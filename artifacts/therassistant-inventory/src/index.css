@@ -407,3 +407,714 @@ button:active:not(:disabled) { transform: translateY(1px); }
     inset: -1px;
   }
 }
+
+
+/* =========================================================
+   THERASSISTANT WORKING DEMO
+   ========================================================= */
+
+:root {
+  --thera-navy: #19324a;
+  --thera-navy-deep: #102438;
+  --thera-sage: #9fb5a5;
+  --thera-sage-dark: #698574;
+  --thera-cream: #f6f3ec;
+  --thera-paper: #ffffff;
+  --thera-border: #dfe5e1;
+  --thera-text: #26333d;
+  --thera-muted: #6b7780;
+  --thera-success-bg: #e7f2ea;
+  --thera-success: #356849;
+  --thera-warning-bg: #fff1d7;
+  --thera-warning: #8a621e;
+  --thera-danger-bg: #f8e4e1;
+  --thera-danger: #98453f;
+  --thera-neutral-bg: #edf1f3;
+  --thera-neutral: #56636d;
+}
+
+.thera-app {
+  min-height: 100vh;
+  display: grid;
+  grid-template-columns: 250px minmax(0, 1fr);
+  background: var(--thera-cream);
+  color: var(--thera-text);
+}
+
+.thera-sidebar {
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  background: var(--thera-navy-deep);
+  color: white;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+}
+
+.thera-brand {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  padding: 22px 18px 18px;
+  border-bottom: 1px solid rgba(255,255,255,.10);
+}
+
+.thera-brand-mark {
+  width: 38px;
+  height: 38px;
+  border-radius: 10px;
+  display: grid;
+  place-items: center;
+  background: var(--thera-sage);
+  color: var(--thera-navy-deep);
+  font-weight: 800;
+  font-size: 20px;
+}
+
+.thera-brand-name {
+  font-size: 14px;
+  font-weight: 800;
+  letter-spacing: .08em;
+}
+
+.thera-brand-subtitle {
+  margin-top: 2px;
+  color: #b8c5cd;
+  font-size: 11px;
+}
+
+.thera-nav {
+  padding: 12px 9px;
+  flex: 1;
+}
+
+.thera-nav-link {
+  display: block;
+  color: #dce4e9;
+  text-decoration: none;
+  padding: 9px 12px;
+  margin: 2px 0;
+  border-radius: 7px;
+  font-size: 13px;
+  transition: background .15s ease;
+}
+
+.thera-nav-link:hover {
+  background: rgba(255,255,255,.07);
+}
+
+.thera-nav-link.active {
+  background: var(--thera-sage);
+  color: var(--thera-navy-deep);
+  font-weight: 700;
+}
+
+.thera-sidebar-footer {
+  padding: 16px 18px 20px;
+  border-top: 1px solid rgba(255,255,255,.10);
+}
+
+.thera-practice-label {
+  font-size: 9px;
+  letter-spacing: .14em;
+  color: #9fb0ba;
+  font-weight: 700;
+}
+
+.thera-practice-name {
+  margin-top: 5px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.thera-practice-meta {
+  color: #9fb0ba;
+  font-size: 10px;
+  margin-top: 3px;
+}
+
+.thera-main {
+  min-width: 0;
+}
+
+.thera-topbar {
+  height: 58px;
+  background: white;
+  border-bottom: 1px solid var(--thera-border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 28px;
+  position: sticky;
+  top: 0;
+  z-index: 20;
+}
+
+.thera-topbar-product {
+  color: var(--thera-muted);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.thera-demo-chip {
+  font-size: 9px;
+  letter-spacing: .1em;
+  font-weight: 800;
+  padding: 6px 9px;
+  border-radius: 999px;
+  background: var(--thera-success-bg);
+  color: var(--thera-success);
+}
+
+.thera-content {
+  padding: 26px 28px 50px;
+  max-width: 1600px;
+  margin: 0 auto;
+}
+
+.thera-page-header {
+  margin-bottom: 22px;
+}
+
+.thera-page-header.split {
+  display: flex;
+  justify-content: space-between;
+  align-items: end;
+  gap: 20px;
+}
+
+.thera-page-header h1 {
+  font-size: 29px;
+  line-height: 1.1;
+  color: var(--thera-navy);
+  margin: 5px 0 8px;
+}
+
+.thera-page-header p {
+  max-width: 820px;
+  color: var(--thera-muted);
+  margin: 0;
+  font-size: 13px;
+}
+
+.thera-eyebrow {
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: .14em;
+  color: var(--thera-sage-dark);
+  text-transform: uppercase;
+}
+
+.thera-card {
+  background: var(--thera-paper);
+  border: 1px solid var(--thera-border);
+  border-radius: 12px;
+  padding: 20px;
+  box-shadow: 0 2px 8px rgba(22, 43, 59, .035);
+}
+
+.thera-card h2 {
+  font-size: 16px;
+  color: var(--thera-navy);
+  margin: 0 0 12px;
+}
+
+.thera-card h3 {
+  font-size: 15px;
+  color: var(--thera-navy);
+  margin: 6px 0;
+}
+
+.thera-card p {
+  font-size: 12px;
+  color: var(--thera-muted);
+}
+
+.thera-card-header {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 15px;
+  margin-bottom: 14px;
+}
+
+.thera-card-header h2 {
+  margin-bottom: 4px;
+}
+
+.thera-card-header p {
+  margin: 0;
+}
+
+.thera-metric-grid {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 18px;
+}
+
+.thera-metric-grid.four {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.thera-metric-card {
+  background: white;
+  border: 1px solid var(--thera-border);
+  border-radius: 10px;
+  padding: 16px;
+}
+
+.thera-metric-label {
+  color: var(--thera-muted);
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+}
+
+.thera-metric-value {
+  margin-top: 7px;
+  color: var(--thera-navy);
+  font-weight: 800;
+  font-size: 22px;
+}
+
+.thera-dashboard-grid {
+  display: grid;
+  grid-template-columns: minmax(0, .9fr) minmax(0, 1.1fr);
+  gap: 18px;
+  margin-bottom: 18px;
+}
+
+.thera-detail-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+}
+
+.thera-span-2 {
+  grid-column: span 2;
+}
+
+.thera-story-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.thera-story {
+  background: #fbfcfa;
+  border: 1px solid var(--thera-border);
+  border-radius: 9px;
+  padding: 14px;
+}
+
+.thera-story strong {
+  display: block;
+  color: var(--thera-navy);
+  margin-top: 5px;
+}
+
+.thera-story p {
+  margin-bottom: 0;
+  line-height: 1.45;
+}
+
+.thera-stack {
+  display: grid;
+  gap: 10px;
+}
+
+.thera-stack-item {
+  padding: 12px 0;
+  border-bottom: 1px solid var(--thera-border);
+}
+
+.thera-stack-item:last-child {
+  border-bottom: 0;
+}
+
+.thera-work-card {
+  border: 1px solid var(--thera-border);
+  border-left: 4px solid var(--thera-sage);
+  border-radius: 8px;
+  padding: 12px;
+  background: #fcfdfc;
+}
+
+.thera-work-card-top,
+.thera-row-between,
+.thera-work-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+
+.thera-work-title {
+  margin-top: 8px;
+  font-weight: 700;
+  color: var(--thera-navy);
+}
+
+.thera-work-footer {
+  margin-top: 9px;
+  color: var(--thera-muted);
+  font-size: 10px;
+  text-transform: capitalize;
+}
+
+.thera-muted {
+  color: var(--thera-muted);
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.thera-table-wrap {
+  width: 100%;
+  overflow-x: auto;
+}
+
+.thera-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 11px;
+}
+
+.thera-table th {
+  background: #f8faf8;
+  color: var(--thera-muted);
+  font-size: 9px;
+  letter-spacing: .05em;
+  text-transform: uppercase;
+  font-weight: 800;
+  text-align: left;
+  padding: 10px 9px;
+  border-bottom: 1px solid var(--thera-border);
+  white-space: nowrap;
+}
+
+.thera-table td {
+  padding: 11px 9px;
+  border-bottom: 1px solid #edf0ee;
+  vertical-align: top;
+}
+
+.thera-table tr:last-child td {
+  border-bottom: 0;
+}
+
+.thera-table tbody tr:hover {
+  background: #fbfcfb;
+}
+
+.thera-table-link,
+.thera-link {
+  color: var(--thera-navy);
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.thera-table-link:hover,
+.thera-link:hover {
+  text-decoration: underline;
+}
+
+.thera-table-subtext {
+  color: var(--thera-muted);
+  font-size: 9px;
+  margin-top: 4px;
+}
+
+.thera-badge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 20px;
+  padding: 3px 7px;
+  border-radius: 999px;
+  font-size: 9px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.thera-badge-success {
+  background: var(--thera-success-bg);
+  color: var(--thera-success);
+}
+
+.thera-badge-warning {
+  background: var(--thera-warning-bg);
+  color: var(--thera-warning);
+}
+
+.thera-badge-danger {
+  background: var(--thera-danger-bg);
+  color: var(--thera-danger);
+}
+
+.thera-badge-neutral {
+  background: var(--thera-neutral-bg);
+  color: var(--thera-neutral);
+}
+
+.thera-input {
+  border: 1px solid var(--thera-border);
+  border-radius: 8px;
+  background: white;
+  padding: 9px 11px;
+  min-width: 190px;
+  color: var(--thera-text);
+  font-size: 12px;
+  outline: none;
+}
+
+.thera-input:focus {
+  border-color: var(--thera-sage-dark);
+  box-shadow: 0 0 0 3px rgba(105,133,116,.10);
+}
+
+.thera-search-wrap,
+.thera-filter-row {
+  display: flex;
+  gap: 8px;
+}
+
+.thera-definition-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px 20px;
+}
+
+.thera-field-label {
+  color: var(--thera-muted);
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  font-weight: 700;
+  margin-bottom: 4px;
+}
+
+.thera-field-value {
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.thera-tabs {
+  display: flex;
+  gap: 3px;
+  overflow-x: auto;
+  margin: 0 0 16px;
+  padding-bottom: 2px;
+}
+
+.thera-tab {
+  border: 0;
+  background: transparent;
+  color: var(--thera-muted);
+  border-bottom: 2px solid transparent;
+  padding: 9px 11px;
+  font-size: 11px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.thera-tab.active {
+  color: var(--thera-navy);
+  border-bottom-color: var(--thera-sage-dark);
+  font-weight: 800;
+}
+
+.thera-breadcrumb {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--thera-muted);
+  font-size: 10px;
+  margin-bottom: 14px;
+}
+
+.thera-header-badges {
+  display: flex;
+  gap: 7px;
+}
+
+.thera-state {
+  padding: 40px;
+  text-align: center;
+  color: var(--thera-muted);
+}
+
+.thera-state.error {
+  color: var(--thera-danger);
+}
+
+.thera-empty {
+  color: var(--thera-muted);
+  font-size: 12px;
+  padding: 16px 0;
+}
+
+.thera-alert {
+  border-radius: 8px;
+  padding: 12px;
+  font-size: 12px;
+}
+
+.thera-alert.danger {
+  background: var(--thera-danger-bg);
+  color: #6f3631;
+  border: 1px solid #ecc7c3;
+}
+
+.thera-denial-panel {
+  display: flex;
+  justify-content: space-between;
+  gap: 20px;
+  background: #fff9f8;
+  border: 1px solid #ecd1cc;
+  padding: 15px;
+  border-radius: 9px;
+}
+
+.thera-denial-panel p {
+  color: #6d514e;
+  margin-bottom: 0;
+}
+
+.thera-denial-amount {
+  font-size: 18px;
+  font-weight: 800;
+  margin-top: 8px;
+  color: var(--thera-danger);
+  text-align: right;
+}
+
+.thera-timeline-item {
+  display: grid;
+  grid-template-columns: 120px 1fr;
+  gap: 12px;
+  padding: 9px 0;
+  border-bottom: 1px solid var(--thera-border);
+}
+
+.thera-timeline-item:last-child {
+  border-bottom: 0;
+}
+
+.thera-admin-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.thera-button {
+  display: inline-block;
+  margin-top: 12px;
+  background: var(--thera-navy);
+  color: white;
+  text-decoration: none;
+  border-radius: 7px;
+  padding: 8px 12px;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.thera-coming {
+  display: inline-block;
+  margin-top: 12px;
+  color: var(--thera-muted);
+  background: var(--thera-neutral-bg);
+  border-radius: 7px;
+  padding: 8px 12px;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.thera-module-banner {
+  background: linear-gradient(
+    120deg,
+    #f5f8f5,
+    #edf3ef
+  );
+  border: 1px solid var(--thera-border);
+  border-radius: 10px;
+  padding: 18px;
+  margin-bottom: 18px;
+}
+
+.thera-module-banner h2 {
+  margin: 5px 0;
+}
+
+.thera-module-banner p {
+  margin: 0;
+}
+
+.thera-capability-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 9px;
+}
+
+.thera-capability {
+  border: 1px solid var(--thera-border);
+  border-radius: 8px;
+  padding: 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.thera-capability-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: var(--thera-sage-dark);
+  flex: 0 0 auto;
+}
+
+@media (max-width: 1150px) {
+  .thera-metric-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .thera-story-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .thera-admin-grid,
+  .thera-capability-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 850px) {
+  .thera-app {
+    grid-template-columns: 205px minmax(0, 1fr);
+  }
+
+  .thera-content {
+    padding: 20px;
+  }
+
+  .thera-dashboard-grid,
+  .thera-detail-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .thera-span-2 {
+    grid-column: span 1;
+  }
+
+  .thera-page-header.split {
+    display: block;
+  }
+
+  .thera-filter-row,
+  .thera-search-wrap {
+    margin-top: 15px;
+  }
+}
