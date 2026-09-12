@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { useState } from "react";
 import { Link, useRoute } from "wouter";
 import { StatusBadge } from "../components/status-badge";
@@ -635,7 +636,7 @@ function SimpleTable({
                       let display:
                         | string
                         | number
-                        | JSX.Element = "—";
+                        | ReactNode = "—";
 
                       if (
                         statusFields.includes(

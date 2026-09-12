@@ -1,50 +1,128 @@
-import { Route, Switch } from "wouter";
+import {
+  Route,
+  Switch,
+} from "wouter";
 
 import InventoryApp from "./InventoryApp";
 
-import { AppShell } from "./components/app-shell";
+import {
+  AppShell,
+} from "./components/app-shell";
 
-import { DashboardPage } from "./pages/dashboard";
-import { ClientsPage } from "./pages/clients";
-import { ClientDetailPage } from "./pages/client-detail";
-import { ClaimsPage } from "./pages/claims";
-import { ClaimDetailPage } from "./pages/claim-detail";
-import { WorkCenterPage } from "./pages/work-center";
-import { ProvidersPage } from "./pages/providers";
-import { ProviderDetailPage } from "./pages/provider-detail";
-import { AdministrationPage } from "./pages/administration";
-import { ModulePlaceholder } from "./pages/module-placeholder";
+import {
+  DemoToolsBar,
+} from "./components/demo-tools-bar";
+
+import {
+  DashboardPage,
+} from "./pages/dashboard";
+
+import {
+  ClientsPage,
+} from "./pages/clients";
+
+import {
+  ClientDetailPage,
+} from "./pages/client-detail";
+
+import {
+  ClaimsPage,
+} from "./pages/claims";
+
+import {
+  ClaimDetailPage,
+} from "./pages/claim-detail";
+
+import {
+  WorkCenterPage,
+} from "./pages/work-center";
+
+import {
+  ProvidersPage,
+} from "./pages/providers";
+
+import {
+  ProviderDetailPage,
+} from "./pages/provider-detail";
+
+import {
+  AdministrationPage,
+} from "./pages/administration";
+
+import {
+  DemoControlCenter,
+} from "./pages/demo-control";
+
+import {
+  SchedulePage,
+  ClinicalPage,
+  EligibilityPage,
+  AuthorizationsPage,
+  MedicaidPage,
+  ChargesPage,
+  PaymentsPage,
+  ArDenialsPage,
+  CredentialingPage,
+  PayersContractsPage,
+  MailroomPage,
+  ImportsPage,
+  JournalPage,
+  ClaimSubmissionPage,
+  ClaimFollowUpPage,
+  ReportsPage,
+  PreSessionPage,
+  GoldenThreadPage,
+  PatientPortalPage,
+} from "./pages/restored-modules";
 
 export default function App() {
   return (
     <AppShell>
+      <DemoToolsBar />
+
       <Switch>
-        <Route path="/">
-          <DashboardPage />
+        <Route path="/demo">
+          <DemoControlCenter />
         </Route>
 
-        <Route path="/work-center">
-          <WorkCenterPage />
+        <Route path="/patient-portal/:clientId">
+          <PatientPortalPage />
+        </Route>
+
+        <Route path="/clinical/golden-thread/:clientId">
+          <GoldenThreadPage />
+        </Route>
+
+        <Route path="/claims/submission">
+          <ClaimSubmissionPage />
+        </Route>
+
+        <Route path="/claims/follow-up">
+          <ClaimFollowUpPage />
+        </Route>
+
+        <Route path="/schedule/:id">
+          <PreSessionPage />
         </Route>
 
         <Route path="/clients/:id">
           <ClientDetailPage />
         </Route>
 
-        <Route path="/clients">
-          <ClientsPage />
-        </Route>
-
         <Route path="/claims/:id">
           <ClaimDetailPage />
         </Route>
 
-        <Route path="/claims">
-          <ClaimsPage />
-        </Route>
-
         <Route path="/providers/:id">
           <ProviderDetailPage />
+        </Route>
+
+        <Route path="/work-center">
+          <WorkCenterPage />
+        </Route>
+
+        <Route path="/clients">
+          <ClientsPage />
         </Route>
 
         <Route path="/providers">
@@ -52,163 +130,63 @@ export default function App() {
         </Route>
 
         <Route path="/schedule">
-          <ModulePlaceholder
-            eyebrow="CLINICAL OPERATIONS"
-            title="Schedule"
-            description="Appointments become the starting point for clinical readiness, eligibility, authorization, documentation, and charge capture."
-            capabilities={[
-              "Provider schedule",
-              "Client check-in",
-              "Appointment readiness",
-              "Eligibility alerts",
-              "Authorization alerts",
-              "Pre-session review",
-            ]}
-          />
+          <SchedulePage />
         </Route>
 
         <Route path="/clinical">
-          <ModulePlaceholder
-            eyebrow="CONNECTED CLINICAL WORKFLOW"
-            title="Clinical"
-            description="Therassistant connects treatment planning and provider documentation directly to billing readiness."
-            capabilities={[
-              "Pre-Session Dashboard",
-              "Treatment plans and goals",
-              "Clinical notes",
-              "Golden-thread review",
-              "Patient journal",
-              "Signature readiness",
-            ]}
-          />
+          <ClinicalPage />
+        </Route>
+
+        <Route path="/journal">
+          <JournalPage />
         </Route>
 
         <Route path="/eligibility">
-          <ModulePlaceholder
-            eyebrow="PAYER READINESS"
-            title="Eligibility"
-            description="Eligibility is treated as operational data that affects scheduling, authorization, billing, and collections."
-            capabilities={[
-              "Coverage status",
-              "Network status",
-              "Copay and coinsurance",
-              "Deductible tracking",
-              "Authorization requirements",
-              "Medicaid program routing",
-            ]}
-          />
+          <EligibilityPage />
+        </Route>
+
+        <Route path="/authorizations">
+          <AuthorizationsPage />
+        </Route>
+
+        <Route path="/medicaid">
+          <MedicaidPage />
         </Route>
 
         <Route path="/charges">
-          <ModulePlaceholder
-            eyebrow="BILLING READINESS"
-            title="Charge Capture"
-            description="Charges move forward only when clinical and payer requirements are ready for billing."
-            capabilities={[
-              "Captured charges",
-              "Documentation checks",
-              "Provider enrollment checks",
-              "Authorization checks",
-              "Coding review",
-              "Ready-for-claim workflow",
-            ]}
-          />
+          <ChargesPage />
+        </Route>
+
+        <Route path="/claims">
+          <ClaimsPage />
         </Route>
 
         <Route path="/payments">
-          <ModulePlaceholder
-            eyebrow="REMITTANCE OPERATIONS"
-            title="Payments"
-            description="Payments, allocations, ERA detail, adjustments, and exceptions remain connected to the underlying claim."
-            capabilities={[
-              "ERA posting",
-              "Payment allocation",
-              "Claim-line allocation",
-              "Zero-pay review",
-              "Secondary balances",
-              "Payment exceptions",
-            ]}
-          />
+          <PaymentsPage />
         </Route>
 
         <Route path="/ar-denials">
-          <ModulePlaceholder
-            eyebrow="REVENUE RECOVERY"
-            title="A/R & Denials"
-            description="A/R follow-up, denials, appeals, underpayments, overpayments, and refund decisions share one operational workflow."
-            capabilities={[
-              "Denial intelligence",
-              "CARC/RARC workflow",
-              "Appeals",
-              "Underpayment detection",
-              "Overpayment review",
-              "A/R prioritization",
-            ]}
-          />
+          <ArDenialsPage />
         </Route>
 
         <Route path="/credentialing">
-          <ModulePlaceholder
-            eyebrow="PAYER OPERATIONS"
-            title="Credentialing"
-            description="Provider participation and payer enrollment are connected directly to claim readiness."
-            capabilities={[
-              "Provider payer enrollment",
-              "Group affiliation",
-              "Provider identifiers",
-              "Application status",
-              "Required actions",
-              "Billing impact alerts",
-            ]}
-          />
+          <CredentialingPage />
         </Route>
 
         <Route path="/payers-contracts">
-          <ModulePlaceholder
-            eyebrow="CONTRACT INTELLIGENCE"
-            title="Payers & Contracts"
-            description="Plans, contracts, fee schedules, and provider enrollment data support payment and underpayment review."
-            capabilities={[
-              "Payers and aliases",
-              "Products and plans",
-              "Contracts",
-              "Fee schedules",
-              "Expected reimbursement",
-              "Participation relationships",
-            ]}
-          />
+          <PayersContractsPage />
         </Route>
 
         <Route path="/mailroom">
-          <ModulePlaceholder
-            eyebrow="CORRESPONDENCE OPERATIONS"
-            title="Mailroom"
-            description="Incoming payer correspondence becomes trackable operational work instead of an isolated document."
-            capabilities={[
-              "Incoming documents",
-              "Denial letters",
-              "Recoupments",
-              "Medical-record requests",
-              "Authorization letters",
-              "Work Center routing",
-            ]}
-          />
+          <MailroomPage />
         </Route>
 
         <Route path="/reports">
-          <ModulePlaceholder
-            eyebrow="OPERATIONAL INTELLIGENCE"
-            title="Reports"
-            description="Reporting spans clinical readiness, claims, payments, denials, credentialing, authorization, and multi-practice operations."
-            capabilities={[
-              "A/R aging",
-              "Claim status",
-              "Denial trends",
-              "Payment performance",
-              "Authorization utilization",
-              "Credentialing status",
-            ]}
-          />
+          <ReportsPage />
+        </Route>
+
+        <Route path="/administration/imports">
+          <ImportsPage />
         </Route>
 
         <Route path="/administration/database-inventory">
@@ -217,6 +195,10 @@ export default function App() {
 
         <Route path="/administration">
           <AdministrationPage />
+        </Route>
+
+        <Route path="/">
+          <DashboardPage />
         </Route>
 
         <Route>
