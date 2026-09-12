@@ -4,3 +4,6 @@ export * from "./payers";
 export * from "./clients";
 export * from "./providers";
 export * from "./clinical";
+export * from "./claims";
+export * from "./payments";
+export * from "./workqueues";
