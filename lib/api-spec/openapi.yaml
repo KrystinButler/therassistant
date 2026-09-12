@@ -3,13 +3,15 @@ info:
   # Do not change the title, if the title changes, the import paths will be broken
   title: Api
   version: 0.1.0
-  description: API specification
+  description: Therassistant database inventory API
 servers:
   - url: /api
     description: Base API path
 tags:
   - name: health
     description: Health operations
+  - name: inventory
+    description: Database inventory records
 paths:
   /healthz:
     get:
@@ -24,6 +26,152 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+  /inventory:
+    get:
+      operationId: listInventory
+      tags: [inventory]
+      summary: List database inventory records
+      parameters:
+        - name: search
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: objectType
+          in: query
+          required: false
+          schema:
+            $ref: "#/components/schemas/InventoryObjectType"
+        - name: sourceSheet
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 1000
+            default: 1000
+        - name: offset
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+      responses:
+        "200":
+          description: Matching inventory records
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/InventoryRecord"
+    post:
+      operationId: createInventory
+      tags: [inventory]
+      summary: Create an inventory record
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/InventoryInput"
+      responses:
+        "201":
+          description: Created inventory record
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InventoryRecord"
+  /inventory/summary:
+    get:
+      operationId: getInventorySummary
+      tags: [inventory]
+      summary: Get inventory summary metrics
+      responses:
+        "200":
+          description: Inventory summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InventorySummary"
+  /inventory/facets:
+    get:
+      operationId: getInventoryFacets
+      tags: [inventory]
+      summary: Get filter facet values
+      responses:
+        "200":
+          description: Available inventory filter values
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InventoryFacets"
+  /inventory/{id}:
+    get:
+      operationId: getInventory
+      tags: [inventory]
+      summary: Get one inventory record
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Inventory record
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InventoryRecord"
+        "404":
+          description: Record not found
+    patch:
+      operationId: updateInventory
+      tags: [inventory]
+      summary: Update an inventory record
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/InventoryUpdate"
+      responses:
+        "200":
+          description: Updated inventory record
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InventoryRecord"
+        "404":
+          description: Record not found
+    delete:
+      operationId: deleteInventory
+      tags: [inventory]
+      summary: Delete an inventory record
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Record deleted
+        "404":
+          description: Record not found
 components:
   schemas:
     HealthStatus:
@@ -33,4 +181,170 @@ components:
           type: string
       required:
         - status
+    InventoryObjectType:
+      type: string
+      enum:
+        - TABLE
+        - VIEW
+        - FUNCTION
+        - TRIGGER
+        - ENUM
+        - INDEX
+        - RLS_POLICY
+        - ROLE
+        - GRANT
+    InventoryRecord:
+      type: object
+      required:
+        - id
+        - objectType
+        - objectName
+        - sourceSheet
+        - columnCount
+        - rowCount
+        - columns
+        - details
+        - createdAt
+        - updatedAt
+      properties:
+        id:
+          type: integer
+        objectType:
+          $ref: "#/components/schemas/InventoryObjectType"
+        objectName:
+          type: string
+        sourceSheet:
+          type: string
+        schemaName:
+          type: ["string", "null"]
+        columnCount:
+          type: integer
+        rowCount:
+          type: integer
+        columns:
+          type: array
+          items:
+            type: string
+        details:
+          type: object
+          additionalProperties:
+            type: string
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    InventoryInput:
+      type: object
+      required:
+        - objectType
+        - objectName
+        - sourceSheet
+      properties:
+        objectType:
+          $ref: "#/components/schemas/InventoryObjectType"
+        objectName:
+          type: string
+          minLength: 1
+        sourceSheet:
+          type: string
+          minLength: 1
+        schemaName:
+          type: string
+        columnCount:
+          type: integer
+          minimum: 0
+        rowCount:
+          type: integer
+          minimum: 0
+        columns:
+          type: array
+          items:
+            type: string
+        details:
+          type: object
+          additionalProperties:
+            type: string
+    InventoryUpdate:
+      type: object
+      properties:
+        objectType:
+          $ref: "#/components/schemas/InventoryObjectType"
+        objectName:
+          type: string
+          minLength: 1
+        sourceSheet:
+          type: string
+          minLength: 1
+        schemaName:
+          type: ["string", "null"]
+        columnCount:
+          type: integer
+          minimum: 0
+        rowCount:
+          type: integer
+          minimum: 0
+        columns:
+          type: array
+          items:
+            type: string
+        details:
+          type: object
+          additionalProperties:
+            type: string
+    InventorySummary:
+      type: object
+      required:
+        - total
+        - tables
+        - views
+        - functions
+        - triggers
+        - enums
+        - indexes
+        - policies
+        - roles
+        - grants
+        - totalColumns
+        - emptyTables
+      properties:
+        total:
+          type: integer
+        tables:
+          type: integer
+        views:
+          type: integer
+        functions:
+          type: integer
+        triggers:
+          type: integer
+        enums:
+          type: integer
+        indexes:
+          type: integer
+        policies:
+          type: integer
+        roles:
+          type: integer
+        grants:
+          type: integer
+        totalColumns:
+          type: integer
+        emptyTables:
+          type: integer
+    InventoryFacets:
+      type: object
+      required:
+        - objectTypes
+        - sourceSheets
+      properties:
+        objectTypes:
+          type: array
+          items:
+            $ref: "#/components/schemas/InventoryObjectType"
+        sourceSheets:
+          type: array
+          items:
+            type: string
 

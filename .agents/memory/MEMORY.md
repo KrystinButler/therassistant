@@ -1,0 +1,1 @@
+- [Artifact workflow asset paths](inventory-seed-paths.md) — resolve uploaded assets from both the service directory and workspace root.

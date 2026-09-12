@@ -1,0 +1,28 @@
+kind = "web"
+previewPath = "/"
+title = "Therassistant Database Inventory"
+description = "A searchable database inventory manager built from the Therassistant Supabase workbook. Explore and manage tables, views, functions, policies, and other database objects with responsive CRUD workflows."
+version = "1.0.0"
+id = "artifacts/therassistant-inventory"
+router = "path"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 20798
+
+[services.development]
+run = "pnpm --filter @workspace/therassistant-inventory run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/therassistant-inventory", "run", "build" ]
+serve = "static"
+publicDir = "artifacts/therassistant-inventory/dist/public"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "20798"
+BASE_PATH = "/"
