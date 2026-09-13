@@ -33,8 +33,52 @@ jobs:
       - name: Tests
         run: pnpm --filter ./scripts exec tsx --test ../artifacts/therassistant-inventory/tests/**/*.test.ts
 
-      - name: Phase 2 typecheck
-        run: pnpm --filter @workspace/therassistant-inventory run typecheck:phase2
+      - name: Phase 3 typecheck
+        run: pnpm --filter @workspace/therassistant-inventory run typecheck:phase3
+
+      - name: Browser secret scan
+        shell: bash
+        run: |
+          if grep -R -n -E 'SUPABASE_SERVICE_ROLE_KEY|sb_secret_' artifacts/therassistant-inventory/src; then
+            echo "Forbidden Supabase server secret marker found in browser source."
+            exit 1
+          fi
 
       - name: Build
         run: pnpm --filter @workspace/therassistant-inventory run build
+
+      - name: Smoke built SPA routes
+        shell: bash
+        run: |
+          pnpm --filter @workspace/therassistant-inventory exec vite preview --config vite.config.ts --host 127.0.0.1 --port 4173 > /tmp/therassistant-preview.log 2>&1 &
+          PREVIEW_PID=$!
+          trap 'kill "$PREVIEW_PID" 2>/dev/null || true' EXIT
+
+          ready=0
+          for i in $(seq 1 20); do
+            if curl -fsS http://127.0.0.1:4173/ >/dev/null; then
+              ready=1
+              break
+            fi
+            sleep 1
+          done
+          if [ "$ready" -ne 1 ]; then
+            cat /tmp/therassistant-preview.log
+            exit 1
+          fi
+
+          routes=(
+            "/billing"
+            "/billing/charges"
+            "/claims"
+            "/payments"
+            "/ar-denials"
+            "/claims/62000000-0000-4000-8000-000000000001"
+            "/clients/ff648f71-9c94-433c-9aab-f80b039a80fd"
+          )
+
+          for route in "${routes[@]}"; do
+            code="$(curl -sS -o /tmp/therassistant-route.html -w '%{http_code}' "http://127.0.0.1:4173${route}")"
+            test "$code" = "200"
+            grep -q '<div id="root"' /tmp/therassistant-route.html
+          done
