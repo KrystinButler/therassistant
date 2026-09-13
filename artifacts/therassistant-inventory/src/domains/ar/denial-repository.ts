@@ -102,7 +102,7 @@ export async function createDenialAppeal(denialId: string, level: number, dueDat
     description: "Prepare and submit payer appeal before the deadline.",
     due_date: dueDate || null,
   });
-  await addHistory(work.id, "Appeal work item created from denial.", null, "open");
+  await addHistory(work.id, "Appeal work item created from denial.", undefined, "open");
   return appeal;
 }
 
