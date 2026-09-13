@@ -4,6 +4,7 @@ import {
   demoUpdate,
   type Row,
 } from "../../lib/supabase-demo-client";
+import { routeEncounterToBilling } from "../billing/repository";
 import { updateEncounter } from "../encounters/repository";
 import { signNoteWorkflow, type ClinicalSigningRepository } from "./workflow";
 
@@ -51,20 +52,24 @@ const signingRepository: ClinicalSigningRepository = {
     const state = await clinicalState(encounterId);
     if (!state.encounter) throw new Error("Encounter not found.");
 
+    const completedAt = new Date().toISOString();
     await updateEncounter(encounterId, {
       encounter_status: "completed",
-      billing_status: "not_ready",
-      ended_at: state.encounter.ended_at || new Date().toISOString(),
+      ended_at: state.encounter.ended_at || completedAt,
     });
 
     if (state.encounter.appointment_id) {
       await demoUpdate<DataRow>("appointments", String(state.encounter.appointment_id), {
         appointment_status: "completed",
-        completed_at: new Date().toISOString(),
+        completed_at: completedAt,
       });
     }
 
-    return { ready: false, pendingFullAudit: true };
+    const readiness = await routeEncounterToBilling(encounterId);
+    if (!readiness.ok && !readiness.blocked) {
+      throw new Error(readiness.message);
+    }
+    return readiness;
   },
 };
 
