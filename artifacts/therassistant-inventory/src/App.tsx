@@ -7,6 +7,8 @@ import { Claim360Page } from "./domains/claims/Claim360Page";
 import { ClaimSubmissionPage } from "./domains/claims/ClaimSubmissionPage";
 import { EncounterPage } from "./domains/encounters/EncounterPage";
 import { PaymentsPage } from "./domains/payments/PaymentsPage";
+import { AuthorizationsPage } from "./domains/payer-readiness/AuthorizationsPage";
+import { EligibilityPage } from "./domains/payer-readiness/EligibilityPage";
 import { PatientChartPage } from "./domains/patients/PatientChartPage";
 import { PatientPortalPage } from "./domains/portal/PatientPortalPage";
 import { SchedulePage } from "./domains/scheduling/SchedulePage";
@@ -28,10 +30,8 @@ import {
   ReportsPage,
 } from "./pages/operational-workspaces";
 import {
-  AuthorizationsPage,
   ClaimFollowUpPage,
   ClinicalPage,
-  EligibilityPage,
   GoldenThreadPage,
   ImportsPage,
   JournalPage,
