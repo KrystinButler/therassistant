@@ -8,29 +8,10 @@ export async function getPatientChart(patientId: string): Promise<PatientChart> 
   if (!patientId) throw new Error("Patient ID is required.");
 
   const [
-    patients,
-    contacts,
-    policies,
-    eligibility,
-    authorizations,
-    authorizationUnits,
-    appointments,
-    encounters,
-    treatmentPlans,
-    treatmentGoals,
-    notes,
-    charges,
-    claims,
-    payments,
-    denials,
-    documents,
-    checkins,
-    journalEntries,
-    workItems,
-    providers,
-    payers,
-    plans,
-    balances,
+    patients, contacts, policies, eligibility, authorizations, authorizationUnits,
+    appointments, encounters, treatmentPlans, treatmentGoals, notes, diagnoses,
+    charges, claims, payments, denials, appeals, documents, checkins, journalEntries,
+    workItems, providers, payers, plans, balances,
   ] = await Promise.all([
     demoSelect<DataRow>("clients", { id: `eq.${patientId}`, limit: "1" }),
     demoSelect<DataRow>("client_contacts", { client_id: `eq.${patientId}`, order: "created_at.asc" }),
@@ -43,10 +24,12 @@ export async function getPatientChart(patientId: string): Promise<PatientChart> 
     demoSelect<DataRow>("treatment_plans", { client_id: `eq.${patientId}`, order: "effective_date.desc.nullslast,created_at.desc" }),
     demoSelect<DataRow>("treatment_plan_goals", { order: "created_at.asc" }),
     demoSelect<DataRow>("clinical_notes", { client_id: `eq.${patientId}`, order: "service_date.desc.nullslast,created_at.desc" }),
+    demoSelect<DataRow>("client_diagnoses", { client_id: `eq.${patientId}`, order: "created_at.desc" }),
     demoSelect<DataRow>("charge_capture_items", { client_id: `eq.${patientId}`, order: "service_date.desc,created_at.desc" }),
     demoSelect<DataRow>("professional_claims", { client_id: `eq.${patientId}`, order: "service_date_from.desc,created_at.desc" }),
     demoSelect<DataRow>("payments", { client_id: `eq.${patientId}`, order: "payment_date.desc,created_at.desc" }),
     demoSelect<DataRow>("denials", { client_id: `eq.${patientId}`, order: "denial_date.desc,created_at.desc" }),
+    demoSelect<DataRow>("appeals", { order: "created_at.desc" }),
     demoSelect<DataRow>("documents", { client_id: `eq.${patientId}`, order: "created_at.desc" }),
     demoSelect<DataRow>("client_checkins", { client_id: `eq.${patientId}`, order: "created_at.desc" }),
     demoSelect<DataRow>("patient_journal_entries", { client_id: `eq.${patientId}`, order: "entry_date.desc,created_at.desc" }),
@@ -59,19 +42,24 @@ export async function getPatientChart(patientId: string): Promise<PatientChart> 
 
   const relevantAuthorizationIds = new Set(authorizations.map((row) => row.id));
   const relevantPlanIds = new Set(treatmentPlans.map((row) => row.id));
+  const claimIds = new Set(claims.map((row) => row.id));
+  const denialIds = new Set(denials.map((row) => row.id));
+  const patientAppeals = appeals.filter((row) =>
+    claimIds.has(String(row.claim_id ?? "")) || denialIds.has(String(row.denial_id ?? "")),
+  );
 
-  return buildPatientChartAggregate({
+  const core = buildPatientChartAggregate({
     patientId,
     patients: patients as ChartRow[],
     contacts: contacts as ChartRow[],
     policies: policies as ChartRow[],
     eligibility: eligibility as ChartRow[],
     authorizations: authorizations as ChartRow[],
-    authorizationUnits: authorizationUnits.filter((row) => relevantAuthorizationIds.has(row.authorization_id as string)) as ChartRow[],
+    authorizationUnits: authorizationUnits.filter((row) => relevantAuthorizationIds.has(String(row.authorization_id ?? ""))) as ChartRow[],
     appointments: appointments as ChartRow[],
     encounters: encounters as ChartRow[],
     treatmentPlans: treatmentPlans as ChartRow[],
-    treatmentGoals: treatmentGoals.filter((row) => relevantPlanIds.has(row.treatment_plan_id as string)) as ChartRow[],
+    treatmentGoals: treatmentGoals.filter((row) => relevantPlanIds.has(String(row.treatment_plan_id ?? ""))) as ChartRow[],
     notes: notes as ChartRow[],
     charges: charges as ChartRow[],
     claims: claims as ChartRow[],
@@ -85,5 +73,11 @@ export async function getPatientChart(patientId: string): Promise<PatientChart> 
     payers: payers as ChartRow[],
     plans: plans as ChartRow[],
     balances: balances as ChartRow[],
-  }) as PatientChart;
+  });
+
+  return {
+    ...core,
+    diagnoses: diagnoses as ChartRow[],
+    appeals: patientAppeals as ChartRow[],
+  } as PatientChart;
 }
