@@ -9,6 +9,9 @@ import {
   AppShell,
 } from "./components/app-shell";
 
+import { SchedulePage } from "./domains/scheduling/SchedulePage";
+import { PreSessionPage } from "./domains/scheduling/PreSessionPage";
+
 import {
   DashboardPage,
 } from "./pages/dashboard";
@@ -50,7 +53,6 @@ import {
 } from "./pages/demo-control";
 
 import {
-  SchedulePage,
   ChargesPage,
   PaymentsPage,
   ArDenialsPage,
@@ -69,7 +71,6 @@ import {
   JournalPage,
   ClaimSubmissionPage,
   ClaimFollowUpPage,
-  PreSessionPage,
   GoldenThreadPage,
   PatientPortalPage,
 } from "./pages/restored-modules";
