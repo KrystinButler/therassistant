@@ -1,0 +1,238 @@
+import {
+  demoInsert,
+  demoSelect,
+  demoUpdate,
+  referenceSelect,
+  type Row,
+} from "../../lib/supabase-demo-client";
+import {
+  changePriority,
+  completeWork,
+  pendWork,
+  reopenWork,
+  startWork,
+  type WorkCenterRepository,
+} from "./workflow";
+
+type DataRow = Row & { id: string };
+
+function first<T>(rows: T[]) {
+  return rows[0] ?? null;
+}
+
+const repository: WorkCenterRepository = {
+  async getWorkItem(id) {
+    return first(
+      await demoSelect<DataRow>("workqueue_items", {
+        id: `eq.${id}`,
+        limit: "1",
+      }),
+    );
+  },
+  updateWorkItem(id, values) {
+    return demoUpdate<DataRow>("workqueue_items", id, values);
+  },
+  insertHistory(values) {
+    return demoInsert<DataRow>("workqueue_history", values);
+  },
+};
+
+export function startWorkItem(id: string, note?: string) {
+  return startWork(repository, id, note);
+}
+
+export function pendWorkItem(id: string, note: string, snooze = false) {
+  return pendWork(repository, id, note, snooze ? "snoozed" : "pending");
+}
+
+export function changeWorkPriority(
+  id: string,
+  priority: "low" | "normal" | "high" | "urgent",
+) {
+  return changePriority(repository, id, priority);
+}
+
+export function completeWorkItem(id: string, note: string) {
+  return completeWork(repository, id, note);
+}
+
+export function reopenWorkItem(id: string, note: string) {
+  return reopenWork(repository, id, note);
+}
+
+function personName(row?: Row) {
+  if (!row) return "—";
+  return [row.first_name, row.last_name].filter(Boolean).join(" ") || "—";
+}
+
+function sourceRoute(type: string, id: string) {
+  switch (type) {
+    case "client": return `/clients/${id}`;
+    case "claim": return `/claims/${id}`;
+    case "encounter": return `/encounters/${id}`;
+    case "appointment": return `/schedule/${id}`;
+    case "provider": return `/providers/${id}`;
+    case "authorization": return "/authorizations";
+    case "eligibility": return "/eligibility";
+    case "charge": return "/billing";
+    case "payment": return "/payments";
+    case "denial": return "/payments";
+    case "appeal": return "/ar-denials";
+    case "era": return "/payments";
+    case "claim_batch": return "/claims/submission";
+    case "payer_contract": return "/payers-contracts";
+    default: return "/work-center";
+  }
+}
+
+export async function getWorkCenterData() {
+  const [
+    workItems,
+    history,
+    clients,
+    providers,
+    payers,
+    claims,
+    encounters,
+    appointments,
+    charges,
+    authorizations,
+    eligibility,
+    payments,
+    denials,
+    batches,
+    eraFiles,
+    payerContracts,
+  ] = await Promise.all([
+    demoSelect<DataRow>("workqueue_items", { order: "created_at.desc" }),
+    demoSelect<DataRow>("workqueue_history", { order: "created_at.desc" }),
+    demoSelect<DataRow>("clients"),
+    demoSelect<DataRow>("providers"),
+    referenceSelect<DataRow>("payers", { order: "name.asc" }),
+    demoSelect<DataRow>("professional_claims"),
+    demoSelect<DataRow>("encounters"),
+    demoSelect<DataRow>("appointments"),
+    demoSelect<DataRow>("charge_capture_items"),
+    demoSelect<DataRow>("authorizations"),
+    demoSelect<DataRow>("eligibility_checks"),
+    demoSelect<DataRow>("payments"),
+    demoSelect<DataRow>("denials"),
+    demoSelect<DataRow>("claim_batches"),
+    demoSelect<DataRow>("era_files"),
+    demoSelect<DataRow>("payer_contracts"),
+  ]);
+
+  const clientsById = new Map(clients.map((row) => [row.id, row]));
+  const providersById = new Map(providers.map((row) => [row.id, row]));
+  const payersById = new Map(payers.map((row) => [row.id, row]));
+  const claimsById = new Map(claims.map((row) => [row.id, row]));
+  const encountersById = new Map(encounters.map((row) => [row.id, row]));
+  const appointmentsById = new Map(appointments.map((row) => [row.id, row]));
+  const chargesById = new Map(charges.map((row) => [row.id, row]));
+  const authById = new Map(authorizations.map((row) => [row.id, row]));
+  const eligibilityById = new Map(eligibility.map((row) => [row.id, row]));
+  const paymentsById = new Map(payments.map((row) => [row.id, row]));
+  const denialsById = new Map(denials.map((row) => [row.id, row]));
+  const batchesById = new Map(batches.map((row) => [row.id, row]));
+  const eraById = new Map(eraFiles.map((row) => [row.id, row]));
+  const contractsById = new Map(payerContracts.map((row) => [row.id, row]));
+
+  const historyByItem = new Map<string, DataRow[]>();
+  for (const row of history) {
+    const id = String(row.workqueue_item_id ?? "");
+    const list = historyByItem.get(id) ?? [];
+    list.push(row);
+    historyByItem.set(id, list);
+  }
+
+  function resolveContext(type: string, id: string) {
+    let clientId = "";
+    let providerId = "";
+    let payerId = "";
+    let relatedName = "—";
+
+    if (type === "client") {
+      clientId = id;
+      relatedName = personName(clientsById.get(id));
+    } else if (type === "claim") {
+      const row = claimsById.get(id);
+      clientId = String(row?.client_id ?? "");
+      providerId = String(row?.rendering_provider_id ?? "");
+      payerId = String(row?.payer_id ?? "");
+      relatedName = `${String(row?.patient_control_number || "Claim")} · ${personName(clientsById.get(clientId))}`;
+    } else if (type === "encounter") {
+      const row = encountersById.get(id);
+      clientId = String(row?.client_id ?? "");
+      providerId = String(row?.provider_id ?? "");
+      payerId = String(row?.payer_id ?? "");
+      relatedName = `Encounter · ${personName(clientsById.get(clientId))}`;
+    } else if (type === "appointment") {
+      const row = appointmentsById.get(id);
+      clientId = String(row?.client_id ?? "");
+      providerId = String(row?.provider_id ?? "");
+      relatedName = `Appointment · ${personName(clientsById.get(clientId))}`;
+    } else if (type === "charge") {
+      const row = chargesById.get(id);
+      clientId = String(row?.client_id ?? "");
+      providerId = String(row?.provider_id ?? "");
+      payerId = String(row?.payer_id ?? "");
+      relatedName = `${String(row?.cpt_code || "Charge")} · ${personName(clientsById.get(clientId))}`;
+    } else if (type === "authorization") {
+      const row = authById.get(id);
+      clientId = String(row?.client_id ?? "");
+      payerId = String(row?.payer_id ?? "");
+      relatedName = `Authorization · ${personName(clientsById.get(clientId))}`;
+    } else if (type === "eligibility") {
+      const row = eligibilityById.get(id);
+      clientId = String(row?.client_id ?? "");
+      payerId = String(row?.payer_id ?? "");
+      relatedName = `Eligibility · ${personName(clientsById.get(clientId))}`;
+    } else if (type === "payment") {
+      const row = paymentsById.get(id);
+      clientId = String(row?.client_id ?? "");
+      payerId = String(row?.payer_id ?? "");
+      relatedName = `${String(row?.trace_number || "Payment")} · ${personName(clientsById.get(clientId))}`;
+    } else if (type === "denial") {
+      const row = denialsById.get(id);
+      clientId = String(row?.client_id ?? "");
+      payerId = String(row?.payer_id ?? "");
+      const claim = claimsById.get(String(row?.claim_id ?? ""));
+      relatedName = `${String(claim?.patient_control_number || "Denial")} · ${personName(clientsById.get(clientId))}`;
+    } else if (type === "provider") {
+      providerId = id;
+      relatedName = personName(providersById.get(id));
+    } else if (type === "claim_batch") {
+      relatedName = String(batchesById.get(id)?.batch_name || "Claim Batch");
+    } else if (type === "era") {
+      const row = eraById.get(id);
+      payerId = String(row?.payer_id ?? "");
+      relatedName = String(row?.file_name || "ERA / 835");
+    } else if (type === "payer_contract") {
+      const row = contractsById.get(id);
+      payerId = String(row?.payer_id ?? "");
+      relatedName = `Payer Contract · ${String(payersById.get(payerId)?.name || "Payer")}`;
+    }
+
+    return {
+      clientId,
+      providerId,
+      payerId,
+      patientName: clientId ? personName(clientsById.get(clientId)) : "—",
+      providerName: providerId ? personName(providersById.get(providerId)) : "—",
+      payerName: payerId ? String(payersById.get(payerId)?.name ?? "—") : "—",
+      relatedName,
+    };
+  }
+
+  return workItems.map((item) => {
+    const sourceType = String(item.source_object_type ?? "");
+    const sourceId = String(item.source_object_id ?? "");
+    const context = resolveContext(sourceType, sourceId);
+    return {
+      ...item,
+      ...context,
+      sourceRoute: sourceRoute(sourceType, sourceId),
+      history: historyByItem.get(item.id) ?? [],
+    };
+  });
+}

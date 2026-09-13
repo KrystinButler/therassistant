@@ -9,6 +9,14 @@ import {
   AppShell,
 } from "./components/app-shell";
 
+import { BillingQueuePage } from "./domains/billing/BillingQueuePage";
+import { Claim360Page } from "./domains/claims/Claim360Page";
+import { ClaimSubmissionPage } from "./domains/claims/ClaimSubmissionPage";
+import { EncounterPage } from "./domains/encounters/EncounterPage";
+import { PaymentsPage } from "./domains/payments/PaymentsPage";
+import { SchedulePage } from "./domains/scheduling/SchedulePage";
+import { PreSessionPage } from "./domains/scheduling/PreSessionPage";
+
 import {
   DashboardPage,
 } from "./pages/dashboard";
@@ -24,10 +32,6 @@ import {
 import {
   ClaimsPage,
 } from "./pages/claims";
-
-import {
-  ClaimDetailPage,
-} from "./pages/claim-detail";
 
 import {
   WorkCenterPage,
@@ -50,9 +54,7 @@ import {
 } from "./pages/demo-control";
 
 import {
-  SchedulePage,
   ChargesPage,
-  PaymentsPage,
   ArDenialsPage,
   CredentialingPage,
   PayersContractsPage,
@@ -67,9 +69,7 @@ import {
   MedicaidPage,
   ImportsPage,
   JournalPage,
-  ClaimSubmissionPage,
   ClaimFollowUpPage,
-  PreSessionPage,
   GoldenThreadPage,
   PatientPortalPage,
 } from "./pages/restored-modules";
@@ -102,12 +102,16 @@ export default function App() {
           <PreSessionPage />
         </Route>
 
+        <Route path="/encounters/:id">
+          <EncounterPage />
+        </Route>
+
         <Route path="/clients/:id">
           <ClientDetailPage />
         </Route>
 
         <Route path="/claims/:id">
-          <ClaimDetailPage />
+          <Claim360Page />
         </Route>
 
         <Route path="/providers/:id">
@@ -148,6 +152,10 @@ export default function App() {
 
         <Route path="/medicaid">
           <MedicaidPage />
+        </Route>
+
+        <Route path="/billing">
+          <BillingQueuePage />
         </Route>
 
         <Route path="/charges">

@@ -1,0 +1,37 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "incremental": false,
+    "lib": ["esnext", "dom", "dom.iterable"],
+    "moduleResolution": "bundler",
+    "types": ["node", "vite/client"],
+    "allowImportingTsExtensions": true,
+    "resolveJsonModule": true
+  },
+  "include": [
+    "src/lib/supabase-demo-client.ts",
+    "src/domains/shared/**/*.ts",
+    "src/domains/readiness/**/*.ts",
+    "src/domains/scheduling/workflow.ts",
+    "src/domains/scheduling/repository.ts",
+    "src/domains/encounters/workflow.ts",
+    "src/domains/encounters/repository.ts",
+    "src/domains/clinical/workflow.ts",
+    "src/domains/clinical/repository.ts",
+    "src/domains/billing/workflow.ts",
+    "src/domains/billing/repository.ts",
+    "src/domains/claims/workflow.ts",
+    "src/domains/claims/repository.ts",
+    "src/domains/claims/relationships.ts",
+    "src/domains/claims/relationships-repository.ts",
+    "src/domains/payments/workflow.ts",
+    "src/domains/payments/repository.ts",
+    "src/domains/work-center/workflow.ts",
+    "src/domains/work-center/repository.ts",
+    "src/domains/clients/chart.ts",
+    "src/domains/clients/repository.ts",
+    "src/domains/demo/scenarios.ts"
+  ],
+  "exclude": ["node_modules", "dist", "build", "**/*.test.ts", "src/InventoryApp.tsx", "src/lib/therassistant-api.ts"]
+}
