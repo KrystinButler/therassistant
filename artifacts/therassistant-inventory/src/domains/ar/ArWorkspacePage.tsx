@@ -3,7 +3,19 @@ import { Link } from "wouter";
 
 import { StatusBadge } from "../../components/status-badge";
 import { money, shortDate } from "../../lib/format";
-import { getArWorkspaceData, type ArRow } from "./repository";
+import {
+  createDenialAppeal,
+  recordAppealOutcome,
+  startDenialWork,
+  submitAppeal,
+  writeOffDenial,
+} from "./denial-repository";
+import {
+  getArWorkspaceData,
+  type AppealWorkspaceRow,
+  type ArRow,
+  type DenialWorkspaceRow,
+} from "./repository";
 
 type Data = Awaited<ReturnType<typeof getArWorkspaceData>>;
 type Tab = "insurance" | "patient" | "denials" | "appeals" | "variance" | "recovery";
@@ -18,7 +30,9 @@ export function ArWorkspacePage() {
   const [data, setData] = useState<Data | null>(null);
   const [tab, setTab] = useState<Tab>(initialTab);
   const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [message, setMessage] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [payer, setPayer] = useState("");
   const [provider, setProvider] = useState("");
@@ -57,6 +71,35 @@ export function ArWorkspacePage() {
     });
   }, [rows, search, payer, provider, status, bucket]);
 
+  async function act(label: string, action: () => Promise<unknown>) {
+    setSaving(true);
+    setError(null);
+    setMessage(null);
+    try {
+      await action();
+      setMessage(label);
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to complete denial action.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  function startAppeal(denial: DenialWorkspaceRow) {
+    const dueDate = window.prompt("Appeal deadline (YYYY-MM-DD)", String(denial.timely_filing_deadline ?? "")) ?? "";
+    if (!dueDate) return;
+    const levelText = window.prompt("Appeal level", "1") ?? "1";
+    const notes = window.prompt("Appeal notes", String(denial.reason ?? "")) ?? "";
+    void act("Appeal draft created.", () => createDenialAppeal(denial.id, Number(levelText), dueDate, notes));
+  }
+
+  function recordOutcome(appeal: AppealWorkspaceRow) {
+    const value = (window.prompt("Outcome: approved, partially_approved, denied, or withdrawn", "approved") ?? "").trim();
+    if (!["approved", "partially_approved", "denied", "withdrawn"].includes(value)) return;
+    void act("Appeal outcome recorded.", () => recordAppealOutcome(appeal.id, value as "approved" | "partially_approved" | "denied" | "withdrawn"));
+  }
+
   return (
     <>
       <div className="thera-page-header split">
@@ -68,7 +111,8 @@ export function ArWorkspacePage() {
         {(["insurance", "patient", "denials", "appeals", "variance", "recovery"] as Tab[]).map((value) => <button key={value} type="button" className={tab === value ? "thera-tab active" : "thera-tab"} onClick={() => chooseTab(value)}>{value === "insurance" ? "Insurance A/R" : value === "patient" ? "Patient A/R" : value === "variance" ? "Underpayments" : value === "recovery" ? "Recoupments / Refunds" : value[0].toUpperCase() + value.slice(1)}</button>)}
       </div>
 
-      {error && <div className="thera-state error">{error}</div>}
+      {error && <div className="thera-state error" style={{ marginBottom: 12 }}>{error}</div>}
+      {message && <div className="thera-alert" style={{ marginBottom: 12 }}>{message}</div>}
       {loading && <div className="thera-state">Loading A/R...</div>}
 
       {!loading && data && (tab === "insurance" || tab === "patient") && (
@@ -94,8 +138,8 @@ export function ArWorkspacePage() {
         </div>
       )}
 
-      {!loading && data && tab === "denials" && <section className="thera-card"><div className="thera-card-header"><div><h2>Denials</h2><p>{data.denials.length} denial record(s). Lifecycle actions are added in the next Phase 3 task.</p></div></div></section>}
-      {!loading && data && tab === "appeals" && <section className="thera-card"><div className="thera-card-header"><div><h2>Appeals</h2><p>{data.appeals.length} appeal record(s). Lifecycle actions are added in the next Phase 3 task.</p></div></div></section>}
+      {!loading && data && tab === "denials" && <DenialsTable rows={data.denials} saving={saving} onStart={(row) => void act("Denial work started.", () => startDenialWork(row.id))} onAppeal={startAppeal} onWriteOff={(row) => void act("Denial written off under configured policy.", () => writeOffDenial(row.id))} />}
+      {!loading && data && tab === "appeals" && <AppealsTable rows={data.appeals} saving={saving} onSubmit={(row) => void act("Appeal submitted.", () => submitAppeal(row.id))} onOutcome={recordOutcome} />}
       {!loading && data && tab === "variance" && <section className="thera-card"><div className="thera-empty">Contract variance analysis is added later in Phase 3.</div></section>}
       {!loading && data && tab === "recovery" && <section className="thera-card"><div className="thera-empty">Recoupment and refund recovery is added later in Phase 3.</div></section>}
     </>
@@ -105,4 +149,14 @@ export function ArWorkspacePage() {
 function ArTable({ rows }: { rows: ArRow[] }) {
   if (!rows.length) return <section className="thera-card"><div className="thera-empty">No open balances match these filters.</div></section>;
   return <section className="thera-card"><div className="thera-table-wrap"><table className="thera-table"><thead><tr><th>Claim</th><th>Patient</th><th>DOS</th><th>Payer</th><th>Provider</th><th>Age</th><th>Charge</th><th>Paid</th><th>Adjustments</th><th>Open</th><th>Status</th><th>Denial</th><th>Work</th></tr></thead><tbody>{rows.map((row) => <tr key={row.id}><td><Link className="thera-table-link" href={`/claims/${row.id}`}>{String(row.patient_control_number ?? "Open")}</Link></td><td>{row.clientName}</td><td>{shortDate(String(row.service_date_from ?? ""))}</td><td>{row.payerName}</td><td>{row.providerName}</td><td>{row.daysOutstanding} days<div className="thera-table-subtext">{row.bucket}</div></td><td>{money(Number(row.total_charge_cents ?? 0))}</td><td>{money(row.paidAmountCents)}</td><td>{money(row.adjustmentAmountCents)}</td><td>{money(row.openBalanceCents)}</td><td><StatusBadge value={String(row.claim_status ?? "unknown")} /></td><td>{row.denialStatus}</td><td>{row.workStatus}</td></tr>)}</tbody></table></div></section>;
+}
+
+function DenialsTable({ rows, saving, onStart, onAppeal, onWriteOff }: { rows: DenialWorkspaceRow[]; saving: boolean; onStart: (row: DenialWorkspaceRow) => void; onAppeal: (row: DenialWorkspaceRow) => void; onWriteOff: (row: DenialWorkspaceRow) => void }) {
+  if (!rows.length) return <section className="thera-card"><div className="thera-empty">No denials.</div></section>;
+  return <section className="thera-card"><div className="thera-table-wrap"><table className="thera-table"><thead><tr><th>Claim / Patient</th><th>Payer</th><th>Category</th><th>CARC / RARC</th><th>Reason</th><th>Amount</th><th>Workability</th><th>Status</th><th>Deadline</th><th>Action</th></tr></thead><tbody>{rows.map((row) => <tr key={row.id}><td>{row.claim_id ? <Link className="thera-table-link" href={`/claims/${String(row.claim_id)}`}>{row.claimNumber}</Link> : row.claimNumber}<div className="thera-table-subtext">{row.clientName}</div></td><td>{row.payerName}</td><td>{String(row.denial_category ?? "other").replaceAll("_", " ")}</td><td>{String(row.carc_code ?? "—")} / {String(row.rarc_code ?? "—")}</td><td>{String(row.reason ?? "—")}</td><td>{money(Number(row.amount_cents ?? 0))}</td><td><StatusBadge value={String(row.workability ?? row.policy)} /></td><td><StatusBadge value={String(row.denial_status ?? "new")} /></td><td>{row.timely_filing_deadline ? shortDate(String(row.timely_filing_deadline)) : "—"}</td><td><div className="thera-filter-row">{row.policy === "auto_writeoff" ? <button type="button" className="thera-action" disabled={saving || row.denial_status === "resolved_writeoff"} onClick={() => onWriteOff(row)}>Write Off</button> : <><button type="button" className="thera-action secondary" disabled={saving} onClick={() => onStart(row)}>Start Work</button><button type="button" className="thera-action" disabled={saving || Boolean(row.activeAppealId)} onClick={() => onAppeal(row)}>{row.activeAppealId ? "Appeal Active" : "Create Appeal"}</button></>}</div></td></tr>)}</tbody></table></div></section>;
+}
+
+function AppealsTable({ rows, saving, onSubmit, onOutcome }: { rows: AppealWorkspaceRow[]; saving: boolean; onSubmit: (row: AppealWorkspaceRow) => void; onOutcome: (row: AppealWorkspaceRow) => void }) {
+  if (!rows.length) return <section className="thera-card"><div className="thera-empty">No appeals.</div></section>;
+  return <section className="thera-card"><div className="thera-table-wrap"><table className="thera-table"><thead><tr><th>Claim / Patient</th><th>Payer</th><th>Category</th><th>Level</th><th>Status</th><th>Due</th><th>Submitted</th><th>Outcome</th><th>Action</th></tr></thead><tbody>{rows.map((row) => <tr key={row.id}><td>{row.claim_id ? <Link className="thera-table-link" href={`/claims/${String(row.claim_id)}`}>{row.claimNumber}</Link> : row.claimNumber}<div className="thera-table-subtext">{row.clientName}</div></td><td>{row.payerName}</td><td>{row.denialCategory.replaceAll("_", " ")}</td><td>{String(row.appeal_level ?? "—")}</td><td><StatusBadge value={String(row.appeal_status ?? "not_started")} /></td><td>{row.deadline_date ? shortDate(String(row.deadline_date)) : "—"}</td><td>{row.submitted_at ? shortDate(String(row.submitted_at)) : "—"}</td><td>{String(row.outcome ?? "—").replaceAll("_", " ")}</td><td><div className="thera-filter-row">{["not_started", "drafting"].includes(String(row.appeal_status)) && <button className="thera-action" type="button" disabled={saving} onClick={() => onSubmit(row)}>Submit</button>}{["submitted", "pending"].includes(String(row.appeal_status)) && <button className="thera-action secondary" type="button" disabled={saving} onClick={() => onOutcome(row)}>Record Outcome</button>}</div></td></tr>)}</tbody></table></div></section>;
 }

@@ -1,5 +1,6 @@
 import { demoSelect, referenceSelect, type Row } from "../../lib/supabase-demo-client";
 import { agingBucket, calculateOpenBalance, daysOutstanding, type AgingBucket } from "./aging";
+import { classifyDenialPolicy, type DenialPolicy } from "./denials";
 
 type DataRow = Row & { id: string };
 export type ArRow = DataRow & {
@@ -13,6 +14,19 @@ export type ArRow = DataRow & {
   bucket: AgingBucket;
   denialStatus: string;
   workStatus: string;
+};
+export type DenialWorkspaceRow = DataRow & {
+  claimNumber: string;
+  clientName: string;
+  payerName: string;
+  policy: DenialPolicy;
+  activeAppealId: string;
+};
+export type AppealWorkspaceRow = DataRow & {
+  claimNumber: string;
+  clientName: string;
+  payerName: string;
+  denialCategory: string;
 };
 
 function personName(row?: Row) {
@@ -40,6 +54,15 @@ export async function getArWorkspaceData(asOfDate = new Date().toISOString().sli
   const clientsById = new Map(clients.map((row) => [row.id, row]));
   const providersById = new Map(providers.map((row) => [row.id, row]));
   const payersById = new Map(payers.map((row) => [row.id, row]));
+  const claimsById = new Map(claims.map((row) => [row.id, row]));
+  const denialsById = new Map(denials.map((row) => [row.id, row]));
+  const activeAppealByDenial = new Map<string, DataRow>();
+  for (const appeal of appeals) {
+    const denialId = String(appeal.denial_id ?? "");
+    if (denialId && ["not_started", "drafting", "submitted", "pending"].includes(String(appeal.appeal_status ?? "")) && !activeAppealByDenial.has(denialId)) {
+      activeAppealByDenial.set(denialId, appeal);
+    }
+  }
 
   const rows = claims.flatMap((claim): ArRow[] => {
     const claimId = claim.id;
@@ -66,11 +89,39 @@ export async function getArWorkspaceData(asOfDate = new Date().toISOString().sli
     }];
   });
 
+  const denialRows: DenialWorkspaceRow[] = denials.map((denial) => {
+    const claim = claimsById.get(String(denial.claim_id ?? ""));
+    const clientId = String(denial.client_id ?? claim?.client_id ?? "");
+    const payerId = String(denial.payer_id ?? claim?.payer_id ?? "");
+    return {
+      ...denial,
+      claimNumber: String(claim?.patient_control_number ?? "—"),
+      clientName: personName(clientsById.get(clientId)),
+      payerName: String(payersById.get(payerId)?.name ?? "—"),
+      policy: classifyDenialPolicy(denial.denial_category),
+      activeAppealId: activeAppealByDenial.get(denial.id)?.id ?? "",
+    };
+  });
+
+  const appealRows: AppealWorkspaceRow[] = appeals.map((appeal) => {
+    const denial = denialsById.get(String(appeal.denial_id ?? ""));
+    const claim = claimsById.get(String(appeal.claim_id ?? denial?.claim_id ?? ""));
+    const clientId = String(denial?.client_id ?? claim?.client_id ?? "");
+    const payerId = String(denial?.payer_id ?? claim?.payer_id ?? "");
+    return {
+      ...appeal,
+      claimNumber: String(claim?.patient_control_number ?? "—"),
+      clientName: personName(clientsById.get(clientId)),
+      payerName: String(payersById.get(payerId)?.name ?? "—"),
+      denialCategory: String(denial?.denial_category ?? "other"),
+    };
+  });
+
   return {
     insuranceAr: rows.filter((row) => row.claim_status !== "patient_responsibility"),
     patientAr: rows.filter((row) => row.claim_status === "patient_responsibility"),
-    denials,
-    appeals,
+    denials: denialRows,
+    appeals: appealRows,
     adjustments,
     workItems,
     payers,

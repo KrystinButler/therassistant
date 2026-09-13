@@ -33,9 +33,12 @@ export function buildClaimWorkqueues(
       .map((row) => String(row.claim_id ?? ""))
       .filter(Boolean),
   );
+  const claimsWithDenialRecord = new Set(
+    denials.map((row) => String(row.claim_id ?? "")).filter(Boolean),
+  );
   const deniedClaimIds = new Set(
     denials
-      .filter((row) => !["resolved_paid", "resolved_writeoff", "closed"].includes(String(row.denial_status ?? "")))
+      .filter((row) => !["resolved_paid", "resolved_writeoff", "upheld", "closed"].includes(String(row.denial_status ?? "")))
       .map((row) => String(row.claim_id ?? ""))
       .filter(Boolean),
   );
@@ -60,7 +63,7 @@ export function buildClaimWorkqueues(
       const status = String(row.claim_status ?? "");
       return status === "rejected" || (["submitted", "batched", "accepted"].includes(status) && rejectedClaimIds.has(row.id));
     }),
-    denials: claims.filter((row) => row.claim_status === "denied" || deniedClaimIds.has(row.id)),
+    denials: claims.filter((row) => deniedClaimIds.has(row.id) || (row.claim_status === "denied" && !claimsWithDenialRecord.has(row.id))),
     appeals: claims.filter((row) => row.claim_status === "appealed" || appealClaimIds.has(row.id)),
     paymentExceptions: claims.filter((row) => paymentClaimIds.has(row.id)),
   };
