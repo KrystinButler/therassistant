@@ -1,7 +1,7 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "installCommand": "pnpm install --frozen-lockfile",
-  "buildCommand": "pnpm --filter ./scripts exec tsx --test ../artifacts/therassistant-inventory/tests/**/*.test.ts && pnpm --filter @workspace/therassistant-inventory run build",
+  "buildCommand": "pnpm --filter ./scripts exec tsx --test ../artifacts/therassistant-inventory/tests/**/*.test.ts && pnpm --filter @workspace/therassistant-inventory run typecheck && pnpm --filter @workspace/therassistant-inventory run build",
   "outputDirectory": "artifacts/therassistant-inventory/dist/public",
   "rewrites": [
     {
