@@ -10,6 +10,8 @@ import {
 } from "./components/app-shell";
 
 import { BillingQueuePage } from "./domains/billing/BillingQueuePage";
+import { Claim360Page } from "./domains/claims/Claim360Page";
+import { ClaimSubmissionPage } from "./domains/claims/ClaimSubmissionPage";
 import { EncounterPage } from "./domains/encounters/EncounterPage";
 import { SchedulePage } from "./domains/scheduling/SchedulePage";
 import { PreSessionPage } from "./domains/scheduling/PreSessionPage";
@@ -29,10 +31,6 @@ import {
 import {
   ClaimsPage,
 } from "./pages/claims";
-
-import {
-  ClaimDetailPage,
-} from "./pages/claim-detail";
 
 import {
   WorkCenterPage,
@@ -71,7 +69,6 @@ import {
   MedicaidPage,
   ImportsPage,
   JournalPage,
-  ClaimSubmissionPage,
   ClaimFollowUpPage,
   GoldenThreadPage,
   PatientPortalPage,
@@ -114,7 +111,7 @@ export default function App() {
         </Route>
 
         <Route path="/claims/:id">
-          <ClaimDetailPage />
+          <Claim360Page />
         </Route>
 
         <Route path="/providers/:id">
