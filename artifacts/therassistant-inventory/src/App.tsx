@@ -10,10 +10,6 @@ import {
 } from "./components/app-shell";
 
 import {
-  DemoToolsBar,
-} from "./components/demo-tools-bar";
-
-import {
   DashboardPage,
 } from "./pages/dashboard";
 
@@ -55,21 +51,24 @@ import {
 
 import {
   SchedulePage,
-  ClinicalPage,
-  EligibilityPage,
-  AuthorizationsPage,
-  MedicaidPage,
   ChargesPage,
   PaymentsPage,
   ArDenialsPage,
   CredentialingPage,
   PayersContractsPage,
   MailroomPage,
+  ReportsPage,
+} from "./pages/operational-workspaces";
+
+import {
+  ClinicalPage,
+  EligibilityPage,
+  AuthorizationsPage,
+  MedicaidPage,
   ImportsPage,
   JournalPage,
   ClaimSubmissionPage,
   ClaimFollowUpPage,
-  ReportsPage,
   PreSessionPage,
   GoldenThreadPage,
   PatientPortalPage,
@@ -78,8 +77,6 @@ import {
 export default function App() {
   return (
     <AppShell>
-      <DemoToolsBar />
-
       <Switch>
         <Route path="/demo">
           <DemoControlCenter />
