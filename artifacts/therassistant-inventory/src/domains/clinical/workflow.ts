@@ -15,13 +15,13 @@ export type ClinicalSigningRepository = {
 export async function signNoteWorkflow(
   repo: ClinicalSigningRepository,
   encounterId: string,
-  signerId: string,
+  providerId: string,
   signatureText: string,
 ): Promise<WorkflowResult<{ noteId: string; signedAt: string }>> {
-  if (!signerId || !signatureText.trim()) {
+  if (!providerId || !signatureText.trim()) {
     return blocked(
       "signature_required",
-      "Signer identity and signature text are required before signing.",
+      "Signing provider identity and signature text are required before signing.",
     );
   }
 
@@ -31,6 +31,14 @@ export async function signNoteWorkflow(
   }
   if (!state.note) {
     return blocked("note_missing", "Create a clinical note before signing.");
+  }
+
+  const encounterProviderId = String(state.encounter.provider_id ?? "");
+  if (encounterProviderId && encounterProviderId !== providerId) {
+    return blocked(
+      "signer_provider_mismatch",
+      "The signing provider must match the encounter provider in the demo workflow.",
+    );
   }
 
   const noteText = String(state.note.note_text ?? "").trim();
@@ -49,7 +57,7 @@ export async function signNoteWorkflow(
   try {
     await repo.createSignature({
       clinical_note_id: state.note.id,
-      signer_id: signerId,
+      provider_id: providerId,
       signed_at: signedAt,
       signature_text: signatureText.trim(),
     });
