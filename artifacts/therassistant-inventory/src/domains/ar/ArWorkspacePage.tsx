@@ -12,9 +12,13 @@ import {
 } from "./denial-repository";
 import {
   getArWorkspaceData,
+  routeRecoveryToWork,
+  routeVarianceToWork,
   type AppealWorkspaceRow,
   type ArRow,
   type DenialWorkspaceRow,
+  type RecoveryWorkspaceRow,
+  type VarianceWorkspaceRow,
 } from "./repository";
 
 type Data = Awaited<ReturnType<typeof getArWorkspaceData>>;
@@ -80,7 +84,7 @@ export function ArWorkspacePage() {
       setMessage(label);
       await load();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Unable to complete denial action.");
+      setError(err instanceof Error ? err.message : "Unable to complete A/R action.");
     } finally {
       setSaving(false);
     }
@@ -140,8 +144,8 @@ export function ArWorkspacePage() {
 
       {!loading && data && tab === "denials" && <DenialsTable rows={data.denials} saving={saving} onStart={(row) => void act("Denial work started.", () => startDenialWork(row.id))} onAppeal={startAppeal} onWriteOff={(row) => void act("Denial written off under configured policy.", () => writeOffDenial(row.id))} />}
       {!loading && data && tab === "appeals" && <AppealsTable rows={data.appeals} saving={saving} onSubmit={(row) => void act("Appeal submitted.", () => submitAppeal(row.id))} onOutcome={recordOutcome} />}
-      {!loading && data && tab === "variance" && <section className="thera-card"><div className="thera-empty">Contract variance analysis is added later in Phase 3.</div></section>}
-      {!loading && data && tab === "recovery" && <section className="thera-card"><div className="thera-empty">Recoupment and refund recovery is added later in Phase 3.</div></section>}
+      {!loading && data && tab === "variance" && <VarianceTable rows={data.variances} saving={saving} onRoute={(row) => void act("Underpayment routed to Work Center.", () => routeVarianceToWork(row))} />}
+      {!loading && data && tab === "recovery" && <RecoveryTable rows={data.recovery} saving={saving} onRoute={(row) => void act("Recovery review routed to Work Center.", () => routeRecoveryToWork(row))} />}
     </>
   );
 }
@@ -159,4 +163,15 @@ function DenialsTable({ rows, saving, onStart, onAppeal, onWriteOff }: { rows: D
 function AppealsTable({ rows, saving, onSubmit, onOutcome }: { rows: AppealWorkspaceRow[]; saving: boolean; onSubmit: (row: AppealWorkspaceRow) => void; onOutcome: (row: AppealWorkspaceRow) => void }) {
   if (!rows.length) return <section className="thera-card"><div className="thera-empty">No appeals.</div></section>;
   return <section className="thera-card"><div className="thera-table-wrap"><table className="thera-table"><thead><tr><th>Claim / Patient</th><th>Payer</th><th>Category</th><th>Level</th><th>Status</th><th>Due</th><th>Submitted</th><th>Outcome</th><th>Action</th></tr></thead><tbody>{rows.map((row) => <tr key={row.id}><td>{row.claim_id ? <Link className="thera-table-link" href={`/claims/${String(row.claim_id)}`}>{row.claimNumber}</Link> : row.claimNumber}<div className="thera-table-subtext">{row.clientName}</div></td><td>{row.payerName}</td><td>{row.denialCategory.replaceAll("_", " ")}</td><td>{String(row.appeal_level ?? "—")}</td><td><StatusBadge value={String(row.appeal_status ?? "not_started")} /></td><td>{row.deadline_date ? shortDate(String(row.deadline_date)) : "—"}</td><td>{row.submitted_at ? shortDate(String(row.submitted_at)) : "—"}</td><td>{String(row.outcome ?? "—").replaceAll("_", " ")}</td><td><div className="thera-filter-row">{["not_started", "drafting"].includes(String(row.appeal_status)) && <button className="thera-action" type="button" disabled={saving} onClick={() => onSubmit(row)}>Submit</button>}{["submitted", "pending"].includes(String(row.appeal_status)) && <button className="thera-action secondary" type="button" disabled={saving} onClick={() => onOutcome(row)}>Record Outcome</button>}</div></td></tr>)}</tbody></table></div></section>;
+}
+
+function VarianceTable({ rows, saving, onRoute }: { rows: VarianceWorkspaceRow[]; saving: boolean; onRoute: (row: VarianceWorkspaceRow) => void }) {
+  if (!rows.length) return <section className="thera-card"><div className="thera-empty">No contract underpayments are currently identified. Variance requires an active contract, active fee schedule, matched claim line, and payer allowed amount.</div></section>;
+  const totalVariance = rows.reduce((sum, row) => sum + row.varianceCents, 0);
+  return <div className="thera-stack"><section className="thera-card"><div className="thera-metric-grid"><div className="thera-metric-card"><div className="thera-metric-label">Underpaid Claims</div><div className="thera-metric-value">{rows.length}</div></div><div className="thera-metric-card"><div className="thera-metric-label">Recoverable Variance</div><div className="thera-metric-value">{money(totalVariance)}</div></div></div></section><section className="thera-card"><div className="thera-table-wrap"><table className="thera-table"><thead><tr><th>Claim / Patient</th><th>DOS</th><th>Payer</th><th>Provider</th><th>Matched Lines</th><th>Expected Allowed</th><th>Actual Allowed</th><th>Underpayment</th><th>Work</th><th>Action</th></tr></thead><tbody>{rows.map((row) => <tr key={row.id}><td><Link className="thera-table-link" href={`/claims/${row.id}`}>{row.claimNumber}</Link><div className="thera-table-subtext">{row.clientName}</div></td><td>{shortDate(row.serviceDate)}</td><td>{row.payerName}</td><td>{row.providerName}</td><td>{row.matchedLineCount}</td><td>{money(row.expectedAllowedCents)}</td><td>{money(row.actualAllowedCents)}</td><td>{money(row.varianceCents)}</td><td><StatusBadge value={row.workStatus} /></td><td><button type="button" className="thera-action" disabled={saving || Boolean(row.workItemId)} onClick={() => onRoute(row)}>{row.workItemId ? "In Work Center" : "Route to Work"}</button></td></tr>)}</tbody></table></div></section></div>;
+}
+
+function RecoveryTable({ rows, saving, onRoute }: { rows: RecoveryWorkspaceRow[]; saving: boolean; onRoute: (row: RecoveryWorkspaceRow) => void }) {
+  if (!rows.length) return <section className="thera-card"><div className="thera-empty">No recoupment or refund-correction adjustments require recovery review.</div></section>;
+  return <section className="thera-card"><div className="thera-table-wrap"><table className="thera-table"><thead><tr><th>Date</th><th>Type</th><th>Claim / Patient</th><th>Payer</th><th>Amount</th><th>Status</th><th>Reason</th><th>Work</th><th>Action</th></tr></thead><tbody>{rows.map((row) => <tr key={row.id}><td>{shortDate(String(row.adjustment_date ?? row.created_at ?? ""))}</td><td>{String(row.adjustment_type ?? "").replaceAll("_", " ")}</td><td>{row.claim_id ? <Link className="thera-table-link" href={`/claims/${String(row.claim_id)}`}>{row.claimNumber}</Link> : row.claimNumber}<div className="thera-table-subtext">{row.clientName}</div></td><td>{row.payerName}</td><td>{money(Number(row.amount_cents ?? 0))}</td><td><StatusBadge value={String(row.adjustment_status ?? "pending")} /></td><td>{String(row.reason ?? "—")}</td><td><StatusBadge value={row.workStatus} /></td><td><button type="button" className="thera-action secondary" disabled={saving || Boolean(row.workItemId)} onClick={() => onRoute(row)}>{row.workItemId ? "In Work Center" : "Create Review"}</button></td></tr>)}</tbody></table></div></section>;
 }
