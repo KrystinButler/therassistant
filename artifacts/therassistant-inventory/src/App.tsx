@@ -13,6 +13,7 @@ import { BillingQueuePage } from "./domains/billing/BillingQueuePage";
 import { Claim360Page } from "./domains/claims/Claim360Page";
 import { ClaimSubmissionPage } from "./domains/claims/ClaimSubmissionPage";
 import { EncounterPage } from "./domains/encounters/EncounterPage";
+import { PaymentsPage } from "./domains/payments/PaymentsPage";
 import { SchedulePage } from "./domains/scheduling/SchedulePage";
 import { PreSessionPage } from "./domains/scheduling/PreSessionPage";
 
@@ -54,7 +55,6 @@ import {
 
 import {
   ChargesPage,
-  PaymentsPage,
   ArDenialsPage,
   CredentialingPage,
   PayersContractsPage,
