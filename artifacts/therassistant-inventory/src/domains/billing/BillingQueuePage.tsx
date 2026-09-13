@@ -2,7 +2,8 @@ import { useEffect, useMemo, useState } from "react";
 import { Link } from "wouter";
 
 import { StatusBadge } from "../../components/status-badge";
-import { dateTime, money, shortDate } from "../../lib/format";
+import { money, shortDate } from "../../lib/format";
+import { createClaimFromCharges } from "../claims/repository";
 import {
   createChargeFromEncounter,
   getBillingQueueData,
@@ -66,14 +67,45 @@ export function BillingQueuePage() {
     }
   }
 
+  async function runCreateClaim(encounterId: string) {
+    if (!data) return;
+    const chargeIds = (data.chargesByEncounter.get(encounterId) ?? [])
+      .filter((charge) => charge.charge_status === "ready_for_claim")
+      .map((charge) => charge.id);
+
+    if (!chargeIds.length) {
+      setError("No ready charges are available for claim creation.");
+      return;
+    }
+
+    setSavingId(encounterId);
+    setError(null);
+    setMessage(null);
+    try {
+      const result = await createClaimFromCharges(chargeIds);
+      if (!result.ok) {
+        setError(result.details?.length ? `${result.message} ${result.details.join(" ")}` : result.message);
+        return;
+      }
+      setMessage(`Claim ${String(result.value.claim.patient_control_number || "created")} created with ${result.value.lineCount} line(s).`);
+      setTab("claimed");
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to create claim.");
+    } finally {
+      setSavingId(null);
+    }
+  }
+
   return (
     <>
-      <div className="thera-page-header">
+      <div className="thera-page-header split">
         <div>
           <div className="thera-eyebrow">BILLING READINESS</div>
           <h1>Billing</h1>
-          <p>Signed encounters are audited, corrected, and converted to charges before claim creation.</p>
+          <p>Signed encounters are audited, corrected, converted to charges, and handed to Claims.</p>
         </div>
+        <Link className="thera-action secondary" href="/claims/submission">Claim Submission</Link>
       </div>
 
       <div className="thera-tabs" style={{ marginBottom: 16 }}>
@@ -87,7 +119,13 @@ export function BillingQueuePage() {
       {message && <div className="thera-alert" style={{ marginBottom: 12 }}>{message}</div>}
       {loading && <div className="thera-state">Loading billing readiness...</div>}
 
-      {!loading && data && tab === "charges" && <ChargesTable data={data} />}
+      {!loading && data && tab === "charges" && (
+        <ChargesTable
+          data={data}
+          savingId={savingId}
+          onCreateClaim={(encounterId) => void runCreateClaim(encounterId)}
+        />
+      )}
       {!loading && data && tab !== "charges" && (
         <EncounterTable
           rows={tab === "ready" ? groups.ready : tab === "blocked" ? groups.blocked : groups.claimed}
@@ -146,10 +184,39 @@ function EncounterTable({
   );
 }
 
-function ChargesTable({ data }: { data: BillingData }) {
+function ChargesTable({
+  data,
+  savingId,
+  onCreateClaim,
+}: {
+  data: BillingData;
+  savingId: string | null;
+  onCreateClaim: (encounterId: string) => void;
+}) {
   const encounters = new Map(data.encounters.map((row) => [row.id, row]));
   const rows = data.charges.filter((row) => row.charge_status === "ready_for_claim");
   if (!rows.length) return <section className="thera-card"><div className="thera-empty">No charges are ready for claim creation.</div></section>;
 
-  return <section className="thera-card"><div className="thera-table-wrap"><table className="thera-table"><thead><tr><th>Service Date</th><th>Patient</th><th>Provider</th><th>Payer</th><th>CPT / Dx</th><th>Charge</th><th>Status</th><th>Source</th></tr></thead><tbody>{rows.map((charge) => { const encounter = encounters.get(String(charge.encounter_id)); return <tr key={charge.id}><td>{shortDate(String(charge.service_date ?? ""))}</td><td>{encounter?.clientName ?? "—"}</td><td>{encounter?.providerName ?? "—"}</td><td>{encounter?.payerName ?? "—"}</td><td>{String(charge.cpt_code ?? "—")}<div className="thera-table-subtext">Dx {String(charge.diagnosis_code ?? "—")}</div></td><td>{money(Number(charge.charge_amount_cents ?? 0))}</td><td><StatusBadge value={String(charge.charge_status)} /></td><td>{encounter ? <Link className="thera-link" href={`/encounters/${encounter.id}`}>Open Encounter</Link> : "—"}</td></tr>; })}</tbody></table></div></section>;
+  const grouped = new Map<string, typeof rows>();
+  for (const row of rows) {
+    const encounterId = String(row.encounter_id ?? "");
+    const list = grouped.get(encounterId) ?? [];
+    list.push(row);
+    grouped.set(encounterId, list);
+  }
+
+  return <div className="thera-stack">{[...grouped.entries()].map(([encounterId, charges]) => {
+    const encounter = encounters.get(encounterId);
+    const total = charges.reduce((sum, charge) => sum + Number(charge.charge_amount_cents ?? 0), 0);
+    return <section className="thera-card" key={encounterId || charges[0].id}>
+      <div className="thera-card-header split">
+        <div>
+          <h2>{encounter?.clientName ?? "Patient"} · {encounter?.payerName ?? "Payer"}</h2>
+          <p>{charges.length} ready charge line(s) · {money(total)}</p>
+        </div>
+        {encounterId && <button type="button" className="thera-action" disabled={savingId === encounterId} onClick={() => onCreateClaim(encounterId)}>Create Claim</button>}
+      </div>
+      <div className="thera-table-wrap"><table className="thera-table"><thead><tr><th>Service Date</th><th>Provider</th><th>CPT / Dx</th><th>Charge</th><th>Status</th><th>Source</th></tr></thead><tbody>{charges.map((charge) => <tr key={charge.id}><td>{shortDate(String(charge.service_date ?? ""))}</td><td>{encounter?.providerName ?? "—"}</td><td>{String(charge.cpt_code ?? "—")}<div className="thera-table-subtext">Dx {String(charge.diagnosis_code ?? "—")}</div></td><td>{money(Number(charge.charge_amount_cents ?? 0))}</td><td><StatusBadge value={String(charge.charge_status)} /></td><td>{encounter ? <Link className="thera-link" href={`/encounters/${encounter.id}`}>Open Encounter</Link> : "—"}</td></tr>)}</tbody></table></div>
+    </section>;
+  })}</div>;
 }
