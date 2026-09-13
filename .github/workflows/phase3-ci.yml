@@ -32,3 +32,9 @@ jobs:
 
       - name: Tests
         run: pnpm --filter ./scripts exec tsx --test ../artifacts/therassistant-inventory/tests/**/*.test.ts
+
+      - name: Phase 2 typecheck
+        run: pnpm --filter @workspace/therassistant-inventory run typecheck:phase2
+
+      - name: Build
+        run: pnpm --filter @workspace/therassistant-inventory run build
