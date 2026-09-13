@@ -18,6 +18,7 @@ export type PatientChart = {
   denials: PatientChartRow[];
   documents: PatientChartRow[];
   checkins: PatientChartRow[];
+  journalEntries: PatientChartRow[];
   workItems: PatientChartRow[];
   openBalanceCents: number;
   summary: PatientReadinessSummary;
