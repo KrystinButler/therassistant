@@ -2,6 +2,7 @@ import { Route, Switch } from "wouter";
 
 import InventoryApp from "./InventoryApp";
 import { AppShell } from "./components/app-shell";
+import { ArWorkspacePage } from "./domains/ar/ArWorkspacePage";
 import { BillingHubPage } from "./domains/billing/BillingHubPage";
 import { BillingQueuePage } from "./domains/billing/BillingQueuePage";
 import { Claim360Page } from "./domains/claims/Claim360Page";
@@ -23,7 +24,6 @@ import { ProviderDetailPage } from "./pages/provider-detail";
 import { ProvidersPage } from "./pages/providers";
 import { WorkCenterPage } from "./pages/work-center";
 import {
-  ArDenialsPage,
   CredentialingPage,
   MailroomPage,
   PayersContractsPage,
@@ -66,7 +66,7 @@ export default function App() {
         <Route path="/charges"><BillingQueuePage /></Route>
         <Route path="/claims"><ClaimsWorkspacePage /></Route>
         <Route path="/payments"><PaymentsPage /></Route>
-        <Route path="/ar-denials"><ArDenialsPage /></Route>
+        <Route path="/ar-denials"><ArWorkspacePage /></Route>
         <Route path="/credentialing"><CredentialingPage /></Route>
         <Route path="/payers-contracts"><PayersContractsPage /></Route>
         <Route path="/mailroom"><MailroomPage /></Route>
