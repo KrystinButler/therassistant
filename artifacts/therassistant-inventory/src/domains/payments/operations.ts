@@ -44,6 +44,12 @@ export function resolvePaymentOwnership(input: {
   const payerId = input.source === "insurance"
     ? (input.claimPayerId || input.requestedPayerId || null)
     : null;
+  if (input.source === "patient" && !clientId) {
+    throw new Error("Patient payments require a patient or a patient-owned claim.");
+  }
+  if (input.source === "insurance" && !payerId) {
+    throw new Error("Insurance payments require a payer or a payer-owned claim.");
+  }
   return { clientId, payerId };
 }
 

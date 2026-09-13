@@ -6,7 +6,7 @@ import { demoSelect, type Row } from "../../lib/supabase-demo-client";
 import { calculateOpenBalance } from "../ar/aging";
 import { getArWorkspaceData } from "../ar/repository";
 import { isRecoveryAdjustment } from "../ar/variance";
-import { buildBillingHubSummary } from "./hub";
+import { buildBillingHubSummary, isActiveArClaimStatus } from "./hub";
 
 type DataRow = Row & { id: string };
 type OpenClaimRow = DataRow & { openBalanceCents: number };
@@ -83,9 +83,20 @@ export function BillingHubPage() {
     if (!data) return null;
     const openClaims = data.claims
       .map((claim): OpenClaimRow => ({ ...claim, openBalanceCents: claimBalance(claim, data.allocations, data.adjustments) }))
-      .filter((claim) => claim.openBalanceCents > 0);
+      .filter((claim) => claim.openBalanceCents > 0 && isActiveArClaimStatus(claim.claim_status));
     const patientAr = openClaims.filter((claim) => claim.claim_status === "patient_responsibility");
     const insuranceAr = openClaims.filter((claim) => claim.claim_status !== "patient_responsibility");
+    const activeAllocations = data.allocations.filter((row) => !row.reversed_at);
+    const paymentsWithUnapplied = data.payments.map((payment) => {
+      const allocatedCents = activeAmount(
+        activeAllocations.filter((row) => row.payment_id === payment.id),
+        "amount_cents",
+      );
+      return {
+        ...payment,
+        unappliedCents: Math.max(0, Number(payment.amount_cents ?? 0) - allocatedCents),
+      };
+    });
     const recoveryItems = data.adjustments.filter((row) =>
       isRecoveryAdjustment(row.adjustment_type)
       && !["reversed", "voided"].includes(String(row.adjustment_status ?? "")),
@@ -94,7 +105,7 @@ export function BillingHubPage() {
     return buildBillingHubSummary({
       charges: data.charges,
       claims: data.claims,
-      payments: data.payments,
+      payments: paymentsWithUnapplied,
       denials: data.denials,
       appeals: data.appeals,
       insuranceAr,

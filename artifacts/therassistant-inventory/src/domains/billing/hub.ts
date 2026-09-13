@@ -37,14 +37,21 @@ function metric(rows: MoneyRow[], field: string): BillingHubMetric {
   return { count: rows.length, amountCents: sum(rows, field) };
 }
 
+export function isActiveArClaimStatus(status: unknown) {
+  return !["voided", "reversed"].includes(String(status ?? ""));
+}
+
 export function buildBillingHubSummary(input: BillingHubInput): BillingHubSummary {
   const readyCharges = input.charges.filter((row) => row.charge_status === "ready_for_claim");
   const claimsNeedAction = input.claims.filter((row) =>
     ["validation_failed", "rejected", "denied"].includes(String(row.claim_status ?? "")),
   );
-  const unappliedPayments = input.payments.filter((row) =>
-    ["unapplied", "partially_applied"].includes(String(row.payment_status ?? "")),
-  );
+  const unappliedPayments = input.payments
+    .filter((row) => ["unapplied", "partially_applied"].includes(String(row.payment_status ?? "")))
+    .map((row) => ({
+      ...row,
+      unappliedCents: Number(row.unappliedCents ?? row.amount_cents ?? 0),
+    }));
   const activeDenials = input.denials.filter((row) =>
     !["resolved_paid", "resolved_writeoff", "upheld", "closed"].includes(String(row.denial_status ?? "")),
   );
@@ -72,7 +79,7 @@ export function buildBillingHubSummary(input: BillingHubInput): BillingHubSummar
   return {
     readyCharges: metric(readyCharges, "charge_amount_cents"),
     claimsNeedAction: metric(claimsNeedAction, "total_charge_cents"),
-    unappliedPayments: metric(unappliedPayments, "amount_cents"),
+    unappliedPayments: metric(unappliedPayments, "unappliedCents"),
     insuranceAr: metric(input.insuranceAr, "openBalanceCents"),
     patientAr: metric(input.patientAr, "openBalanceCents"),
     denials: metric(activeDenials, "amount_cents"),

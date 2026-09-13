@@ -2,6 +2,7 @@ import {
   demoInsert,
   demoSelect,
   demoUpdate,
+  demoUpdateExact,
   referenceSelect,
   type Row,
 } from "../../lib/supabase-demo-client";
@@ -171,7 +172,7 @@ export async function reversePayment(paymentId: string, reason: string) {
   const reversal = buildPaymentReversal({ paymentId, allocationIds: activeAllocations.map((row) => row.id), reason });
   await demoInsert<DataRow>("payment_reversals", { payment_id: paymentId, reason: reversal.reason });
   for (const allocation of activeAllocations) {
-    await demoUpdate<DataRow>("payment_allocations", allocation.id, { reversed_at: reversal.reversedAt });
+    await demoUpdateExact<DataRow>("payment_allocations", allocation.id, { reversed_at: reversal.reversedAt });
   }
   const updatedPayment = await demoUpdate<DataRow>("payments", paymentId, { payment_status: reversal.paymentStatus });
   for (const claimId of affectedClaimIds) {

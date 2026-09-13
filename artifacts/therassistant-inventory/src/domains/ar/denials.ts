@@ -7,6 +7,12 @@ export function classifyDenialPolicy(category: unknown): DenialPolicy {
   return "needs_review";
 }
 
+export function capDenialWriteOffAmount(denialAmountCents: number, openBalanceCents: number) {
+  if (!Number.isFinite(denialAmountCents) || denialAmountCents < 0) throw new Error("Denial amount cannot be negative.");
+  if (!Number.isFinite(openBalanceCents) || openBalanceCents < 0) throw new Error("Claim open balance cannot be negative.");
+  return Math.min(denialAmountCents, openBalanceCents);
+}
+
 export function assertAppealAllowed(input: { category: unknown; hasActiveAppeal: boolean }) {
   if (classifyDenialPolicy(input.category) === "auto_writeoff") {
     throw new Error("This denial category follows the configured non-workable/write-off policy and should not be appealed.");

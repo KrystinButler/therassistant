@@ -4,13 +4,52 @@ import {
   demoUpdate,
   type Row,
 } from "../../lib/supabase-demo-client";
-import { assertAppealAllowed, classifyDenialPolicy, createAppealInput } from "./denials";
+import { calculateOpenBalance } from "./aging";
+import {
+  assertAppealAllowed,
+  capDenialWriteOffAmount,
+  classifyDenialPolicy,
+  createAppealInput,
+} from "./denials";
+import { isRecoveryAdjustment } from "./variance";
 
 type DataRow = Row & { id: string };
 const ACTIVE_APPEAL_STATUSES = ["not_started", "drafting", "submitted", "pending"];
 
 async function first<T extends Row>(table: string, id: string) {
   return (await demoSelect<T>(table, { id: `eq.${id}`, limit: "1" }))[0] ?? null;
+}
+
+function total(rows: DataRow[], field: string) {
+  return rows.reduce((sum, row) => sum + Number(row[field] ?? 0), 0);
+}
+
+async function getClaimFinancialState(claimId: string) {
+  const claim = await first<DataRow>("professional_claims", claimId);
+  if (!claim) throw new Error("Linked claim not found.");
+  const [allocations, adjustments] = await Promise.all([
+    demoSelect<DataRow>("payment_allocations", { claim_id: `eq.${claimId}`, order: "created_at.desc" }),
+    demoSelect<DataRow>("adjustments", { claim_id: `eq.${claimId}`, order: "created_at.desc" }),
+  ]);
+  const paidCents = total(allocations.filter((row) => !row.reversed_at), "amount_cents");
+  const activeAdjustments = adjustments.filter(
+    (row) => !["reversed", "voided"].includes(String(row.adjustment_status ?? "")),
+  );
+  const adjustmentCents = total(
+    activeAdjustments.filter((row) => !isRecoveryAdjustment(row.adjustment_type)),
+    "amount_cents",
+  );
+  const recoveryCents = total(
+    activeAdjustments.filter((row) => isRecoveryAdjustment(row.adjustment_type)),
+    "amount_cents",
+  );
+  const openBalanceCents = calculateOpenBalance(
+    Number(claim.total_charge_cents ?? 0),
+    paidCents,
+    adjustmentCents,
+    recoveryCents,
+  );
+  return { claim, openBalanceCents };
 }
 
 async function addHistory(workItemId: string, note: string, oldStatus?: string, newStatus?: string) {
@@ -143,26 +182,42 @@ export async function writeOffDenial(denialId: string) {
   if (classifyDenialPolicy(denial.denial_category) !== "auto_writeoff") {
     throw new Error("This denial is not configured for automatic write-off.");
   }
-  const amount = Number(denial.amount_cents ?? 0);
-  if (amount <= 0) throw new Error("A positive denial amount is required before write-off.");
+  const denialAmount = Number(denial.amount_cents ?? 0);
+  if (denialAmount <= 0) throw new Error("A positive denial amount is required before write-off.");
+
+  let writeOffAmount = denialAmount;
+  let claimOpenBalance: number | null = null;
+  if (denial.claim_id) {
+    const financial = await getClaimFinancialState(String(denial.claim_id));
+    claimOpenBalance = financial.openBalanceCents;
+    writeOffAmount = capDenialWriteOffAmount(denialAmount, claimOpenBalance);
+  }
+
   const type = denial.denial_category === "credentialing" ? "credentialing_writeoff" : "payer_writeoff";
-  await demoInsert<DataRow>("adjustments", {
-    client_id: denial.client_id ?? null,
-    claim_id: denial.claim_id ?? null,
-    payer_id: denial.payer_id ?? null,
-    adjustment_type: type,
-    adjustment_status: "posted",
-    amount_cents: amount,
-    reason: `Configured ${String(denial.denial_category)} denial write-off policy.`,
-    carc_code: denial.carc_code ?? null,
-    posted_at: new Date().toISOString(),
-  });
+  if (writeOffAmount > 0) {
+    await demoInsert<DataRow>("adjustments", {
+      client_id: denial.client_id ?? null,
+      claim_id: denial.claim_id ?? null,
+      payer_id: denial.payer_id ?? null,
+      adjustment_type: type,
+      adjustment_status: "posted",
+      amount_cents: writeOffAmount,
+      reason: `Configured ${String(denial.denial_category)} denial write-off policy.`,
+      carc_code: denial.carc_code ?? null,
+      posted_at: new Date().toISOString(),
+    });
+  }
   await demoUpdate<DataRow>("denials", denialId, {
     denial_status: "resolved_writeoff",
     workability: "auto_writeoff",
   });
-  if (denial.claim_id) {
-    await demoUpdate<DataRow>("professional_claims", String(denial.claim_id), { claim_status: "paid" });
+  if (denial.claim_id && claimOpenBalance !== null) {
+    const remainingBalance = Math.max(0, claimOpenBalance - writeOffAmount);
+    if (remainingBalance === 0) {
+      await demoUpdate<DataRow>("professional_claims", String(denial.claim_id), { claim_status: "paid" });
+    } else {
+      await demoUpdate<DataRow>("professional_claims", String(denial.claim_id), { claim_status: "partially_paid" });
+    }
   }
   const work = await findActiveWork("denial", denialId, "denial_followup");
   if (work) {
