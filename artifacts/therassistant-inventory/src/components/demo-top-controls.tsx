@@ -7,6 +7,10 @@ import {
   Link,
 } from "wouter";
 
+import {
+  parseApiResponse,
+} from "../lib/therassistant-api";
+
 
 const DEFAULT_TENANT =
   "10000000-0000-4000-8000-000000000002";
@@ -56,17 +60,10 @@ export function DemoTopControls() {
         "/api/demo-control/tenants",
       )
         .then(
-          async (response) => {
-            if (
-              !response.ok
-            ) {
-              throw new Error(
-                "Unable to load workspaces.",
-              );
-            }
-
-            return response.json();
-          },
+          (response) =>
+            parseApiResponse<Tenant[]>(
+              response,
+            ),
         )
         .then(
           (

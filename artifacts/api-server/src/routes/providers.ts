@@ -3,6 +3,8 @@ import { db } from "@workspace/db";
 import { sql } from "drizzle-orm";
 
 const router: IRouter = Router();
+const UUID_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 router.get("/providers", async (_req, res, next) => {
   try {
@@ -54,6 +56,12 @@ router.get("/providers", async (_req, res, next) => {
 router.get("/providers/:id", async (req, res, next) => {
   try {
     const id = req.params.id;
+
+    if (!UUID_PATTERN.test(id)) {
+      return res.status(400).json({
+        error: "Invalid provider id",
+      });
+    }
 
     const provider = await db.execute(sql`
       SELECT *
@@ -169,7 +177,7 @@ router.get("/providers/:id", async (req, res, next) => {
       `),
     ]);
 
-    res.json({
+    return res.json({
       provider: provider.rows[0],
       appointments: appointments.rows,
       clinicalNotes: notes.rows,

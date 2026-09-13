@@ -12,6 +12,7 @@ import {
 } from "../components/status-badge";
 
 import {
+  parseApiResponse,
   useApi,
 } from "../lib/therassistant-api";
 
@@ -278,16 +279,7 @@ export function DemoControlCenter() {
         );
 
 
-      const result =
-        await response.json();
-
-
-      if (!response.ok) {
-        throw new Error(
-          result.error ||
-          "Demo reset failed.",
-        );
-      }
+      await parseApiResponse(response);
 
 
       window.localStorage

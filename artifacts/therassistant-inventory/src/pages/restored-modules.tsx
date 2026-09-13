@@ -10,6 +10,10 @@ import {
   useRoute,
 } from "wouter";
 
+import {
+  parseApiResponse,
+} from "../lib/therassistant-api";
+
 type Row =
   Record<string, unknown>;
 
@@ -32,19 +36,7 @@ function useJson(
     setError(null);
 
     fetch(endpoint)
-      .then(async (response) => {
-        const body =
-          await response.json();
-
-        if (!response.ok) {
-          throw new Error(
-            body?.error ??
-            `HTTP ${response.status}`,
-          );
-        }
-
-        return body;
-      })
+      .then((response) => parseApiResponse(response))
       .then((body) => {
         if (active) {
           setData(body);
