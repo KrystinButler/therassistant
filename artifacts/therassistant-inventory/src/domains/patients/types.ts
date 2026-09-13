@@ -12,10 +12,12 @@ export type PatientChart = {
   encounters: PatientChartRow[];
   treatmentPlans: Array<PatientChartRow & { goals: PatientChartRow[] }>;
   clinicalNotes: PatientChartRow[];
+  diagnoses: PatientChartRow[];
   charges: PatientChartRow[];
   claims: PatientChartRow[];
   payments: PatientChartRow[];
   denials: PatientChartRow[];
+  appeals: PatientChartRow[];
   documents: PatientChartRow[];
   checkins: PatientChartRow[];
   journalEntries: PatientChartRow[];
