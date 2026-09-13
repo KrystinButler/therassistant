@@ -23,6 +23,61 @@ function check(
   return { code, label, status, blocking, message, action };
 }
 
+function treatmentPlanCheck(input: PreSessionInput): ReadinessCheck {
+  const plan = input.treatmentPlan;
+  if (!plan) {
+    return check(
+      "treatment_plan_missing",
+      "Treatment Plan",
+      "warn",
+      false,
+      "No current treatment plan is on file. This may be expected for an intake or first visit.",
+      "Create or review the treatment plan when clinically appropriate.",
+    );
+  }
+
+  const status = String(plan.status ?? "draft");
+  if (!["active", "signed"].includes(status)) {
+    return check(
+      "treatment_plan_status",
+      "Treatment Plan",
+      "warn",
+      false,
+      `Treatment plan status is ${status.replaceAll("_", " ")}.`,
+      "Review the treatment plan status before ongoing treatment.",
+    );
+  }
+
+  const serviceDate = input.serviceDate ? new Date(`${input.serviceDate}T12:00:00Z`) : null;
+  const reviewDue = plan.review_due_date ? new Date(`${plan.review_due_date}T12:00:00Z`) : null;
+  if (
+    serviceDate &&
+    reviewDue &&
+    Number.isFinite(serviceDate.getTime()) &&
+    Number.isFinite(reviewDue.getTime()) &&
+    reviewDue < serviceDate
+  ) {
+    return check(
+      "treatment_plan_review_overdue",
+      "Treatment Plan",
+      "warn",
+      false,
+      `Treatment plan review was due ${plan.review_due_date}.`,
+      "Review and update the treatment plan.",
+    );
+  }
+
+  return check(
+    "treatment_plan_current",
+    "Treatment Plan",
+    "pass",
+    false,
+    plan.review_due_date
+      ? `Treatment plan is current through ${plan.review_due_date}.`
+      : "Treatment plan is active.",
+  );
+}
+
 export function evaluatePreSession(
   input: PreSessionInput,
 ): PreSessionReadiness {
@@ -168,6 +223,8 @@ export function evaluatePreSession(
       ),
     );
   }
+
+  checks.push(treatmentPlanCheck(input));
 
   return {
     ready: !checks.some((item) => item.blocking),

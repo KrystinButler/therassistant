@@ -1,3 +1,5 @@
+export { syntheticEligibilityStatus } from "../eligibility/workflow";
+
 export type AppointmentDraft = {
   clientId: string;
   providerId?: string | null;
@@ -35,11 +37,4 @@ export function buildAppointmentInput(draft: AppointmentDraft) {
     cpt_code: draft.cptCode || null,
     notes: draft.notes || null,
   };
-}
-
-export function syntheticEligibilityStatus(memberId: string) {
-  const normalized = memberId.trim();
-  if (normalized.endsWith("0")) return "inactive" as const;
-  if (normalized.endsWith("9")) return "unable_to_verify" as const;
-  return "active" as const;
 }

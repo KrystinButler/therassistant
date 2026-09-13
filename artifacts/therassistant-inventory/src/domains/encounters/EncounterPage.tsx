@@ -9,6 +9,7 @@ import {
   saveClinicalNote,
   signEncounterNote,
 } from "../clinical/repository";
+import { treatmentPlanAlert } from "../treatment-plans/workflow";
 import { getEncounterDetail } from "./repository";
 
 type EncounterDetail = Awaited<ReturnType<typeof getEncounterDetail>>;
@@ -154,6 +155,18 @@ export function EncounterPage() {
 
   const encounter = data.encounter;
   const note = data.notes[0];
+  const currentTreatmentPlan = data.treatmentPlans[0] ?? null;
+  const treatmentPlanReadiness = currentTreatmentPlan
+    ? treatmentPlanAlert(
+        {
+          status: String(currentTreatmentPlan.status ?? "draft"),
+          reviewDueDate: currentTreatmentPlan.review_due_date
+            ? String(currentTreatmentPlan.review_due_date)
+            : null,
+        },
+        new Date(String(encounter.started_at ?? new Date().toISOString())),
+      )
+    : null;
 
   return (
     <>
@@ -194,9 +207,12 @@ export function EncounterPage() {
         </section>
 
         <section className="thera-card">
-          <div className="thera-card-header"><div><h2>Treatment Plan Context</h2><p>Active goals remain visible beside documentation.</p></div></div>
-          {data.treatmentPlans.length === 0 ? <div className="thera-empty">No treatment plan is linked for this patient.</div> : (
+          <div className="thera-card-header"><div><h2>Treatment Plan Context</h2><p>Active goals and review readiness remain visible beside documentation.</p></div>{treatmentPlanReadiness && <StatusBadge value={treatmentPlanReadiness.code} />}</div>
+          {data.treatmentPlans.length === 0 ? (
+            <div className="thera-empty">No treatment plan is linked for this patient. Create or review one when clinically appropriate.</div>
+          ) : (
             <div className="thera-stack">
+              {treatmentPlanReadiness && <div className="thera-alert">{treatmentPlanReadiness.message}</div>}
               {data.treatmentPlans.slice(0, 2).map((plan) => (
                 <div className="thera-stack-item" key={plan.id}>
                   <div className="thera-row-between"><strong>{String(plan.plan_name ?? plan.plan_text ?? "Treatment Plan")}</strong><StatusBadge value={String(plan.status ?? "active")} /></div>

@@ -13,6 +13,19 @@ import {
 } from "./workflow";
 
 type DataRow = Row & { id: string };
+type EnrichedClaimRow = DataRow & { clientName: string; payerName: string };
+type EnrichedPaymentRow = DataRow & { clientName: string; payerName: string };
+type AllocationRow = DataRow & {
+  claimControlNumber: string;
+  patientName: string;
+  traceNumber: string;
+};
+type EraClaimRow = DataRow & { patientName: string };
+type DenialRow = DataRow & {
+  patientName: string;
+  payerName: string;
+  claimControlNumber: string;
+};
 
 function first<T>(rows: T[]) {
   return rows[0] ?? null;
@@ -124,19 +137,19 @@ export async function getPaymentsWorkspaceData() {
   const claimsById = new Map(claims.map((row) => [row.id, row]));
   const paymentsById = new Map(payments.map((row) => [row.id, row]));
 
-  const claimRows = claims.map((claim) => ({
+  const claimRows = claims.map((claim): EnrichedClaimRow => ({
     ...claim,
     clientName: personName(clientsById.get(String(claim.client_id))),
     payerName: String(payersById.get(String(claim.payer_id))?.name ?? "—"),
   }));
 
-  const paymentRows = payments.map((payment) => ({
+  const paymentRows = payments.map((payment): EnrichedPaymentRow => ({
     ...payment,
     clientName: personName(clientsById.get(String(payment.client_id))),
     payerName: String(payersById.get(String(payment.payer_id))?.name ?? "—"),
   }));
 
-  const allocationRows = allocations.map((allocation) => {
+  const allocationRows = allocations.map((allocation): AllocationRow => {
     const claim = claimsById.get(String(allocation.claim_id));
     const payment = paymentsById.get(String(allocation.payment_id));
     return {
@@ -147,12 +160,12 @@ export async function getPaymentsWorkspaceData() {
     };
   });
 
-  const eraClaimRows = eraClaims.map((eraClaim) => ({
+  const eraClaimRows = eraClaims.map((eraClaim): EraClaimRow => ({
     ...eraClaim,
     patientName: personName(clientsById.get(String(eraClaim.client_id))),
   }));
 
-  const denialRows = denials.map((denial) => ({
+  const denialRows = denials.map((denial): DenialRow => ({
     ...denial,
     patientName: personName(clientsById.get(String(denial.client_id))),
     payerName: String(payersById.get(String(denial.payer_id))?.name ?? "—"),

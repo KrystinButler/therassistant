@@ -14,6 +14,12 @@ import {
 } from "./workflow";
 
 type DataRow = Row & { id: string };
+type ReadinessCheckRow = DataRow & {
+  action?: string | null;
+  check_code?: string | null;
+  check_status?: string | null;
+  message?: string | null;
+};
 
 function first<T>(rows: T[]) {
   return rows[0] ?? null;
@@ -95,7 +101,7 @@ export async function getEncounterDetail(encounterId: string) {
       encounter_id: `eq.${encounterId}`,
       order: "created_at.asc",
     }),
-    demoSelect<DataRow>("encounter_readiness_checks", {
+    demoSelect<ReadinessCheckRow>("encounter_readiness_checks", {
       encounter_id: `eq.${encounterId}`,
       order: "evaluated_at.desc",
     }),

@@ -16,6 +16,13 @@ import {
 } from "./workflow";
 
 type DataRow = Row & { id: string };
+type EnrichedClaimRow = DataRow & {
+  clientName: string;
+  providerName: string;
+  payerName: string;
+};
+type BatchRow = DataRow & { claimIds: string[] };
+type SubmissionRow = DataRow & { responses: DataRow[] };
 
 function first<T>(rows: T[]) {
   return rows[0] ?? null;
@@ -227,7 +234,7 @@ export async function getClaimSubmissionData() {
   const providersById = new Map(providers.map((row) => [row.id, row]));
   const payersById = new Map(payers.map((row) => [row.id, row]));
 
-  const claimRows = claims.map((claim) => ({
+  const claimRows = claims.map((claim): EnrichedClaimRow => ({
     ...claim,
     clientName: personName(clientsById.get(String(claim.client_id))),
     providerName: personName(providersById.get(String(claim.rendering_provider_id))),
@@ -242,7 +249,7 @@ export async function getClaimSubmissionData() {
     claimIdsByBatch.set(batchId, list);
   }
 
-  const batchRows = batches.map((batch) => ({
+  const batchRows = batches.map((batch): BatchRow => ({
     ...batch,
     claimIds: claimIdsByBatch.get(batch.id) ?? [],
   }));
@@ -255,7 +262,7 @@ export async function getClaimSubmissionData() {
     responseBySubmission.set(submissionId, list);
   }
 
-  const submissionRows = submissions.map((submission) => ({
+  const submissionRows = submissions.map((submission): SubmissionRow => ({
     ...submission,
     responses: responseBySubmission.get(submission.id) ?? [],
   }));
@@ -292,13 +299,15 @@ export async function getClaim360Data(claimId: string) {
       : Promise.resolve([]),
   ]);
 
+  const enrichedClaim: EnrichedClaimRow = {
+    ...claim,
+    clientName: personName(first(clients) ?? undefined),
+    providerName: personName(first(providers) ?? undefined),
+    payerName: String(first(payers)?.name ?? "—"),
+  };
+
   return {
-    claim: {
-      ...claim,
-      clientName: personName(first(clients) ?? undefined),
-      providerName: personName(first(providers) ?? undefined),
-      payerName: String(first(payers)?.name ?? "—"),
-    },
+    claim: enrichedClaim,
     sourceEncounter: first(encounters),
     lines,
     diagnoses,
