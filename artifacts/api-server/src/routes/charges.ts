@@ -142,9 +142,9 @@ router.get(
           c.first_name
       `);
 
-      res.json(result.rows);
+      return res.json(result.rows);
     } catch (error) {
-      next(error);
+      return next(error);
     }
   },
 );
@@ -296,7 +296,7 @@ router.post(
           "Charge passed validation and is ready for claim creation.",
       });
     } catch (error) {
-      next(error);
+      return next(error);
     }
   },
 );
@@ -557,7 +557,7 @@ router.post(
           controlNumber,
       });
     } catch (error) {
-      next(error);
+      return next(error);
     }
   },
 );

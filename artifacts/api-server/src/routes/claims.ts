@@ -113,9 +113,9 @@ router.get("/claims", async (req, res, next) => {
       ORDER BY pc.service_date_from DESC NULLS LAST
     `);
 
-    res.json(result.rows);
+    return res.json(result.rows);
   } catch (error) {
-    next(error);
+    return next(error);
   }
 });
 
@@ -272,7 +272,7 @@ router.get("/claims/:id", async (req, res, next) => {
       workItems: workItems.rows,
     });
   } catch (error) {
-    next(error);
+    return next(error);
   }
 });
 

@@ -91,9 +91,9 @@ router.get("/clients", async (req, res, next) => {
       ORDER BY c.last_name, c.first_name
     `);
 
-    res.json(result.rows);
+    return res.json(result.rows);
   } catch (error) {
-    next(error);
+    return next(error);
   }
 });
 
@@ -272,7 +272,7 @@ router.get("/clients/:id", async (req, res, next) => {
       workItems: workItems.rows,
     });
   } catch (error) {
-    next(error);
+    return next(error);
   }
 });
 

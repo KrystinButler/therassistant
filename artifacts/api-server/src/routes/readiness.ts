@@ -198,9 +198,9 @@ router.get("/schedule", async (_req, res, next) => {
       ORDER BY a.starts_at
     `);
 
-    res.json(result.rows);
+    return res.json(result.rows);
   } catch (error) {
-    next(error);
+    return next(error);
   }
 });
 
@@ -530,7 +530,7 @@ router.get(
           workItems.rows,
       });
     } catch (error) {
-      next(error);
+      return next(error);
     }
   },
 );
@@ -634,9 +634,9 @@ router.get(
           c.first_name
       `);
 
-      res.json(result.rows);
+      return res.json(result.rows);
     } catch (error) {
-      next(error);
+      return next(error);
     }
   },
 );
@@ -739,9 +739,9 @@ router.get(
           c.first_name
       `);
 
-      res.json(result.rows);
+      return res.json(result.rows);
     } catch (error) {
-      next(error);
+      return next(error);
     }
   },
 );

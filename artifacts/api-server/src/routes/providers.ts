@@ -44,9 +44,9 @@ router.get("/providers", async (_req, res, next) => {
       ORDER BY pr.last_name, pr.first_name
     `);
 
-    res.json(result.rows);
+    return res.json(result.rows);
   } catch (error) {
-    next(error);
+    return next(error);
   }
 });
 
@@ -179,7 +179,7 @@ router.get("/providers/:id", async (req, res, next) => {
       workItems: workItems.rows,
     });
   } catch (error) {
-    next(error);
+    return next(error);
   }
 });
 

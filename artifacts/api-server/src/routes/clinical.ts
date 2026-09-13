@@ -111,9 +111,9 @@ router.get(
           cn.updated_at DESC
       `);
 
-      res.json(result.rows);
+      return res.json(result.rows);
     } catch (error) {
-      next(error);
+      return next(error);
     }
   },
 );
@@ -271,7 +271,7 @@ router.post(
         note: updated.rows[0],
       });
     } catch (error) {
-      next(error);
+      return next(error);
     }
   },
 );

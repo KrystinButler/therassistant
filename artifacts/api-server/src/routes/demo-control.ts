@@ -159,7 +159,7 @@ router.get(
         result.rows,
       );
     } catch (error) {
-      next(error);
+      return next(error);
     }
   },
 );
@@ -348,7 +348,7 @@ router.get(
           defaultTenant,
       });
     } catch (error) {
-      next(error);
+      return next(error);
     }
   },
 );
@@ -427,7 +427,7 @@ router.post(
           "Synthetic Therassistant demo data has been restored to its starting state.",
       });
     } catch (error) {
-      next(error);
+      return next(error);
     }
   },
 );
