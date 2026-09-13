@@ -1,5 +1,35 @@
 export type QueueRow = Record<string, unknown> & { id: string };
 
+export type EligibilityQueueRow = {
+  id: string;
+  patientId: string;
+  patientName: string;
+  policyId: string | null;
+  payerId: string | null;
+  payerName: string;
+  memberId: string;
+  serviceDate: string | null;
+  checkedAt: string | null;
+  status: string;
+  needsAttention: boolean;
+  rawResponse: unknown;
+};
+
+export type AuthorizationQueueRow = {
+  id: string;
+  patientId: string;
+  patientName: string;
+  payerId: string | null;
+  payerName: string;
+  authorizationId: string | null;
+  authorizationNumber: string | null;
+  status: string;
+  endDate: string | null;
+  remainingUnits: number | null;
+  alert: string;
+  needsAttention: boolean;
+};
+
 type EligibilityQueueInput = {
   clients: QueueRow[];
   payers: QueueRow[];
@@ -48,10 +78,10 @@ function newest(rows: QueueRow[]) {
   })[0] ?? null;
 }
 
-export function buildEligibilityQueue(input: EligibilityQueueInput) {
+export function buildEligibilityQueue(input: EligibilityQueueInput): EligibilityQueueRow[] {
   const payerMap = new Map(input.payers.map((row) => [row.id, row]));
 
-  return input.clients.map((client) => {
+  return input.clients.map((client): EligibilityQueueRow => {
     const policy = primaryPolicy(input.policies, client.id);
     const latest = policy
       ? newest(
@@ -103,11 +133,12 @@ function currentAuthorization(
   })[0] ?? null;
 }
 
-export function buildAuthorizationQueue(input: AuthorizationQueueInput) {
+export function buildAuthorizationQueue(input: AuthorizationQueueInput): AuthorizationQueueRow[] {
   const payerMap = new Map(input.payers.map((row) => [row.id, row]));
   const today = input.today ?? new Date().toISOString().slice(0, 10);
+  const result: AuthorizationQueueRow[] = [];
 
-  return input.clients.flatMap((client) => {
+  for (const client of input.clients) {
     const policy = primaryPolicy(input.policies, client.id);
     const payerId = policy?.payer_id ? String(policy.payer_id) : null;
     const required = metadata(policy).authorization_required === true;
@@ -117,10 +148,10 @@ export function buildAuthorizationQueue(input: AuthorizationQueueInput) {
       payerId,
     );
 
-    if (!required && !authorization) return [];
+    if (!required && !authorization) continue;
 
     if (!authorization) {
-      return [{
+      result.push({
         id: `authorization-missing-${client.id}`,
         patientId: client.id,
         patientName: patientName(client),
@@ -133,7 +164,8 @@ export function buildAuthorizationQueue(input: AuthorizationQueueInput) {
         remainingUnits: null,
         alert: "missing",
         needsAttention: true,
-      }];
+      });
+      continue;
     }
 
     const authUnits = input.units.filter(
@@ -151,7 +183,7 @@ export function buildAuthorizationQueue(input: AuthorizationQueueInput) {
     else if (remainingUnits !== null && remainingUnits <= 0) alert = "exhausted";
     else if (remainingUnits !== null && remainingUnits <= 2) alert = "low_units";
 
-    return [{
+    result.push({
       id: authorization.id,
       patientId: client.id,
       patientName: patientName(client),
@@ -166,6 +198,8 @@ export function buildAuthorizationQueue(input: AuthorizationQueueInput) {
       remainingUnits,
       alert,
       needsAttention: alert !== "current",
-    }];
-  });
+    });
+  }
+
+  return result;
 }
