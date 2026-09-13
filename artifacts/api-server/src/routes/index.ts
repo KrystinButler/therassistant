@@ -14,6 +14,8 @@ import workqueuesRouter from "./workqueues";
 import readinessRouter from "./readiness";
 import clinicalRouter from "./clinical";
 import chargesRouter from "./charges";
+import demoControlRouter from "./demo-control";
+import restoredRouter from "./restored";
 
 const router: IRouter = Router();
 
@@ -28,5 +30,7 @@ router.use(workqueuesRouter);
 router.use(readinessRouter);
 router.use(clinicalRouter);
 router.use(chargesRouter);
+router.use(demoControlRouter);
+router.use(restoredRouter);
 
 export default router;
