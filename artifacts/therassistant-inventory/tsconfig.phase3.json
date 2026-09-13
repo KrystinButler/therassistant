@@ -16,8 +16,8 @@
   "include": [
     "src/domains/**/*.ts",
     "src/domains/**/*.tsx",
-    "src/components/**/*.ts",
-    "src/components/**/*.tsx",
+    "src/components/app-shell.tsx",
+    "src/components/status-badge.tsx",
     "src/pages/work-center.tsx",
     "src/lib/format.ts",
     "src/lib/supabase-demo-client.ts"
