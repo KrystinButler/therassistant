@@ -14,16 +14,13 @@
     }
   },
   "include": [
-    "src/App.tsx",
-    "src/InventoryApp.tsx",
     "src/domains/**/*.ts",
     "src/domains/**/*.tsx",
     "src/components/**/*.ts",
     "src/components/**/*.tsx",
-    "src/lib/**/*.ts",
-    "src/lib/**/*.tsx",
-    "src/pages/**/*.ts",
-    "src/pages/**/*.tsx"
+    "src/pages/work-center.tsx",
+    "src/lib/format.ts",
+    "src/lib/supabase-demo-client.ts"
   ],
   "exclude": [
     "node_modules",
