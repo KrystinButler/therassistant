@@ -1,0 +1,67 @@
+export type ClaimQueueRow = Record<string, unknown> & { id: string };
+
+export type ClaimWorkqueues = {
+  all: ClaimQueueRow[];
+  validation: ClaimQueueRow[];
+  submission: ClaimQueueRow[];
+  rejections: ClaimQueueRow[];
+  denials: ClaimQueueRow[];
+  appeals: ClaimQueueRow[];
+  paymentExceptions: ClaimQueueRow[];
+};
+
+export type BulkClaimAction =
+  | "validate"
+  | "create_follow_up"
+  | "retry_rejected"
+  | "mark_paid"
+  | "resolve_denial";
+
+export function canBulkClaimAction(action: BulkClaimAction) {
+  return ["validate", "create_follow_up", "retry_rejected"].includes(action);
+}
+
+export function buildClaimWorkqueues(
+  claims: ClaimQueueRow[],
+  responses: ClaimQueueRow[],
+  denials: ClaimQueueRow[],
+  payments: ClaimQueueRow[],
+): ClaimWorkqueues {
+  const rejectedClaimIds = new Set(
+    responses
+      .filter((row) => row.response_status === "rejected")
+      .map((row) => String(row.claim_id ?? ""))
+      .filter(Boolean),
+  );
+  const deniedClaimIds = new Set(
+    denials
+      .filter((row) => !["resolved_paid", "resolved_writeoff", "closed"].includes(String(row.denial_status ?? "")))
+      .map((row) => String(row.claim_id ?? ""))
+      .filter(Boolean),
+  );
+  const appealClaimIds = new Set(
+    denials
+      .filter((row) => row.denial_status === "appealed")
+      .map((row) => String(row.claim_id ?? ""))
+      .filter(Boolean),
+  );
+  const paymentClaimIds = new Set(
+    payments
+      .filter((row) => ["unapplied", "partially_applied"].includes(String(row.payment_status ?? "")))
+      .map((row) => String(row.claim_id ?? ""))
+      .filter(Boolean),
+  );
+
+  return {
+    all: claims,
+    validation: claims.filter((row) => ["ready_for_validation", "validation_failed"].includes(String(row.claim_status ?? ""))),
+    submission: claims.filter((row) => ["ready_for_batch", "batched", "submitted"].includes(String(row.claim_status ?? ""))),
+    rejections: claims.filter((row) => {
+      const status = String(row.claim_status ?? "");
+      return status === "rejected" || (["submitted", "batched", "accepted"].includes(status) && rejectedClaimIds.has(row.id));
+    }),
+    denials: claims.filter((row) => row.claim_status === "denied" || deniedClaimIds.has(row.id)),
+    appeals: claims.filter((row) => row.claim_status === "appealed" || appealClaimIds.has(row.id)),
+    paymentExceptions: claims.filter((row) => paymentClaimIds.has(row.id)),
+  };
+}
