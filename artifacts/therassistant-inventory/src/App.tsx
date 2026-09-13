@@ -9,6 +9,7 @@ import {
   AppShell,
 } from "./components/app-shell";
 
+import { BillingQueuePage } from "./domains/billing/BillingQueuePage";
 import { EncounterPage } from "./domains/encounters/EncounterPage";
 import { SchedulePage } from "./domains/scheduling/SchedulePage";
 import { PreSessionPage } from "./domains/scheduling/PreSessionPage";
@@ -154,6 +155,10 @@ export default function App() {
 
         <Route path="/medicaid">
           <MedicaidPage />
+        </Route>
+
+        <Route path="/billing">
+          <BillingQueuePage />
         </Route>
 
         <Route path="/charges">
