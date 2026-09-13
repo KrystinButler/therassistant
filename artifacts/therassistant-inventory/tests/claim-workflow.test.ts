@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import {
   applySyntheticClearinghouseResponseWorkflow,
   createBatchWorkflow,
+  createClaimFromChargesWorkflow,
   submitBatchWorkflow,
   validateClaimWorkflow,
   type ClaimsRepository,
@@ -165,4 +166,82 @@ test("clearinghouse rejection persists response and creates follow-up work", asy
   assert.equal(state.claims.get("claim-1")?.claim_status, "rejected");
   assert.equal(state.workItems.length, 1);
   assert.equal(state.workItems[0].workqueue_type, "claim_rejection");
+});
+
+test("charges are marked claim-created only after claim lines and diagnoses persist", async () => {
+  const calls: string[] = [];
+  const createdLines: Row[] = [];
+  const createdDiagnoses: Row[] = [];
+  const updatedCharges: Row[] = [];
+
+  const charges: Row[] = [
+    {
+      id: "charge-1",
+      charge_status: "ready_for_claim",
+      encounter_id: "encounter-1",
+      client_id: "client-1",
+      provider_id: "provider-1",
+      payer_id: "payer-1",
+      service_date: "2026-09-13",
+      cpt_code: "90837",
+      diagnosis_code: "F41.1",
+      place_of_service: "10",
+      charge_amount_cents: 12500,
+    },
+    {
+      id: "charge-2",
+      charge_status: "ready_for_claim",
+      encounter_id: "encounter-1",
+      client_id: "client-1",
+      provider_id: "provider-1",
+      payer_id: "payer-1",
+      service_date: "2026-09-13",
+      cpt_code: "90785",
+      diagnosis_code: "F41.1",
+      place_of_service: "10",
+      charge_amount_cents: 1500,
+    },
+  ];
+
+  const repo = {
+    async getCharges(ids: string[]) {
+      return charges.filter((row) => ids.includes(row.id));
+    },
+    async createClaim(values: Record<string, unknown>) {
+      calls.push("claim");
+      return { id: "claim-new", ...values };
+    },
+    async createClaimLine(values: Record<string, unknown>) {
+      calls.push("line");
+      const row = { id: `line-${createdLines.length + 1}`, ...values };
+      createdLines.push(row);
+      return row;
+    },
+    async createClaimDiagnosis(values: Record<string, unknown>) {
+      calls.push("diagnosis");
+      const row = { id: `dx-${createdDiagnoses.length + 1}`, ...values };
+      createdDiagnoses.push(row);
+      return row;
+    },
+    async updateCharge(id: string, values: Record<string, unknown>) {
+      calls.push(`charge:${String(values.charge_status)}`);
+      const row = { id, ...values };
+      updatedCharges.push(row);
+      return row;
+    },
+    async updateEncounter(id: string, values: Record<string, unknown>) {
+      calls.push("encounter");
+      return { id, ...values };
+    },
+  };
+
+  const result = await createClaimFromChargesWorkflow(repo, ["charge-1", "charge-2"]);
+  assert.equal(result.ok, true);
+  if (!result.ok) return;
+
+  assert.equal(result.value.claim.source_encounter_id, "encounter-1");
+  assert.equal(createdLines.length, 2);
+  assert.equal(createdDiagnoses.length, 1);
+  assert.equal(updatedCharges.length, 2);
+  assert.ok(calls.lastIndexOf("diagnosis") < calls.indexOf("charge:claim_created"));
 });
