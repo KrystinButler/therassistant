@@ -1,5 +1,7 @@
+import { useState } from "react";
 import { Link } from "wouter";
 import { StatusBadge } from "../components/status-badge";
+import { demoInsert, demoUpdate } from "../lib/demo-data";
 import { useApi } from "../lib/therassistant-api";
 
 type Provider = {
@@ -11,115 +13,116 @@ type Provider = {
   individualNpi?: string | null;
   taxonomyCode?: string | null;
   email?: string | null;
+  phone?: string | null;
   claimCount?: number;
   openIssueCount?: number;
 };
 
+type ProviderForm = {
+  id?: string;
+  first_name: string;
+  last_name: string;
+  credentials: string;
+  provider_status: string;
+  individual_npi: string;
+  taxonomy_code: string;
+  email: string;
+  phone: string;
+};
+
+const blank: ProviderForm = {
+  first_name: "",
+  last_name: "",
+  credentials: "",
+  provider_status: "active",
+  individual_npi: "",
+  taxonomy_code: "",
+  email: "",
+  phone: "",
+};
+
 export function ProvidersPage() {
+  const [version, setVersion] = useState(0);
+  const [form, setForm] = useState<ProviderForm | null>(null);
   const { data, loading, error } =
-    useApi<Provider[]>("/api/providers");
+    useApi<Provider[]>(`/api/providers?refresh=${version}`);
+
+  function edit(provider: Provider) {
+    setForm({
+      id: provider.id,
+      first_name: provider.firstName,
+      last_name: provider.lastName,
+      credentials: provider.credentials || "",
+      provider_status: provider.providerStatus,
+      individual_npi: provider.individualNpi || "",
+      taxonomy_code: provider.taxonomyCode || "",
+      email: provider.email || "",
+      phone: provider.phone || "",
+    });
+  }
+
+  async function save() {
+    if (!form?.first_name.trim() || !form.last_name.trim()) return;
+    const payload = {
+      first_name: form.first_name.trim(),
+      last_name: form.last_name.trim(),
+      credentials: form.credentials || null,
+      provider_status: form.provider_status,
+      individual_npi: form.individual_npi || null,
+      taxonomy_code: form.taxonomy_code || null,
+      email: form.email || null,
+      phone: form.phone || null,
+    };
+    if (form.id) await demoUpdate("providers", form.id, payload);
+    else await demoInsert("providers", payload);
+    setForm(null);
+    setVersion((v) => v + 1);
+  }
 
   return (
     <>
-      <div className="thera-page-header">
+      <div className="thera-page-header split">
         <div>
-          <div className="thera-eyebrow">
-            PROVIDER OPERATIONS
-          </div>
-
+          <div className="thera-eyebrow">PROVIDER OPERATIONS</div>
           <h1>Providers</h1>
-
-          <p>
-            Clinical activity, billing activity, and
-            payer-related operational issues.
-          </p>
+          <p>Clinical activity, billing activity, and payer-related operational issues.</p>
         </div>
+        <button type="button" className="thera-action" onClick={() => setForm({ ...blank })}>+ Add Provider</button>
       </div>
 
       <section className="thera-card">
-        {loading && (
-          <div className="thera-state">
-            Loading providers...
-          </div>
-        )}
-
-        {error && (
-          <div className="thera-state error">
-            {error}
-          </div>
-        )}
-
+        {loading && <div className="thera-state">Loading providers...</div>}
+        {error && <div className="thera-state error">{error}</div>}
         {!loading && !error && (
           <div className="thera-table-wrap">
             <table className="thera-table">
-              <thead>
-                <tr>
-                  <th>Provider</th>
-                  <th>NPI</th>
-                  <th>Taxonomy</th>
-                  <th>Status</th>
-                  <th>Claims</th>
-                  <th>Open Issues</th>
+              <thead><tr><th>Provider</th><th>NPI</th><th>Taxonomy</th><th>Status</th><th>Claims</th><th>Open Issues</th><th>Actions</th></tr></thead>
+              <tbody>{(data ?? []).map((provider) => (
+                <tr key={provider.id}>
+                  <td><Link href={`/providers/${provider.id}`} className="thera-table-link">{provider.firstName} {provider.lastName}{provider.credentials ? `, ${provider.credentials}` : ""}</Link><div className="thera-table-subtext">{provider.email || ""}</div></td>
+                  <td>{provider.individualNpi || "—"}</td>
+                  <td>{provider.taxonomyCode || "—"}</td>
+                  <td><StatusBadge value={provider.providerStatus} /></td>
+                  <td>{provider.claimCount ?? 0}</td>
+                  <td>{(provider.openIssueCount ?? 0) > 0 ? <StatusBadge value="needs review" /> : "0"}</td>
+                  <td><button type="button" className="thera-action secondary" onClick={() => edit(provider)}>Edit</button></td>
                 </tr>
-              </thead>
-
-              <tbody>
-                {(data ?? []).map((provider) => (
-                  <tr key={provider.id}>
-                    <td>
-                      <Link
-                        href={`/providers/${provider.id}`}
-                        className="thera-table-link"
-                      >
-                        {provider.firstName}{" "}
-                        {provider.lastName}
-                        {provider.credentials
-                          ? `, ${provider.credentials}`
-                          : ""}
-                      </Link>
-
-                      <div className="thera-table-subtext">
-                        {provider.email || ""}
-                      </div>
-                    </td>
-
-                    <td>
-                      {provider.individualNpi ||
-                        "—"}
-                    </td>
-
-                    <td>
-                      {provider.taxonomyCode ||
-                        "—"}
-                    </td>
-
-                    <td>
-                      <StatusBadge
-                        value={
-                          provider.providerStatus
-                        }
-                      />
-                    </td>
-
-                    <td>
-                      {provider.claimCount ?? 0}
-                    </td>
-
-                    <td>
-                      {(provider.openIssueCount ??
-                        0) > 0 ? (
-                        <StatusBadge value="needs review" />
-                      ) : (
-                        "0"
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
+              ))}</tbody>
             </table>
           </div>
         )}
       </section>
+
+      {form && <div style={{position:"fixed",inset:0,background:"rgba(15,23,42,.45)",display:"grid",placeItems:"center",zIndex:1000,padding:20}}><section className="thera-card" style={{width:"min(680px,100%)"}}><div className="thera-card-header"><div><h2>{form.id ? "Edit Provider" : "Add Provider"}</h2><p>Provider changes save directly to the synthetic Supabase demo.</p></div><button className="thera-action secondary" type="button" onClick={() => setForm(null)}>Close</button></div><div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(190px,1fr))",gap:12}}>
+        <label><div className="thera-field-label">First Name</div><input className="thera-input" value={form.first_name} onChange={(e)=>setForm({...form,first_name:e.target.value})}/></label>
+        <label><div className="thera-field-label">Last Name</div><input className="thera-input" value={form.last_name} onChange={(e)=>setForm({...form,last_name:e.target.value})}/></label>
+        <label><div className="thera-field-label">Credentials</div><input className="thera-input" value={form.credentials} onChange={(e)=>setForm({...form,credentials:e.target.value})}/></label>
+        <label><div className="thera-field-label">Status</div><select className="thera-input" value={form.provider_status} onChange={(e)=>setForm({...form,provider_status:e.target.value})}><option value="active">Active</option><option value="pending">Pending</option><option value="inactive">Inactive</option><option value="on_leave">On Leave</option><option value="terminated">Terminated</option></select></label>
+        <label><div className="thera-field-label">NPI</div><input className="thera-input" value={form.individual_npi} onChange={(e)=>setForm({...form,individual_npi:e.target.value})}/></label>
+        <label><div className="thera-field-label">Taxonomy</div><input className="thera-input" value={form.taxonomy_code} onChange={(e)=>setForm({...form,taxonomy_code:e.target.value})}/></label>
+        <label><div className="thera-field-label">Email</div><input className="thera-input" type="email" value={form.email} onChange={(e)=>setForm({...form,email:e.target.value})}/></label>
+        <label><div className="thera-field-label">Phone</div><input className="thera-input" value={form.phone} onChange={(e)=>setForm({...form,phone:e.target.value})}/></label>
+      </div><div style={{marginTop:16}}><button type="button" className="thera-action" onClick={() => void save()}>Save Provider</button></div></section></div>}
     </>
   );
 }
