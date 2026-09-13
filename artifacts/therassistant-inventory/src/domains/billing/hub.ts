@@ -48,10 +48,17 @@ export function buildBillingHubSummary(input: BillingHubInput): BillingHubSummar
   const activeDenials = input.denials.filter((row) =>
     !["resolved_paid", "resolved_writeoff", "upheld", "closed"].includes(String(row.denial_status ?? "")),
   );
-  const activeAppeals = input.appeals.filter((row) =>
-    !["approved", "denied", "partially_approved", "withdrawn", "closed"].includes(String(row.appeal_status ?? "")),
-  );
+  const denialsById = new Map(input.denials.map((row) => [String(row.id ?? ""), row]));
+  const activeAppeals = input.appeals
+    .filter((row) => !["approved", "denied", "partially_approved", "withdrawn", "closed"].includes(String(row.appeal_status ?? "")))
+    .map((row) => ({
+      ...row,
+      amount_cents: Number(row.amount_cents ?? denialsById.get(String(row.denial_id ?? ""))?.amount_cents ?? 0),
+    }));
   const variances = input.variances.filter((row) => Number(row.varianceCents ?? 0) > 0);
+  const activeRecovery = input.recoveryItems.filter((row) =>
+    !["reversed", "voided"].includes(String(row.adjustment_status ?? "")),
+  );
 
   return {
     readyCharges: metric(readyCharges, "charge_amount_cents"),
@@ -62,6 +69,6 @@ export function buildBillingHubSummary(input: BillingHubInput): BillingHubSummar
     denials: metric(activeDenials, "amount_cents"),
     appeals: metric(activeAppeals, "amount_cents"),
     underpayments: metric(variances, "varianceCents"),
-    recovery: metric(input.recoveryItems, "amount_cents"),
+    recovery: metric(activeRecovery, "amount_cents"),
   };
 }

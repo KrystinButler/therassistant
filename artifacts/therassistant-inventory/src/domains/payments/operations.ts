@@ -19,6 +19,12 @@ export function buildAllocationPlan(paymentAmountCents: number, allocationAmount
   return { allocatedCents, unappliedCents, status } as const;
 }
 
+export function capAllocationToOpenBalance(requestedCents: number, openBalanceCents: number) {
+  if (!Number.isFinite(requestedCents) || requestedCents < 0) throw new Error("Requested allocation cannot be negative.");
+  if (!Number.isFinite(openBalanceCents) || openBalanceCents < 0) throw new Error("Claim open balance cannot be negative.");
+  return Math.min(requestedCents, openBalanceCents);
+}
+
 export function validatePaymentDraft(input: { amountCents: number; source: string; method: string }) {
   if (!Number.isFinite(input.amountCents) || input.amountCents <= 0) throw new Error("Payment amount must be greater than zero.");
   if (!SOURCES.includes(input.source as PaymentSource)) throw new Error("Payment source is invalid.");

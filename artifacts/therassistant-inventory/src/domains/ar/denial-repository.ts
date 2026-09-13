@@ -161,6 +161,9 @@ export async function writeOffDenial(denialId: string) {
     denial_status: "resolved_writeoff",
     workability: "auto_writeoff",
   });
+  if (denial.claim_id) {
+    await demoUpdate<DataRow>("professional_claims", String(denial.claim_id), { claim_status: "paid" });
+  }
   const work = await findActiveWork("denial", denialId, "denial_followup");
   if (work) {
     const oldStatus = String(work.workqueue_status ?? "open");

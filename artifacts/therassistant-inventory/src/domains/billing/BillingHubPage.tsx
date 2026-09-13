@@ -87,7 +87,8 @@ export function BillingHubPage() {
     const patientAr = openClaims.filter((claim) => claim.claim_status === "patient_responsibility");
     const insuranceAr = openClaims.filter((claim) => claim.claim_status !== "patient_responsibility");
     const recoveryItems = data.adjustments.filter((row) =>
-      isRecoveryAdjustment(row.adjustment_type),
+      isRecoveryAdjustment(row.adjustment_type)
+      && !["reversed", "voided"].includes(String(row.adjustment_status ?? "")),
     );
 
     return buildBillingHubSummary({

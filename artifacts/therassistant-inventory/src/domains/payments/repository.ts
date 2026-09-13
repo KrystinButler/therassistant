@@ -9,6 +9,7 @@ import { isRecoveryAdjustment } from "../ar/variance";
 import {
   buildAllocationPlan,
   buildPaymentReversal,
+  capAllocationToOpenBalance,
   deriveClaimFinancialStatus,
   resolvePaymentOwnership,
   validatePaymentDraft,
@@ -69,13 +70,10 @@ export function postInsurancePayment(input: Parameters<typeof postInsurancePayme
 export function postDemoEra(input: Parameters<typeof postDemoEraWorkflow>[1]) { return postDemoEraWorkflow(repository, input); }
 export function createDenialFromAdjudication(input: Parameters<typeof createDenialFromAdjudicationWorkflow>[1]) { return createDenialFromAdjudicationWorkflow(repository, input); }
 
-async function syncClaimFinancialStatus(claimId: string) {
-  const claim = first(await demoSelect<DataRow>("professional_claims", { id: `eq.${claimId}`, limit: "1" }));
-  if (!claim || ["voided", "reversed"].includes(String(claim.claim_status ?? ""))) return claim;
-
+async function getClaimFinancialState(claim: DataRow) {
   const [allocations, adjustments] = await Promise.all([
-    demoSelect<DataRow>("payment_allocations", { claim_id: `eq.${claimId}`, order: "created_at.desc" }),
-    demoSelect<DataRow>("adjustments", { claim_id: `eq.${claimId}`, order: "created_at.desc" }),
+    demoSelect<DataRow>("payment_allocations", { claim_id: `eq.${claim.id}`, order: "created_at.desc" }),
+    demoSelect<DataRow>("adjustments", { claim_id: `eq.${claim.id}`, order: "created_at.desc" }),
   ]);
   const paidCents = total(allocations.filter((row) => !row.reversed_at), "amount_cents");
   const activeAdjustments = adjustments.filter(
@@ -89,12 +87,17 @@ async function syncClaimFinancialStatus(claimId: string) {
     activeAdjustments.filter((row) => isRecoveryAdjustment(row.adjustment_type)),
     "amount_cents",
   );
-  const claimStatus = deriveClaimFinancialStatus({
-    chargeCents: Number(claim.total_charge_cents ?? 0),
-    paidCents,
-    adjustmentCents,
-    recoveryCents,
-  });
+  const chargeCents = Number(claim.total_charge_cents ?? 0);
+  const openBalanceCents = Math.max(0, chargeCents - paidCents - adjustmentCents + recoveryCents);
+  return { chargeCents, paidCents, adjustmentCents, recoveryCents, openBalanceCents };
+}
+
+async function syncClaimFinancialStatus(claimId: string) {
+  const claim = first(await demoSelect<DataRow>("professional_claims", { id: `eq.${claimId}`, limit: "1" }));
+  if (!claim || ["voided", "reversed"].includes(String(claim.claim_status ?? ""))) return claim;
+
+  const financials = await getClaimFinancialState(claim);
+  const claimStatus = deriveClaimFinancialStatus(financials);
   return demoUpdate<DataRow>("professional_claims", claimId, { claim_status: claimStatus });
 }
 
@@ -111,13 +114,16 @@ export async function postManualPayment(input: {
   notes?: string;
 }) {
   const draft = validatePaymentDraft({ amountCents: input.amountCents, source: input.source, method: input.method });
-  const allocationCents = input.claimId ? Number(input.allocationCents ?? input.amountCents) : 0;
-  const plan = buildAllocationPlan(input.amountCents, allocationCents > 0 ? [allocationCents] : []);
+  const requestedAllocationCents = input.claimId ? Number(input.allocationCents ?? input.amountCents) : 0;
   let claim: DataRow | null = null;
+  let allocationCents = 0;
   if (input.claimId) {
     claim = first(await demoSelect<DataRow>("professional_claims", { id: `eq.${input.claimId}`, limit: "1" }));
     if (!claim) throw new Error("Selected claim was not found.");
+    const financials = await getClaimFinancialState(claim);
+    allocationCents = capAllocationToOpenBalance(requestedAllocationCents, financials.openBalanceCents);
   }
+  const plan = buildAllocationPlan(input.amountCents, allocationCents > 0 ? [allocationCents] : []);
   const ownership = resolvePaymentOwnership({
     source: draft.source,
     requestedClientId: input.clientId,
