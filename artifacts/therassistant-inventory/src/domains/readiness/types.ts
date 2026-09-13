@@ -23,4 +23,9 @@ export type PreSessionInput = {
     remaining_units?: number | string | null;
   } | null;
   providerEnrollmentStatus?: string | null;
+  treatmentPlan?: {
+    status?: string | null;
+    review_due_date?: string | null;
+  } | null;
+  serviceDate?: string | null;
 };
