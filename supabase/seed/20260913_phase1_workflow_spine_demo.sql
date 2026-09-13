@@ -1,0 +1,270 @@
+-- Therassistant Phase 1 connected synthetic demo seed.
+-- Safe to rerun: every seeded object uses a stable UUID and UPSERT baseline state.
+-- Synthetic data only; no PHI.
+
+do $$
+declare
+  t uuid;
+  anthem uuid := '93bada2a-1a9b-4cb3-939d-af98fc0e81a3';
+  uhc uuid := 'a0be2998-2479-482b-8e2c-223d011a5ce3';
+  jordan_client uuid := 'ff648f71-9c94-433c-9aab-f80b039a80fd';
+  morgan_client uuid := 'e4709001-0620-4bf0-a9b8-9947d5630423';
+  taylor_client uuid := 'cf537c94-9748-4725-aa11-ac7b503e83f7';
+  casey_client uuid := 'e3f0fbd7-3964-4a24-b0cb-05c097f4c82f';
+  sofia_client uuid := '13e518bb-fd55-4ebe-a1e2-5a137c3a80c1';
+  jamie uuid := 'c1538366-c7d3-4dad-a249-2914a891dc52';
+  jordan_provider uuid := '37c820e0-90b7-485d-b6dd-8fb0b337928e';
+begin
+  select id into t from public.tenants where name = 'Therassistant Demo' limit 1;
+  if t is null then raise exception 'Therassistant Demo tenant not found'; end if;
+
+  -- -------------------------------------------------------------------------
+  -- Insurance prerequisites: one primary policy per real demo patient.
+  -- -------------------------------------------------------------------------
+  insert into public.client_insurance_policies
+    (id, tenant_id, client_id, payer_id, insurance_order, status, member_id, group_number, subscriber_name, relationship_to_subscriber, effective_date, metadata)
+  values
+    ('51000000-0000-4000-8000-000000000001', t, jordan_client, anthem, 'primary', 'active', 'DEMO-ACTIVE-001', 'ANTHEM-DEMO', 'Jordan Ellis', 'self', '2026-01-01', '{"authorization_required":true,"scenario":"happy_path"}'::jsonb),
+    ('51000000-0000-4000-8000-000000000002', t, morgan_client, anthem, 'primary', 'active', 'DEMO-INACTIVE-002', 'ANTHEM-DEMO', 'Morgan Reed', 'self', '2026-01-01', '{"authorization_required":false,"scenario":"inactive_eligibility"}'::jsonb),
+    ('51000000-0000-4000-8000-000000000003', t, taylor_client, anthem, 'primary', 'active', 'DEMO-ACTIVE-003', 'ANTHEM-DEMO', 'Taylor Brooks', 'self', '2026-01-01', '{"authorization_required":true,"scenario":"missing_authorization"}'::jsonb),
+    ('51000000-0000-4000-8000-000000000004', t, casey_client, uhc, 'primary', 'active', 'DEMO-ACTIVE-004', 'UHC-DEMO', 'Casey Martin', 'self', '2026-01-01', '{"authorization_required":false,"scenario":"credentialing_block"}'::jsonb),
+    ('51000000-0000-4000-8000-000000000005', t, sofia_client, anthem, 'primary', 'active', 'DEMO-ACTIVE-005', 'ANTHEM-DEMO', 'Sofia Nguyen', 'self', '2026-01-01', '{"authorization_required":false,"scenario":"documentation_block"}'::jsonb)
+  on conflict (id) do update set
+    payer_id=excluded.payer_id, status=excluded.status, member_id=excluded.member_id,
+    metadata=excluded.metadata, updated_at=now();
+
+  insert into public.eligibility_checks
+    (id, tenant_id, client_id, insurance_policy_id, payer_id, service_date, eligibility_status, response_source, raw_response, notes, created_at, updated_at)
+  values
+    ('52000000-0000-4000-8000-000000000001', t, jordan_client, '51000000-0000-4000-8000-000000000001', anthem, '2026-09-12', 'active', 'synthetic_demo_271', '{"demo":true,"scenario":"happy_path"}'::jsonb, 'Active coverage for clean demo path.', '2026-09-13 08:00:00-06', now()),
+    ('52000000-0000-4000-8000-000000000002', t, morgan_client, '51000000-0000-4000-8000-000000000002', anthem, '2026-09-15', 'inactive', 'synthetic_demo_271', '{"demo":true,"scenario":"inactive_eligibility"}'::jsonb, 'Inactive coverage blocks service.', '2026-09-13 08:01:00-06', now()),
+    ('52000000-0000-4000-8000-000000000003', t, taylor_client, '51000000-0000-4000-8000-000000000003', anthem, '2026-09-16', 'active', 'synthetic_demo_271', '{"demo":true,"scenario":"missing_authorization"}'::jsonb, 'Coverage active; authorization remains missing.', '2026-09-13 08:02:00-06', now()),
+    ('52000000-0000-4000-8000-000000000004', t, casey_client, '51000000-0000-4000-8000-000000000004', uhc, '2026-09-17', 'active', 'synthetic_demo_271', '{"demo":true,"scenario":"credentialing_block"}'::jsonb, 'Coverage active; provider enrollment is not approved.', '2026-09-13 08:03:00-06', now()),
+    ('52000000-0000-4000-8000-000000000005', t, sofia_client, '51000000-0000-4000-8000-000000000005', anthem, '2026-09-11', 'active', 'synthetic_demo_271', '{"demo":true,"scenario":"documentation_block"}'::jsonb, 'Coverage active; post-session documentation is incomplete.', '2026-09-13 08:04:00-06', now())
+  on conflict (id) do update set eligibility_status=excluded.eligibility_status, raw_response=excluded.raw_response, notes=excluded.notes, updated_at=now();
+
+  -- Happy-path authorization and treatment plan.
+  insert into public.authorizations
+    (id, tenant_id, client_id, payer_id, authorization_number, status, start_date, end_date, notes)
+  values
+    ('53000000-0000-4000-8000-000000000001', t, jordan_client, anthem, 'AUTH-DEMO-001', 'approved', '2026-01-01', '2026-12-31', 'Synthetic approved authorization.')
+  on conflict (id) do update set status=excluded.status, end_date=excluded.end_date, notes=excluded.notes, updated_at=now();
+
+  insert into public.authorization_units
+    (id, tenant_id, authorization_id, cpt_code, authorized_units, used_units, remaining_units)
+  values
+    ('53100000-0000-4000-8000-000000000001', t, '53000000-0000-4000-8000-000000000001', '90837', 20, 5, 15)
+  on conflict (id) do update set authorized_units=excluded.authorized_units, used_units=excluded.used_units, remaining_units=excluded.remaining_units, updated_at=now();
+
+  insert into public.treatment_plans
+    (id, tenant_id, client_id, provider_id, status, effective_date, review_due_date, signed_at, plan_text)
+  values
+    ('54000000-0000-4000-8000-000000000001', t, jordan_client, jamie, 'active', '2026-07-01', '2026-10-01', '2026-07-01 09:00:00-06', 'Reduce anxiety symptoms and improve coping skills.')
+  on conflict (id) do update set status=excluded.status, plan_text=excluded.plan_text, review_due_date=excluded.review_due_date, updated_at=now();
+
+  insert into public.treatment_plan_goals
+    (id, tenant_id, treatment_plan_id, goal_text, objective_text, status)
+  values
+    ('54100000-0000-4000-8000-000000000001', t, '54000000-0000-4000-8000-000000000001', 'Use coping skills during periods of anxiety.', 'Practice and report use of two coping strategies weekly.', 'active')
+  on conflict (id) do update set goal_text=excluded.goal_text, objective_text=excluded.objective_text, status=excluded.status, updated_at=now();
+
+  -- -------------------------------------------------------------------------
+  -- Scheduling scenarios.
+  -- -------------------------------------------------------------------------
+  insert into public.appointments
+    (id, tenant_id, client_id, provider_id, starts_at, ends_at, appointment_status, location_type, service_type, cpt_code, notes, completed_at)
+  values
+    ('55000000-0000-4000-8000-000000000001', t, jordan_client, jamie, '2026-09-12 10:00:00-06', '2026-09-12 11:00:00-06', 'completed', 'telehealth', 'Individual Psychotherapy', '90837', 'Complete clean Phase 1 path.', '2026-09-12 11:00:00-06'),
+    ('55000000-0000-4000-8000-000000000002', t, morgan_client, jamie, '2026-09-15 09:00:00-06', '2026-09-15 10:00:00-06', 'scheduled', 'telehealth', 'Individual Psychotherapy', '90837', 'Blocked by inactive eligibility.', null),
+    ('55000000-0000-4000-8000-000000000003', t, taylor_client, jamie, '2026-09-16 13:00:00-06', '2026-09-16 14:00:00-06', 'scheduled', 'telehealth', 'Individual Psychotherapy', '90837', 'Blocked by missing authorization.', null),
+    ('55000000-0000-4000-8000-000000000004', t, casey_client, jordan_provider, '2026-09-17 15:00:00-06', '2026-09-17 16:00:00-06', 'scheduled', 'telehealth', 'Individual Psychotherapy', '90837', 'Blocked by provider enrollment status.', null),
+    ('55000000-0000-4000-8000-000000000005', t, sofia_client, jamie, '2026-09-11 14:00:00-06', '2026-09-11 15:00:00-06', 'completed', 'telehealth', 'Individual Psychotherapy', '90837', 'Completed service with unsigned documentation.', '2026-09-11 15:00:00-06')
+  on conflict (id) do update set appointment_status=excluded.appointment_status, notes=excluded.notes, completed_at=excluded.completed_at, updated_at=now();
+
+  -- -------------------------------------------------------------------------
+  -- Complete clean clinical -> charge -> claim -> 837P -> ERA/payment chain.
+  -- -------------------------------------------------------------------------
+  insert into public.encounters
+    (id, tenant_id, appointment_id, client_id, provider_id, insurance_policy_id, payer_id, encounter_status, billing_status, started_at, ended_at, location_type, service_type)
+  values
+    ('56000000-0000-4000-8000-000000000001', t, '55000000-0000-4000-8000-000000000001', jordan_client, jamie, '51000000-0000-4000-8000-000000000001', anthem, 'closed', 'claimed', '2026-09-12 10:00:00-06', '2026-09-12 11:00:00-06', 'telehealth', 'Individual Psychotherapy'),
+    ('56000000-0000-4000-8000-000000000005', t, '55000000-0000-4000-8000-000000000005', sofia_client, jamie, '51000000-0000-4000-8000-000000000005', anthem, 'completed', 'held', '2026-09-11 14:00:00-06', '2026-09-11 15:00:00-06', 'telehealth', 'Individual Psychotherapy')
+  on conflict (id) do update set encounter_status=excluded.encounter_status, billing_status=excluded.billing_status, ended_at=excluded.ended_at, updated_at=now();
+
+  insert into public.clinical_notes
+    (id, tenant_id, client_id, appointment_id, provider_id, treatment_plan_id, note_type, note_status, service_date, cpt_code, diagnosis_code, goal_addressed, note_text, locked_at, encounter_id)
+  values
+    ('57000000-0000-4000-8000-000000000001', t, jordan_client, '55000000-0000-4000-8000-000000000001', jamie, '54000000-0000-4000-8000-000000000001', 'psychotherapy', 'signed', '2026-09-12', '90837', 'F41.1', 'Use coping skills during periods of anxiety.', 'SOAP demo note: symptoms reviewed, CBT intervention provided, client engaged, continue current treatment plan.', '2026-09-12 11:05:00-06', '56000000-0000-4000-8000-000000000001'),
+    ('57000000-0000-4000-8000-000000000005', t, sofia_client, '55000000-0000-4000-8000-000000000005', jamie, null, 'psychotherapy', 'draft', '2026-09-11', '90837', null, null, 'Draft note intentionally left unsigned for the documentation exception scenario.', null, '56000000-0000-4000-8000-000000000005')
+  on conflict (id) do update set note_status=excluded.note_status, note_text=excluded.note_text, locked_at=excluded.locked_at, encounter_id=excluded.encounter_id, updated_at=now();
+
+  insert into public.clinical_note_signatures
+    (id, tenant_id, clinical_note_id, signer_id, signed_at, signature_text)
+  values
+    ('57100000-0000-4000-8000-000000000001', t, '57000000-0000-4000-8000-000000000001', jamie, '2026-09-12 11:05:00-06', 'Jamie Parker')
+  on conflict (id) do update set signed_at=excluded.signed_at, signature_text=excluded.signature_text;
+
+  insert into public.encounter_diagnoses
+    (id, tenant_id, encounter_id, diagnosis_code, diagnosis_description, is_primary, sequence_number, present_on_claim)
+  values
+    ('58000000-0000-4000-8000-000000000001', t, '56000000-0000-4000-8000-000000000001', 'F41.1', 'Generalized anxiety disorder', true, 1, true)
+  on conflict (id) do update set diagnosis_code=excluded.diagnosis_code, is_primary=excluded.is_primary, updated_at=now();
+
+  insert into public.encounter_service_lines
+    (id, tenant_id, encounter_id, cpt_hcpcs_code, units, charge_amount_cents, place_of_service_code, ready_for_claim)
+  values
+    ('59000000-0000-4000-8000-000000000001', t, '56000000-0000-4000-8000-000000000001', '90837', 1, 15000, '10', true)
+  on conflict (id) do update set cpt_hcpcs_code=excluded.cpt_hcpcs_code, charge_amount_cents=excluded.charge_amount_cents, ready_for_claim=excluded.ready_for_claim, updated_at=now();
+
+  insert into public.encounter_readiness_checks
+    (id, tenant_id, encounter_id, check_code, check_status, blocking, message, action, evaluated_at)
+  values
+    ('59100000-0000-4000-8000-000000000001', t, '56000000-0000-4000-8000-000000000001', 'billing_complete', 'pass', false, 'All billing prerequisites satisfied.', null, '2026-09-12 11:06:00-06'),
+    ('59100000-0000-4000-8000-000000000005', t, '56000000-0000-4000-8000-000000000005', 'signed_note', 'fail', true, 'Clinical note is not signed.', 'Complete and sign the clinical note.', '2026-09-11 15:05:00-06')
+  on conflict (id) do update set check_status=excluded.check_status, blocking=excluded.blocking, message=excluded.message, action=excluded.action, evaluated_at=excluded.evaluated_at, updated_at=now();
+
+  insert into public.charge_capture_items
+    (id, tenant_id, client_id, provider_id, payer_id, service_date, cpt_code, diagnosis_code, place_of_service, charge_amount_cents, charge_status, block_reason, encounter_id)
+  values
+    ('60000000-0000-4000-8000-000000000001', t, jordan_client, jamie, anthem, '2026-09-12', '90837', 'F41.1', '10', 15000, 'claim_created', null, '56000000-0000-4000-8000-000000000001')
+  on conflict (id) do update set charge_status=excluded.charge_status, block_reason=excluded.block_reason, encounter_id=excluded.encounter_id, updated_at=now();
+
+  insert into public.professional_claims
+    (id, tenant_id, charge_id, client_id, rendering_provider_id, billing_provider_id, payer_id, claim_status, service_date_from, service_date_to, total_charge_cents, patient_control_number, submitted_at, accepted_at, paid_at, metadata, source_encounter_id)
+  values
+    ('61000000-0000-4000-8000-000000000001', t, '60000000-0000-4000-8000-000000000001', jordan_client, jamie, jamie, anthem, 'paid', '2026-09-12', '2026-09-12', 15000, 'DEMO-HAPPY-001', '2026-09-12 12:00:00-06', '2026-09-12 12:05:00-06', '2026-09-13 08:30:00-06', '{"demo":true,"scenario":"happy_path"}'::jsonb, '56000000-0000-4000-8000-000000000001'),
+    ('61000000-0000-4000-8000-000000000002', t, null, jordan_client, jamie, jamie, anthem, 'rejected', '2026-09-09', '2026-09-09', 10000, 'DEMO-REJECT-001', '2026-09-09 12:00:00-06', null, null, '{"demo":true,"scenario":"clearinghouse_rejection"}'::jsonb, null),
+    ('61000000-0000-4000-8000-000000000003', t, null, jordan_client, jamie, jamie, anthem, 'denied', '2026-09-08', '2026-09-08', 9000, 'DEMO-DENIAL-001', '2026-09-08 12:00:00-06', '2026-09-08 12:05:00-06', null, '{"demo":true,"scenario":"payer_denial"}'::jsonb, null),
+    ('61000000-0000-4000-8000-000000000004', t, null, jordan_client, jamie, jamie, anthem, 'accepted', '2026-09-10', '2026-09-10', 12500, 'DEMO-ERA-READY', '2026-09-10 12:00:00-06', '2026-09-10 12:05:00-06', null, '{"demo":true,"scenario":"ready_for_era"}'::jsonb, null)
+  on conflict (id) do update set claim_status=excluded.claim_status, total_charge_cents=excluded.total_charge_cents, patient_control_number=excluded.patient_control_number, metadata=excluded.metadata, updated_at=now();
+
+  insert into public.professional_claim_lines
+    (id, tenant_id, claim_id, service_date, cpt_code, diagnosis_pointer, units, charge_amount_cents, paid_amount_cents, adjustment_amount_cents)
+  values
+    ('61100000-0000-4000-8000-000000000001', t, '61000000-0000-4000-8000-000000000001', '2026-09-12', '90837', '1', 1, 15000, 12000, 3000),
+    ('61100000-0000-4000-8000-000000000002', t, '61000000-0000-4000-8000-000000000002', '2026-09-09', '90837', '1', 1, 10000, 0, 0),
+    ('61100000-0000-4000-8000-000000000003', t, '61000000-0000-4000-8000-000000000003', '2026-09-08', '90837', '1', 1, 9000, 0, 0),
+    ('61100000-0000-4000-8000-000000000004', t, '61000000-0000-4000-8000-000000000004', '2026-09-10', '90837', '1', 1, 12500, 0, 0)
+  on conflict (id) do update set charge_amount_cents=excluded.charge_amount_cents, paid_amount_cents=excluded.paid_amount_cents, adjustment_amount_cents=excluded.adjustment_amount_cents, updated_at=now();
+
+  insert into public.claim_diagnoses (id, tenant_id, claim_id, diagnosis_code, pointer_order)
+  values
+    ('61200000-0000-4000-8000-000000000001', t, '61000000-0000-4000-8000-000000000001', 'F41.1', 1),
+    ('61200000-0000-4000-8000-000000000002', t, '61000000-0000-4000-8000-000000000002', 'F41.1', 1),
+    ('61200000-0000-4000-8000-000000000003', t, '61000000-0000-4000-8000-000000000003', 'F41.1', 1),
+    ('61200000-0000-4000-8000-000000000004', t, '61000000-0000-4000-8000-000000000004', 'F41.1', 1)
+  on conflict (id) do update set diagnosis_code=excluded.diagnosis_code, pointer_order=excluded.pointer_order;
+
+  insert into public.claim_batches
+    (id, tenant_id, batch_status, batch_name, claim_count, total_charge_cents, submitted_at)
+  values
+    ('62000000-0000-4000-8000-000000000001', t, 'accepted', 'DEMO Happy 837P Batch', 1, 15000, '2026-09-12 12:00:00-06'),
+    ('62000000-0000-4000-8000-000000000002', t, 'rejected', 'DEMO Rejected 837P Batch', 1, 10000, '2026-09-09 12:00:00-06')
+  on conflict (id) do update set batch_status=excluded.batch_status, claim_count=excluded.claim_count, total_charge_cents=excluded.total_charge_cents, submitted_at=excluded.submitted_at, updated_at=now();
+
+  insert into public.claim_batch_items (id, tenant_id, batch_id, claim_id)
+  values
+    ('62100000-0000-4000-8000-000000000001', t, '62000000-0000-4000-8000-000000000001', '61000000-0000-4000-8000-000000000001'),
+    ('62100000-0000-4000-8000-000000000002', t, '62000000-0000-4000-8000-000000000002', '61000000-0000-4000-8000-000000000002')
+  on conflict (id) do nothing;
+
+  insert into public.claim_submissions
+    (id, tenant_id, batch_id, claim_id, submission_status, submission_method, submitted_at, response_payload)
+  values
+    ('63000000-0000-4000-8000-000000000001', t, '62000000-0000-4000-8000-000000000001', null, 'accepted', '837P_demo', '2026-09-12 12:00:00-06', '{"demo":true,"outcome":"accepted"}'::jsonb),
+    ('63000000-0000-4000-8000-000000000002', t, '62000000-0000-4000-8000-000000000002', null, 'rejected', '837P_demo', '2026-09-09 12:00:00-06', '{"demo":true,"outcome":"rejected"}'::jsonb)
+  on conflict (id) do update set submission_status=excluded.submission_status, response_payload=excluded.response_payload, updated_at=now();
+
+  insert into public.submission_responses
+    (id, tenant_id, submission_id, claim_id, response_status, response_code, response_message, raw_response)
+  values
+    ('63100000-0000-4000-8000-000000000001', t, '63000000-0000-4000-8000-000000000001', '61000000-0000-4000-8000-000000000001', 'accepted', 'A1', 'Demo clearinghouse accepted the claim.', '{"demo":true}'::jsonb),
+    ('63100000-0000-4000-8000-000000000002', t, '63000000-0000-4000-8000-000000000002', '61000000-0000-4000-8000-000000000002', 'rejected', 'A3', 'Demo clearinghouse rejected the claim for correction.', '{"demo":true}'::jsonb)
+  on conflict (id) do update set response_status=excluded.response_status, response_code=excluded.response_code, response_message=excluded.response_message, raw_response=excluded.raw_response;
+
+  insert into public.claim_status_history
+    (id, tenant_id, claim_id, old_status, new_status, reason, created_at)
+  values
+    ('61300000-0000-4000-8000-000000000001', t, '61000000-0000-4000-8000-000000000001', 'ready_for_validation', 'ready_for_batch', 'Demo scrub passed.', '2026-09-12 11:30:00-06'),
+    ('61300000-0000-4000-8000-000000000002', t, '61000000-0000-4000-8000-000000000001', 'ready_for_batch', 'batched', 'Added to demo batch.', '2026-09-12 11:40:00-06'),
+    ('61300000-0000-4000-8000-000000000003', t, '61000000-0000-4000-8000-000000000001', 'batched', 'submitted', '837P demo submitted.', '2026-09-12 12:00:00-06'),
+    ('61300000-0000-4000-8000-000000000004', t, '61000000-0000-4000-8000-000000000001', 'submitted', 'accepted', 'Clearinghouse accepted claim.', '2026-09-12 12:05:00-06'),
+    ('61300000-0000-4000-8000-000000000005', t, '61000000-0000-4000-8000-000000000001', 'accepted', 'paid', 'ERA posted and claim balanced to zero.', '2026-09-13 08:30:00-06'),
+    ('61300000-0000-4000-8000-000000000006', t, '61000000-0000-4000-8000-000000000002', 'submitted', 'rejected', 'Clearinghouse rejection A3.', '2026-09-09 12:05:00-06')
+  on conflict (id) do nothing;
+
+  -- ERA/payment/contractual adjustment for clean paid claim.
+  insert into public.era_files
+    (id, tenant_id, payer_id, file_name, check_or_trace_number, payment_amount_cents, status, raw_metadata)
+  values
+    ('66000000-0000-4000-8000-000000000001', t, anthem, 'demo-happy-001.835', 'DEMO-EFT-001', 12000, 'posted', '{"demo":true,"scenario":"happy_path"}'::jsonb)
+  on conflict (id) do update set payment_amount_cents=excluded.payment_amount_cents, status=excluded.status, raw_metadata=excluded.raw_metadata, updated_at=now();
+
+  insert into public.era_claims
+    (id, tenant_id, era_file_id, patient_control_number, client_id, claim_id, charge_amount_cents, paid_amount_cents, status, raw_data)
+  values
+    ('66100000-0000-4000-8000-000000000001', t, '66000000-0000-4000-8000-000000000001', 'DEMO-HAPPY-001', jordan_client, '61000000-0000-4000-8000-000000000001', 15000, 12000, 'posted', '{"demo":true}'::jsonb)
+  on conflict (id) do update set paid_amount_cents=excluded.paid_amount_cents, status=excluded.status, raw_data=excluded.raw_data, updated_at=now();
+
+  insert into public.era_matches (id, tenant_id, era_claim_id, claim_id, match_status, confidence)
+  values ('66200000-0000-4000-8000-000000000001', t, '66100000-0000-4000-8000-000000000001', '61000000-0000-4000-8000-000000000001', 'posted', 1)
+  on conflict (id) do update set match_status=excluded.match_status, confidence=excluded.confidence, updated_at=now();
+
+  insert into public.payments
+    (id, tenant_id, client_id, payer_id, payment_source, payment_method, payment_status, payment_date, amount_cents, trace_number, notes, posted_at)
+  values
+    ('64000000-0000-4000-8000-000000000001', t, jordan_client, anthem, 'insurance', 'eft', 'posted', '2026-09-13', 12000, 'DEMO-EFT-001', 'Synthetic ERA payment.', '2026-09-13 08:30:00-06')
+  on conflict (id) do update set payment_status=excluded.payment_status, amount_cents=excluded.amount_cents, trace_number=excluded.trace_number, posted_at=excluded.posted_at, updated_at=now();
+
+  insert into public.payment_allocations
+    (id, tenant_id, payment_id, client_id, claim_id, claim_line_id, amount_cents)
+  values
+    ('64100000-0000-4000-8000-000000000001', t, '64000000-0000-4000-8000-000000000001', jordan_client, '61000000-0000-4000-8000-000000000001', '61100000-0000-4000-8000-000000000001', 12000)
+  on conflict (id) do update set amount_cents=excluded.amount_cents, updated_at=now();
+
+  insert into public.adjustments
+    (id, tenant_id, client_id, claim_id, payer_id, adjustment_type, adjustment_status, adjustment_date, amount_cents, reason, carc_code, posted_at)
+  values
+    ('65000000-0000-4000-8000-000000000001', t, jordan_client, '61000000-0000-4000-8000-000000000001', anthem, 'contractual', 'posted', '2026-09-13', 3000, 'Synthetic contractual adjustment.', '45', '2026-09-13 08:30:00-06')
+  on conflict (id) do update set adjustment_status=excluded.adjustment_status, amount_cents=excluded.amount_cents, reason=excluded.reason, updated_at=now();
+
+  insert into public.adjustment_allocations
+    (id, tenant_id, adjustment_id, client_id, claim_id, claim_line_id, amount_cents)
+  values
+    ('65100000-0000-4000-8000-000000000001', t, '65000000-0000-4000-8000-000000000001', jordan_client, '61000000-0000-4000-8000-000000000001', '61100000-0000-4000-8000-000000000001', 3000)
+  on conflict (id) do update set amount_cents=excluded.amount_cents, updated_at=now();
+
+  insert into public.claim_balance_summaries
+    (claim_id, tenant_id, total_charge_cents, paid_amount_cents, adjustment_amount_cents, open_balance_cents, last_calculated_at)
+  values
+    ('61000000-0000-4000-8000-000000000001', t, 15000, 12000, 3000, 0, '2026-09-13 08:30:00-06')
+  on conflict (claim_id) do update set paid_amount_cents=excluded.paid_amount_cents, adjustment_amount_cents=excluded.adjustment_amount_cents, open_balance_cents=excluded.open_balance_cents, last_calculated_at=excluded.last_calculated_at;
+
+  -- Payer denial with CARC/RARC; no appeal is seeded.
+  insert into public.denials
+    (id, tenant_id, claim_id, client_id, payer_id, denial_date, denial_status, denial_category, workability, carc_code, rarc_code, amount_cents, reason)
+  values
+    ('67000000-0000-4000-8000-000000000003', t, '61000000-0000-4000-8000-000000000003', jordan_client, anthem, '2026-09-09', 'new', 'authorization', 'workable', '197', 'N130', 9000, 'Authorization required for service. Synthetic demo denial.')
+  on conflict (id) do update set denial_status=excluded.denial_status, workability=excluded.workability, reason=excluded.reason, updated_at=now();
+
+  -- -------------------------------------------------------------------------
+  -- Operational exception work. These are intentionally unresolved.
+  -- -------------------------------------------------------------------------
+  insert into public.workqueue_items
+    (id, tenant_id, workqueue_type, workqueue_status, priority, source_object_type, source_object_id, title, description, due_date)
+  values
+    ('68000000-0000-4000-8000-000000000001', t, 'eligibility_issue', 'open', 'high', 'eligibility', '52000000-0000-4000-8000-000000000002', 'Inactive coverage before appointment', 'Morgan Reed has inactive eligibility. Confirm new coverage before service.', '2026-09-14'),
+    ('68000000-0000-4000-8000-000000000002', t, 'authorization_issue', 'open', 'urgent', 'appointment', '55000000-0000-4000-8000-000000000003', 'Authorization required before service', 'Taylor Brooks has active coverage but no approved authorization for 90837.', '2026-09-15'),
+    ('68000000-0000-4000-8000-000000000003', t, 'credentialing_issue', 'open', 'high', 'provider', jordan_provider, 'Provider participation blocks billing', 'Jordan Lee is not yet approved with UnitedHealthcare.', '2026-09-16'),
+    ('68000000-0000-4000-8000-000000000004', t, 'missing_documentation', 'pending', 'high', 'encounter', '56000000-0000-4000-8000-000000000005', 'Unsigned note blocks billing', 'Sofia Nguyen encounter cannot move to billing until the clinical note is signed.', '2026-09-13'),
+    ('68000000-0000-4000-8000-000000000005', t, 'claim_rejection', 'open', 'high', 'claim', '61000000-0000-4000-8000-000000000002', 'Clearinghouse rejection requires correction', 'A3 rejection: correct the claim and resubmit.', '2026-09-14'),
+    ('68000000-0000-4000-8000-000000000006', t, 'denial_followup', 'open', 'high', 'denial', '67000000-0000-4000-8000-000000000003', 'Denial requires follow-up', 'CARC 197 / RARC N130 authorization denial requires review.', '2026-09-15')
+  on conflict (id) do update set workqueue_status=excluded.workqueue_status, priority=excluded.priority, title=excluded.title, description=excluded.description, due_date=excluded.due_date, updated_at=now();
+
+  insert into public.workqueue_history
+    (id, tenant_id, workqueue_item_id, old_status, new_status, old_priority, new_priority, note, created_at)
+  values
+    ('68100000-0000-4000-8000-000000000001', t, '68000000-0000-4000-8000-000000000004', 'open', 'in_progress', 'high', 'high', 'Clinical documentation follow-up started.', '2026-09-12 09:00:00-06'),
+    ('68100000-0000-4000-8000-000000000002', t, '68000000-0000-4000-8000-000000000004', 'in_progress', 'pending', 'high', 'high', 'Waiting for provider signature.', '2026-09-12 10:00:00-06')
+  on conflict (id) do nothing;
+end $$;
