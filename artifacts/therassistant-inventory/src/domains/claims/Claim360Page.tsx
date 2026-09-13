@@ -4,8 +4,11 @@ import { Link, useRoute } from "wouter";
 import { StatusBadge } from "../../components/status-badge";
 import { dateTime, money, shortDate } from "../../lib/format";
 import { getClaim360Data } from "./repository";
+import { getClaim360RelationshipsData } from "./relationships-repository";
 
-type Data = Awaited<ReturnType<typeof getClaim360Data>>;
+type BaseData = Awaited<ReturnType<typeof getClaim360Data>>;
+type RelationshipData = Awaited<ReturnType<typeof getClaim360RelationshipsData>>;
+type Data = Omit<BaseData, "submissions" | "workItems"> & Pick<RelationshipData, "submissions" | "workItems">;
 
 type Tab = "overview" | "lines" | "history" | "responses" | "denials" | "work";
 
@@ -21,8 +24,17 @@ export function Claim360Page() {
     if (!claimId) return;
     setLoading(true);
     setError(null);
-    void getClaim360Data(claimId)
-      .then(setData)
+    void Promise.all([
+      getClaim360Data(claimId),
+      getClaim360RelationshipsData(claimId),
+    ])
+      .then(([base, relationships]) => {
+        setData({
+          ...base,
+          submissions: relationships.submissions,
+          workItems: relationships.workItems,
+        });
+      })
       .catch((err) => setError(err instanceof Error ? err.message : "Unable to load claim."))
       .finally(() => setLoading(false));
   }, [claimId]);
@@ -54,7 +66,7 @@ export function Claim360Page() {
         <TabButton active={tab === "overview"} onClick={() => setTab("overview")} label="Overview" />
         <TabButton active={tab === "lines"} onClick={() => setTab("lines")} label={`Lines & Diagnoses (${data.lines.length})`} />
         <TabButton active={tab === "history"} onClick={() => setTab("history")} label={`Status History (${data.history.length})`} />
-        <TabButton active={tab === "responses"} onClick={() => setTab("responses")} label={`Submissions / Responses (${data.responses.length})`} />
+        <TabButton active={tab === "responses"} onClick={() => setTab("responses")} label={`Submissions / Responses (${data.submissions.length + data.responses.length})`} />
         <TabButton active={tab === "denials"} onClick={() => setTab("denials")} label={`Denials / Appeals (${data.denials.length + data.appeals.length})`} />
         <TabButton active={tab === "work"} onClick={() => setTab("work")} label={`Work (${data.workItems.length})`} />
       </div>
@@ -125,7 +137,7 @@ function History({ rows }: { rows: Data["history"] }) {
 
 function Responses({ data }: { data: Data }) {
   return <div className="thera-detail-grid">
-    <section className="thera-card thera-span-2"><h2>Submissions</h2>{data.submissions.length ? <div className="thera-table-wrap"><table className="thera-table"><thead><tr><th>Submitted</th><th>Method</th><th>Status</th></tr></thead><tbody>{data.submissions.map((row) => <tr key={row.id}><td>{dateTime(String(row.submitted_at || row.created_at || ""))}</td><td>{String(row.submission_method || "—")}</td><td><StatusBadge value={String(row.submission_status)} /></td></tr>)}</tbody></table></div> : <div className="thera-empty">No claim-specific submission records. Batch submissions appear in Claim Submission.</div>}</section>
+    <section className="thera-card thera-span-2"><h2>Submissions</h2>{data.submissions.length ? <div className="thera-table-wrap"><table className="thera-table"><thead><tr><th>Submitted</th><th>Method</th><th>Status</th></tr></thead><tbody>{data.submissions.map((row) => <tr key={row.id}><td>{dateTime(String(row.submitted_at || row.created_at || ""))}</td><td>{String(row.submission_method || "—")}</td><td><StatusBadge value={String(row.submission_status)} /></td></tr>)}</tbody></table></div> : <div className="thera-empty">No submissions are linked to this claim.</div>}</section>
     <section className="thera-card thera-span-2"><h2>Clearinghouse Responses</h2>{data.responses.length ? <div className="thera-table-wrap"><table className="thera-table"><thead><tr><th>When</th><th>Status</th><th>Code</th><th>Message</th></tr></thead><tbody>{data.responses.map((row) => <tr key={row.id}><td>{dateTime(String(row.created_at ?? ""))}</td><td><StatusBadge value={String(row.response_status)} /></td><td>{String(row.response_code || "—")}</td><td>{String(row.response_message || "—")}</td></tr>)}</tbody></table></div> : <div className="thera-empty">No clearinghouse responses.</div>}</section>
   </div>;
 }
@@ -138,7 +150,7 @@ function Denials({ data }: { data: Data }) {
 }
 
 function Work({ rows }: { rows: Data["workItems"] }) {
-  return <section className="thera-card">{rows.length ? <div className="thera-stack">{rows.map((row) => <div className="thera-work-card" key={row.id}><div className="thera-work-card-top"><strong>{String(row.title || "Claim work")}</strong><div><StatusBadge value={String(row.priority)} /> <StatusBadge value={String(row.workqueue_status)} /></div></div><div>{String(row.description || "")}</div><div className="thera-muted">{String(row.workqueue_type || "")}</div></div>)}</div> : <div className="thera-empty">No claim work items.</div>}</section>;
+  return <section className="thera-card">{rows.length ? <div className="thera-stack">{rows.map((row) => <div className="thera-work-card" key={row.id}><div className="thera-work-card-top"><strong>{String(row.title || "Claim work")}</strong><div><StatusBadge value={String(row.priority)} /> <StatusBadge value={String(row.workqueue_status)} /></div></div><div>{String(row.description || "")}</div><div className="thera-muted">{String(row.workqueue_type || "")}</div></div>)}</div> : <div className="thera-empty">No linked claim or denial work items.</div>}</section>;
 }
 
 function Field({ label, value }: { label: string; value: React.ReactNode }) {
