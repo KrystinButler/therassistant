@@ -9,6 +9,7 @@ import {
   AppShell,
 } from "./components/app-shell";
 
+import { EncounterPage } from "./domains/encounters/EncounterPage";
 import { SchedulePage } from "./domains/scheduling/SchedulePage";
 import { PreSessionPage } from "./domains/scheduling/PreSessionPage";
 
@@ -101,6 +102,10 @@ export default function App() {
 
         <Route path="/schedule/:id">
           <PreSessionPage />
+        </Route>
+
+        <Route path="/encounters/:id">
+          <EncounterPage />
         </Route>
 
         <Route path="/clients/:id">
