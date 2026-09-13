@@ -39,6 +39,7 @@ export type PatientChartAggregateInput = {
   denials: ChartRow[];
   documents: ChartRow[];
   checkins: ChartRow[];
+  journalEntries?: ChartRow[];
   workItems: ChartRow[];
   providers: ChartRow[];
   payers: ChartRow[];
@@ -68,14 +69,11 @@ function patientRows(rows: ChartRow[], patientId: string) {
 export function summarizePatientReadiness(input: PatientReadinessInput): PatientReadinessSummary {
   const now = input.now ?? new Date();
   const primaryPolicy =
-    input.insurancePolicies.find(
-      (row) => row.status === "active" && row.insurance_order === "primary",
-    ) ?? input.insurancePolicies.find((row) => row.status === "active") ?? null;
-
+    input.insurancePolicies.find((row) => row.status === "active" && row.insurance_order === "primary") ??
+    input.insurancePolicies.find((row) => row.status === "active") ?? null;
   const payer = primaryPolicy
     ? input.payers.find((row) => row.id === String(primaryPolicy.payer_id ?? "")) ?? null
     : null;
-
   const nextAppointment = input.appointments
     .filter((row) => {
       const startsAt = new Date(String(row.starts_at ?? ""));
@@ -83,13 +81,9 @@ export function summarizePatientReadiness(input: PatientReadinessInput): Patient
       return Number.isFinite(startsAt.getTime()) && startsAt >= now && !["cancelled", "no_show", "completed"].includes(status);
     })
     .sort((a, b) => String(a.starts_at ?? "").localeCompare(String(b.starts_at ?? "")))[0] ?? null;
-
   const activeAuthorization = input.authorizations.find(
-    (row) =>
-      row.status === "approved" &&
-      (!primaryPolicy || !row.payer_id || row.payer_id === primaryPolicy.payer_id),
+    (row) => row.status === "approved" && (!primaryPolicy || !row.payer_id || row.payer_id === primaryPolicy.payer_id),
   ) ?? null;
-
   let authorizationAlert = "No active authorization";
   if (activeAuthorization) {
     const remaining = input.authorizationUnits
@@ -97,11 +91,7 @@ export function summarizePatientReadiness(input: PatientReadinessInput): Patient
       .reduce((sum, row) => sum + Number(row.remaining_units ?? 0), 0);
     authorizationAlert = `${remaining} units remaining`;
   }
-
-  const openWorkCount = input.workItems.filter((row) =>
-    ACTIVE_WORK.has(String(row.workqueue_status ?? "open")),
-  ).length;
-
+  const openWorkCount = input.workItems.filter((row) => ACTIVE_WORK.has(String(row.workqueue_status ?? "open"))).length;
   return {
     registrationStatus: String(input.patient.registration_status ?? "not_started"),
     primaryPolicyId: primaryPolicy?.id ?? null,
@@ -115,11 +105,9 @@ export function summarizePatientReadiness(input: PatientReadinessInput): Patient
 export function buildPatientChartAggregate(input: PatientChartAggregateInput) {
   const patient = input.patients.find((row) => row.id === input.patientId);
   if (!patient) throw new Error("Patient not found.");
-
   const providersById = mapById(input.providers);
   const payersById = mapById(input.payers);
   const plansById = mapById(input.plans);
-
   const contacts = patientRows(input.contacts, input.patientId);
   const insurancePolicies = patientRows(input.policies, input.patientId).map((row) => ({
     ...row,
@@ -158,27 +146,14 @@ export function buildPatientChartAggregate(input: PatientChartAggregateInput) {
     providerName: personName(providersById.get(String(row.provider_id ?? ""))),
     payerName: String(payersById.get(String(row.payer_id ?? ""))?.name ?? "—"),
   }));
-  const claims = patientRows(input.claims, input.patientId).map((row) => ({
-    ...row,
-    payerName: String(payersById.get(String(row.payer_id ?? ""))?.name ?? "—"),
-  }));
-  const payments = patientRows(input.payments, input.patientId).map((row) => ({
-    ...row,
-    payerName: String(payersById.get(String(row.payer_id ?? ""))?.name ?? "—"),
-  }));
-  const denials = patientRows(input.denials, input.patientId).map((row) => ({
-    ...row,
-    payerName: String(payersById.get(String(row.payer_id ?? ""))?.name ?? "—"),
-  }));
+  const claims = patientRows(input.claims, input.patientId).map((row) => ({ ...row, payerName: String(payersById.get(String(row.payer_id ?? ""))?.name ?? "—") }));
+  const payments = patientRows(input.payments, input.patientId).map((row) => ({ ...row, payerName: String(payersById.get(String(row.payer_id ?? ""))?.name ?? "—") }));
+  const denials = patientRows(input.denials, input.patientId).map((row) => ({ ...row, payerName: String(payersById.get(String(row.payer_id ?? ""))?.name ?? "—") }));
   const documents = patientRows(input.documents, input.patientId);
   const checkins = patientRows(input.checkins, input.patientId);
-  const workItems = input.workItems.filter(
-    (row) => row.source_object_type === "client" && row.source_object_id === input.patientId,
-  );
-  const openBalanceCents = Number(
-    input.balances.find((row) => row.client_id === input.patientId)?.open_balance_cents ?? 0,
-  );
-
+  const journalEntries = patientRows(input.journalEntries ?? [], input.patientId);
+  const workItems = input.workItems.filter((row) => row.source_object_type === "client" && row.source_object_id === input.patientId);
+  const openBalanceCents = Number(input.balances.find((row) => row.client_id === input.patientId)?.open_balance_cents ?? 0);
   const summary = summarizePatientReadiness({
     patient,
     insurancePolicies,
@@ -189,7 +164,6 @@ export function buildPatientChartAggregate(input: PatientChartAggregateInput) {
     workItems,
     now: input.now,
   });
-
   return {
     patient,
     contacts,
@@ -206,6 +180,7 @@ export function buildPatientChartAggregate(input: PatientChartAggregateInput) {
     denials,
     documents,
     checkins,
+    journalEntries,
     workItems,
     openBalanceCents,
     summary,
