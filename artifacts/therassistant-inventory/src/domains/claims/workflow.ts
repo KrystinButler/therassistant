@@ -7,6 +7,15 @@ import {
 
 export type ClaimRow = Record<string, any> & { id: string };
 
+export type ClaimCreationRepository = {
+  getCharges(chargeIds: string[]): Promise<ClaimRow[]>;
+  createClaim(values: Record<string, unknown>): Promise<ClaimRow>;
+  createClaimLine(values: Record<string, unknown>): Promise<ClaimRow>;
+  createClaimDiagnosis(values: Record<string, unknown>): Promise<ClaimRow>;
+  updateCharge(chargeId: string, values: Record<string, unknown>): Promise<ClaimRow>;
+  updateEncounter(encounterId: string, values: Record<string, unknown>): Promise<ClaimRow>;
+};
+
 export type ClaimsRepository = {
   getClaim(claimId: string): Promise<ClaimRow | null>;
   getClaimLines(claimId: string): Promise<ClaimRow[]>;
@@ -26,6 +35,121 @@ export type ClaimsRepository = {
   createSubmissionResponse(values: Record<string, unknown>): Promise<ClaimRow>;
   upsertWorkItem(values: Record<string, unknown>): Promise<ClaimRow>;
 };
+
+export async function createClaimFromChargesWorkflow(
+  repo: ClaimCreationRepository,
+  chargeIds: string[],
+): Promise<WorkflowResult<{ claim: ClaimRow; lineCount: number; diagnosisCount: number }>> {
+  if (!chargeIds.length) {
+    return blocked("no_charges", "Select at least one ready charge to create a claim.");
+  }
+
+  const charges = await repo.getCharges(chargeIds);
+  if (charges.length !== chargeIds.length) {
+    return failure("charge_not_found", "One or more selected charges were not found.");
+  }
+
+  const invalid = charges.filter((charge) => charge.charge_status !== "ready_for_claim");
+  if (invalid.length) {
+    return blocked(
+      "charge_not_ready",
+      "Every selected charge must be ready for claim creation.",
+      invalid.map((charge) => `${charge.id}: ${String(charge.charge_status)}`),
+    );
+  }
+
+  const first = charges[0];
+  const contextKeys = ["encounter_id", "client_id", "provider_id", "payer_id"] as const;
+  for (const key of contextKeys) {
+    const expected = String(first[key] ?? "");
+    if (charges.some((charge) => String(charge[key] ?? "") !== expected)) {
+      return blocked(
+        "mixed_claim_context",
+        "Selected charges must belong to the same encounter, patient, provider, and payer.",
+      );
+    }
+  }
+
+  const diagnoses = [...new Set(
+    charges
+      .map((charge) => String(charge.diagnosis_code ?? "").trim().toUpperCase())
+      .filter(Boolean),
+  )];
+  if (!diagnoses.length) {
+    return blocked("claim_diagnosis_missing", "At least one diagnosis is required to create a claim.");
+  }
+
+  const dates = charges.map((charge) => String(charge.service_date ?? "")).filter(Boolean).sort();
+  const totalChargeCents = charges.reduce(
+    (sum, charge) => sum + Number(charge.charge_amount_cents ?? 0),
+    0,
+  );
+
+  try {
+    const claim = await repo.createClaim({
+      charge_id: first.id,
+      client_id: first.client_id,
+      rendering_provider_id: first.provider_id || null,
+      billing_provider_id: first.provider_id || null,
+      payer_id: first.payer_id || null,
+      claim_status: "ready_for_validation",
+      service_date_from: dates[0] || null,
+      service_date_to: dates.at(-1) || dates[0] || null,
+      total_charge_cents: totalChargeCents,
+      patient_control_number: `TH-${Date.now().toString().slice(-10)}`,
+      source_encounter_id: first.encounter_id || null,
+      metadata: { demo: true, source: "encounter_charge" },
+    });
+
+    for (const charge of charges) {
+      const diagnosisCode = String(charge.diagnosis_code ?? "").trim().toUpperCase();
+      const pointer = Math.max(1, diagnoses.indexOf(diagnosisCode) + 1);
+      await repo.createClaimLine({
+        claim_id: claim.id,
+        service_date: charge.service_date,
+        cpt_code: charge.cpt_code,
+        modifier1: charge.modifier1 || null,
+        modifier2: charge.modifier2 || null,
+        diagnosis_pointer: String(pointer),
+        units: 1,
+        charge_amount_cents: Number(charge.charge_amount_cents ?? 0),
+      });
+    }
+
+    for (const [index, diagnosisCode] of diagnoses.entries()) {
+      await repo.createClaimDiagnosis({
+        claim_id: claim.id,
+        diagnosis_code: diagnosisCode,
+        pointer_order: index + 1,
+      });
+    }
+
+    // Claim structure is persisted before source charges are moved forward.
+    for (const charge of charges) {
+      await repo.updateCharge(charge.id, {
+        charge_status: "claim_created",
+        block_reason: null,
+      });
+    }
+
+    if (first.encounter_id) {
+      await repo.updateEncounter(String(first.encounter_id), {
+        billing_status: "claimed",
+      });
+    }
+
+    return success({
+      claim,
+      lineCount: charges.length,
+      diagnosisCount: diagnoses.length,
+    });
+  } catch (error) {
+    return failure(
+      "claim_creation_failed",
+      error instanceof Error ? error.message : "Unable to create claim from charges.",
+    );
+  }
+}
 
 function claimValidationIssues(
   claim: ClaimRow,
