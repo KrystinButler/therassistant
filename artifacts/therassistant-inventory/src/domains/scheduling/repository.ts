@@ -35,6 +35,8 @@ export type ScheduleAppointment = {
   authorizationNumber: string | null;
   remainingUnits: number | null;
   providerEnrollmentStatus: string | null;
+  treatmentPlanStatus: string | null;
+  treatmentPlanReviewDueDate: string | null;
   readiness: PreSessionReadiness;
 };
 
@@ -108,6 +110,28 @@ function activeAuthorization(
     })[0] ?? null;
 }
 
+function currentTreatmentPlan(
+  rows: DataRow[],
+  clientId: string,
+  serviceDate: string,
+) {
+  return rows
+    .filter((row) => {
+      if (row.client_id !== clientId) return false;
+      const effectiveDate = String(row.effective_date ?? "");
+      return !effectiveDate || effectiveDate <= serviceDate;
+    })
+    .sort((a, b) => {
+      const aCurrent = ["active", "signed"].includes(String(a.status ?? ""));
+      const bCurrent = ["active", "signed"].includes(String(b.status ?? ""));
+      if (aCurrent && !bCurrent) return -1;
+      if (bCurrent && !aCurrent) return 1;
+      return String(b.effective_date ?? b.created_at ?? "").localeCompare(
+        String(a.effective_date ?? a.created_at ?? ""),
+      );
+    })[0] ?? null;
+}
+
 function remainingUnitsFor(
   units: DataRow[],
   authorizationId: string | null,
@@ -136,6 +160,7 @@ export async function getScheduleData(): Promise<ScheduleData> {
     authorizations,
     authorizationUnits,
     enrollments,
+    treatmentPlans,
     payers,
     plans,
   ] = await Promise.all([
@@ -147,6 +172,7 @@ export async function getScheduleData(): Promise<ScheduleData> {
     demoSelect<DataRow>("authorizations"),
     demoSelect<DataRow>("authorization_units"),
     demoSelect<DataRow>("provider_payer_enrollments"),
+    demoSelect<DataRow>("treatment_plans"),
     referenceSelect<DataRow>("payers", { order: "name.asc" }),
     referenceSelect<DataRow>("payer_plans", { order: "name.asc" }),
   ]);
@@ -179,6 +205,8 @@ export async function getScheduleData(): Promise<ScheduleData> {
         row.provider_id === providerId &&
         row.payer_id === payerId,
     );
+    const serviceDate = String(appointment.starts_at ?? "").slice(0, 10);
+    const treatmentPlan = currentTreatmentPlan(treatmentPlans, clientId, serviceDate);
 
     const readiness = evaluatePreSession({
       policy: policy ? { status: String(policy.status ?? "unknown") } : null,
@@ -195,6 +223,15 @@ export async function getScheduleData(): Promise<ScheduleData> {
       providerEnrollmentStatus: enrollment
         ? String(enrollment.enrollment_status ?? "unknown")
         : null,
+      treatmentPlan: treatmentPlan
+        ? {
+            status: String(treatmentPlan.status ?? "draft"),
+            review_due_date: treatmentPlan.review_due_date
+              ? String(treatmentPlan.review_due_date)
+              : null,
+          }
+        : null,
+      serviceDate,
     });
 
     return {
@@ -232,6 +269,12 @@ export async function getScheduleData(): Promise<ScheduleData> {
       remainingUnits,
       providerEnrollmentStatus: enrollment
         ? String(enrollment.enrollment_status ?? "unknown")
+        : null,
+      treatmentPlanStatus: treatmentPlan
+        ? String(treatmentPlan.status ?? "draft")
+        : null,
+      treatmentPlanReviewDueDate: treatmentPlan?.review_due_date
+        ? String(treatmentPlan.review_due_date)
         : null,
       readiness,
     };
