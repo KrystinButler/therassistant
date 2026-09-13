@@ -125,12 +125,14 @@ test("signing requires note text, a diagnosis, and a service line", async () => 
   }
 });
 
-test("signing records signature, locks note, then runs billing readiness", async () => {
+test("signing records provider identity, locks note, then runs billing readiness", async () => {
   const repo = clinicalRepo();
   const result = await signNoteWorkflow(repo, "encounter-1", "provider-1", "Jamie Parker, LCSW");
 
   assert.equal(result.ok, true);
   assert.equal(repo.signatures.length, 1);
+  assert.equal(repo.signatures[0].provider_id, "provider-1");
+  assert.equal(repo.signatures[0].signer_id, undefined);
   assert.equal(repo.noteStatus, "signed");
   assert.equal(repo.readinessRuns, 1);
 });
