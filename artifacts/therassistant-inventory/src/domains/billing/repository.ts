@@ -13,6 +13,12 @@ import {
 } from "./workflow";
 
 type DataRow = Row & { id: string };
+type BillingQueueEncounter = DataRow & {
+  clientName: string;
+  providerName: string;
+  payerName: string;
+  blockingChecks: DataRow[];
+};
 
 function first<T>(rows: T[]) {
   return rows[0] ?? null;
@@ -182,7 +188,7 @@ export async function getBillingQueueData() {
   const displayName = (row?: Row) =>
     row ? [row.first_name, row.last_name].filter(Boolean).join(" ") || "—" : "—";
 
-  const encounterRows = encounters.map((encounter) => ({
+  const encounterRows = encounters.map((encounter): BillingQueueEncounter => ({
     ...encounter,
     clientName: displayName(clientsById.get(String(encounter.client_id))),
     providerName: displayName(providersById.get(String(encounter.provider_id))),
