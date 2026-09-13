@@ -15,6 +15,14 @@ const billingHubPageSource = readFileSync(
   new URL("../src/domains/billing/BillingHubPage.tsx", import.meta.url),
   "utf8",
 );
+const paymentRepositorySource = readFileSync(
+  new URL("../src/domains/payments/repository.ts", import.meta.url),
+  "utf8",
+);
+const demoClientSource = readFileSync(
+  new URL("../src/lib/supabase-demo-client.ts", import.meta.url),
+  "utf8",
+);
 const restrictedAllocationMigrationUrl = new URL(
   "../../../supabase/migrations/20260913_phase3_restrict_payment_allocation_columns.sql",
   import.meta.url,
@@ -95,4 +103,6 @@ test("anonymous payment allocation updates are limited to reversed_at", () => {
   assert.match(sql, /revoke\s+update\s+on\s+table\s+public\.payment_allocations\s+from\s+anon/i);
   assert.match(sql, /grant\s+update\s*\(\s*reversed_at\s*\)\s+on\s+table\s+public\.payment_allocations\s+to\s+anon/i);
   assert.doesNotMatch(sql, /grant\s+update\s+on\s+table\s+public\.payment_allocations\s+to\s+anon/i);
+  assert.match(demoClientSource, /demoUpdateExact/);
+  assert.match(paymentRepositorySource, /demoUpdateExact<DataRow>\("payment_allocations"/);
 });
