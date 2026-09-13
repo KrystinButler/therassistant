@@ -1,0 +1,40 @@
+name: Phase 2 CI
+
+on:
+  push:
+    branches:
+      - phase2-patient-chart
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.28.0
+          run_install: false
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Tests
+        run: pnpm --filter ./scripts exec tsx --test ../artifacts/therassistant-inventory/tests/**/*.test.ts
+
+      - name: Phase 2 typecheck
+        run: pnpm --filter @workspace/therassistant-inventory run typecheck:phase2
+
+      - name: Build
+        run: pnpm --filter @workspace/therassistant-inventory run build
