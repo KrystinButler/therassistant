@@ -3,7 +3,7 @@ import { Link } from "wouter";
 
 import { StatusBadge } from "../../components/status-badge";
 import { money, shortDate } from "../../lib/format";
-import { buildClaimWorkqueues } from "./workqueues";
+import { buildClaimWorkqueues, isActiveAppealStatus } from "./workqueues";
 import {
   bulkValidateClaims,
   createClaimFollowUps,
@@ -54,7 +54,7 @@ export function ClaimsWorkspacePage() {
   );
 
   const appealClaimIds = useMemo(
-    () => new Set((data?.appeals ?? []).filter((row) => !["closed", "withdrawn"].includes(String(row.appeal_status ?? ""))).map((row) => String(row.claim_id ?? ""))),
+    () => new Set((data?.appeals ?? []).filter((row) => isActiveAppealStatus(row.appeal_status)).map((row) => String(row.claim_id ?? ""))),
     [data],
   );
 

@@ -5,9 +5,12 @@ import {
   referenceSelect,
   type Row,
 } from "../../lib/supabase-demo-client";
+import { isRecoveryAdjustment } from "../ar/variance";
 import {
   buildAllocationPlan,
   buildPaymentReversal,
+  deriveClaimFinancialStatus,
+  resolvePaymentOwnership,
   validatePaymentDraft,
 } from "./operations";
 import {
@@ -27,6 +30,10 @@ type ReversalRow = DataRow & { traceNumber: string; patientName: string; amountC
 type AdjustmentRow = DataRow & { patientName: string; payerName: string; claimControlNumber: string };
 
 function first<T>(rows: T[]) { return rows[0] ?? null; }
+
+function total(rows: DataRow[], field: string) {
+  return rows.reduce((sum, row) => sum + Number(row[field] ?? 0), 0);
+}
 
 const repository: PaymentRepository = {
   async getClaim(claimId) {
@@ -62,6 +69,35 @@ export function postInsurancePayment(input: Parameters<typeof postInsurancePayme
 export function postDemoEra(input: Parameters<typeof postDemoEraWorkflow>[1]) { return postDemoEraWorkflow(repository, input); }
 export function createDenialFromAdjudication(input: Parameters<typeof createDenialFromAdjudicationWorkflow>[1]) { return createDenialFromAdjudicationWorkflow(repository, input); }
 
+async function syncClaimFinancialStatus(claimId: string) {
+  const claim = first(await demoSelect<DataRow>("professional_claims", { id: `eq.${claimId}`, limit: "1" }));
+  if (!claim || ["voided", "reversed"].includes(String(claim.claim_status ?? ""))) return claim;
+
+  const [allocations, adjustments] = await Promise.all([
+    demoSelect<DataRow>("payment_allocations", { claim_id: `eq.${claimId}`, order: "created_at.desc" }),
+    demoSelect<DataRow>("adjustments", { claim_id: `eq.${claimId}`, order: "created_at.desc" }),
+  ]);
+  const paidCents = total(allocations.filter((row) => !row.reversed_at), "amount_cents");
+  const activeAdjustments = adjustments.filter(
+    (row) => !["reversed", "voided"].includes(String(row.adjustment_status ?? "")),
+  );
+  const adjustmentCents = total(
+    activeAdjustments.filter((row) => !isRecoveryAdjustment(row.adjustment_type)),
+    "amount_cents",
+  );
+  const recoveryCents = total(
+    activeAdjustments.filter((row) => isRecoveryAdjustment(row.adjustment_type)),
+    "amount_cents",
+  );
+  const claimStatus = deriveClaimFinancialStatus({
+    chargeCents: Number(claim.total_charge_cents ?? 0),
+    paidCents,
+    adjustmentCents,
+    recoveryCents,
+  });
+  return demoUpdate<DataRow>("professional_claims", claimId, { claim_status: claimStatus });
+}
+
 export async function postManualPayment(input: {
   amountCents: number;
   source: string;
@@ -82,9 +118,16 @@ export async function postManualPayment(input: {
     claim = first(await demoSelect<DataRow>("professional_claims", { id: `eq.${input.claimId}`, limit: "1" }));
     if (!claim) throw new Error("Selected claim was not found.");
   }
+  const ownership = resolvePaymentOwnership({
+    source: draft.source,
+    requestedClientId: input.clientId,
+    requestedPayerId: input.payerId,
+    claimClientId: claim ? String(claim.client_id ?? "") || undefined : undefined,
+    claimPayerId: claim ? String(claim.payer_id ?? "") || undefined : undefined,
+  });
   const payment = await demoInsert<DataRow>("payments", {
-    client_id: input.clientId || claim?.client_id || null,
-    payer_id: draft.source === "insurance" ? (input.payerId || claim?.payer_id || null) : null,
+    client_id: ownership.clientId,
+    payer_id: ownership.payerId,
     payment_source: draft.source,
     payment_method: draft.method,
     payment_status: "pending",
@@ -97,15 +140,19 @@ export async function postManualPayment(input: {
   if (claim && allocationCents > 0) {
     await demoInsert<DataRow>("payment_allocations", {
       payment_id: payment.id,
-      client_id: input.clientId || claim.client_id || null,
+      client_id: ownership.clientId,
       claim_id: claim.id,
       amount_cents: allocationCents,
     });
   }
-  return demoUpdate<DataRow>("payments", payment.id, {
+  const updatedPayment = await demoUpdate<DataRow>("payments", payment.id, {
     payment_status: plan.status,
     posted_at: plan.allocatedCents > 0 ? new Date().toISOString() : null,
   });
+  if (claim && allocationCents > 0) {
+    await syncClaimFinancialStatus(claim.id);
+  }
+  return updatedPayment;
 }
 
 export async function reversePayment(paymentId: string, reason: string) {
@@ -114,12 +161,17 @@ export async function reversePayment(paymentId: string, reason: string) {
   if (["reversed", "voided"].includes(String(payment.payment_status ?? ""))) throw new Error("Payment is already reversed or voided.");
   const allocations = await demoSelect<DataRow>("payment_allocations", { payment_id: `eq.${paymentId}`, order: "created_at.asc" });
   const activeAllocations = allocations.filter((row) => !row.reversed_at);
+  const affectedClaimIds = [...new Set(activeAllocations.map((row) => String(row.claim_id ?? "")).filter(Boolean))];
   const reversal = buildPaymentReversal({ paymentId, allocationIds: activeAllocations.map((row) => row.id), reason });
   await demoInsert<DataRow>("payment_reversals", { payment_id: paymentId, reason: reversal.reason });
   for (const allocation of activeAllocations) {
     await demoUpdate<DataRow>("payment_allocations", allocation.id, { reversed_at: reversal.reversedAt });
   }
-  return demoUpdate<DataRow>("payments", paymentId, { payment_status: reversal.paymentStatus });
+  const updatedPayment = await demoUpdate<DataRow>("payments", paymentId, { payment_status: reversal.paymentStatus });
+  for (const claimId of affectedClaimIds) {
+    await syncClaimFinancialStatus(claimId);
+  }
+  return updatedPayment;
 }
 
 function personName(row?: Row) {

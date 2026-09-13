@@ -17,6 +17,12 @@ export type BulkClaimAction =
   | "mark_paid"
   | "resolve_denial";
 
+const ACTIVE_APPEAL_STATUSES = ["not_started", "drafting", "submitted", "pending"];
+
+export function isActiveAppealStatus(status: unknown) {
+  return ACTIVE_APPEAL_STATUSES.includes(String(status ?? ""));
+}
+
 export function canBulkClaimAction(action: BulkClaimAction) {
   return ["validate", "create_follow_up", "retry_rejected"].includes(action);
 }
@@ -27,11 +33,17 @@ export function buildClaimWorkqueues(
   denials: ClaimQueueRow[],
   payments: ClaimQueueRow[],
 ): ClaimWorkqueues {
+  const latestResponseByClaim = new Map<string, ClaimQueueRow>();
+  for (const response of responses) {
+    const claimId = String(response.claim_id ?? "");
+    if (claimId && !latestResponseByClaim.has(claimId)) {
+      latestResponseByClaim.set(claimId, response);
+    }
+  }
   const rejectedClaimIds = new Set(
-    responses
-      .filter((row) => row.response_status === "rejected")
-      .map((row) => String(row.claim_id ?? ""))
-      .filter(Boolean),
+    [...latestResponseByClaim.entries()]
+      .filter(([, row]) => row.response_status === "rejected")
+      .map(([claimId]) => claimId),
   );
   const claimsWithDenialRecord = new Set(
     denials.map((row) => String(row.claim_id ?? "")).filter(Boolean),
@@ -61,7 +73,7 @@ export function buildClaimWorkqueues(
     submission: claims.filter((row) => ["ready_for_batch", "batched", "submitted"].includes(String(row.claim_status ?? ""))),
     rejections: claims.filter((row) => {
       const status = String(row.claim_status ?? "");
-      return status === "rejected" || (["submitted", "batched", "accepted"].includes(status) && rejectedClaimIds.has(row.id));
+      return status === "rejected" || (["submitted", "batched"].includes(status) && rejectedClaimIds.has(row.id));
     }),
     denials: claims.filter((row) => deniedClaimIds.has(row.id) || (row.claim_status === "denied" && !claimsWithDenialRecord.has(row.id))),
     appeals: claims.filter((row) => row.claim_status === "appealed" || appealClaimIds.has(row.id)),

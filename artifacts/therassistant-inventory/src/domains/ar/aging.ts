@@ -19,6 +19,11 @@ export function agingBucket(serviceDate: string, asOfDate = new Date().toISOStri
   return "120+";
 }
 
-export function calculateOpenBalance(chargeCents: number, paidCents: number, adjustmentCents: number) {
-  return Math.max(0, chargeCents - paidCents - adjustmentCents);
+export function calculateOpenBalance(
+  chargeCents: number,
+  paidCents: number,
+  adjustmentCents: number,
+  recoveryCents = 0,
+) {
+  return Math.max(0, chargeCents - paidCents - adjustmentCents + recoveryCents);
 }

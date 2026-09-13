@@ -5,6 +5,8 @@ import {
   referenceSelect,
   type Row,
 } from "../../lib/supabase-demo-client";
+import { calculateOpenBalance } from "../ar/aging";
+import { isRecoveryAdjustment } from "../ar/variance";
 import { validateClaim } from "./repository";
 
 type DataRow = Row & { id: string };
@@ -60,11 +62,14 @@ export async function getClaimsWorkspaceData() {
     const claimDenials = denials.filter((row) => row.claim_id === claimId);
     const claimAppeals = appeals.filter((row) => row.claim_id === claimId);
     const claimAllocations = allocations.filter((row) => row.claim_id === claimId && !row.reversed_at);
-    const claimAdjustments = adjustments.filter(
+    const activeAdjustments = adjustments.filter(
       (row) => row.claim_id === claimId && !["reversed", "voided"].includes(String(row.adjustment_status ?? "")),
     );
+    const reducingAdjustments = activeAdjustments.filter((row) => !isRecoveryAdjustment(row.adjustment_type));
+    const recoveryAdjustments = activeAdjustments.filter((row) => isRecoveryAdjustment(row.adjustment_type));
     const paidAmountCents = total(claimAllocations, "amount_cents");
-    const adjustmentAmountCents = total(claimAdjustments, "amount_cents");
+    const adjustmentAmountCents = total(reducingAdjustments, "amount_cents");
+    const recoveryAmountCents = total(recoveryAdjustments, "amount_cents");
     const latestResponse = claimResponses[0];
     return {
       ...claim,
@@ -74,7 +79,12 @@ export async function getClaimsWorkspaceData() {
       clearinghouseStatus: String(latestResponse?.response_status ?? "—"),
       paidAmountCents,
       adjustmentAmountCents,
-      openBalanceCents: Math.max(0, Number(claim.total_charge_cents ?? 0) - paidAmountCents - adjustmentAmountCents),
+      openBalanceCents: calculateOpenBalance(
+        Number(claim.total_charge_cents ?? 0),
+        paidAmountCents,
+        adjustmentAmountCents,
+        recoveryAmountCents,
+      ),
       denialCount: claimDenials.length,
       appealCount: claimAppeals.length,
       workCount: workItems.filter((row) => row.source_object_id === claimId && row.workqueue_status !== "completed").length,

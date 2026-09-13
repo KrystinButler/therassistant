@@ -27,6 +27,38 @@ export function validatePaymentDraft(input: { amountCents: number; source: strin
   return { amountCents: input.amountCents, source: input.source as PaymentSource, method: normalizedMethod as PaymentMethod };
 }
 
+export function resolvePaymentOwnership(input: {
+  source: string;
+  requestedClientId?: string;
+  requestedPayerId?: string;
+  claimClientId?: string;
+  claimPayerId?: string;
+}) {
+  const clientId = input.claimClientId || input.requestedClientId || null;
+  const payerId = input.source === "insurance"
+    ? (input.claimPayerId || input.requestedPayerId || null)
+    : null;
+  return { clientId, payerId };
+}
+
+export function deriveClaimFinancialStatus(input: {
+  chargeCents: number;
+  paidCents: number;
+  adjustmentCents: number;
+  recoveryCents?: number;
+}) {
+  const recoveryCents = input.recoveryCents ?? 0;
+  const openBalanceCents = Math.max(
+    0,
+    input.chargeCents - input.paidCents - input.adjustmentCents + recoveryCents,
+  );
+  if (openBalanceCents === 0) return "paid" as const;
+  if (input.paidCents > 0 || input.adjustmentCents > 0 || recoveryCents > 0) {
+    return "partially_paid" as const;
+  }
+  return "accepted" as const;
+}
+
 export function buildPaymentReversal(input: { paymentId: string; allocationIds: string[]; reason: string }) {
   if (!input.paymentId) throw new Error("Payment is required.");
   if (!input.reason.trim()) throw new Error("Reversal reason is required.");

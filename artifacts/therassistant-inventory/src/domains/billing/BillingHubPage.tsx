@@ -3,10 +3,14 @@ import { Link } from "wouter";
 
 import { money } from "../../lib/format";
 import { demoSelect, type Row } from "../../lib/supabase-demo-client";
+import { calculateOpenBalance } from "../ar/aging";
+import { getArWorkspaceData } from "../ar/repository";
+import { isRecoveryAdjustment } from "../ar/variance";
 import { buildBillingHubSummary } from "./hub";
 
 type DataRow = Row & { id: string };
 type OpenClaimRow = DataRow & { openBalanceCents: number };
+type VarianceRow = Awaited<ReturnType<typeof getArWorkspaceData>>["variances"][number];
 
 type HubData = {
   charges: DataRow[];
@@ -16,6 +20,7 @@ type HubData = {
   appeals: DataRow[];
   allocations: DataRow[];
   adjustments: DataRow[];
+  variances: VarianceRow[];
 };
 
 function activeAmount(rows: DataRow[], field: string) {
@@ -28,11 +33,18 @@ function claimBalance(claim: DataRow, allocations: DataRow[], adjustments: DataR
     allocations.filter((row) => row.claim_id === claimId && !row.reversed_at),
     "amount_cents",
   );
+  const activeAdjustments = adjustments.filter(
+    (row) => row.claim_id === claimId && row.adjustment_status !== "reversed" && row.adjustment_status !== "voided",
+  );
   const adjusted = activeAmount(
-    adjustments.filter((row) => row.claim_id === claimId && row.adjustment_status !== "reversed" && row.adjustment_status !== "voided"),
+    activeAdjustments.filter((row) => !isRecoveryAdjustment(row.adjustment_type)),
     "amount_cents",
   );
-  return Math.max(0, Number(claim.total_charge_cents ?? 0) - paid - adjusted);
+  const recovery = activeAmount(
+    activeAdjustments.filter((row) => isRecoveryAdjustment(row.adjustment_type)),
+    "amount_cents",
+  );
+  return calculateOpenBalance(Number(claim.total_charge_cents ?? 0), paid, adjusted, recovery);
 }
 
 export function BillingHubPage() {
@@ -51,9 +63,10 @@ export function BillingHubPage() {
       demoSelect<DataRow>("appeals", { order: "created_at.desc" }),
       demoSelect<DataRow>("payment_allocations", { order: "created_at.desc" }),
       demoSelect<DataRow>("adjustments", { order: "created_at.desc" }),
+      getArWorkspaceData(),
     ])
-      .then(([charges, claims, payments, denials, appeals, allocations, adjustments]) => {
-        if (active) setData({ charges, claims, payments, denials, appeals, allocations, adjustments });
+      .then(([charges, claims, payments, denials, appeals, allocations, adjustments, arData]) => {
+        if (active) setData({ charges, claims, payments, denials, appeals, allocations, adjustments, variances: arData.variances });
       })
       .catch((err: unknown) => {
         if (active) setError(err instanceof Error ? err.message : "Unable to load Billing.");
@@ -74,7 +87,7 @@ export function BillingHubPage() {
     const patientAr = openClaims.filter((claim) => claim.claim_status === "patient_responsibility");
     const insuranceAr = openClaims.filter((claim) => claim.claim_status !== "patient_responsibility");
     const recoveryItems = data.adjustments.filter((row) =>
-      ["recoupment", "refund_correction"].includes(String(row.adjustment_type ?? "")),
+      isRecoveryAdjustment(row.adjustment_type),
     );
 
     return buildBillingHubSummary({
@@ -85,7 +98,7 @@ export function BillingHubPage() {
       appeals: data.appeals,
       insuranceAr,
       patientAr,
-      variances: [],
+      variances: data.variances,
       recoveryItems,
     });
   }, [data]);

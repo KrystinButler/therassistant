@@ -190,9 +190,23 @@ export async function getArWorkspaceData(asOfDate = new Date().toISOString().sli
   const rows = claims.flatMap((claim): ArRow[] => {
     const claimId = claim.id;
     const paidAmountCents = total(allocations.filter((row) => row.claim_id === claimId && !row.reversed_at), "amount_cents");
-    const claimAdjustments = adjustments.filter((row) => row.claim_id === claimId && !["reversed", "voided"].includes(String(row.adjustment_status ?? "")));
-    const adjustmentAmountCents = total(claimAdjustments, "amount_cents");
-    const openBalanceCents = calculateOpenBalance(Number(claim.total_charge_cents ?? 0), paidAmountCents, adjustmentAmountCents);
+    const activeClaimAdjustments = adjustments.filter(
+      (row) => row.claim_id === claimId && !["reversed", "voided"].includes(String(row.adjustment_status ?? "")),
+    );
+    const adjustmentAmountCents = total(
+      activeClaimAdjustments.filter((row) => !isRecoveryAdjustment(row.adjustment_type)),
+      "amount_cents",
+    );
+    const recoveryAmountCents = total(
+      activeClaimAdjustments.filter((row) => isRecoveryAdjustment(row.adjustment_type)),
+      "amount_cents",
+    );
+    const openBalanceCents = calculateOpenBalance(
+      Number(claim.total_charge_cents ?? 0),
+      paidAmountCents,
+      adjustmentAmountCents,
+      recoveryAmountCents,
+    );
     if (openBalanceCents <= 0 || ["voided", "reversed"].includes(String(claim.claim_status ?? ""))) return [];
     const serviceDate = String(claim.service_date_from ?? claim.created_at ?? asOfDate).slice(0, 10);
     const denial = denials.find((row) => row.claim_id === claimId);
@@ -282,7 +296,7 @@ export async function getArWorkspaceData(asOfDate = new Date().toISOString().sli
   });
 
   const recoveryRows: RecoveryWorkspaceRow[] = adjustments
-    .filter((row) => isRecoveryAdjustment(row.adjustment_type))
+    .filter((row) => isRecoveryAdjustment(row.adjustment_type) && !["reversed", "voided"].includes(String(row.adjustment_status ?? "")))
     .map((adjustment) => {
       const claim = claimsById.get(String(adjustment.claim_id ?? ""));
       const clientId = String(adjustment.client_id ?? claim?.client_id ?? "");
