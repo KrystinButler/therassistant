@@ -11,6 +11,8 @@ type ClientRow = {
   lastName: string;
   preferredName?: string | null;
   dateOfBirth?: string | null;
+  email?: string | null;
+  phone?: string | null;
   clientStatus: string;
   registrationStatus: string;
   billingReadinessStatus: string;
@@ -77,8 +79,8 @@ export function ClientsPage() {
       last_name: client.lastName,
       preferred_name: client.preferredName || "",
       date_of_birth: client.dateOfBirth || "",
-      email: "",
-      phone: "",
+      email: client.email || "",
+      phone: client.phone || "",
       client_status: client.clientStatus,
       registration_status: client.registrationStatus,
     });
