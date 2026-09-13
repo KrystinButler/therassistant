@@ -6,6 +6,7 @@ import { demoSelect, type Row } from "../../lib/supabase-demo-client";
 import { buildBillingHubSummary } from "./hub";
 
 type DataRow = Row & { id: string };
+type OpenClaimRow = DataRow & { openBalanceCents: number };
 
 type HubData = {
   charges: DataRow[];
@@ -68,7 +69,7 @@ export function BillingHubPage() {
   const summary = useMemo(() => {
     if (!data) return null;
     const openClaims = data.claims
-      .map((claim) => ({ ...claim, openBalanceCents: claimBalance(claim, data.allocations, data.adjustments) }))
+      .map((claim): OpenClaimRow => ({ ...claim, openBalanceCents: claimBalance(claim, data.allocations, data.adjustments) }))
       .filter((claim) => claim.openBalanceCents > 0);
     const patientAr = openClaims.filter((claim) => claim.claim_status === "patient_responsibility");
     const insuranceAr = openClaims.filter((claim) => claim.claim_status !== "patient_responsibility");
