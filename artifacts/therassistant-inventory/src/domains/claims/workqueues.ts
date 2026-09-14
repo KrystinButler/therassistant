@@ -23,6 +23,12 @@ export function isActiveAppealStatus(status: unknown) {
   return ACTIVE_APPEAL_STATUSES.includes(String(status ?? ""));
 }
 
+export function isRetryableRejection(claimStatus: unknown, latestResponseStatus: unknown) {
+  const status = String(claimStatus ?? "");
+  if (status === "rejected") return true;
+  return ["submitted", "batched"].includes(status) && String(latestResponseStatus ?? "") === "rejected";
+}
+
 export function canBulkClaimAction(action: BulkClaimAction) {
   return ["validate", "create_follow_up", "retry_rejected"].includes(action);
 }
@@ -40,11 +46,6 @@ export function buildClaimWorkqueues(
       latestResponseByClaim.set(claimId, response);
     }
   }
-  const rejectedClaimIds = new Set(
-    [...latestResponseByClaim.entries()]
-      .filter(([, row]) => row.response_status === "rejected")
-      .map(([claimId]) => claimId),
-  );
   const claimsWithDenialRecord = new Set(
     denials.map((row) => String(row.claim_id ?? "")).filter(Boolean),
   );
@@ -71,10 +72,10 @@ export function buildClaimWorkqueues(
     all: claims,
     validation: claims.filter((row) => ["ready_for_validation", "validation_failed"].includes(String(row.claim_status ?? ""))),
     submission: claims.filter((row) => ["ready_for_batch", "batched", "submitted"].includes(String(row.claim_status ?? ""))),
-    rejections: claims.filter((row) => {
-      const status = String(row.claim_status ?? "");
-      return status === "rejected" || (["submitted", "batched"].includes(status) && rejectedClaimIds.has(row.id));
-    }),
+    rejections: claims.filter((row) => isRetryableRejection(
+      row.claim_status,
+      latestResponseByClaim.get(row.id)?.response_status,
+    )),
     denials: claims.filter((row) => deniedClaimIds.has(row.id) || (row.claim_status === "denied" && !claimsWithDenialRecord.has(row.id))),
     appeals: claims.filter((row) => row.claim_status === "appealed" || appealClaimIds.has(row.id)),
     paymentExceptions: claims.filter((row) => paymentClaimIds.has(row.id)),
