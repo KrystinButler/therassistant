@@ -5,7 +5,8 @@ export type Phase3BillingScenario = {
     | "contract_underpayment"
     | "recoupment_recovery"
     | "unapplied_payment_reversal"
-    | "credentialing_writeoff";
+    | "credentialing_writeoff"
+    | "patient_responsibility";
   title: string;
   demoId: string;
   claimId: string;
@@ -67,6 +68,15 @@ export const phase3BillingScenarios: Phase3BillingScenario[] = [
     claimId: "62000000-0000-4000-8000-000000000006",
     detail: "Credentialing denial follows the configured non-workable write-off policy instead of entering the appeal queue.",
     href: "/claims/62000000-0000-4000-8000-000000000006",
+    synthetic: true,
+  },
+  {
+    code: "patient_responsibility",
+    title: "ERA Transfers Balance to Patient Responsibility",
+    demoId: "P3-PATIENT-AR-001",
+    claimId: "62000000-0000-4000-8000-000000000007",
+    detail: "Synthetic ERA posts an $80 payer payment and $20 contractual adjustment, leaving the remaining $20 as patient responsibility in Patient A/R.",
+    href: "/ar-denials?tab=patient",
     synthetic: true,
   },
 ];
