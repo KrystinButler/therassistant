@@ -32,13 +32,13 @@ router.get("/providers", async (_req, res, next) => {
           FROM workqueue_items w
           WHERE w.workqueue_status = 'open'
             AND (
-              w.source_object_id IN (
+              (w.source_object_type = 'provider' AND w.source_object_id = pr.id)
+              OR w.source_object_id IN (
                 SELECT pc2.id
                 FROM professional_claims pc2
                 WHERE pc2.rendering_provider_id = pr.id
                    OR pc2.billing_provider_id = pr.id
               )
-              OR w.description ILIKE '%' || pr.first_name || '%'
             )
         ) AS "openIssueCount"
 
@@ -51,7 +51,6 @@ router.get("/providers", async (_req, res, next) => {
     return next(error);
   }
 });
-
 
 router.get("/providers/:id", async (req, res, next) => {
   try {
@@ -83,6 +82,8 @@ router.get("/providers/:id", async (req, res, next) => {
       renderingClaims,
       billingClaims,
       workItems,
+      identifiers,
+      payerEnrollments,
     ] = await Promise.all([
       db.execute(sql`
         SELECT
@@ -158,22 +159,34 @@ router.get("/providers/:id", async (req, res, next) => {
         SELECT DISTINCT w.*
         FROM workqueue_items w
         WHERE
-          w.source_object_id IN (
+          (w.source_object_type = 'provider' AND w.source_object_id = ${id}::uuid)
+          OR w.source_object_id IN (
             SELECT pc.id
             FROM professional_claims pc
             WHERE pc.rendering_provider_id = ${id}::uuid
                OR pc.billing_provider_id = ${id}::uuid
           )
-          OR w.description ILIKE (
-            '%' ||
-            (
-              SELECT first_name
-              FROM providers
-              WHERE id = ${id}::uuid
-            ) ||
-            '%'
-          )
         ORDER BY w.created_at DESC
+      `),
+
+      db.execute(sql`
+        SELECT
+          pi.*,
+          p.name AS "payerName"
+        FROM provider_identifiers pi
+        LEFT JOIN payers p ON p.id = pi.payer_id
+        WHERE pi.provider_id = ${id}::uuid
+        ORDER BY pi.identifier_type, pi.created_at
+      `),
+
+      db.execute(sql`
+        SELECT
+          ppe.*,
+          p.name AS "payerName"
+        FROM provider_payer_enrollments ppe
+        LEFT JOIN payers p ON p.id = ppe.payer_id
+        WHERE ppe.provider_id = ${id}::uuid
+        ORDER BY p.name, ppe.created_at
       `),
     ]);
 
@@ -185,7 +198,73 @@ router.get("/providers/:id", async (req, res, next) => {
       renderingClaims: renderingClaims.rows,
       billingClaims: billingClaims.rows,
       workItems: workItems.rows,
+      identifiers: identifiers.rows,
+      payerEnrollments: payerEnrollments.rows,
     });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.post("/providers/:id/identifiers", async (req, res, next) => {
+  try {
+    const providerId = req.params.id;
+    const identifierType = typeof req.body?.identifier_type === "string"
+      ? req.body.identifier_type.trim()
+      : "";
+    const identifierValue = typeof req.body?.identifier_value === "string"
+      ? req.body.identifier_value.trim()
+      : "";
+    const payerId = typeof req.body?.payer_id === "string" && req.body.payer_id
+      ? req.body.payer_id
+      : null;
+    const effectiveDate = typeof req.body?.effective_date === "string" && req.body.effective_date
+      ? req.body.effective_date
+      : null;
+    const terminationDate = typeof req.body?.termination_date === "string" && req.body.termination_date
+      ? req.body.termination_date
+      : null;
+
+    if (!UUID_PATTERN.test(providerId)) {
+      return res.status(400).json({ error: "Invalid provider id" });
+    }
+    if (!identifierType || !identifierValue) {
+      return res.status(400).json({ error: "Identifier type and value are required" });
+    }
+    if (payerId && !UUID_PATTERN.test(payerId)) {
+      return res.status(400).json({ error: "Invalid payer id" });
+    }
+
+    const result = await db.execute(sql`
+      INSERT INTO provider_identifiers (
+        tenant_id,
+        provider_id,
+        identifier_type,
+        identifier_value,
+        payer_id,
+        effective_date,
+        termination_date
+      )
+      SELECT
+        pr.tenant_id,
+        pr.id,
+        ${identifierType},
+        ${identifierValue},
+        ${payerId}::uuid,
+        ${effectiveDate}::date,
+        ${terminationDate}::date
+      FROM providers pr
+      JOIN tenants t ON t.id = pr.tenant_id
+      WHERE pr.id = ${providerId}::uuid
+        AND COALESCE((t.settings ->> 'demo')::boolean, false) = true
+      RETURNING *
+    `);
+
+    if (!result.rows.length) {
+      return res.status(404).json({ error: "Demo provider not found" });
+    }
+
+    return res.status(201).json(result.rows[0]);
   } catch (error) {
     return next(error);
   }
