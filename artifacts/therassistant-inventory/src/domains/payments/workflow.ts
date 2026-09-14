@@ -127,6 +127,7 @@ export async function postDemoEraWorkflow(
     claimId: string;
     paidAmountCents: number;
     adjustmentAmountCents: number;
+    patientResponsibilityCents?: number;
     traceNumber?: string;
     carcCode?: string;
   },
@@ -135,11 +136,12 @@ export async function postDemoEraWorkflow(
   if (!claim) return failure("claim_not_found", "Claim not found.");
 
   const totalChargeCents = Number(claim.total_charge_cents ?? 0);
-  if (input.paidAmountCents < 0 || input.adjustmentAmountCents < 0) {
-    return blocked("negative_adjudication", "ERA payment and adjustment amounts cannot be negative.");
+  const patientResponsibilityCents = Number(input.patientResponsibilityCents ?? 0);
+  if (input.paidAmountCents < 0 || input.adjustmentAmountCents < 0 || patientResponsibilityCents < 0) {
+    return blocked("negative_adjudication", "ERA payment, adjustment, and patient responsibility amounts cannot be negative.");
   }
-  if (input.paidAmountCents + input.adjustmentAmountCents > totalChargeCents) {
-    return blocked("era_overage", "ERA payment plus adjustment exceeds the claim charge.");
+  if (input.paidAmountCents + input.adjustmentAmountCents + patientResponsibilityCents > totalChargeCents) {
+    return blocked("era_overage", "ERA payment, adjustment, and patient responsibility exceed the claim charge.");
   }
 
   try {
@@ -149,7 +151,7 @@ export async function postDemoEraWorkflow(
       check_or_trace_number: input.traceNumber || `ERA-${Date.now()}`,
       payment_amount_cents: input.paidAmountCents,
       status: "uploaded",
-      raw_metadata: { demo: true, claimId: claim.id },
+      raw_metadata: { demo: true, claimId: claim.id, patientResponsibilityCents },
     });
 
     const eraClaim = await repo.createEraClaim({
@@ -160,7 +162,7 @@ export async function postDemoEraWorkflow(
       charge_amount_cents: totalChargeCents,
       paid_amount_cents: input.paidAmountCents,
       status: "matched",
-      raw_data: { demo: true },
+      raw_data: { demo: true, patientResponsibilityCents },
     });
 
     await repo.createEraMatch({
@@ -207,10 +209,22 @@ export async function postDemoEraWorkflow(
     }
 
     const openBalance = totalChargeCents - input.paidAmountCents - input.adjustmentAmountCents;
-    const claimStatus = openBalance === 0 ? "paid" : "partially_paid";
+    const insuranceRemainder = Math.max(0, openBalance - patientResponsibilityCents);
+    const claimStatus = openBalance === 0
+      ? "paid"
+      : patientResponsibilityCents > 0 && insuranceRemainder === 0
+        ? "patient_responsibility"
+        : "partially_paid";
+    const currentMetadata = claim.metadata && typeof claim.metadata === "object" && !Array.isArray(claim.metadata)
+      ? claim.metadata
+      : {};
     await repo.updateClaim(claim.id, {
       claim_status: claimStatus,
-      ...(claimStatus === "paid" ? { paid_at: new Date().toISOString() } : {}),
+      metadata: {
+        ...currentMetadata,
+        patient_responsibility_cents: patientResponsibilityCents,
+      },
+      ...(claimStatus === "paid" ? { paid_at: new Date().toISOString() } : { paid_at: null }),
     });
 
     await repo.updateEraFile(eraFile.id, { status: "posted" });
