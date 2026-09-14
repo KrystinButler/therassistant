@@ -12,7 +12,16 @@ import {
   startWorkItem,
 } from "../domains/work-center/repository";
 
-type WorkItem = Awaited<ReturnType<typeof getWorkCenterData>>[number];
+type WorkItemBase = Awaited<ReturnType<typeof getWorkCenterData>>[number];
+type WorkItem = WorkItemBase & {
+  workqueue_type: string;
+  priority: string;
+  workqueue_status: string;
+  due_date: string | null;
+  title: string;
+  description: string | null;
+  source_object_type: string;
+};
 type DueFilter = "all" | "overdue" | "next7" | "none";
 
 export function WorkCenterPage() {
@@ -32,7 +41,7 @@ export function WorkCenterPage() {
     setLoading(true);
     setError(null);
     try {
-      setItems(await getWorkCenterData());
+      setItems(await getWorkCenterData() as WorkItem[]);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unable to load Work Center.");
     } finally {

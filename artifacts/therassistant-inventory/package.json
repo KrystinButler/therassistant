@@ -9,7 +9,8 @@
     "serve": "vite preview --config vite.config.ts --host 0.0.0.0",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "typecheck:phase1": "tsc -p tsconfig.phase1.json --noEmit",
-    "typecheck:phase2": "tsc -p tsconfig.phase2.json --noEmit"
+    "typecheck:phase2": "tsc -p tsconfig.phase2.json --noEmit",
+    "typecheck:phase3": "tsc -p tsconfig.phase3.json --noEmit"
   },
   "devDependencies": {
     "@hookform/resolvers": "^3.10.0",

@@ -65,7 +65,7 @@ function personName(row?: Row) {
   return [row.first_name, row.last_name].filter(Boolean).join(" ") || "—";
 }
 
-function sourceRoute(type: string, id: string) {
+export function sourceRouteForWorkItem(type: string, id: string) {
   switch (type) {
     case "client": return `/clients/${id}`;
     case "claim": return `/claims/${id}`;
@@ -74,10 +74,11 @@ function sourceRoute(type: string, id: string) {
     case "provider": return `/providers/${id}`;
     case "authorization": return "/authorizations";
     case "eligibility": return "/eligibility";
-    case "charge": return "/billing";
+    case "charge": return "/billing/charges";
     case "payment": return "/payments";
-    case "denial": return "/payments";
+    case "denial": return "/ar-denials?tab=denials";
     case "appeal": return "/ar-denials";
+    case "adjustment": return "/ar-denials?tab=recovery";
     case "era": return "/payments";
     case "claim_batch": return "/claims/submission";
     case "payer_contract": return "/payers-contracts";
@@ -100,6 +101,7 @@ export async function getWorkCenterData() {
     eligibility,
     payments,
     denials,
+    adjustments,
     batches,
     eraFiles,
     payerContracts,
@@ -117,6 +119,7 @@ export async function getWorkCenterData() {
     demoSelect<DataRow>("eligibility_checks"),
     demoSelect<DataRow>("payments"),
     demoSelect<DataRow>("denials"),
+    demoSelect<DataRow>("adjustments"),
     demoSelect<DataRow>("claim_batches"),
     demoSelect<DataRow>("era_files"),
     demoSelect<DataRow>("payer_contracts"),
@@ -133,6 +136,7 @@ export async function getWorkCenterData() {
   const eligibilityById = new Map(eligibility.map((row) => [row.id, row]));
   const paymentsById = new Map(payments.map((row) => [row.id, row]));
   const denialsById = new Map(denials.map((row) => [row.id, row]));
+  const adjustmentsById = new Map(adjustments.map((row) => [row.id, row]));
   const batchesById = new Map(batches.map((row) => [row.id, row]));
   const eraById = new Map(eraFiles.map((row) => [row.id, row]));
   const contractsById = new Map(payerContracts.map((row) => [row.id, row]));
@@ -198,6 +202,13 @@ export async function getWorkCenterData() {
       payerId = String(row?.payer_id ?? "");
       const claim = claimsById.get(String(row?.claim_id ?? ""));
       relatedName = `${String(claim?.patient_control_number || "Denial")} · ${personName(clientsById.get(clientId))}`;
+    } else if (type === "adjustment") {
+      const row = adjustmentsById.get(id);
+      const claim = claimsById.get(String(row?.claim_id ?? ""));
+      clientId = String(row?.client_id ?? claim?.client_id ?? "");
+      providerId = String(claim?.rendering_provider_id ?? "");
+      payerId = String(row?.payer_id ?? claim?.payer_id ?? "");
+      relatedName = `${String(row?.adjustment_type || "Recovery").replaceAll("_", " ")} · ${String(claim?.patient_control_number || "Claim")} · ${personName(clientsById.get(clientId))}`;
     } else if (type === "provider") {
       providerId = id;
       relatedName = personName(providersById.get(id));
@@ -231,7 +242,7 @@ export async function getWorkCenterData() {
     return {
       ...item,
       ...context,
-      sourceRoute: sourceRoute(sourceType, sourceId),
+      sourceRoute: sourceRouteForWorkItem(sourceType, sourceId),
       history: historyByItem.get(item.id) ?? [],
     };
   });

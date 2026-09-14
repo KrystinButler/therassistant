@@ -2,8 +2,11 @@ import { Route, Switch } from "wouter";
 
 import InventoryApp from "./InventoryApp";
 import { AppShell } from "./components/app-shell";
+import { ArWorkspacePage } from "./domains/ar/ArWorkspacePage";
+import { BillingHubPage } from "./domains/billing/BillingHubPage";
 import { BillingQueuePage } from "./domains/billing/BillingQueuePage";
 import { Claim360Page } from "./domains/claims/Claim360Page";
+import { ClaimsWorkspacePage } from "./domains/claims/ClaimsWorkspacePage";
 import { ClaimSubmissionPage } from "./domains/claims/ClaimSubmissionPage";
 import { EncounterPage } from "./domains/encounters/EncounterPage";
 import { PaymentsPage } from "./domains/payments/PaymentsPage";
@@ -14,7 +17,6 @@ import { PatientPortalPage } from "./domains/portal/PatientPortalPage";
 import { SchedulePage } from "./domains/scheduling/SchedulePage";
 import { PreSessionPage } from "./domains/scheduling/PreSessionPage";
 import { AdministrationPage } from "./pages/administration";
-import { ClaimsPage } from "./pages/claims";
 import { ClientsPage } from "./pages/clients";
 import { DashboardPage } from "./pages/dashboard";
 import { DemoControlCenter } from "./pages/demo-control";
@@ -22,8 +24,6 @@ import { ProviderDetailPage } from "./pages/provider-detail";
 import { ProvidersPage } from "./pages/providers";
 import { WorkCenterPage } from "./pages/work-center";
 import {
-  ArDenialsPage,
-  ChargesPage,
   CredentialingPage,
   MailroomPage,
   PayersContractsPage,
@@ -52,6 +52,7 @@ export default function App() {
         <Route path="/clients/:id"><PatientChartPage /></Route>
         <Route path="/claims/:id"><Claim360Page /></Route>
         <Route path="/providers/:id"><ProviderDetailPage /></Route>
+        <Route path="/billing/charges"><BillingQueuePage /></Route>
         <Route path="/work-center"><WorkCenterPage /></Route>
         <Route path="/clients"><ClientsPage /></Route>
         <Route path="/providers"><ProvidersPage /></Route>
@@ -61,11 +62,11 @@ export default function App() {
         <Route path="/eligibility"><EligibilityPage /></Route>
         <Route path="/authorizations"><AuthorizationsPage /></Route>
         <Route path="/medicaid"><MedicaidPage /></Route>
-        <Route path="/billing"><BillingQueuePage /></Route>
-        <Route path="/charges"><ChargesPage /></Route>
-        <Route path="/claims"><ClaimsPage /></Route>
+        <Route path="/billing"><BillingHubPage /></Route>
+        <Route path="/charges"><BillingQueuePage /></Route>
+        <Route path="/claims"><ClaimsWorkspacePage /></Route>
         <Route path="/payments"><PaymentsPage /></Route>
-        <Route path="/ar-denials"><ArDenialsPage /></Route>
+        <Route path="/ar-denials"><ArWorkspacePage /></Route>
         <Route path="/credentialing"><CredentialingPage /></Route>
         <Route path="/payers-contracts"><PayersContractsPage /></Route>
         <Route path="/mailroom"><MailroomPage /></Route>
