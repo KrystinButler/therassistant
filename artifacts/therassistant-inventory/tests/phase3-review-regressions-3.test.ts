@@ -19,12 +19,8 @@ const paymentRepositorySource = readFileSync(
   new URL("../src/domains/payments/repository.ts", import.meta.url),
   "utf8",
 );
-const demoClientSource = readFileSync(
-  new URL("../src/lib/supabase-demo-client.ts", import.meta.url),
-  "utf8",
-);
-const restrictedAllocationMigrationUrl = new URL(
-  "../../../supabase/migrations/20260913_phase3_restrict_payment_allocation_columns.sql",
+const atomicReversalMigrationUrl = new URL(
+  "../../../supabase/migrations/20260913_phase3_atomic_demo_payment_reversal.sql",
   import.meta.url,
 );
 
@@ -95,14 +91,14 @@ test("voided and reversed claims are not active Billing Hub A/R", () => {
   assert.match(billingHubPageSource, /isActiveArClaimStatus/);
 });
 
-test("anonymous payment allocation updates are limited to reversed_at", () => {
-  assert.equal(existsSync(restrictedAllocationMigrationUrl), true);
-  if (!existsSync(restrictedAllocationMigrationUrl)) return;
+test("anonymous payment allocation reversal writes are removed in favor of an atomic RPC", () => {
+  assert.equal(existsSync(atomicReversalMigrationUrl), true);
+  if (!existsSync(atomicReversalMigrationUrl)) return;
 
-  const sql = readFileSync(restrictedAllocationMigrationUrl, "utf8");
-  assert.match(sql, /revoke\s+update\s+on\s+table\s+public\.payment_allocations\s+from\s+anon/i);
-  assert.match(sql, /grant\s+update\s*\(\s*reversed_at\s*\)\s+on\s+table\s+public\.payment_allocations\s+to\s+anon/i);
-  assert.doesNotMatch(sql, /grant\s+update\s+on\s+table\s+public\.payment_allocations\s+to\s+anon/i);
-  assert.match(demoClientSource, /demoUpdateExact/);
-  assert.match(paymentRepositorySource, /demoUpdateExact<DataRow>\("payment_allocations"/);
+  const sql = readFileSync(atomicReversalMigrationUrl, "utf8");
+  assert.match(sql, /revoke\s+update\s*\(\s*reversed_at\s*\)\s+on\s+table\s+public\.payment_allocations\s+from\s+anon/i);
+  assert.match(sql, /revoke\s+insert\s+on\s+table\s+public\.payment_reversals\s+from\s+anon/i);
+  assert.match(sql, /create\s+or\s+replace\s+function\s+public\.reverse_demo_payment/i);
+  assert.match(paymentRepositorySource, /demoRpc<DemoPaymentReversalResult>\("reverse_demo_payment"/);
+  assert.doesNotMatch(paymentRepositorySource, /demoUpdateExact<DataRow>\("payment_allocations"/);
 });
