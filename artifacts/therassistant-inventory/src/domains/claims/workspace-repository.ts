@@ -8,6 +8,7 @@ import {
 import { calculateOpenBalance } from "../ar/aging";
 import { isRecoveryAdjustment } from "../ar/variance";
 import { validateClaim } from "./repository";
+import { isRetryableRejection } from "./workqueues";
 
 type DataRow = Row & { id: string };
 export type ClaimsWorkspaceRow = DataRow & {
@@ -108,20 +109,31 @@ export async function bulkValidateClaims(claimIds: string[]) {
   return results;
 }
 
+async function getLatestSubmissionResponse(claimId: string) {
+  return (await demoSelect<DataRow>("submission_responses", {
+    claim_id: `eq.${claimId}`,
+    order: "created_at.desc",
+    limit: "1",
+  }))[0];
+}
+
 export async function createClaimFollowUps(claimIds: string[]) {
   for (const claimId of claimIds) {
+    const claim = (await demoSelect<DataRow>("professional_claims", { id: `eq.${claimId}`, limit: "1" }))[0];
+    if (!claim) continue;
+    const latestResponse = await getLatestSubmissionResponse(claimId);
+    const rejected = isRetryableRejection(claim.claim_status, latestResponse?.response_status);
+    const type = rejected ? "claim_rejection" : "claim_validation";
     const existing = await demoSelect<DataRow>("workqueue_items", {
       source_object_type: "eq.claim",
       source_object_id: `eq.${claimId}`,
+      workqueue_type: `eq.${type}`,
       workqueue_status: "in.(open,in_progress,pending,snoozed,reopened)",
       limit: "1",
     });
     if (existing[0]) continue;
-    const claim = (await demoSelect<DataRow>("professional_claims", { id: `eq.${claimId}`, limit: "1" }))[0];
-    if (!claim) continue;
-    const rejected = claim.claim_status === "rejected";
     await demoInsert<DataRow>("workqueue_items", {
-      workqueue_type: rejected ? "claim_rejection" : "claim_validation",
+      workqueue_type: type,
       workqueue_status: "open",
       priority: rejected ? "high" : "normal",
       source_object_type: "claim",
@@ -135,14 +147,17 @@ export async function createClaimFollowUps(claimIds: string[]) {
 export async function retryRejectedClaims(claimIds: string[]) {
   for (const claimId of claimIds) {
     const claim = (await demoSelect<DataRow>("professional_claims", { id: `eq.${claimId}`, limit: "1" }))[0];
-    if (!claim || claim.claim_status !== "rejected") continue;
+    if (!claim) continue;
+    const latestResponse = await getLatestSubmissionResponse(claimId);
+    if (!isRetryableRejection(claim.claim_status, latestResponse?.response_status)) continue;
+    const oldStatus = String(claim.claim_status ?? "");
     await demoUpdate<DataRow>("professional_claims", claimId, {
       claim_status: "ready_for_validation",
       accepted_at: null,
     });
     await demoInsert<DataRow>("claim_status_history", {
       claim_id: claimId,
-      old_status: "rejected",
+      old_status: oldStatus,
       new_status: "ready_for_validation",
       reason: "Corrected claim returned to validation after clearinghouse rejection.",
     });
