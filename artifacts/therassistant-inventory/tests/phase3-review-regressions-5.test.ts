@@ -13,8 +13,8 @@ const atomicReversalMigrationUrl = new URL(
   "../../../supabase/migrations/20260913_phase3_atomic_demo_payment_reversal.sql",
   import.meta.url,
 );
-const phase3SeedSource = readFileSync(
-  new URL("../../../supabase/seed/2026-09-13-phase3-demo.sql", import.meta.url),
+const patientArSeedSource = readFileSync(
+  new URL("../../../supabase/seed/2026-09-13-phase3-patient-ar-demo.sql", import.meta.url),
   "utf8",
 );
 
@@ -116,7 +116,12 @@ test("patient responsibility cannot exceed the adjudicated remainder", async () 
 
 test("Phase 3 includes a connected patient A/R scenario and seed", () => {
   assert.equal(phase3BillingScenarios.some((scenario) => scenario.code === "patient_responsibility"), true);
-  assert.match(phase3SeedSource, /P3-PATIENT-AR-001/);
-  assert.match(phase3SeedSource, /'patient_responsibility'/);
-  assert.match(phase3SeedSource, /"patient_responsibility_cents"\s*:\s*2000/);
+  assert.match(patientArSeedSource, /P3-PATIENT-AR-001/);
+  assert.match(patientArSeedSource, /'patient_responsibility'/);
+  assert.match(patientArSeedSource, /"patient_responsibility_cents"\s*:\s*2000/);
+  assert.match(patientArSeedSource, /insert\s+into\s+era_files/i);
+  assert.match(patientArSeedSource, /insert\s+into\s+era_claims/i);
+  assert.match(patientArSeedSource, /insert\s+into\s+era_matches/i);
+  assert.match(patientArSeedSource, /insert\s+into\s+payment_allocations/i);
+  assert.match(patientArSeedSource, /insert\s+into\s+adjustment_allocations/i);
 });
