@@ -41,6 +41,8 @@ The current `mailroom_items` table contains:
 
 The database already has a `documents` table with patient, claim, authorization, and appeal linkage plus document type, status, file name, storage path, MIME type, and file size.
 
+Supabase Storage already has a private `therassistant-documents` bucket. Phase 5 must reuse that bucket for new correspondence files rather than creating a second file store.
+
 The Work Center already supports reusable status, priority, assignment, due-date, and history behavior, but its enums do not yet contain a correspondence-specific workqueue type or a mailroom-item source-object type.
 
 ## 3. Goals
@@ -50,7 +52,7 @@ Phase 5 must provide:
 1. an actionable Mailroom inbox;
 2. a Correspondence 360 workspace for one item;
 3. classification and operational linkage;
-4. document linkage without creating a second attachment system;
+4. document upload/linkage without creating a second attachment system;
 5. due dates, ownership, and follow-up routing;
 6. Work Center integration for correspondence requiring action;
 7. auditable status changes;
@@ -75,7 +77,7 @@ Those remain separate phases or production-hardening work.
 
 ### Approach A — Expand the existing workflow spine
 
-Reuse `mailroom_items`, `documents`, `workqueue_items`, and `status_history`. Add only the fields and enum values required for first-class correspondence workflow.
+Reuse `mailroom_items`, `documents`, `workqueue_items`, `status_history`, and the existing private document bucket. Add only the fields and enum values required for first-class correspondence workflow.
 
 Advantages:
 
@@ -138,7 +140,7 @@ The Mailroom must support at least the canonical categories:
 - `prior_authorization_notice`
 - `payer_correspondence`
 
-`general_correspondence` may be used as the fallback category.
+`general_correspondence` is the fallback category.
 
 Correspondence type remains a controlled application value in Phase 5. A database enum is not required unless implementation review shows a clear integrity benefit.
 
@@ -168,17 +170,47 @@ Meaning:
 - `resolved`: required operational action is complete;
 - `closed`: final administrative closure; no open correspondence work remains.
 
+Allowed transitions are explicit:
+
+| Current | Allowed next states |
+| --- | --- |
+| `new` | `reviewed`, `action_required`, `closed` |
+| `reviewed` | `action_required`, `closed` |
+| `action_required` | `in_progress`, `pending`, `resolved` |
+| `in_progress` | `pending`, `resolved` |
+| `pending` | `in_progress`, `resolved` |
+| `resolved` | `closed`, `action_required` |
+| `closed` | `action_required` |
+
+Rules:
+
+- `markCorrespondenceReviewed()` sets `reviewed_at` when moving from `new` to `reviewed`.
+- Entering `action_required` ensures one active correspondence Work Center item exists.
+- `resolveCorrespondence()` completes the active correspondence Work Center item as part of the same logical transition.
+- `closeCorrespondence()` is permitted only when no active correspondence Work Center item remains. It sets `closed_at`.
+- `reopenCorrespondence()` moves `resolved` or `closed` to `action_required`, clears `closed_at`, and reopens or creates the actionable Work Center item according to existing Work Center history conventions.
+- Any transition outside the matrix is rejected.
+
 Status transitions must run through domain workflow actions rather than direct select/dropdown mutation.
 
-### 6.4 Documents
+### 6.4 Documents and storage
 
-The existing `documents` table remains the document/file source of truth.
+The existing `documents` table remains the document metadata source of truth.
 
-Mailroom does not create another attachment table.
+The existing private Supabase Storage bucket `therassistant-documents` remains the binary file store.
+
+Mailroom does not create another attachment table or storage bucket.
 
 A Mailroom item references one primary `document_id` in Phase 5. Additional related documents can still be accessed through their normal patient, claim, authorization, or appeal relationships. Multiple arbitrary attachments per correspondence are deferred unless implementation proves the single-primary-document model insufficient for the existing demo requirements.
 
 Document type values already supported by the database such as `eob`, `appeal_letter`, `authorization_letter`, and `payer_correspondence` should be reused where they match.
+
+Phase 5 must support both:
+
+1. linking an existing `documents` record to correspondence; and
+2. adding a new correspondence document by uploading the file to `therassistant-documents`, creating its `documents` record, and linking that record to the Mailroom item.
+
+The browser must not receive privileged storage credentials. Opening/downloading a private document must use the existing safe storage-access pattern or a narrowly scoped signed-access pattern established during implementation.
 
 ## 7. Mailroom Inbox
 
@@ -246,6 +278,7 @@ It must show:
 
 - primary document file name;
 - document type/status;
+- add/upload or link-existing-document action;
 - open/download action when a valid stored document is linked;
 - clear empty state when no document is attached.
 
@@ -273,15 +306,16 @@ resolveCorrespondence()
 closeCorrespondence()
 reopenCorrespondence()
 linkCorrespondenceDocument()
+addCorrespondenceDocument()
 ```
 
-Each action validates prerequisites and records history.
+Each action validates prerequisites and records history where state changes.
 
 ### Action-required behavior
 
 When an item enters `action_required`, Therassistant must ensure there is an open correspondence Work Center item.
 
-The Work Center record should contain:
+The Work Center record contains:
 
 - correspondence-specific workqueue type;
 - source object type pointing to the Mailroom item;
@@ -290,9 +324,9 @@ The Work Center record should contain:
 - due date when present;
 - priority based on due-date urgency or explicit user selection.
 
-Duplicate open work items for the same active correspondence should not be created by repeated transitions.
+Duplicate open work items for the same active correspondence must not be created by repeated transitions.
 
-Resolving or closing the correspondence should complete its active correspondence work item when appropriate. Reopening correspondence should reopen or recreate actionable work according to existing Work Center history conventions.
+Resolving correspondence completes its active correspondence work item. Closing requires that no active correspondence work remains. Reopening correspondence reopens or recreates actionable work according to existing Work Center history conventions.
 
 ## 10. Work Center Integration
 
@@ -342,7 +376,7 @@ The domain owns:
 - human-readable enrichment;
 - workflow transition rules;
 - work-item synchronization;
-- document linkage behavior;
+- document linkage/upload behavior;
 - due-date state calculation.
 
 `operational-workspaces.tsx` must stop owning the active Mailroom implementation once the new route is connected.
@@ -378,7 +412,8 @@ The add correspondence form must support:
 - authorization/appeal where relevant and available;
 - due date;
 - notes;
-- optional link to an existing document.
+- optional link to an existing document;
+- optional new document upload.
 
 Context selections must be constrained where reasonable. For example, when a patient is selected, the claim list should prefer that patient's claims rather than forcing users to identify relationships by UUID.
 
@@ -386,7 +421,7 @@ Creating a correspondence item does not automatically create a Work Center item 
 
 ## 15. Synthetic Demo Scenarios
 
-Phase 5 should provide deterministic synthetic examples that demonstrate distinct workflows without modifying real records.
+Phase 5 provides deterministic synthetic examples that demonstrate distinct workflows without modifying real records.
 
 Minimum scenarios:
 
@@ -396,7 +431,7 @@ Minimum scenarios:
 4. credentialing letter linked to a provider and payer;
 5. resolved correspondence with completed work and visible history.
 
-The scenarios must use synthetic data only.
+The scenarios use synthetic data only.
 
 ## 16. Error Handling
 
@@ -406,6 +441,7 @@ Examples:
 
 - linked correspondence not found;
 - linked document missing;
+- document upload/storage failure;
 - invalid status transition;
 - attempt to close while required active work remains unresolved;
 - failed Work Center synchronization;
@@ -413,11 +449,15 @@ Examples:
 
 Where a transition affects the Mailroom item, history, and Work Center together, implementation should use a transactional database operation when partial success would leave inconsistent workflow state.
 
+Document upload is handled as a two-part operation: storage upload plus document metadata creation/linking. If metadata creation fails after storage upload, implementation must either clean up the orphaned uploaded object or surface a recoverable cleanup condition rather than silently losing track of the file.
+
 ## 17. Security and RLS
 
 All new or altered exposed tables must retain RLS.
 
 Phase 5 must not introduce service-role credentials or privileged secrets into browser code.
+
+The private `therassistant-documents` bucket must remain private.
 
 Any database function used for atomic correspondence transitions must follow the same constrained security model used in prior phases:
 
@@ -427,12 +467,15 @@ Any database function used for atomic correspondence transitions must follow the
 - no broad anonymous destructive grants;
 - post-migration security-advisor review.
 
+Storage policies used for the synthetic demo must be scoped to the intended document path and operations rather than granting broad bucket-wide anonymous mutation.
+
 ## 18. Testing and Verification
 
 Phase 5 requires dedicated tests for:
 
 - allowed status transitions;
 - invalid transition rejection;
+- close-with-active-work rejection;
 - due-soon and overdue calculation;
 - correspondence Work Center payload generation;
 - duplicate work-item prevention;
@@ -440,6 +483,7 @@ Phase 5 requires dedicated tests for:
 - history payloads;
 - Mailroom aggregate enrichment;
 - document linkage;
+- new document metadata/storage orchestration boundaries;
 - synthetic scenario integrity;
 - source routing to `/mailroom/:id`.
 
@@ -463,7 +507,10 @@ The implementation plan should expect one focused migration containing:
 2. supporting indexes for common Mailroom filters/links;
 3. `correspondence` workqueue type;
 4. `mailroom_item` workqueue source-object type;
-5. any RLS/policy adjustments required for the synthetic demo's controlled Mailroom writes.
+5. foreign-key constraints for new first-class links where compatible with existing schema;
+6. any RLS/policy adjustments required for the synthetic demo's controlled Mailroom writes.
+
+Storage-policy changes are included only if required to support the approved private correspondence upload/open workflow.
 
 No schema change should be added solely for UI convenience.
 
@@ -474,10 +521,11 @@ Phase 5 is complete when:
 - `/mailroom` is an actionable correspondence inbox;
 - one correspondence item opens a dedicated Correspondence 360 route;
 - correspondence can be classified and linked to relevant operational records;
-- stored documents are reused and accessible from Correspondence 360;
+- an existing document can be linked and a new correspondence document can be added through the existing document/storage architecture;
+- stored documents remain private and are accessible through the approved application path;
 - action-required correspondence creates one appropriate Work Center item;
 - Work Center correspondence links return to the exact Mailroom item;
-- status changes are intentional and auditable;
+- status changes follow the explicit transition matrix and are auditable;
 - due dates and overdue states are visible and tested;
 - raw IDs are not normal user-facing identifiers;
 - synthetic scenarios demonstrate the workflow;
