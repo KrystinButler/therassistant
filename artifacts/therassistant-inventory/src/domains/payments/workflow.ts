@@ -23,6 +23,15 @@ export type PaymentRepository = {
   upsertWorkItem(values: Record<string, unknown>): Promise<PaymentRow>;
 };
 
+export function partitionAdjudicatedBalance(openBalanceCents: number, patientResponsibilityCents: number, patientPaidCents = 0) {
+  const remainingPatient = Math.max(0, patientResponsibilityCents - Math.max(0, patientPaidCents));
+  const patient = Math.min(remainingPatient, Math.max(0, openBalanceCents));
+  return {
+    patientResponsibilityCents: patient,
+    insuranceResponsibilityCents: Math.max(0, openBalanceCents - patient),
+  };
+}
+
 export function validateAllocation(
   paymentAmountCents: number,
   allocationAmountsCents: number[],
@@ -209,7 +218,8 @@ export async function postDemoEraWorkflow(
     }
 
     const openBalance = totalChargeCents - input.paidAmountCents - input.adjustmentAmountCents;
-    const insuranceRemainder = Math.max(0, openBalance - patientResponsibilityCents);
+    const responsibility = partitionAdjudicatedBalance(openBalance, patientResponsibilityCents);
+    const insuranceRemainder = responsibility.insuranceResponsibilityCents;
     const claimStatus = openBalance === 0
       ? "paid"
       : patientResponsibilityCents > 0 && insuranceRemainder === 0
@@ -222,7 +232,8 @@ export async function postDemoEraWorkflow(
       claim_status: claimStatus,
       metadata: {
         ...currentMetadata,
-        patient_responsibility_cents: patientResponsibilityCents,
+        patient_responsibility_cents: responsibility.patientResponsibilityCents,
+        insurance_responsibility_cents: responsibility.insuranceResponsibilityCents,
       },
       ...(claimStatus === "paid" ? { paid_at: new Date().toISOString() } : { paid_at: null }),
     });

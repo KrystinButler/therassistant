@@ -6,6 +6,8 @@ import { demoSelect, type Row } from "../../lib/supabase-demo-client";
 import { calculateOpenBalance } from "../ar/aging";
 import { getArWorkspaceData } from "../ar/repository";
 import { isRecoveryAdjustment } from "../ar/variance";
+import { summarizePaymentBalance } from "../payments/operations";
+import { partitionAdjudicatedBalance } from "../payments/workflow";
 import { buildBillingHubSummary, isActiveArClaimStatus } from "./hub";
 
 type DataRow = Row & { id: string };
@@ -84,8 +86,26 @@ export function BillingHubPage() {
     const openClaims = data.claims
       .map((claim): OpenClaimRow => ({ ...claim, openBalanceCents: claimBalance(claim, data.allocations, data.adjustments) }))
       .filter((claim) => claim.openBalanceCents > 0 && isActiveArClaimStatus(claim.claim_status));
-    const patientAr = openClaims.filter((claim) => claim.claim_status === "patient_responsibility");
-    const insuranceAr = openClaims.filter((claim) => claim.claim_status !== "patient_responsibility");
+    const patientAr = openClaims.flatMap((claim) => {
+      const metadata = claim.metadata && typeof claim.metadata === "object" && !Array.isArray(claim.metadata)
+        ? claim.metadata as Record<string, unknown>
+        : {};
+      const recorded = Number(metadata.patient_responsibility_cents ?? 0);
+      const patientPaymentIds = new Set(data.payments.filter((payment) => payment.payment_source === "patient").map((payment) => payment.id));
+      const patientPaidCents = activeAmount(
+        data.allocations.filter((allocation) => allocation.claim_id === claim.id && !allocation.reversed_at && patientPaymentIds.has(String(allocation.payment_id))),
+        "amount_cents",
+      );
+      const patientCents = Number.isFinite(recorded) && recorded > 0
+        ? partitionAdjudicatedBalance(claim.openBalanceCents, recorded, patientPaidCents).patientResponsibilityCents
+        : claim.claim_status === "patient_responsibility" ? claim.openBalanceCents : 0;
+      return patientCents > 0 ? [{ ...claim, openBalanceCents: patientCents }] : [];
+    });
+    const insuranceAr = openClaims.flatMap((claim) => {
+      const patientCents = patientAr.find((row) => row.id === claim.id)?.openBalanceCents ?? 0;
+      const insuranceCents = Math.max(0, claim.openBalanceCents - patientCents);
+      return insuranceCents > 0 ? [{ ...claim, openBalanceCents: insuranceCents }] : [];
+    });
     const activeAllocations = data.allocations.filter((row) => !row.reversed_at);
     const paymentsWithUnapplied = data.payments.map((payment) => {
       const allocatedCents = activeAmount(
@@ -94,7 +114,7 @@ export function BillingHubPage() {
       );
       return {
         ...payment,
-        unappliedCents: Math.max(0, Number(payment.amount_cents ?? 0) - allocatedCents),
+        ...summarizePaymentBalance(payment.payment_status, Number(payment.amount_cents ?? 0), allocatedCents),
       };
     });
     const recoveryItems = data.adjustments.filter((row) =>

@@ -10,9 +10,8 @@ import { isRecoveryAdjustment } from "../ar/variance";
 import {
   buildAllocationPlan,
   capAllocationToOpenBalance,
-  deriveClaimFinancialStatus,
-  deriveSynchronizedClaimStatus,
   resolvePaymentOwnership,
+  summarizePaymentBalance,
   validatePaymentDraft,
 } from "./operations";
 import {
@@ -37,6 +36,8 @@ type DemoPaymentReversalResult = {
   reversed_at: string;
   allocation_count: number;
 };
+
+type DemoManualPaymentResult = DataRow;
 
 function first<T>(rows: T[]) { return rows[0] ?? null; }
 
@@ -100,17 +101,6 @@ async function getClaimFinancialState(claim: DataRow) {
   return { chargeCents, paidCents, adjustmentCents, recoveryCents, openBalanceCents };
 }
 
-async function syncClaimFinancialStatus(claimId: string) {
-  const claim = first(await demoSelect<DataRow>("professional_claims", { id: `eq.${claimId}`, limit: "1" }));
-  if (!claim || ["voided", "reversed"].includes(String(claim.claim_status ?? ""))) return claim;
-
-  const financials = await getClaimFinancialState(claim);
-  const financialStatus = deriveClaimFinancialStatus(financials);
-  const claimStatus = deriveSynchronizedClaimStatus(claim.claim_status, financialStatus);
-  if (claimStatus === String(claim.claim_status ?? "")) return claim;
-  return demoUpdate<DataRow>("professional_claims", claimId, { claim_status: claimStatus });
-}
-
 export async function postManualPayment(input: {
   amountCents: number;
   source: string;
@@ -141,34 +131,18 @@ export async function postManualPayment(input: {
     claimClientId: claim ? String(claim.client_id ?? "") || undefined : undefined,
     claimPayerId: claim ? String(claim.payer_id ?? "") || undefined : undefined,
   });
-  const payment = await demoInsert<DataRow>("payments", {
-    client_id: ownership.clientId,
-    payer_id: ownership.payerId,
-    payment_source: draft.source,
-    payment_method: draft.method,
-    payment_status: "pending",
-    payment_date: new Date().toISOString().slice(0, 10),
-    amount_cents: draft.amountCents,
-    trace_number: input.traceNumber?.trim() || null,
-    check_number: input.checkNumber?.trim() || null,
-    notes: input.notes?.trim() || null,
+  return demoRpc<DemoManualPaymentResult>("post_demo_manual_payment", {
+    p_amount_cents: draft.amountCents,
+    p_source: draft.source,
+    p_method: draft.method,
+    p_client_id: ownership.clientId,
+    p_payer_id: ownership.payerId,
+    p_claim_id: claim?.id ?? null,
+    p_allocation_cents: plan.allocatedCents,
+    p_trace_number: input.traceNumber?.trim() || null,
+    p_check_number: input.checkNumber?.trim() || null,
+    p_notes: input.notes?.trim() || null,
   });
-  if (claim && allocationCents > 0) {
-    await demoInsert<DataRow>("payment_allocations", {
-      payment_id: payment.id,
-      client_id: ownership.clientId,
-      claim_id: claim.id,
-      amount_cents: allocationCents,
-    });
-  }
-  const updatedPayment = await demoUpdate<DataRow>("payments", payment.id, {
-    payment_status: plan.status,
-    posted_at: plan.allocatedCents > 0 ? new Date().toISOString() : null,
-  });
-  if (claim && allocationCents > 0) {
-    await syncClaimFinancialStatus(claim.id);
-  }
-  return updatedPayment;
 }
 
 export async function reversePayment(paymentId: string, reason: string) {
@@ -212,13 +186,13 @@ export async function getPaymentsWorkspaceData() {
   }));
 
   const paymentRows = payments.map((payment): EnrichedPaymentRow => {
-    const allocatedCents = activeAllocations.filter((row) => row.payment_id === payment.id).reduce((sum, row) => sum + Number(row.amount_cents ?? 0), 0);
+    const activeAllocatedCents = activeAllocations.filter((row) => row.payment_id === payment.id).reduce((sum, row) => sum + Number(row.amount_cents ?? 0), 0);
+    const balance = summarizePaymentBalance(payment.payment_status, Number(payment.amount_cents ?? 0), activeAllocatedCents);
     return {
       ...payment,
       clientName: personName(clientsById.get(String(payment.client_id))),
       payerName: String(payersById.get(String(payment.payer_id))?.name ?? "—"),
-      allocatedCents,
-      unappliedCents: Math.max(0, Number(payment.amount_cents ?? 0) - allocatedCents),
+      ...balance,
     };
   });
 

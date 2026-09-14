@@ -20,6 +20,16 @@ export function buildAllocationPlan(paymentAmountCents: number, allocationAmount
   return { allocatedCents, unappliedCents, status } as const;
 }
 
+export function summarizePaymentBalance(status: unknown, amountCents: number, allocatedCents: number) {
+  if (["reversed", "voided"].includes(String(status ?? ""))) {
+    return { allocatedCents: 0, unappliedCents: 0 };
+  }
+  return {
+    allocatedCents,
+    unappliedCents: Math.max(0, amountCents - allocatedCents),
+  };
+}
+
 export function capAllocationToOpenBalance(requestedCents: number, openBalanceCents: number) {
   if (!Number.isFinite(requestedCents) || requestedCents < 0) throw new Error("Requested allocation cannot be negative.");
   if (!Number.isFinite(openBalanceCents) || openBalanceCents < 0) throw new Error("Claim open balance cannot be negative.");

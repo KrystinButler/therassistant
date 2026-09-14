@@ -71,7 +71,7 @@ test("Billing Hub counts only the unapplied portion of partially applied payment
   });
 
   assert.deepEqual(summary.unappliedPayments, { count: 2, amountCents: 6500 });
-  assert.match(billingHubPageSource, /unappliedCents/);
+  assert.match(billingHubPageSource, /summarizePaymentBalance/);
   assert.match(billingHubPageSource, /!row\.reversed_at/);
 });
 

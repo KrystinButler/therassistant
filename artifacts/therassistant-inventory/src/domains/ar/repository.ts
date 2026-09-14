@@ -2,6 +2,7 @@ import { demoInsert, demoSelect, demoUpdate, referenceSelect, type Row } from ".
 import { agingBucket, calculateOpenBalance, daysOutstanding, type AgingBucket } from "./aging";
 import { classifyDenialPolicy, type DenialPolicy } from "./denials";
 import { calculateContractVariance, expectedAllowedForLine, isRecoveryAdjustment } from "./variance";
+import { partitionAdjudicatedBalance } from "../payments/workflow";
 
 type DataRow = Row & { id: string };
 export type ArRow = DataRow & {
@@ -59,6 +60,20 @@ function personName(row?: Row) {
 
 function total(rows: DataRow[], field: string) {
   return rows.reduce((sum, row) => sum + Number(row[field] ?? 0), 0);
+}
+
+function responsibilityBalances(row: ArRow, patientPaidCents: number) {
+  const metadata = row.metadata && typeof row.metadata === "object" && !Array.isArray(row.metadata)
+    ? row.metadata as Record<string, unknown>
+    : {};
+  const recordedPatient = Number(metadata.patient_responsibility_cents ?? 0);
+  const patientCents = Number.isFinite(recordedPatient) && recordedPatient > 0
+    ? partitionAdjudicatedBalance(row.openBalanceCents, recordedPatient, patientPaidCents).patientResponsibilityCents
+    : row.claim_status === "patient_responsibility" ? row.openBalanceCents : 0;
+  return {
+    patientCents,
+    insuranceCents: Math.max(0, row.openBalanceCents - patientCents),
+  };
 }
 
 function activeOnDate(row: Row, date: string) {
@@ -151,6 +166,7 @@ export async function getArWorkspaceData(asOfDate = new Date().toISOString().sli
     providers,
     payers,
     allocations,
+    payments,
     adjustments,
     denials,
     appeals,
@@ -165,6 +181,7 @@ export async function getArWorkspaceData(asOfDate = new Date().toISOString().sli
     demoSelect<DataRow>("providers"),
     referenceSelect<DataRow>("payers", { order: "name.asc" }),
     demoSelect<DataRow>("payment_allocations", { order: "created_at.desc" }),
+    demoSelect<DataRow>("payments", { order: "created_at.desc" }),
     demoSelect<DataRow>("adjustments", { order: "created_at.desc" }),
     demoSelect<DataRow>("denials", { order: "created_at.desc" }),
     demoSelect<DataRow>("appeals", { order: "created_at.desc" }),
@@ -177,6 +194,7 @@ export async function getArWorkspaceData(asOfDate = new Date().toISOString().sli
   const clientsById = new Map(clients.map((row) => [row.id, row]));
   const providersById = new Map(providers.map((row) => [row.id, row]));
   const payersById = new Map(payers.map((row) => [row.id, row]));
+  const paymentsById = new Map(payments.map((row) => [row.id, row]));
   const claimsById = new Map(claims.map((row) => [row.id, row]));
   const denialsById = new Map(denials.map((row) => [row.id, row]));
   const activeAppealByDenial = new Map<string, DataRow>();
@@ -312,9 +330,28 @@ export async function getArWorkspaceData(asOfDate = new Date().toISOString().sli
       };
     });
 
+  const insuranceAr: ArRow[] = rows.flatMap((row): ArRow[] => {
+    const patientPaidCents = total(allocations.filter((allocation) =>
+      allocation.claim_id === row.id
+      && !allocation.reversed_at
+      && paymentsById.get(String(allocation.payment_id))?.payment_source === "patient"
+    ), "amount_cents");
+    const balance = responsibilityBalances(row, patientPaidCents).insuranceCents;
+    return balance > 0 ? [{ ...row, openBalanceCents: balance } as ArRow] : [];
+  });
+  const patientAr: ArRow[] = rows.flatMap((row): ArRow[] => {
+    const patientPaidCents = total(allocations.filter((allocation) =>
+      allocation.claim_id === row.id
+      && !allocation.reversed_at
+      && paymentsById.get(String(allocation.payment_id))?.payment_source === "patient"
+    ), "amount_cents");
+    const balance = responsibilityBalances(row, patientPaidCents).patientCents;
+    return balance > 0 ? [{ ...row, openBalanceCents: balance } as ArRow] : [];
+  });
+
   return {
-    insuranceAr: rows.filter((row) => row.claim_status !== "patient_responsibility"),
-    patientAr: rows.filter((row) => row.claim_status === "patient_responsibility"),
+    insuranceAr,
+    patientAr,
     denials: denialRows,
     appeals: appealRows,
     variances: varianceRows,
