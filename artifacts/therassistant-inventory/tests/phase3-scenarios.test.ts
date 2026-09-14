@@ -13,9 +13,10 @@ test("Phase 3 demo covers advanced billing and recovery workflows", () => {
       "recoupment_recovery",
       "unapplied_payment_reversal",
       "credentialing_writeoff",
+      "patient_responsibility",
     ],
   );
   assert.equal(phase3BillingScenarios.every((scenario) => scenario.synthetic === true), true);
   assert.equal(phase3BillingScenarios.every((scenario) => scenario.demoId.startsWith("P3-")), true);
-  assert.equal(new Set(phase3BillingScenarios.map((scenario) => scenario.demoId)).size, 6);
+  assert.equal(new Set(phase3BillingScenarios.map((scenario) => scenario.demoId)).size, 7);
 });
