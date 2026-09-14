@@ -81,7 +81,7 @@ export function evaluateBillingReadiness(input: BillingReadinessInput): BillingR
     checks.push(result(
       "provider_revalidation_due",
       "Provider Participation",
-      "warning",
+      "warn",
       false,
       "Provider enrollment is active but requires revalidation.",
       "Complete payer revalidation before the due date.",
