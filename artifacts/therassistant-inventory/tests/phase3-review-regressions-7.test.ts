@@ -27,6 +27,12 @@ test("manual payment posting uses one constrained database transaction", () => {
   assert.match(sql, /insert\s+into\s+public\.payments/i);
   assert.match(sql, /insert\s+into\s+public\.payment_allocations/i);
   assert.match(sql, /update\s+public\.professional_claims/i);
+  assert.match(sql, /p\.payment_source\s*=\s*p_source/i);
+  assert.match(sql, /patient_responsibility_cents/);
+  assert.match(sql, /insurance_responsibility_cents/);
+  assert.match(sql, /least\(v_allocation,\s*v_open,\s*v_source_open,\s*p_amount_cents\)/i);
+  assert.match(sql, /'patient_responsibility'::public\.claim_status_enum/);
+  assert.match(sql, /when\s+v_claim\.claim_status\s*=\s*'patient_responsibility'::public\.claim_status_enum\s+then\s+'patient_responsibility'/i);
   assert.match(sql, /create\s+or\s+replace\s+function\s+public\.post_demo_manual_payment/i);
   assert.match(sql, /security\s+invoker/i);
 
