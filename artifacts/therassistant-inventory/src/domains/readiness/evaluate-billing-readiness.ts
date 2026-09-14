@@ -77,7 +77,16 @@ export function evaluateBillingReadiness(input: BillingReadinessInput): BillingR
     checks.push(result("authorization_not_required", "Authorization", "pass", false, "Authorization is not required."));
   }
 
-  if (input.providerEnrollmentStatus !== "approved") {
+  if (input.providerEnrollmentStatus === "needs_revalidation") {
+    checks.push(result(
+      "provider_revalidation_due",
+      "Provider Participation",
+      "warning",
+      false,
+      "Provider enrollment is active but requires revalidation.",
+      "Complete payer revalidation before the due date.",
+    ));
+  } else if (input.providerEnrollmentStatus !== "approved") {
     checks.push(result("provider_enrollment", "Provider Participation", "fail", true, `Provider enrollment is ${String(input.providerEnrollmentStatus ?? "not confirmed").replaceAll("_", " ")}.`, "Resolve provider-payer enrollment before claim creation."));
   } else {
     checks.push(result("provider_enrollment_approved", "Provider Participation", "pass", false, "Provider enrollment is approved."));
