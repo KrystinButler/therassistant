@@ -116,7 +116,7 @@ export function ClaimsWorkspacePage() {
         await bulkValidateClaims(ids);
         setMessage(`${ids.length} claim(s) sent through validation.`);
       } else if (action === "retry") {
-        const ids = chosen.filter((row) => row.claim_status === "rejected").map((row) => row.id);
+        const ids = chosen.map((row) => row.id);
         await retryRejectedClaims(ids);
         setMessage(`${ids.length} rejected claim(s) returned to validation.`);
       } else {
