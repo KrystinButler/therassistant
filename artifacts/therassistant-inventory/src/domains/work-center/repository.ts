@@ -74,7 +74,7 @@ export function sourceRouteForWorkItem(type: string, id: string) {
     case "provider": return `/providers/${id}`;
     case "authorization": return "/authorizations";
     case "eligibility": return "/eligibility";
-    case "charge": return "/billing";
+    case "charge": return "/billing/charges";
     case "payment": return "/payments";
     case "denial": return "/payments";
     case "appeal": return "/ar-denials";
