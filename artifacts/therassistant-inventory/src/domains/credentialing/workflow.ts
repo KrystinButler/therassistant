@@ -20,6 +20,8 @@ export type RevalidationState =
   | "due_soon"
   | "overdue";
 
+type CredentialingRow = Record<string, any>;
+
 const actionsByStatus: Record<EnrollmentStatus, EnrollmentAction[]> = {
   not_started: [{ label: "Start Enrollment", nextStatus: "in_progress" }],
   in_progress: [{ label: "Mark Submitted", nextStatus: "submitted" }],
@@ -62,6 +64,40 @@ export function revalidationState(
   if (daysUntilDue < 0) return "overdue";
   if (daysUntilDue <= warningDays) return "due_soon";
   return "current";
+}
+
+export function buildProviderCredentialingView(input: {
+  providerId: string;
+  identifiers: CredentialingRow[];
+  enrollments: CredentialingRow[];
+  payers: CredentialingRow[];
+  today?: Date;
+}) {
+  const payerMap = new Map(input.payers.map((payer) => [payer.id, payer]));
+
+  return {
+    identifiers: input.identifiers
+      .filter((identifier) => identifier.provider_id === input.providerId)
+      .map((identifier) => ({
+        ...identifier,
+        payerName: identifier.payer_id
+          ? payerMap.get(identifier.payer_id)?.name ?? null
+          : null,
+      })),
+    enrollments: input.enrollments
+      .filter((enrollment) => enrollment.provider_id === input.providerId)
+      .map((enrollment) => ({
+        ...enrollment,
+        payerName: payerMap.get(enrollment.payer_id)?.name ?? null,
+        revalidationState: revalidationState(
+          {
+            enrollment_status: enrollment.enrollment_status as EnrollmentStatus,
+            revalidation_due_date: enrollment.revalidation_due_date ?? null,
+          },
+          input.today,
+        ),
+      })),
+  };
 }
 
 export function buildEnrollmentStatusHistory(input: {
