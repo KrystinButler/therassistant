@@ -2,7 +2,7 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "git": {
     "deploymentEnabled": {
-      "phase3-advanced-billing-ar": false
+      "phase3-advanced-billing-ar": true
     }
   },
   "installCommand": "pnpm install --frozen-lockfile",
