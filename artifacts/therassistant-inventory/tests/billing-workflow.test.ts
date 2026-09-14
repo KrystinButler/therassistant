@@ -35,7 +35,7 @@ test("needs revalidation remains billing ready but surfaces a participation warn
   const result = evaluateBillingReadiness({ ...cleanContext, providerEnrollmentStatus: "needs_revalidation" });
   assert.equal(result.ready, true);
   assert.ok(result.checks.some(
-    (check) => check.code === "provider_revalidation_due" && check.status === "warning" && !check.blocking,
+    (check) => check.code === "provider_revalidation_due" && check.status === "warn" && !check.blocking,
   ));
 });
 
