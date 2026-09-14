@@ -31,6 +31,14 @@ test("credentialing failure blocks billing readiness", () => {
   assert.ok(result.checks.some((check) => check.code === "provider_enrollment" && check.blocking));
 });
 
+test("needs revalidation remains billing ready but surfaces a participation warning", () => {
+  const result = evaluateBillingReadiness({ ...cleanContext, providerEnrollmentStatus: "needs_revalidation" });
+  assert.equal(result.ready, true);
+  assert.ok(result.checks.some(
+    (check) => check.code === "provider_revalidation_due" && check.status === "warning" && !check.blocking,
+  ));
+});
+
 test("signed complete encounter is billing ready", () => {
   const result = evaluateBillingReadiness(cleanContext);
   assert.equal(result.ready, true);
