@@ -8,6 +8,7 @@ import { BillingQueuePage } from "./domains/billing/BillingQueuePage";
 import { Claim360Page } from "./domains/claims/Claim360Page";
 import { ClaimsWorkspacePage } from "./domains/claims/ClaimsWorkspacePage";
 import { ClaimSubmissionPage } from "./domains/claims/ClaimSubmissionPage";
+import { CredentialingPage } from "./domains/credentialing/CredentialingPage";
 import { EncounterPage } from "./domains/encounters/EncounterPage";
 import { PaymentsPage } from "./domains/payments/PaymentsPage";
 import { AuthorizationsPage } from "./domains/payer-readiness/AuthorizationsPage";
@@ -24,7 +25,6 @@ import { ProviderDetailPage } from "./pages/provider-detail";
 import { ProvidersPage } from "./pages/providers";
 import { WorkCenterPage } from "./pages/work-center";
 import {
-  CredentialingPage,
   MailroomPage,
   PayersContractsPage,
   ReportsPage,
