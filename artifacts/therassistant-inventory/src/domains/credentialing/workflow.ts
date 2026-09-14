@@ -66,6 +66,18 @@ export function revalidationState(
   return "current";
 }
 
+export function shouldOpenRevalidationWork(
+  enrollment: {
+    enrollment_status: EnrollmentStatus;
+    revalidation_due_date?: string | null;
+  },
+  today = new Date(),
+) {
+  if (enrollment.enrollment_status === "needs_revalidation") return true;
+  const state = revalidationState(enrollment, today);
+  return state === "due_soon" || state === "overdue";
+}
+
 export function buildProviderCredentialingView(input: {
   providerId: string;
   identifiers: CredentialingRow[];
