@@ -1,15 +1,14 @@
 import {
   demoInsert,
+  demoRpc,
   demoSelect,
   demoUpdate,
-  demoUpdateExact,
   referenceSelect,
   type Row,
 } from "../../lib/supabase-demo-client";
 import { isRecoveryAdjustment } from "../ar/variance";
 import {
   buildAllocationPlan,
-  buildPaymentReversal,
   capAllocationToOpenBalance,
   deriveClaimFinancialStatus,
   deriveSynchronizedClaimStatus,
@@ -31,6 +30,13 @@ type EraClaimRow = DataRow & { patientName: string };
 type DenialRow = DataRow & { patientName: string; payerName: string; claimControlNumber: string };
 type ReversalRow = DataRow & { traceNumber: string; patientName: string; amountCents: number };
 type AdjustmentRow = DataRow & { patientName: string; payerName: string; claimControlNumber: string };
+
+type DemoPaymentReversalResult = {
+  payment_id: string;
+  payment_status: "reversed";
+  reversed_at: string;
+  allocation_count: number;
+};
 
 function first<T>(rows: T[]) { return rows[0] ?? null; }
 
@@ -166,22 +172,12 @@ export async function postManualPayment(input: {
 }
 
 export async function reversePayment(paymentId: string, reason: string) {
-  const payment = first(await demoSelect<DataRow>("payments", { id: `eq.${paymentId}`, limit: "1" }));
-  if (!payment) throw new Error("Payment not found.");
-  if (["reversed", "voided"].includes(String(payment.payment_status ?? ""))) throw new Error("Payment is already reversed or voided.");
-  const allocations = await demoSelect<DataRow>("payment_allocations", { payment_id: `eq.${paymentId}`, order: "created_at.asc" });
-  const activeAllocations = allocations.filter((row) => !row.reversed_at);
-  const affectedClaimIds = [...new Set(activeAllocations.map((row) => String(row.claim_id ?? "")).filter(Boolean))];
-  const reversal = buildPaymentReversal({ paymentId, allocationIds: activeAllocations.map((row) => row.id), reason });
-  await demoInsert<DataRow>("payment_reversals", { payment_id: paymentId, reason: reversal.reason });
-  for (const allocation of activeAllocations) {
-    await demoUpdateExact<DataRow>("payment_allocations", allocation.id, { reversed_at: reversal.reversedAt });
-  }
-  const updatedPayment = await demoUpdate<DataRow>("payments", paymentId, { payment_status: reversal.paymentStatus });
-  for (const claimId of affectedClaimIds) {
-    await syncClaimFinancialStatus(claimId);
-  }
-  return updatedPayment;
+  if (!paymentId) throw new Error("Payment is required.");
+  if (!reason.trim()) throw new Error("Reversal reason is required.");
+  return demoRpc<DemoPaymentReversalResult>("reverse_demo_payment", {
+    p_payment_id: paymentId,
+    p_reason: reason.trim(),
+  });
 }
 
 function personName(row?: Row) {
