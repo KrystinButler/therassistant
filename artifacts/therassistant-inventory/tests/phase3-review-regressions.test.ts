@@ -108,14 +108,15 @@ test("claim financial status follows the remaining balance", () => {
   );
 });
 
-test("manual payment and reversal both resynchronize linked claim status", () => {
+test("manual payment resynchronizes client-side status and reversal delegates atomically to the database", () => {
   assert.match(paymentRepositorySource, /resolvePaymentOwnership/);
   assert.doesNotMatch(
     paymentRepositorySource,
     /input\.clientId\s*\|\|\s*claim\?\.client_id/,
   );
   const syncCalls = paymentRepositorySource.match(/syncClaimFinancialStatus/g) ?? [];
-  assert.ok(syncCalls.length >= 3, "expected helper definition plus payment and reversal synchronization calls");
+  assert.ok(syncCalls.length >= 2, "expected helper definition plus manual-payment synchronization call");
+  assert.match(paymentRepositorySource, /demoRpc<DemoPaymentReversalResult>\("reverse_demo_payment"/);
 });
 
 test("superseded rejection responses do not keep an accepted claim in the rejection queue", () => {
