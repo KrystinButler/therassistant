@@ -5,6 +5,7 @@ import {
   availableEnrollmentActions,
   buildCredentialingWorkItem,
   buildEnrollmentStatusHistory,
+  buildProviderCredentialingView,
   revalidationState,
 } from "../src/domains/credentialing/workflow.ts";
 
@@ -83,4 +84,24 @@ test("revalidation work item is provider-scoped and payer-specific", () => {
       due_date: "2026-11-30",
     },
   );
+});
+
+test("Provider 360 credentialing model resolves payer names and revalidation state", () => {
+  const result = buildProviderCredentialingView({
+    providerId: "provider-1",
+    identifiers: [
+      { id: "identifier-1", provider_id: "provider-1", identifier_type: "caqh", identifier_value: "12345678", payer_id: null },
+      { id: "identifier-2", provider_id: "provider-2", identifier_type: "medicaid", identifier_value: "999", payer_id: null },
+    ],
+    enrollments: [
+      { id: "enrollment-1", provider_id: "provider-1", payer_id: "payer-1", enrollment_status: "approved", revalidation_due_date: "2026-11-30" },
+    ],
+    payers: [{ id: "payer-1", name: "Aetna" }],
+    today: new Date("2026-09-14T12:00:00Z"),
+  });
+
+  assert.equal(result.identifiers.length, 1);
+  assert.equal(result.enrollments.length, 1);
+  assert.equal(result.enrollments[0].payerName, "Aetna");
+  assert.equal(result.enrollments[0].revalidationState, "due_soon");
 });
