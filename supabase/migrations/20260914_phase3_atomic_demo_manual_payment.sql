@@ -30,6 +30,8 @@ declare
   v_reducing bigint := 0;
   v_recovery bigint := 0;
   v_open bigint := 0;
+  v_source_paid bigint := 0;
+  v_source_open bigint := 0;
   v_allocation bigint := greatest(0, coalesce(p_allocation_cents, 0));
   v_status public.payment_status_enum;
   v_claim_status public.claim_status_enum;
@@ -89,7 +91,41 @@ begin
       and a.adjustment_status not in ('reversed', 'voided');
 
     v_open := greatest(0, coalesce(v_claim.total_charge_cents, 0) - v_paid - v_reducing + v_recovery);
-    v_allocation := least(v_allocation, v_open, p_amount_cents);
+
+    -- A claim can carry independent patient and insurance balances. An
+    -- allocation must not consume the other party's responsibility merely
+    -- because the claim still has an overall open balance.
+    if p_source in ('patient', 'insurance') then
+      select coalesce(sum(pa.amount_cents), 0)
+        into v_source_paid
+      from public.payment_allocations pa
+      join public.payments p on p.id = pa.payment_id and p.tenant_id = pa.tenant_id
+      where pa.claim_id = p_claim_id
+        and pa.tenant_id = v_tenant_id
+        and pa.reversed_at is null
+        and p.payment_source = p_source
+        and p.payment_status not in ('reversed', 'voided');
+
+      if p_source = 'patient' then
+        v_source_open := case
+          when coalesce(v_claim.metadata, '{}'::jsonb) ? 'patient_responsibility_cents'
+            then greatest(0, coalesce((v_claim.metadata ->> 'patient_responsibility_cents')::bigint, 0) - v_source_paid)
+          when v_claim.claim_status = 'patient_responsibility'::public.claim_status_enum
+            then v_open
+          else 0
+        end;
+      else
+        v_source_open := case
+          when coalesce(v_claim.metadata, '{}'::jsonb) ? 'insurance_responsibility_cents'
+            then greatest(0, coalesce((v_claim.metadata ->> 'insurance_responsibility_cents')::bigint, 0) - v_source_paid)
+          else v_open
+        end;
+      end if;
+    else
+      v_source_open := v_open;
+    end if;
+
+    v_allocation := least(v_allocation, v_open, v_source_open, p_amount_cents);
   else
     v_allocation := 0;
   end if;
@@ -134,12 +170,15 @@ begin
     v_open := greatest(0, v_open - v_allocation);
     v_claim_status := case
       when v_open = 0 then 'paid'::public.claim_status_enum
+      when v_claim.claim_status = 'patient_responsibility'::public.claim_status_enum
+        then 'patient_responsibility'::public.claim_status_enum
       else 'partially_paid'::public.claim_status_enum
     end;
 
     if v_claim.claim_status in (
       'accepted'::public.claim_status_enum,
       'partially_paid'::public.claim_status_enum,
+      'patient_responsibility'::public.claim_status_enum,
       'paid'::public.claim_status_enum
     ) then
       update public.professional_claims pc
