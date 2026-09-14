@@ -3,6 +3,7 @@ export type PaymentMethod = "eft" | "ach" | "check" | "credit_card" | "debit_car
 
 const SOURCES: PaymentSource[] = ["insurance", "patient", "third_party", "historical", "transfer", "refund", "adjustment", "other"];
 const METHODS: PaymentMethod[] = ["eft", "ach", "check", "credit_card", "debit_card", "cash", "money_order", "portal", "manual", "other"];
+const FINANCIAL_SYNC_STATUSES = new Set(["accepted", "partially_paid", "paid"]);
 
 export function calculateUnapplied(paymentAmountCents: number, allocationAmountsCents: number[]) {
   if (!Number.isFinite(paymentAmountCents) || paymentAmountCents < 0) throw new Error("Payment amount cannot be negative.");
@@ -69,6 +70,14 @@ export function deriveClaimFinancialStatus(input: {
     return "partially_paid" as const;
   }
   return "accepted" as const;
+}
+
+export function deriveSynchronizedClaimStatus(
+  currentStatus: unknown,
+  financialStatus: "accepted" | "partially_paid" | "paid",
+) {
+  const current = String(currentStatus ?? "");
+  return FINANCIAL_SYNC_STATUSES.has(current) ? financialStatus : current;
 }
 
 export function buildPaymentReversal(input: { paymentId: string; allocationIds: string[]; reason: string }) {
