@@ -16,6 +16,7 @@ import clinicalRouter from "./clinical";
 import chargesRouter from "./charges";
 import demoControlRouter from "./demo-control";
 import restoredRouter from "./restored";
+import credentialingRouter from "./credentialing";
 
 const router: IRouter = Router();
 
@@ -31,6 +32,7 @@ router.use(readinessRouter);
 router.use(clinicalRouter);
 router.use(chargesRouter);
 router.use(demoControlRouter);
+router.use(credentialingRouter);
 router.use(restoredRouter);
 
 export default router;
