@@ -119,6 +119,14 @@ export function createDemoClient(
     return rows[0];
   }
 
+  async function demoRpc<T>(functionName: string, args: Row = {}) {
+    const url = new URL(`${SUPABASE_URL}/rest/v1/rpc/${functionName}`);
+    return request<T>(`rpc/${functionName}`, url, {
+      method: "POST",
+      body: JSON.stringify(args),
+    });
+  }
+
   return {
     getDemoTenantId,
     referenceSelect,
@@ -126,6 +134,7 @@ export function createDemoClient(
     demoInsert,
     demoUpdate,
     demoUpdateExact,
+    demoRpc,
   };
 }
 
@@ -137,3 +146,4 @@ export const demoSelect = demoClient.demoSelect;
 export const demoInsert = demoClient.demoInsert;
 export const demoUpdate = demoClient.demoUpdate;
 export const demoUpdateExact = demoClient.demoUpdateExact;
+export const demoRpc = demoClient.demoRpc;
