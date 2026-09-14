@@ -7,6 +7,7 @@ import {
   buildEnrollmentStatusHistory,
   buildProviderCredentialingView,
   revalidationState,
+  shouldOpenRevalidationWork,
 } from "../src/domains/credentialing/workflow.ts";
 
 test("submitted enrollment offers approval and denial actions", () => {
@@ -40,6 +41,31 @@ test("approved enrollment past revalidation date is overdue", () => {
       new Date("2026-09-14T12:00:00Z"),
     ),
     "overdue",
+  );
+});
+
+test("revalidation work opens for explicit revalidation or an approaching approved deadline", () => {
+  const today = new Date("2026-09-14T12:00:00Z");
+  assert.equal(
+    shouldOpenRevalidationWork(
+      { enrollment_status: "needs_revalidation", revalidation_due_date: "2026-12-31" },
+      today,
+    ),
+    true,
+  );
+  assert.equal(
+    shouldOpenRevalidationWork(
+      { enrollment_status: "approved", revalidation_due_date: "2026-11-30" },
+      today,
+    ),
+    true,
+  );
+  assert.equal(
+    shouldOpenRevalidationWork(
+      { enrollment_status: "approved", revalidation_due_date: "2027-09-14" },
+      today,
+    ),
+    false,
   );
 });
 
