@@ -12,6 +12,7 @@ import {
   buildPaymentReversal,
   capAllocationToOpenBalance,
   deriveClaimFinancialStatus,
+  deriveSynchronizedClaimStatus,
   resolvePaymentOwnership,
   validatePaymentDraft,
 } from "./operations";
@@ -98,7 +99,9 @@ async function syncClaimFinancialStatus(claimId: string) {
   if (!claim || ["voided", "reversed"].includes(String(claim.claim_status ?? ""))) return claim;
 
   const financials = await getClaimFinancialState(claim);
-  const claimStatus = deriveClaimFinancialStatus(financials);
+  const financialStatus = deriveClaimFinancialStatus(financials);
+  const claimStatus = deriveSynchronizedClaimStatus(claim.claim_status, financialStatus);
+  if (claimStatus === String(claim.claim_status ?? "")) return claim;
   return demoUpdate<DataRow>("professional_claims", claimId, { claim_status: claimStatus });
 }
 
