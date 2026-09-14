@@ -1,0 +1,37 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "incremental": false,
+    "jsx": "preserve",
+    "lib": ["esnext", "dom", "dom.iterable"],
+    "moduleResolution": "bundler",
+    "types": ["node", "vite/client"],
+    "allowImportingTsExtensions": true,
+    "resolveJsonModule": true,
+    "paths": {
+      "@/*": ["./src/*"]
+    }
+  },
+  "include": [
+    "src/domains/**/*.ts",
+    "src/domains/**/*.tsx",
+    "src/components/app-shell.tsx",
+    "src/components/status-badge.tsx",
+    "src/pages/work-center.tsx",
+    "src/pages/providers.tsx",
+    "src/pages/provider-detail.tsx",
+    "src/pages/payer-detail.tsx",
+    "src/pages/operational-workspaces.tsx",
+    "src/lib/format.ts",
+    "src/lib/supabase-demo-client.ts",
+    "src/lib/demo-data.ts",
+    "src/lib/therassistant-api.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    "dist",
+    "build",
+    "**/*.test.ts"
+  ]
+}
