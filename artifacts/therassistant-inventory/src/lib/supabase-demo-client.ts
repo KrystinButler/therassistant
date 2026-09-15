@@ -1,8 +1,8 @@
 export type Row = Record<string, unknown>;
 export type FetchLike = typeof fetch;
 
-const SUPABASE_URL = "https://lpjwfdvaxobewxcklenl.supabase.co";
-const SUPABASE_KEY = "sb_publishable_JaHqUqIU43A0EwuE5yPXEw_VZYIASqH";
+export const SUPABASE_URL = "https://lpjwfdvaxobewxcklenl.supabase.co";
+export const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_JaHqUqIU43A0EwuE5yPXEw_VZYIASqH";
 const DEMO_TENANT_NAME = "Therassistant Demo";
 
 export function buildFilterQuery(filters: Record<string, string> = {}) {
@@ -25,7 +25,7 @@ export function createDemoClient(
     const response = await fetchImpl(url, {
       ...init,
       headers: {
-        apikey: SUPABASE_KEY,
+        apikey: SUPABASE_PUBLISHABLE_KEY,
         Accept: "application/json",
         "Content-Type": "application/json",
         ...(init?.headers ?? {}),
