@@ -16,6 +16,7 @@
   "include": [
     "src/domains/**/*.ts",
     "src/domains/**/*.tsx",
+    "src/navigation/**/*.ts",
     "src/components/app-shell.tsx",
     "src/components/status-badge.tsx",
     "src/pages/work-center.tsx",
