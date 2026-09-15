@@ -3,6 +3,7 @@ import { Link } from "wouter";
 
 import { StatusBadge } from "../../components/status-badge";
 import { money, shortDate } from "../../lib/format";
+import { ClaimWorkDrawer, type ClaimWorkRecord } from "./claim-work-drawer";
 import { buildClaimWorkqueues, isActiveAppealStatus } from "./workqueues";
 import {
   bulkValidateClaims,
@@ -31,6 +32,7 @@ export function ClaimsWorkspacePage() {
   const [page, setPage] = useState(1);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [saving, setSaving] = useState(false);
+  const [activeClaimId, setActiveClaimId] = useState<string | null>(null);
 
   async function load() {
     setLoading(true);
@@ -90,10 +92,24 @@ export function ClaimsWorkspacePage() {
   const pageSize = 20;
   const pageCount = Math.max(1, Math.ceil(filtered.length / pageSize));
   const visible = filtered.slice((page - 1) * pageSize, page * pageSize);
+  const activeClaimIndex = activeClaimId ? filtered.findIndex((row) => row.id === activeClaimId) : -1;
+  const activeClaimRow = activeClaimIndex >= 0 ? filtered[activeClaimIndex] : null;
+  const activeClaim: ClaimWorkRecord | null = activeClaimRow ? {
+    id: activeClaimRow.id,
+    patientControlNumber: activeClaimRow.patient_control_number,
+    payerClaimNumber: activeClaimRow.payer_claim_number,
+    claimStatus: String(activeClaimRow.claim_status),
+    serviceDateFrom: activeClaimRow.service_date_from,
+    totalChargeCents: Number(activeClaimRow.total_charge_cents ?? 0),
+    clientName: activeClaimRow.clientName,
+    payerName: activeClaimRow.payerName,
+    renderingProviderName: activeClaimRow.providerName,
+  } : null;
 
   useEffect(() => {
     setPage(1);
     setSelected(new Set());
+    setActiveClaimId(null);
   }, [tab, search, status, payer, provider, cpt, diagnosis, sort]);
 
   function toggle(id: string) {
@@ -102,6 +118,16 @@ export function ClaimsWorkspacePage() {
       if (next.has(id)) next.delete(id); else next.add(id);
       return next;
     });
+  }
+
+  function openClaim(id: string) {
+    setActiveClaimId(id);
+  }
+
+  function moveActiveClaim(offset: -1 | 1) {
+    if (activeClaimIndex < 0) return;
+    const next = filtered[activeClaimIndex + offset];
+    if (next) setActiveClaimId(next.id);
   }
 
   async function runBulk(action: "validate" | "followup" | "retry") {
@@ -193,10 +219,21 @@ export function ClaimsWorkspacePage() {
             {selected.size > 0 && <div className="thera-filter-row" style={{ marginTop: 12 }}><strong>{selected.size} selected</strong><button className="thera-action secondary" type="button" disabled={saving} onClick={() => void runBulk("validate")}>Validate</button><button className="thera-action secondary" type="button" disabled={saving} onClick={() => void runBulk("followup")}>Create Follow-Up</button>{tab === "rejections" && <button className="thera-action" type="button" disabled={saving} onClick={() => void runBulk("retry")}>Retry Rejected</button>}</div>}
           </section>
 
-          <ClaimsTable rows={visible} selected={selected} onToggle={toggle} />
+          <ClaimsTable rows={visible} selected={selected} onToggle={toggle} onOpenClaim={openClaim} />
           <div className="thera-filter-row" style={{ justifyContent: "space-between", marginTop: 12 }}><span>{filtered.length} claim(s) · Page {page} of {pageCount}</span><div className="thera-filter-row"><button type="button" className="thera-action secondary" disabled={page <= 1} onClick={() => setPage((value) => value - 1)}>Previous</button><button type="button" className="thera-action secondary" disabled={page >= pageCount} onClick={() => setPage((value) => value + 1)}>Next</button></div></div>
         </>
       )}
+
+      <ClaimWorkDrawer
+        claim={activeClaim}
+        open={Boolean(activeClaim)}
+        onOpenChange={(open) => { if (!open) setActiveClaimId(null); }}
+        queuePosition={activeClaimIndex >= 0 ? `${activeClaimIndex + 1} of ${filtered.length}` : undefined}
+        onPrevious={() => moveActiveClaim(-1)}
+        onNext={() => moveActiveClaim(1)}
+        previousDisabled={activeClaimIndex <= 0}
+        nextDisabled={activeClaimIndex < 0 || activeClaimIndex >= filtered.length - 1}
+      />
     </>
   );
 }
@@ -205,7 +242,7 @@ function Metric({ label, count, amount }: { label: string; count: number; amount
   return <div className="thera-metric-card"><div className="thera-metric-label">{label}</div><div className="thera-metric-value">{count}</div>{amount !== undefined && <div className="thera-table-subtext">{money(amount)}</div>}</div>;
 }
 
-function ClaimsTable({ rows, selected, onToggle }: { rows: ClaimsWorkspaceRow[]; selected: Set<string>; onToggle: (id: string) => void }) {
+function ClaimsTable({ rows, selected, onToggle, onOpenClaim }: { rows: ClaimsWorkspaceRow[]; selected: Set<string>; onToggle: (id: string) => void; onOpenClaim: (id: string) => void }) {
   if (!rows.length) return <section className="thera-card"><div className="thera-empty">No claims match this workqueue.</div></section>;
-  return <section className="thera-card"><div className="thera-table-wrap"><table className="thera-table"><thead><tr><th></th><th>Claim</th><th>Patient</th><th>DOS</th><th>Payer</th><th>Provider</th><th>CPT / Dx</th><th>Clearinghouse</th><th>Charge</th><th>Paid</th><th>Balance</th><th>Status</th><th>Exceptions</th></tr></thead><tbody>{rows.map((row) => <tr key={row.id}><td><input type="checkbox" checked={selected.has(row.id)} onChange={() => onToggle(row.id)} aria-label={`Select ${String(row.patient_control_number ?? row.id)}`} /></td><td><Link className="thera-table-link" href={`/claims/${row.id}`}>{String(row.patient_control_number ?? "Open Claim")}</Link><div className="thera-table-subtext">{String(row.payer_claim_number ?? "No payer claim #")}</div></td><td>{row.clientName}</td><td>{shortDate(String(row.service_date_from ?? ""))}</td><td>{row.payerName}</td><td>{row.providerName}</td><td>{row.cptCodes.join(", ") || "—"}<div className="thera-table-subtext">{row.diagnosisCodes.join(", ") || "—"}</div></td><td><StatusBadge value={row.clearinghouseStatus} /></td><td>{money(Number(row.total_charge_cents ?? 0))}</td><td>{money(row.paidAmountCents)}</td><td>{money(row.openBalanceCents)}</td><td><StatusBadge value={String(row.claim_status)} /></td><td>{row.denialCount > 0 ? `${row.denialCount} denial` : row.workCount > 0 ? `${row.workCount} work item` : "—"}</td></tr>)}</tbody></table></div></section>;
+  return <section className="thera-card"><div className="thera-table-wrap"><table className="thera-table"><thead><tr><th></th><th>Claim</th><th>Patient</th><th>DOS</th><th>Payer</th><th>Provider</th><th>CPT / Dx</th><th>Clearinghouse</th><th>Charge</th><th>Paid</th><th>Balance</th><th>Status</th><th>Exceptions</th></tr></thead><tbody>{rows.map((row) => <tr key={row.id}><td><input type="checkbox" checked={selected.has(row.id)} onChange={() => onToggle(row.id)} aria-label={`Select ${String(row.patient_control_number ?? row.id)}`} /></td><td><button type="button" className="thera-table-link" onClick={() => onOpenClaim(row.id)}>{String(row.patient_control_number ?? "Open Claim")}</button><div className="thera-table-subtext">{String(row.payer_claim_number ?? "No payer claim #")}</div></td><td>{row.clientName}</td><td>{shortDate(String(row.service_date_from ?? ""))}</td><td>{row.payerName}</td><td>{row.providerName}</td><td>{row.cptCodes.join(", ") || "—"}<div className="thera-table-subtext">{row.diagnosisCodes.join(", ") || "—"}</div></td><td><StatusBadge value={row.clearinghouseStatus} /></td><td>{money(Number(row.total_charge_cents ?? 0))}</td><td>{money(row.paidAmountCents)}</td><td>{money(row.openBalanceCents)}</td><td><StatusBadge value={String(row.claim_status)} /></td><td>{row.denialCount > 0 ? `${row.denialCount} denial` : row.workCount > 0 ? `${row.workCount} work item` : "—"}</td></tr>)}</tbody></table></div></section>;
 }
