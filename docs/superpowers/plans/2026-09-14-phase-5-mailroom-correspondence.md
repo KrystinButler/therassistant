@@ -330,7 +330,7 @@ It must:
 6. if metadata exists but Mailroom linking fails, return a clear recoverable error explaining that the document was saved and can be linked from existing documents rather than deleting valid metadata silently.
 
 - [ ] Map correspondence types to existing document enum values, e.g. EOB → `eob`, appeal/reconsideration → `appeal_letter`, prior-auth → `authorization_letter`, and other payer correspondence → `payer_correspondence`/`other`.
-- [ ] Add `openCorrespondenceDocument()` that requests a short-lived signed URL and lets the page open/download it. Supabase private-bucket signed access requires Storage `SELECT`; do not make the bucket public. citeturn491156search2turn491156search3
+- [ ] Add `openCorrespondenceDocument()` that requests a short-lived signed URL and lets the page open/download it. Private-bucket signed access requires scoped Storage `SELECT`; do not make the bucket public.
 - [ ] Run Storage and repository tests and confirm GREEN.
 - [ ] Run the browser secret scan manually:
 
