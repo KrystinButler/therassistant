@@ -49,3 +49,36 @@ export const phase1DemoScenarios: DemoScenario[] = [
     href: "/claims/61000000-0000-4000-8000-000000000003",
   },
 ];
+
+export const phase5MailroomScenarios: DemoScenario[] = [
+  {
+    title: "New Payer Correspondence",
+    name: "Aetna",
+    detail: "A newly received payer notice is waiting for classification and review in the Mailroom inbox.",
+    href: "/mailroom/75000000-0000-4000-8000-000000000001",
+  },
+  {
+    title: "Medical Records Deadline",
+    name: "Jordan Ellis",
+    detail: "A medical-record request is due September 18 and already has high-priority correspondence work in Work Center.",
+    href: "/mailroom/75000000-0000-4000-8000-000000000002",
+  },
+  {
+    title: "Claim Recoupment Notice",
+    name: "P3-RECOUP-001",
+    detail: "A reviewed recoupment notice is linked directly to the existing Phase 3 recovery claim and patient context.",
+    href: "/mailroom/75000000-0000-4000-8000-000000000003",
+  },
+  {
+    title: "Provider Credentialing Letter",
+    name: "Jamie Parker, LCSW",
+    detail: "A credentialing roster letter is classified to the provider and Aetna without exposing internal identifiers.",
+    href: "/mailroom/75000000-0000-4000-8000-000000000004",
+  },
+  {
+    title: "Resolved Appeal Response",
+    name: "P3-APPEAL-001",
+    detail: "A resolved payer appeal response shows completed correspondence work and an auditable status history.",
+    href: "/mailroom/75000000-0000-4000-8000-000000000005",
+  },
+];
