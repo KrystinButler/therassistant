@@ -1,37 +1,32 @@
-import type { ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { Link, useLocation } from "wouter";
+
+import {
+  getVisibleWorkspaces,
+  getWorkspaceContext,
+  toggleExpandedWorkspace,
+  type WorkspaceId,
+} from "../navigation/workspaces";
 
 type Props = {
   children: ReactNode;
 };
 
-const navigation = [
-  ["Home", "/"],
-  ["Work Center", "/work-center"],
-  ["Clients", "/clients"],
-  ["Schedule", "/schedule"],
-  ["Clinical", "/clinical"],
-  ["Eligibility", "/eligibility"],
-  ["Authorizations", "/authorizations"],
-  ["Billing", "/billing"],
-  ["Claims", "/claims"],
-  ["Payments", "/payments"],
-  ["A/R & Denials", "/ar-denials"],
-  ["Providers", "/providers"],
-  ["Credentialing", "/credentialing"],
-  ["Payers & Contracts", "/payers-contracts"],
-  ["Mailroom", "/mailroom"],
-  ["Reports", "/reports"],
-  ["Administration", "/administration"],
-] as const;
-
 export function AppShell({ children }: Props) {
   const [location] = useLocation();
+  const context = getWorkspaceContext(location);
+  const activeWorkspaceId = context.workspace?.id ?? null;
+  const [expandedWorkspaceId, setExpandedWorkspaceId] = useState<WorkspaceId | null>(activeWorkspaceId);
 
-  function active(href: string) {
-    if (href === "/") return location === "/";
-    return location === href || location.startsWith(`${href}/`);
-  }
+  useEffect(() => {
+    if (activeWorkspaceId) setExpandedWorkspaceId(activeWorkspaceId);
+  }, [activeWorkspaceId]);
+
+  const topbarContext = context.workspace
+    ? context.child
+      ? `${context.workspace.label} · ${context.child.label}`
+      : context.workspace.label
+    : "Operational Workspace";
 
   return (
     <div className="thera-app">
@@ -44,16 +39,52 @@ export function AppShell({ children }: Props) {
           </div>
         </div>
 
-        <nav className="thera-nav">
-          {navigation.map(([name, href]) => (
-            <Link
-              key={href}
-              href={href}
-              className={active(href) ? "thera-nav-link active" : "thera-nav-link"}
-            >
-              {name}
-            </Link>
-          ))}
+        <nav className="thera-nav" aria-label="Workspace navigation">
+          {getVisibleWorkspaces().map((workspace) => {
+            const expanded = workspace.id === expandedWorkspaceId;
+            const activeWorkspace = workspace.id === activeWorkspaceId;
+
+            return (
+              <div className="thera-workspace" key={workspace.id}>
+                <button
+                  type="button"
+                  className={activeWorkspace ? "thera-workspace-button active" : "thera-workspace-button"}
+                  aria-expanded={expanded}
+                  aria-controls={`thera-workspace-${workspace.id}`}
+                  onClick={() =>
+                    setExpandedWorkspaceId((current) => toggleExpandedWorkspace(current, workspace.id))
+                  }
+                >
+                  <span className="thera-workspace-label">{workspace.label}</span>
+                  <span className="thera-workspace-chevron" aria-hidden="true">
+                    {expanded ? "⌄" : "›"}
+                  </span>
+                </button>
+
+                <div
+                  id={`thera-workspace-${workspace.id}`}
+                  className="thera-workspace-children"
+                  hidden={!expanded}
+                >
+                  {expanded
+                    ? workspace.children.map((child) => {
+                        const activeChild = context.child?.id === child.id;
+                        return (
+                          <Link
+                            key={child.id}
+                            href={child.href}
+                            className={activeChild ? "thera-workspace-child active" : "thera-workspace-child"}
+                            aria-current={activeChild ? "page" : undefined}
+                          >
+                            {child.label}
+                          </Link>
+                        );
+                      })
+                    : null}
+                </div>
+              </div>
+            );
+          })}
         </nav>
 
         <div className="thera-sidebar-footer">
@@ -65,7 +96,10 @@ export function AppShell({ children }: Props) {
 
       <main className="thera-main">
         <header className="thera-topbar">
-          <div><div className="thera-topbar-product">Operational Workspace</div></div>
+          <div className="thera-topbar-context">
+            <div className="thera-topbar-practice">Front Range Behavioral Health</div>
+            <div className="thera-topbar-product">{topbarContext}</div>
+          </div>
           <div className="thera-demo-chip">SYNTHETIC DEMO DATA</div>
         </header>
         <section className="thera-content">{children}</section>
