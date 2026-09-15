@@ -68,9 +68,30 @@ jobs:
           fi
 
           routes=(
-            "/mailroom"
-            "/mailroom/75000000-0000-4000-8000-000000000001"
+            "/"
             "/work-center"
+            "/clients"
+            "/schedule"
+            "/clinical"
+            "/eligibility"
+            "/authorizations"
+            "/billing"
+            "/billing/charges"
+            "/claims"
+            "/claims/submission"
+            "/claims/follow-up"
+            "/payments"
+            "/ar-denials"
+            "/providers"
+            "/credentialing"
+            "/payers-contracts"
+            "/mailroom"
+            "/reports"
+            "/journal"
+            "/administration/imports"
+            "/administration"
+            "/administration/database-inventory"
+            "/mailroom/75000000-0000-4000-8000-000000000001"
           )
 
           for route in "${routes[@]}"; do
