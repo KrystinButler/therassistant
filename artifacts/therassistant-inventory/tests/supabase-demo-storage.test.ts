@@ -84,8 +84,10 @@ test("cleanup deletes only the exact uploaded object path", async () => {
     return response({ message: "success" });
   });
 
-  await storage.deleteObject("demo/tenant-1/mailroom/mail-1/notice.pdf");
+  const path = "demo/tenant-1/mailroom/mail-1/notice.pdf";
+  await storage.deleteObject(path);
   assert.equal(calls.length, 1);
   assert.equal(calls[0].init?.method, "DELETE");
-  assert.match(calls[0].url, /\/storage\/v1\/object\/therassistant-documents\/demo\/tenant-1\/mailroom\/mail-1\/notice\.pdf$/);
+  assert.match(calls[0].url, /\/storage\/v1\/object\/therassistant-documents$/);
+  assert.deepEqual(JSON.parse(String(calls[0].init?.body)), { prefixes: [path] });
 });
