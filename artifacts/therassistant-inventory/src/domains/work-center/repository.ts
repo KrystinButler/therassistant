@@ -65,6 +65,40 @@ function personName(row?: Row) {
   return [row.first_name, row.last_name].filter(Boolean).join(" ") || "—";
 }
 
+export function resolveMailroomWorkContext(input: {
+  mailroomItem: Row & { id: string };
+  linkedClaim?: Row & { id: string };
+  client?: Row & { id: string };
+  provider?: Row & { id: string };
+  payer?: Row & { id: string };
+}) {
+  const { mailroomItem, linkedClaim, client, provider, payer } = input;
+  const clientId = String(mailroomItem.client_id ?? linkedClaim?.client_id ?? "");
+  const providerId = String(mailroomItem.provider_id ?? "");
+  const payerId = String(mailroomItem.payer_id ?? linkedClaim?.payer_id ?? "");
+  const patientName = clientId ? personName(client) : "—";
+  const providerName = providerId ? personName(provider) : "—";
+  const payerName = payerId ? String(payer?.name ?? "—") : "—";
+  const claimNumber = String(
+    linkedClaim?.patient_control_number ?? linkedClaim?.payer_claim_number ?? "",
+  );
+  const relatedName = [
+    String(mailroomItem.subject || "Correspondence"),
+    patientName !== "—" ? patientName : "",
+    claimNumber,
+  ].filter(Boolean).join(" · ");
+
+  return {
+    clientId,
+    providerId,
+    payerId,
+    patientName,
+    providerName,
+    payerName,
+    relatedName,
+  };
+}
+
 export function sourceRouteForWorkItem(type: string, id: string) {
   switch (type) {
     case "client": return `/clients/${id}`;
@@ -82,6 +116,7 @@ export function sourceRouteForWorkItem(type: string, id: string) {
     case "era": return "/payments";
     case "claim_batch": return "/claims/submission";
     case "payer_contract": return "/payers-contracts";
+    case "mailroom_item": return `/mailroom/${id}`;
     default: return "/work-center";
   }
 }
@@ -105,6 +140,7 @@ export async function getWorkCenterData() {
     batches,
     eraFiles,
     payerContracts,
+    mailroomItems,
   ] = await Promise.all([
     demoSelect<DataRow>("workqueue_items", { order: "created_at.desc" }),
     demoSelect<DataRow>("workqueue_history", { order: "created_at.desc" }),
@@ -123,6 +159,7 @@ export async function getWorkCenterData() {
     demoSelect<DataRow>("claim_batches"),
     demoSelect<DataRow>("era_files"),
     demoSelect<DataRow>("payer_contracts"),
+    demoSelect<DataRow>("mailroom_items"),
   ]);
 
   const clientsById = new Map(clients.map((row) => [row.id, row]));
@@ -140,6 +177,7 @@ export async function getWorkCenterData() {
   const batchesById = new Map(batches.map((row) => [row.id, row]));
   const eraById = new Map(eraFiles.map((row) => [row.id, row]));
   const contractsById = new Map(payerContracts.map((row) => [row.id, row]));
+  const mailroomById = new Map(mailroomItems.map((row) => [row.id, row]));
 
   const historyByItem = new Map<string, DataRow[]>();
   for (const row of history) {
@@ -222,6 +260,19 @@ export async function getWorkCenterData() {
       const row = contractsById.get(id);
       payerId = String(row?.payer_id ?? "");
       relatedName = `Payer Contract · ${String(payersById.get(payerId)?.name || "Payer")}`;
+    } else if (type === "mailroom_item") {
+      const row = mailroomById.get(id);
+      const claim = claimsById.get(String(row?.claim_id ?? ""));
+      const resolvedClientId = String(row?.client_id ?? claim?.client_id ?? "");
+      const resolvedProviderId = String(row?.provider_id ?? "");
+      const resolvedPayerId = String(row?.payer_id ?? claim?.payer_id ?? "");
+      return resolveMailroomWorkContext({
+        mailroomItem: row ?? { id, subject: "Correspondence" },
+        linkedClaim: claim,
+        client: clientsById.get(resolvedClientId),
+        provider: providersById.get(resolvedProviderId),
+        payer: payersById.get(resolvedPayerId),
+      });
     }
 
     return {
