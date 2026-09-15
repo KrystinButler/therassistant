@@ -76,6 +76,7 @@ export type MailroomInboxItem = MailroomRow & MailroomFilterRow & {
   document: Record<string, unknown> | null;
   documentMissing: boolean;
   activeWork: Record<string, unknown> | null;
+  correspondenceWork: Array<Record<string, unknown> & { id: string }>;
   statusHistory: Array<Record<string, unknown> & { id: string }>;
 };
 
