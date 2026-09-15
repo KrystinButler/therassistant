@@ -26,6 +26,17 @@ export type ClaimsWorkspaceRow = DataRow & {
   diagnosisCodes: string[];
 };
 
+export type ClaimWorkData = {
+  claim: DataRow;
+  lines: DataRow[];
+  diagnoses: DataRow[];
+  responses: DataRow[];
+  denials: DataRow[];
+  appeals: DataRow[];
+  workItems: DataRow[];
+  history: DataRow[];
+};
+
 function personName(row?: Row) {
   if (!row) return "—";
   return [row.first_name, row.last_name].filter(Boolean).join(" ") || "—";
@@ -33,6 +44,23 @@ function personName(row?: Row) {
 
 function total(rows: DataRow[], field: string) {
   return rows.reduce((sum, row) => sum + Number(row[field] ?? 0), 0);
+}
+
+export async function getClaimWorkData(claimId: string): Promise<ClaimWorkData | null> {
+  const claim = (await demoSelect<DataRow>("professional_claims", { id: `eq.${claimId}`, limit: "1" }))[0];
+  if (!claim) return null;
+
+  const [lines, diagnoses, responses, denials, appeals, workItems, history] = await Promise.all([
+    demoSelect<DataRow>("professional_claim_lines", { claim_id: `eq.${claimId}`, order: "service_date.asc" }),
+    demoSelect<DataRow>("claim_diagnoses", { claim_id: `eq.${claimId}`, order: "pointer_order.asc" }),
+    demoSelect<DataRow>("submission_responses", { claim_id: `eq.${claimId}`, order: "created_at.desc" }),
+    demoSelect<DataRow>("denials", { claim_id: `eq.${claimId}`, order: "created_at.desc" }),
+    demoSelect<DataRow>("appeals", { claim_id: `eq.${claimId}`, order: "created_at.desc" }),
+    demoSelect<DataRow>("workqueue_items", { source_object_type: "eq.claim", source_object_id: `eq.${claimId}`, order: "created_at.desc" }),
+    demoSelect<DataRow>("claim_status_history", { claim_id: `eq.${claimId}`, order: "created_at.desc" }),
+  ]);
+
+  return { claim, lines, diagnoses, responses, denials, appeals, workItems, history };
 }
 
 export async function getClaimsWorkspaceData() {
@@ -63,9 +91,7 @@ export async function getClaimsWorkspaceData() {
     const claimDenials = denials.filter((row) => row.claim_id === claimId);
     const claimAppeals = appeals.filter((row) => row.claim_id === claimId);
     const claimAllocations = allocations.filter((row) => row.claim_id === claimId && !row.reversed_at);
-    const activeAdjustments = adjustments.filter(
-      (row) => row.claim_id === claimId && !["reversed", "voided"].includes(String(row.adjustment_status ?? "")),
-    );
+    const activeAdjustments = adjustments.filter((row) => row.claim_id === claimId && !["reversed", "voided"].includes(String(row.adjustment_status ?? "")));
     const reducingAdjustments = activeAdjustments.filter((row) => !isRecoveryAdjustment(row.adjustment_type));
     const recoveryAdjustments = activeAdjustments.filter((row) => isRecoveryAdjustment(row.adjustment_type));
     const paidAmountCents = total(claimAllocations, "amount_cents");
@@ -80,12 +106,7 @@ export async function getClaimsWorkspaceData() {
       clearinghouseStatus: String(latestResponse?.response_status ?? "—"),
       paidAmountCents,
       adjustmentAmountCents,
-      openBalanceCents: calculateOpenBalance(
-        Number(claim.total_charge_cents ?? 0),
-        paidAmountCents,
-        adjustmentAmountCents,
-        recoveryAmountCents,
-      ),
+      openBalanceCents: calculateOpenBalance(Number(claim.total_charge_cents ?? 0), paidAmountCents, adjustmentAmountCents, recoveryAmountCents),
       denialCount: claimDenials.length,
       appealCount: claimAppeals.length,
       workCount: workItems.filter((row) => row.source_object_id === claimId && row.workqueue_status !== "completed").length,
@@ -94,12 +115,7 @@ export async function getClaimsWorkspaceData() {
     };
   });
 
-  const paymentSignals = allocations.map((allocation) => ({
-    ...(paymentById.get(String(allocation.payment_id)) ?? allocation),
-    id: String(allocation.payment_id ?? allocation.id),
-    claim_id: allocation.claim_id,
-  }));
-
+  const paymentSignals = allocations.map((allocation) => ({ ...(paymentById.get(String(allocation.payment_id)) ?? allocation), id: String(allocation.payment_id ?? allocation.id), claim_id: allocation.claim_id }));
   return { claims: rows, responses, denials, appeals, payments, paymentSignals, payers, providers };
 }
 
@@ -110,11 +126,7 @@ export async function bulkValidateClaims(claimIds: string[]) {
 }
 
 async function getLatestSubmissionResponse(claimId: string) {
-  return (await demoSelect<DataRow>("submission_responses", {
-    claim_id: `eq.${claimId}`,
-    order: "created_at.desc",
-    limit: "1",
-  }))[0];
+  return (await demoSelect<DataRow>("submission_responses", { claim_id: `eq.${claimId}`, order: "created_at.desc", limit: "1" }))[0];
 }
 
 export async function createClaimFollowUps(claimIds: string[]) {
@@ -124,23 +136,9 @@ export async function createClaimFollowUps(claimIds: string[]) {
     const latestResponse = await getLatestSubmissionResponse(claimId);
     const rejected = isRetryableRejection(claim.claim_status, latestResponse?.response_status);
     const type = rejected ? "claim_rejection" : "claim_validation";
-    const existing = await demoSelect<DataRow>("workqueue_items", {
-      source_object_type: "eq.claim",
-      source_object_id: `eq.${claimId}`,
-      workqueue_type: `eq.${type}`,
-      workqueue_status: "in.(open,in_progress,pending,snoozed,reopened)",
-      limit: "1",
-    });
+    const existing = await demoSelect<DataRow>("workqueue_items", { source_object_type: "eq.claim", source_object_id: `eq.${claimId}`, workqueue_type: `eq.${type}`, workqueue_status: "in.(open,in_progress,pending,snoozed,reopened)", limit: "1" });
     if (existing[0]) continue;
-    await demoInsert<DataRow>("workqueue_items", {
-      workqueue_type: type,
-      workqueue_status: "open",
-      priority: rejected ? "high" : "normal",
-      source_object_type: "claim",
-      source_object_id: claimId,
-      title: `${rejected ? "Rejected claim" : "Claim follow-up"}: ${String(claim.patient_control_number ?? claimId)}`,
-      description: "Created from the Claims workspace for operational follow-up.",
-    });
+    await demoInsert<DataRow>("workqueue_items", { workqueue_type: type, workqueue_status: "open", priority: rejected ? "high" : "normal", source_object_type: "claim", source_object_id: claimId, title: `${rejected ? "Rejected claim" : "Claim follow-up"}: ${String(claim.patient_control_number ?? claimId)}`, description: "Created from the Claims workspace for operational follow-up." });
   }
 }
 
@@ -151,15 +149,7 @@ export async function retryRejectedClaims(claimIds: string[]) {
     const latestResponse = await getLatestSubmissionResponse(claimId);
     if (!isRetryableRejection(claim.claim_status, latestResponse?.response_status)) continue;
     const oldStatus = String(claim.claim_status ?? "");
-    await demoUpdate<DataRow>("professional_claims", claimId, {
-      claim_status: "ready_for_validation",
-      accepted_at: null,
-    });
-    await demoInsert<DataRow>("claim_status_history", {
-      claim_id: claimId,
-      old_status: oldStatus,
-      new_status: "ready_for_validation",
-      reason: "Corrected claim returned to validation after clearinghouse rejection.",
-    });
+    await demoUpdate<DataRow>("professional_claims", claimId, { claim_status: "ready_for_validation", accepted_at: null });
+    await demoInsert<DataRow>("claim_status_history", { claim_id: claimId, old_status: oldStatus, new_status: "ready_for_validation", reason: "Corrected claim returned to validation after clearinghouse rejection." });
   }
 }
