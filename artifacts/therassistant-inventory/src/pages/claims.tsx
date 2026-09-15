@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Link } from "wouter";
+import { ClaimWorkDrawer } from "../domains/claims/claim-work-drawer";
 import { StatusBadge } from "../components/status-badge";
 import { money, shortDate } from "../lib/format";
 import { demoInsert, demoUpdate } from "../lib/demo-data";
@@ -26,9 +27,13 @@ export function ClaimsPage() {
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("");
   const [version, setVersion] = useState(0);
+  const [selectedClaimId, setSelectedClaimId] = useState<string | null>(null);
 
   const path = `/api/claims?search=${encodeURIComponent(search)}&status=${encodeURIComponent(status)}&refresh=${version}`;
   const { data, loading, error } = useApi<ClaimRow[]>(path);
+  const claims = data ?? [];
+  const selectedIndex = claims.findIndex((claim) => claim.id === selectedClaimId);
+  const selectedClaim = selectedIndex >= 0 ? claims[selectedIndex] : null;
 
   async function updateStatus(id: string, claimStatus: string, extra: Record<string, unknown> = {}) {
     await demoUpdate("professional_claims", id, { claim_status: claimStatus, ...extra });
@@ -76,8 +81,8 @@ export function ClaimsPage() {
         {loading && <div className="thera-state">Loading claims...</div>}
         {error && <div className="thera-state error">{error}</div>}
         {!loading && !error && <div className="thera-table-wrap"><table className="thera-table"><thead><tr><th>Claim</th><th>Patient</th><th>DOS</th><th>Payer</th><th>Rendering Provider</th><th>Charge</th><th>Paid</th><th>Balance</th><th>Status</th><th>Denial</th><th>Actions</th></tr></thead><tbody>
-          {(data ?? []).map((claim) => <tr key={claim.id}>
-            <td><Link href={`/claims/${claim.id}`} className="thera-table-link">{claim.patientControlNumber || "Open Claim"}</Link><div className="thera-table-subtext">{claim.payerClaimNumber || "No payer claim #"}</div></td>
+          {claims.map((claim) => <tr key={claim.id}>
+            <td><button type="button" className="thera-table-link" onClick={() => setSelectedClaimId(claim.id)}>{claim.patientControlNumber || "Open Claim"}</button><div className="thera-table-subtext">{claim.payerClaimNumber || "No payer claim #"}</div></td>
             <td>{claim.clientName}</td>
             <td>{shortDate(claim.serviceDateFrom)}</td>
             <td>{claim.payerName || "—"}</td>
@@ -92,14 +97,26 @@ export function ClaimsPage() {
               {claim.claimStatus === "validation_failed" && <button type="button" className="thera-action secondary" onClick={() => void updateStatus(claim.id, "ready_for_validation")}>Retry Validation</button>}
               {claim.claimStatus === "ready_for_batch" && <button type="button" className="thera-action" onClick={() => void updateStatus(claim.id, "submitted", { submitted_at: new Date().toISOString() })}>Submit</button>}
               {claim.claimStatus === "submitted" && <button type="button" className="thera-action secondary" onClick={() => void updateStatus(claim.id, "accepted", { accepted_at: new Date().toISOString() })}>Mark Accepted</button>}
-              {claim.claimStatus === "rejected" && <button type="button" className="thera-action" onClick={() => void updateStatus(claim.id, "corrected")}>Correct Claim</button>}
+              {claim.claimStatus === "rejected" && <button type="button" className="thera-action" onClick={() => setSelectedClaimId(claim.id)}>Correct Claim</button>}
               {claim.claimStatus === "denied" && <Link className="thera-action" href="/ar-denials">Work Denial</Link>}
               {['rejected','denied'].includes(claim.claimStatus) && <button type="button" className="thera-action secondary" onClick={() => void createFollowUp(claim)}>Create Follow-Up</button>}
-              <Link className="thera-action secondary" href={`/claims/${claim.id}`}>Open</Link>
+              <button type="button" className="thera-action secondary" onClick={() => setSelectedClaimId(claim.id)}>Work Claim</button>
+              <Link className="thera-action secondary" href={`/claims/${claim.id}`}>Open 360</Link>
             </div></td>
           </tr>)}
         </tbody></table></div>}
       </section>
+
+      <ClaimWorkDrawer
+        claim={selectedClaim}
+        open={Boolean(selectedClaim)}
+        onOpenChange={(open) => { if (!open) setSelectedClaimId(null); }}
+        queuePosition={selectedClaim ? `${selectedIndex + 1} of ${claims.length}` : undefined}
+        onPrevious={selectedIndex > 0 ? () => setSelectedClaimId(claims[selectedIndex - 1].id) : undefined}
+        onNext={selectedIndex >= 0 && selectedIndex < claims.length - 1 ? () => setSelectedClaimId(claims[selectedIndex + 1].id) : undefined}
+        previousDisabled={selectedIndex <= 0}
+        nextDisabled={selectedIndex < 0 || selectedIndex >= claims.length - 1}
+      />
     </>
   );
 }
