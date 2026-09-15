@@ -72,15 +72,20 @@ function titleCase(value: unknown) {
   return text ? text.charAt(0).toUpperCase() + text.slice(1) : "";
 }
 
-function activeCorrespondenceWork(rows: DataRow[], mailroomItemId: string) {
+function correspondenceWorkItems(rows: DataRow[], mailroomItemId: string) {
   return rows
     .filter((row) =>
       row.source_object_type === "mailroom_item" &&
       row.source_object_id === mailroomItemId &&
-      row.workqueue_type === "correspondence" &&
-      !["completed", "cancelled"].includes(String(row.workqueue_status ?? "")),
+      row.workqueue_type === "correspondence",
     )
-    .sort((a, b) => String(b.created_at ?? "").localeCompare(String(a.created_at ?? "")))[0] ?? null;
+    .sort((a, b) => String(b.created_at ?? "").localeCompare(String(a.created_at ?? "")));
+}
+
+function activeCorrespondenceWork(rows: DataRow[], mailroomItemId: string) {
+  return correspondenceWorkItems(rows, mailroomItemId).find(
+    (row) => !["completed", "cancelled"].includes(String(row.workqueue_status ?? "")),
+  ) ?? null;
 }
 
 export function buildMailroomAggregates(input: MailroomAggregateInput): MailroomInboxItem[] {
@@ -119,6 +124,7 @@ export function buildMailroomAggregates(input: MailroomAggregateInput): Mailroom
 
     const appealLevel = appeal ? titleCase(appeal.appeal_level) : "";
     const appealStatus = appeal ? String(appeal.appeal_status ?? "").replaceAll("_", " ") : "";
+    const work = correspondenceWorkItems(input.workItems, item.id);
 
     return {
       ...item,
@@ -146,6 +152,7 @@ export function buildMailroomAggregates(input: MailroomAggregateInput): Mailroom
       document,
       documentMissing: Boolean(documentId && !document),
       activeWork: activeCorrespondenceWork(input.workItems, item.id),
+      correspondenceWork: work,
       statusHistory: history,
     } as MailroomInboxItem;
   });
