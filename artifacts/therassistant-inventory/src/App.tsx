@@ -11,6 +11,8 @@ import { ClaimSubmissionPage } from "./domains/claims/ClaimSubmissionPage";
 import { CredentialingPage } from "./domains/credentialing/CredentialingPage";
 import { PayersContractsPage } from "./domains/credentialing/PayersContractsPage";
 import { EncounterPage } from "./domains/encounters/EncounterPage";
+import { CorrespondencePage } from "./domains/mailroom/CorrespondencePage";
+import { MailroomPage } from "./domains/mailroom/MailroomPage";
 import { PaymentsPage } from "./domains/payments/PaymentsPage";
 import { AuthorizationsPage } from "./domains/payer-readiness/AuthorizationsPage";
 import { EligibilityPage } from "./domains/payer-readiness/EligibilityPage";
@@ -26,10 +28,7 @@ import { PayerDetailPage } from "./pages/payer-detail";
 import { ProviderDetailPage } from "./pages/provider-detail";
 import { ProvidersPage } from "./pages/providers";
 import { WorkCenterPage } from "./pages/work-center";
-import {
-  MailroomPage,
-  ReportsPage,
-} from "./pages/operational-workspaces";
+import { ReportsPage } from "./pages/operational-workspaces";
 import {
   ClaimFollowUpPage,
   ClinicalPage,
@@ -54,6 +53,7 @@ export default function App() {
         <Route path="/claims/:id"><Claim360Page /></Route>
         <Route path="/providers/:id"><ProviderDetailPage /></Route>
         <Route path="/payers/:id"><PayerDetailPage /></Route>
+        <Route path="/mailroom/:id"><CorrespondencePage /></Route>
         <Route path="/billing/charges"><BillingQueuePage /></Route>
         <Route path="/work-center"><WorkCenterPage /></Route>
         <Route path="/clients"><ClientsPage /></Route>
