@@ -126,3 +126,19 @@ test("accordion toggle allows at most one expanded workspace", () => {
   assert.equal(toggleExpandedWorkspace("overview", "revenue-cycle"), "revenue-cycle");
   assert.equal(toggleExpandedWorkspace("revenue-cycle", "revenue-cycle"), null);
 });
+
+test("unmapped paths fail soft instead of inventing an owner", () => {
+  const context = getWorkspaceContext("/not-a-real-route");
+  assert.equal(context.workspace, undefined);
+  assert.equal(context.child, undefined);
+});
+
+test("contextual record routes may have a workspace without a visible child", () => {
+  const portal = getWorkspaceContext("/patient-portal/patient-1");
+  assert.equal(portal.workspace?.label, "Client experience");
+  assert.equal(portal.child, undefined);
+
+  const encounter = getWorkspaceContext("/encounters/encounter-1");
+  assert.equal(encounter.workspace?.label, "Care delivery");
+  assert.equal(encounter.child, undefined);
+});
