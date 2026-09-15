@@ -58,6 +58,8 @@ It does not create a Help Center route until Help Center content exists.
 
 It does not merge unrelated workflows into one code file simply because they share a workspace group.
 
+It does not implement the separate patient-facing shell or the broader Phase 6 Patient Portal redesign. Those remain a separate approved project.
+
 ## Current problem
 
 The current `AppShell` exposes a long flat list of peer navigation items:
@@ -179,18 +181,21 @@ Future dashboards and saved reporting views belong here rather than as additiona
 
 ### Client experience
 
-Purpose: Manage the patient-facing side of Therassistant.
+Purpose: Organize the patient-facing side of Therassistant from the staff application's information architecture.
 
-Primary destinations:
+Visible staff destination in this refactor:
 
-- Patient Portal: contextual patient portal route `/patient-portal/:clientId`
 - Journal: `/journal`
-- Check-In: contextual patient/appointment workflow
-- Patient financial/account actions: contextual portal/account workflow
 
-Because Patient Portal requires patient context, it should not link to an invalid generic route. Until a safe patient selector or portal administration landing page exists, the workspace may expose Journal and a descriptive Client Experience landing state while patient-specific portal access remains contextual from the patient chart/demo scenarios.
+Contextual routes owned by Client experience but not rendered as ordinary global child links:
 
-The actual patient-facing portal will ultimately use a separate patient shell. It must not expose the staff EHR sidebar.
+- Patient Portal: `/patient-portal/:clientId`
+- appointment/patient Check-In workflow
+- patient financial/account actions
+
+Because Patient Portal requires patient context, the navigation must not link to an invalid generic portal route. Patient-specific portal access remains contextual from patient records and demo scenarios.
+
+The separate patient-facing shell remains Phase 6 scope and is not implemented by this navigation refactor.
 
 ### Settings
 
@@ -217,7 +222,7 @@ The staff sidebar displays the workspace groups rather than every route.
 
 Behavior:
 
-- Overview is a direct workspace entry with Home and Work Center available within it.
+- Overview is a workspace group containing Home and Work Center.
 - Care delivery, Revenue cycle, Operations, Insights, Client experience, and Settings are workspace groups.
 - Only one major workspace is expanded at a time.
 - The group containing the current route automatically opens.
@@ -235,7 +240,7 @@ Each navigation entry should define:
 - stable workspace id
 - workspace label
 - optional icon
-- primary route
+- primary route when a safe generic route exists
 - child routes
 - route match rules for contextual descendants
 - visibility metadata for future role-aware behavior
@@ -327,11 +332,9 @@ Work Center must not become a second navigation system.
 
 The staff-side Client experience workspace and the patient-facing portal are related but not the same shell.
 
-Staff users may navigate to patient-experience configuration or contextual patient portal previews from the EHR.
+This navigation refactor only establishes correct route ownership and prevents the patient portal from being promoted as a generic staff navigation link.
 
-Patients use a dedicated patient-facing shell with Therassistant branding, navy-and-sage styling, and no staff operational navigation.
-
-This separation is required before real patient use.
+A dedicated patient-facing shell with Therassistant branding, navy-and-sage styling, and no staff operational navigation is part of the separate Phase 6 Patient Portal project.
 
 ## Error and fallback behavior
 
@@ -358,7 +361,7 @@ Likely implementation surface:
 - new centralized navigation configuration under `src/components` or `src/navigation`
 - navigation-specific styles in the existing application stylesheet(s)
 - focused navigation tests
-- possibly route-shell handling in `src/App.tsx` where needed for patient-shell separation
+- `src/App.tsx` only if navigation-safe route metadata or route-shell plumbing is needed without implementing the patient-shell redesign
 
 Existing domain pages should not require broad rewrites for this navigation refactor.
 
@@ -368,12 +371,12 @@ Add deterministic tests for:
 
 1. Canonical top-level workspace order.
 2. Current route -> owning workspace mapping.
-3. Contextual route ownership for patient, claim, provider, payer, Mailroom, encounter, Pre-Session, and Golden Thread routes.
+3. Contextual route ownership for patient, claim, provider, payer, Mailroom, encounter, Pre-Session, Golden Thread, and Patient Portal routes.
 4. Only one expanded workspace at a time.
 5. Existing deep links remain valid.
 6. `/administration/imports` appears under Operations while remaining route-compatible.
 7. Work Center remains under Overview.
-8. Patient-specific portal routes do not accidentally become ordinary staff global links.
+8. Patient-specific portal routes do not become ordinary staff global links.
 9. No raw UUIDs or route fragments appear as navigation labels.
 10. Existing Phase 2-5 domain tests remain green.
 11. Production typecheck gate remains `typecheck:phase3` unless a separate approved project changes it.
