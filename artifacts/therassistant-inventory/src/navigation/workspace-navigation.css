@@ -1,0 +1,151 @@
+.thera-workspace {
+  margin: 2px 0;
+}
+
+.thera-workspace-button {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  border: 0;
+  background: transparent;
+  color: #dce4e9;
+  padding: 10px 12px;
+  border-radius: 7px;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  text-align: left;
+  cursor: pointer;
+}
+
+.thera-workspace-button:hover,
+.thera-workspace-button.active {
+  background: rgba(255,255,255,.07);
+}
+
+.thera-workspace-button.active {
+  color: white;
+}
+
+.thera-workspace-button:focus-visible,
+.thera-workspace-child:focus-visible,
+.thera-sidebar-toggle:focus-visible,
+.thera-sidebar-backdrop:focus-visible {
+  outline: 2px solid var(--thera-sage);
+  outline-offset: 2px;
+}
+
+.thera-workspace-chevron {
+  color: var(--thera-sage);
+  font-size: 12px;
+}
+
+.thera-workspace-children {
+  display: grid;
+  gap: 2px;
+  padding: 2px 0 6px 12px;
+}
+
+.thera-workspace-children[hidden] {
+  display: none;
+}
+
+.thera-workspace-child {
+  display: block;
+  color: #bfcbd2;
+  text-decoration: none;
+  padding: 8px 10px 8px 15px;
+  border-left: 2px solid rgba(159,181,165,.22);
+  border-radius: 0 7px 7px 0;
+  font-size: 12px;
+}
+
+.thera-workspace-child:hover {
+  color: white;
+  background: rgba(255,255,255,.05);
+}
+
+.thera-workspace-child.active {
+  color: var(--thera-navy-deep);
+  background: var(--thera-sage);
+  border-left-color: var(--thera-sage);
+  font-weight: 800;
+}
+
+.thera-topbar-leading {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.thera-topbar-context {
+  min-width: 0;
+}
+
+.thera-topbar-practice {
+  color: var(--thera-navy);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.thera-topbar-product {
+  margin-top: 2px;
+}
+
+.thera-sidebar-toggle,
+.thera-sidebar-backdrop {
+  display: none;
+}
+
+@media (max-width: 900px) {
+  .thera-app {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .thera-sidebar {
+    position: fixed;
+    inset: 0 auto 0 0;
+    width: min(300px, 86vw);
+    z-index: 60;
+    transform: translateX(-102%);
+    transition: transform 180ms ease;
+  }
+
+  .thera-sidebar.mobile-open {
+    transform: translateX(0);
+  }
+
+  .thera-sidebar-toggle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 36px;
+    min-height: 36px;
+    border: 1px solid var(--thera-border);
+    border-radius: 8px;
+    background: white;
+    color: var(--thera-navy);
+    cursor: pointer;
+  }
+
+  .thera-sidebar-backdrop {
+    display: block;
+    position: fixed;
+    inset: 0;
+    z-index: 50;
+    border: 0;
+    background: rgba(16,36,56,.42);
+  }
+
+  .thera-topbar {
+    padding: 0 16px;
+    gap: 12px;
+  }
+
+  .thera-content {
+    padding: 20px 16px 40px;
+  }
+}
