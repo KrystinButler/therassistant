@@ -3,9 +3,11 @@ import {
   demoRpc,
   demoSelect,
   demoUpdate,
+  getDemoTenantId,
   referenceSelect,
   type Row,
 } from "../../lib/supabase-demo-client";
+import { demoStorage } from "../../lib/supabase-demo-storage";
 import { correspondenceDueState } from "./workflow";
 import type {
   ClassifyCorrespondenceInput,
@@ -32,6 +34,20 @@ export type MailroomAggregateInput = {
   workItems: DataRow[];
   assignees: AssigneeRow[];
   today?: Date;
+};
+
+export type CorrespondenceDocumentDependencies = {
+  getTenantId(): Promise<string>;
+  uploadMailroomFile(input: {
+    tenantId: string;
+    mailroomItemId: string;
+    file: Blob;
+    fileName: string;
+    contentType?: string;
+  }): Promise<{ path: string }>;
+  insertDocument(values: Row): Promise<DataRow>;
+  linkDocument(id: string, documentId: string): Promise<MailroomRow>;
+  deleteObject(path: string): Promise<void>;
 };
 
 function byId(rows: DataRow[]) {
@@ -235,4 +251,75 @@ export function transitionCorrespondence(
 
 export function linkCorrespondenceDocument(id: string, documentId: string) {
   return demoUpdate<MailroomRow>("mailroom_items", id, { document_id: documentId });
+}
+
+export function documentTypeForCorrespondence(correspondenceType: string) {
+  if (correspondenceType === "eob") return "eob";
+  if (["appeal", "reconsideration"].includes(correspondenceType)) return "appeal_letter";
+  if (correspondenceType === "prior_authorization_notice") return "authorization_letter";
+  return "payer_correspondence";
+}
+
+function errorText(error: unknown) {
+  return error instanceof Error ? error.message : String(error);
+}
+
+export async function addCorrespondenceDocumentWithDependencies(
+  correspondence: MailroomRow,
+  file: File,
+  deps: CorrespondenceDocumentDependencies,
+) {
+  const tenantId = await deps.getTenantId();
+  const uploaded = await deps.uploadMailroomFile({
+    tenantId,
+    mailroomItemId: correspondence.id,
+    file,
+    fileName: file.name,
+    contentType: file.type || undefined,
+  });
+
+  let document: DataRow;
+  try {
+    document = await deps.insertDocument({
+      client_id: correspondence.client_id ?? null,
+      claim_id: correspondence.claim_id ?? null,
+      authorization_id: correspondence.authorization_id ?? null,
+      appeal_id: correspondence.appeal_id ?? null,
+      document_type: documentTypeForCorrespondence(correspondence.correspondence_type),
+      document_status: "uploaded",
+      file_name: file.name,
+      storage_path: uploaded.path,
+      mime_type: file.type || null,
+      file_size_bytes: file.size,
+    });
+  } catch (error) {
+    try {
+      await deps.deleteObject(uploaded.path);
+    } catch (cleanupError) {
+      throw new Error(`${errorText(error)} Storage cleanup also failed: ${errorText(cleanupError)}`);
+    }
+    throw error;
+  }
+
+  try {
+    return await deps.linkDocument(correspondence.id, document.id);
+  } catch (error) {
+    throw new Error(
+      `The document was saved but could not be linked to this correspondence. It can be linked from existing documents. ${errorText(error)}`,
+    );
+  }
+}
+
+export function addCorrespondenceDocument(correspondence: MailroomRow, file: File) {
+  return addCorrespondenceDocumentWithDependencies(correspondence, file, {
+    getTenantId: getDemoTenantId,
+    uploadMailroomFile: demoStorage.uploadMailroomFile,
+    insertDocument: (values) => demoInsert<DataRow>("documents", values),
+    linkDocument: linkCorrespondenceDocument,
+    deleteObject: demoStorage.deleteObject,
+  });
+}
+
+export function openCorrespondenceDocument(storagePath: string, expiresIn = 300) {
+  return demoStorage.createSignedDocumentUrl(storagePath, expiresIn);
 }
