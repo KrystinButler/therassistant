@@ -7,6 +7,7 @@ import {
   toggleExpandedWorkspace,
   type WorkspaceId,
 } from "../navigation/workspaces";
+import "../navigation/workspace-navigation.css";
 
 type Props = {
   children: ReactNode;
@@ -17,6 +18,7 @@ export function AppShell({ children }: Props) {
   const context = getWorkspaceContext(location);
   const activeWorkspaceId = context.workspace?.id ?? null;
   const [expandedWorkspaceId, setExpandedWorkspaceId] = useState<WorkspaceId | null>(activeWorkspaceId);
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
 
   useEffect(() => {
     if (activeWorkspaceId) setExpandedWorkspaceId(activeWorkspaceId);
@@ -30,7 +32,16 @@ export function AppShell({ children }: Props) {
 
   return (
     <div className="thera-app">
-      <aside className="thera-sidebar">
+      {mobileNavOpen ? (
+        <button
+          type="button"
+          className="thera-sidebar-backdrop"
+          aria-label="Close navigation"
+          onClick={() => setMobileNavOpen(false)}
+        />
+      ) : null}
+
+      <aside className={mobileNavOpen ? "thera-sidebar mobile-open" : "thera-sidebar"}>
         <div className="thera-brand">
           <div className="thera-brand-mark">T</div>
           <div>
@@ -75,6 +86,7 @@ export function AppShell({ children }: Props) {
                             href={child.href}
                             className={activeChild ? "thera-workspace-child active" : "thera-workspace-child"}
                             aria-current={activeChild ? "page" : undefined}
+                            onClick={() => setMobileNavOpen(false)}
                           >
                             {child.label}
                           </Link>
@@ -96,9 +108,20 @@ export function AppShell({ children }: Props) {
 
       <main className="thera-main">
         <header className="thera-topbar">
-          <div className="thera-topbar-context">
-            <div className="thera-topbar-practice">Front Range Behavioral Health</div>
-            <div className="thera-topbar-product">{topbarContext}</div>
+          <div className="thera-topbar-leading">
+            <button
+              type="button"
+              className="thera-sidebar-toggle"
+              aria-label={mobileNavOpen ? "Close navigation" : "Open navigation"}
+              aria-expanded={mobileNavOpen}
+              onClick={() => setMobileNavOpen((open) => !open)}
+            >
+              ☰
+            </button>
+            <div className="thera-topbar-context">
+              <div className="thera-topbar-practice">Front Range Behavioral Health</div>
+              <div className="thera-topbar-product">{topbarContext}</div>
+            </div>
           </div>
           <div className="thera-demo-chip">SYNTHETIC DEMO DATA</div>
         </header>
