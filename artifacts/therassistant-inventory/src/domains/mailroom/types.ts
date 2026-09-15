@@ -76,8 +76,21 @@ export type MailroomInboxItem = MailroomRow & MailroomFilterRow & {
   document: Record<string, unknown> | null;
   documentMissing: boolean;
   activeWork: Record<string, unknown> | null;
-  correspondenceWork: Array<Record<string, unknown> & { id: string }>;
-  statusHistory: Array<Record<string, unknown> & { id: string }>;
+  correspondenceWork: Array<Record<string, unknown> & {
+    id: string;
+    title?: string | null;
+    workqueue_status?: string | null;
+    priority?: string | null;
+    due_date?: string | null;
+    created_at?: string | null;
+  }>;
+  statusHistory: Array<Record<string, unknown> & {
+    id: string;
+    created_at?: string | null;
+    old_status?: string | null;
+    new_status?: string | null;
+    reason?: string | null;
+  }>;
 };
 
 export type CreateCorrespondenceInput = {
