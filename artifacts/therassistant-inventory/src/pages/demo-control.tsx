@@ -1,6 +1,9 @@
 import { Link } from "wouter";
 
-import { phase1DemoScenarios } from "../domains/demo/scenarios";
+import {
+  phase1DemoScenarios,
+  phase5MailroomScenarios,
+} from "../domains/demo/scenarios";
 import { money } from "../lib/format";
 import { useApi } from "../lib/therassistant-api";
 
@@ -76,6 +79,31 @@ export function DemoControlCenter() {
         </div>
         <div className="thera-story-grid">
           {phase1DemoScenarios.map((story) => (
+            <Link
+              key={story.title}
+              href={story.href}
+              className="thera-story"
+              style={{ textDecoration: "none", color: "inherit" }}
+            >
+              <div className="thera-eyebrow">{story.title}</div>
+              <strong>{story.name}</strong>
+              <p>{story.detail}</p>
+            </Link>
+          ))}
+        </div>
+      </section>
+
+      <section className="thera-card thera-section-gap">
+        <div className="thera-card-header">
+          <div>
+            <div className="thera-eyebrow">PHASE 5</div>
+            <h2>Mailroom Scenarios</h2>
+            <p>Open deterministic synthetic correspondence records that demonstrate review, deadlines, claim context, credentialing context, and completed follow-up.</p>
+          </div>
+          <Link href="/mailroom" className="thera-action secondary">Open Mailroom</Link>
+        </div>
+        <div className="thera-story-grid">
+          {phase5MailroomScenarios.map((story) => (
             <Link
               key={story.title}
               href={story.href}
