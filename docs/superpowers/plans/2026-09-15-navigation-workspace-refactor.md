@@ -32,18 +32,18 @@
 ### Create
 
 - `artifacts/therassistant-inventory/src/navigation/workspaces.ts`
-  - Single source of truth for workspace metadata, visible child links, contextual route ownership, and route-to-workspace helpers.
+  - Single source of truth for workspace metadata, visible child links, contextual route ownership, safe primary destinations, future role visibility metadata, optional badge sources, and route-to-workspace helpers.
 - `artifacts/therassistant-inventory/tests/navigation-workspaces.test.ts`
-  - Pure deterministic tests for canonical order, route ownership, visible children, contextual routes, and accordion state helper behavior.
+  - Pure deterministic tests for canonical order, route ownership, visible children, contextual routes, metadata, and accordion state helper behavior.
 
 ### Modify
 
 - `artifacts/therassistant-inventory/src/components/app-shell.tsx`
   - Replace the flat `navigation` array with workspace accordion rendering driven by `workspaces.ts`.
-  - Show current workspace/child context in the top bar.
+  - Show current practice plus workspace/child context in the top bar.
   - Add semantic accordion controls and active-link state.
 - `artifacts/therassistant-inventory/src/index.css`
-  - Add workspace-group, child-link, chevron, active-state, focus-visible, and responsive drawer/stack rules using the existing navy/sage variables.
+  - Add workspace-group, child-link, chevron, active-state, focus-visible, top-bar context, and responsive drawer/stack rules using the existing navy/sage variables.
 - `artifacts/therassistant-inventory/tsconfig.phase3.json`
   - Include `src/navigation/**/*.ts` so the production TypeScript gate covers the new navigation model.
 - `docs/superpowers/specs/2026-09-15-navigation-workspace-refactor-design.md`
@@ -68,6 +68,7 @@
 **Interfaces:**
 - Produces:
   - `type WorkspaceId = "overview" | "care-delivery" | "revenue-cycle" | "operations" | "insights" | "client-experience" | "help-center" | "settings"`
+  - `type NavigationVisibility`
   - `type NavigationChild`
   - `type WorkspaceDefinition`
   - `const WORKSPACES: readonly WorkspaceDefinition[]`
@@ -115,8 +116,17 @@ test("canonical workspace order matches the ChatGPT Therassistant site", () => {
 });
 
 test("Help center remains canonical but is not rendered until a route exists", () => {
-  assert.equal(WORKSPACES.find((workspace) => workspace.id === "help-center")?.renderInSidebar, false);
+  const help = WORKSPACES.find((workspace) => workspace.id === "help-center");
+  assert.equal(help?.renderInSidebar, false);
+  assert.equal(help?.primaryHref, undefined);
   assert.equal(getVisibleWorkspaces().some((workspace) => workspace.id === "help-center"), false);
+});
+
+test("workspace metadata keeps safe primary destinations and future visibility fields", () => {
+  assert.equal(WORKSPACES.find((workspace) => workspace.id === "overview")?.primaryHref, "/");
+  assert.equal(WORKSPACES.find((workspace) => workspace.id === "revenue-cycle")?.primaryHref, "/billing");
+  assert.equal(WORKSPACES.find((workspace) => workspace.id === "settings")?.primaryHref, "/administration");
+  for (const workspace of WORKSPACES) assert.equal(workspace.visibility.mode, "all");
 });
 
 test("primary routes map to the owning workspace", () => {
@@ -173,6 +183,7 @@ test("specific children win over broader route prefixes", () => {
   assert.equal(childLabel("/billing/charges"), "Charge Capture");
   assert.equal(childLabel("/administration/imports"), "Imports / Migration");
   assert.equal(childLabel("/administration/database-inventory"), "Database Inventory");
+  assert.equal(childLabel("/payers/payer-1"), "Payers & Contracts");
 });
 
 test("patient portal is contextual and not a generic staff child link", () => {
@@ -228,23 +239,46 @@ export type WorkspaceId =
   | "help-center"
   | "settings";
 
+export type NavigationVisibility =
+  | { mode: "all" }
+  | { mode: "roles"; roles: readonly string[] };
+
 export type NavigationChild = {
   id: string;
   label: string;
   href: string;
   matchPaths?: readonly string[];
+  visibility: NavigationVisibility;
+  badgeKey?: string;
 };
 
 export type WorkspaceDefinition = {
   id: WorkspaceId;
   label: string;
   renderInSidebar: boolean;
+  primaryHref?: string;
+  icon?: string;
+  visibility: NavigationVisibility;
+  badgeKey?: string;
   children: readonly NavigationChild[];
   contextualPaths?: readonly string[];
 };
 ```
 
-Populate `WORKSPACES` in canonical order with these visible children:
+Populate `WORKSPACES` in canonical order with `visibility: { mode: "all" }` on every workspace and child. Badge keys remain optional metadata and are not wired to counts in this refactor.
+
+Use these safe workspace primary destinations:
+
+- Overview: `/`
+- Care delivery: `/clients`
+- Revenue cycle: `/billing`
+- Operations: `/providers`
+- Insights: `/reports`
+- Client experience: `/journal`
+- Help center: no `primaryHref`
+- Settings: `/administration`
+
+Use these visible children:
 
 - Overview: Home `/`, Work Center `/work-center`
 - Care delivery: Patients `/clients`, Schedule `/schedule`, Clinical `/clinical`, Eligibility & Benefits `/eligibility`, Authorizations `/authorizations`
@@ -286,6 +320,8 @@ Implement `toggleExpandedWorkspace(current, clicked)` as:
 ```ts
 return current === clicked ? null : clicked;
 ```
+
+Do not enforce role visibility or badge counts yet; this task only preserves the metadata contract required for later role-aware navigation without another structural redesign.
 
 - [ ] **Step 4: Add the navigation model to the production typecheck gate**
 
@@ -335,7 +371,7 @@ git commit -m "feat: add canonical workspace navigation model"
   - Sidebar rendered from workspace configuration rather than a hard-coded flat route list.
   - URL-derived active workspace and active child.
   - One user-expanded workspace at a time.
-  - Top-bar context text in the form `Workspace · Child` when a child is active, otherwise just `Workspace`.
+  - Top-bar practice context plus `Workspace · Child` when a child is active, otherwise just `Workspace`.
 
 - [ ] **Step 1: Extend the focused test for fallback and label context behavior**
 
@@ -423,9 +459,9 @@ It must not navigate or change the current route.
 
 8. Keep Help center absent because `getVisibleWorkspaces()` filters it.
 
-- [ ] **Step 4: Update the top bar to show current workspace context**
+- [ ] **Step 4: Update the top bar to show practice plus current workspace context**
 
-Replace the fixed `Operational Workspace` copy with:
+Derive the route label:
 
 ```ts
 const topbarContext = context.workspace
@@ -435,9 +471,16 @@ const topbarContext = context.workspace
   : "Operational Workspace";
 ```
 
-Render `topbarContext` in `.thera-topbar-product`.
+Replace the single fixed top-bar label with:
 
-Do not add duplicate top-level navigation to the top bar.
+```tsx
+<div className="thera-topbar-context">
+  <div className="thera-topbar-practice">Front Range Behavioral Health</div>
+  <div className="thera-topbar-product">{topbarContext}</div>
+</div>
+```
+
+Keep the existing synthetic-demo status chip on the right. Do not add duplicate top-level navigation to the top bar.
 
 - [ ] **Step 5: Run focused tests, typecheck, and build**
 
@@ -467,7 +510,7 @@ git commit -m "feat: render workspace-first sidebar navigation"
 
 **Interfaces:**
 - Consumes: Task 2 workspace markup/class names.
-- Produces: Clear visual distinction between workspace controls and child workflows, accessible focus treatment, active sage state, and usable small-screen behavior.
+- Produces: Clear visual distinction between workspace controls and child workflows, accessible focus treatment, active sage state, readable practice/workspace top-bar context, and usable small-screen behavior.
 
 - [ ] **Step 1: Add stable class names to the Task 2 markup**
 
@@ -482,6 +525,8 @@ thera-workspace-chevron
 thera-workspace-children
 thera-workspace-child
 thera-workspace-child active
+thera-topbar-context
+thera-topbar-practice
 thera-sidebar-backdrop
 thera-sidebar-toggle
 ```
@@ -587,6 +632,20 @@ In the existing THERASSISTANT WORKING DEMO section of `index.css`, retain the cu
   border-left-color: var(--thera-sage);
   font-weight: 800;
 }
+
+.thera-topbar-context {
+  min-width: 0;
+}
+
+.thera-topbar-practice {
+  color: var(--thera-navy);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.thera-topbar-product {
+  margin-top: 2px;
+}
 ```
 
 Remove or stop using the old `.thera-nav-link` flat-menu visual treatment.
@@ -671,6 +730,7 @@ Then inspect `app-shell.tsx` source to confirm:
 - active child links use `aria-current="page"`;
 - mobile toggle has an accessible label;
 - backdrop is a button and can be keyboard activated;
+- top bar shows practice plus current workspace context;
 - no Help Center dead link exists;
 - no patient portal generic link exists.
 
@@ -824,6 +884,7 @@ Before opening the pull request, verify all of the following from the final bran
 - Sidebar has workspace groups, not the original flat 17-link list.
 - Canonical workspace order is preserved in configuration.
 - Help center exists in canonical metadata but is not a dead link.
+- Workspace metadata includes safe primary destinations, icon/badge extension points, and future role visibility metadata without enforcing role logic in this refactor.
 - Work Center is under Overview.
 - Eligibility and Authorizations are under Care delivery.
 - Claims, payments, and A/R are under Revenue cycle.
@@ -838,6 +899,7 @@ Before opening the pull request, verify all of the following from the final bran
 - Route changes automatically expand the owning workspace.
 - Active child links use `aria-current="page"`.
 - Workspace controls use semantic buttons with `aria-expanded`.
+- Top bar shows practice context plus current workspace context.
 - Mobile navigation can open and close without changing routes.
 - Navy and sage remain the primary shell colors.
 - No workflow/domain pages were broadly rewritten.
