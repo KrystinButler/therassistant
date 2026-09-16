@@ -5,8 +5,8 @@ import { readFileSync } from "node:fs";
 import * as paymentOperations from "../src/domains/payments/operations";
 import * as claimWorkqueues from "../src/domains/claims/workqueues";
 
-const claimsWorkspacePageSource = readFileSync(
-  new URL("../src/domains/claims/ClaimsWorkspacePage.tsx", import.meta.url),
+const rejectionsPageSource = readFileSync(
+  new URL("../src/domains/claims/RejectionsPage.tsx", import.meta.url),
   "utf8",
 );
 const claimsWorkspaceRepositorySource = readFileSync(
@@ -52,10 +52,8 @@ test("latest rejected response makes submitted or batched claims retryable", () 
   assert.equal(isRetryableRejection("batched", "rejected"), true);
   assert.equal(isRetryableRejection("submitted", "accepted"), false);
   assert.equal(isRetryableRejection("accepted", "rejected"), false);
-  assert.doesNotMatch(
-    claimsWorkspacePageSource,
-    /chosen\.filter\(\(row\) => row\.claim_status === "rejected"\)/,
-  );
+  assert.match(rejectionsPageSource, /latestResponseStatus:\s*row\.clearinghouseStatus/);
+  assert.match(rejectionsPageSource, /getOperationalHome/);
   assert.match(claimsWorkspaceRepositorySource, /submission_responses/);
   assert.match(claimsWorkspaceRepositorySource, /isRetryableRejection/);
 });

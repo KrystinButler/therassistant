@@ -15,8 +15,8 @@ const billingHubPageSource = readFileSync(
   new URL("../src/domains/billing/BillingHubPage.tsx", import.meta.url),
   "utf8",
 );
-const claimsWorkspacePageSource = readFileSync(
-  new URL("../src/domains/claims/ClaimsWorkspacePage.tsx", import.meta.url),
+const denialsPageSource = readFileSync(
+  new URL("../src/domains/ar/DenialsPage.tsx", import.meta.url),
   "utf8",
 );
 
@@ -153,5 +153,6 @@ test("completed appeal outcomes are excluded from active appeal views", () => {
   assert.equal(isActiveAppealStatus("denied"), false);
   assert.equal(isActiveAppealStatus("withdrawn"), false);
   assert.equal(isActiveAppealStatus("closed"), false);
-  assert.match(claimsWorkspacePageSource, /isActiveAppealStatus/);
+  assert.match(denialsPageSource, /ACTIVE_APPEAL_STATUSES/);
+  assert.match(denialsPageSource, /ACTIVE_APPEAL_STATUSES\.includes/);
 });

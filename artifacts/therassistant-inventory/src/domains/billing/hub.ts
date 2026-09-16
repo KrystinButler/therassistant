@@ -41,10 +41,14 @@ export function isActiveArClaimStatus(status: unknown) {
   return !["voided", "reversed"].includes(String(status ?? ""));
 }
 
+function isClaimsOwnedStatus(status: unknown) {
+  return ["submitted", "accepted", "partially_paid"].includes(String(status ?? ""));
+}
+
 export function buildBillingHubSummary(input: BillingHubInput): BillingHubSummary {
   const readyCharges = input.charges.filter((row) => row.charge_status === "ready_for_claim");
-  const claimsNeedAction = input.claims.filter((row) =>
-    ["validation_failed", "rejected", "denied"].includes(String(row.claim_status ?? "")),
+  const claimsOwnedInsuranceAr = input.insuranceAr.filter((row) =>
+    isClaimsOwnedStatus(row.claim_status) && Number(row.openBalanceCents ?? 0) > 0,
   );
   const unappliedPayments = input.payments
     .filter((row) => ["unapplied", "partially_applied"].includes(String(row.payment_status ?? "")))
@@ -53,7 +57,7 @@ export function buildBillingHubSummary(input: BillingHubInput): BillingHubSummar
       unappliedCents: Number(row.unappliedCents ?? row.amount_cents ?? 0),
     }));
   const activeDenials = input.denials.filter((row) =>
-    !["resolved_paid", "resolved_writeoff", "upheld", "closed"].includes(String(row.denial_status ?? "")),
+    !["resolved", "resolved_paid", "resolved_writeoff", "closed"].includes(String(row.denial_status ?? "")),
   );
   const denialsById = new Map(
     input.denials
@@ -78,9 +82,9 @@ export function buildBillingHubSummary(input: BillingHubInput): BillingHubSummar
 
   return {
     readyCharges: metric(readyCharges, "charge_amount_cents"),
-    claimsNeedAction: metric(claimsNeedAction, "total_charge_cents"),
+    claimsNeedAction: metric(claimsOwnedInsuranceAr, "openBalanceCents"),
     unappliedPayments: metric(unappliedPayments, "unappliedCents"),
-    insuranceAr: metric(input.insuranceAr, "openBalanceCents"),
+    insuranceAr: metric(claimsOwnedInsuranceAr, "openBalanceCents"),
     patientAr: metric(input.patientAr, "openBalanceCents"),
     denials: metric(activeDenials, "amount_cents"),
     appeals: metric(activeAppeals, "amount_cents"),

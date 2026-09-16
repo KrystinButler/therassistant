@@ -2,8 +2,16 @@ import { useEffect, useMemo, useState } from "react";
 import { Link } from "wouter";
 
 import { StatusBadge } from "../../components/status-badge";
-import { money, shortDate } from "../../lib/format";
-import { createClaimFromCharges } from "../claims/repository";
+import { dateTime, money, shortDate } from "../../lib/format";
+import {
+  createBatch,
+  createClaimFromCharges,
+  getClaimSubmissionData,
+  submitBatch,
+  validateClaim,
+} from "../claims/repository";
+import { build837PText, buildCms1500Html } from "./claim-output";
+import { getBatchExportData } from "./claim-output-repository";
 import {
   createChargeFromEncounter,
   getBillingQueueData,
@@ -11,11 +19,13 @@ import {
 } from "./repository";
 
 type BillingData = Awaited<ReturnType<typeof getBillingQueueData>>;
-type QueueTab = "ready" | "blocked" | "charges" | "claimed";
+type ClaimsData = Awaited<ReturnType<typeof getClaimSubmissionData>>;
+type ChargesData = { billing: BillingData; claims: ClaimsData };
+type ChargesTab = "ready" | "blocked" | "unbatched" | "batches" | "submitted";
 
 export function BillingQueuePage() {
-  const [data, setData] = useState<BillingData | null>(null);
-  const [tab, setTab] = useState<QueueTab>("ready");
+  const [data, setData] = useState<ChargesData | null>(null);
+  const [tab, setTab] = useState<ChargesTab>("ready");
   const [loading, setLoading] = useState(true);
   const [savingId, setSavingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -25,9 +35,13 @@ export function BillingQueuePage() {
     setLoading(true);
     setError(null);
     try {
-      setData(await getBillingQueueData());
+      const [billing, claims] = await Promise.all([
+        getBillingQueueData(),
+        getClaimSubmissionData(),
+      ]);
+      setData({ billing, claims });
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Unable to load billing queue.");
+      setError(err instanceof Error ? err.message : "Unable to load Charges.");
     } finally {
       setLoading(false);
     }
@@ -38,15 +52,41 @@ export function BillingQueuePage() {
   }, []);
 
   const groups = useMemo(() => {
-    if (!data) return { ready: [], blocked: [], claimed: [] };
+    if (!data) {
+      return {
+        ready: [],
+        blocked: [],
+        readyCharges: [],
+        preBatchClaims: [],
+        readyForBatch: [],
+        openBatches: [],
+        submittedBatches: [],
+      };
+    }
+
+    const ready = data.billing.encounters.filter(
+      (row) =>
+        ["ready", "not_ready"].includes(String(row.billing_status)) &&
+        !data.billing.chargesByEncounter.get(row.id)?.length,
+    );
+    const blocked = data.billing.encounters.filter(
+      (row) => row.billing_status === "held" || row.blockingChecks.length > 0,
+    );
+
     return {
-      ready: data.encounters.filter((row) => ["ready", "not_ready"].includes(String(row.billing_status)) && !data.chargesByEncounter.get(row.id)?.length),
-      blocked: data.encounters.filter((row) => row.billing_status === "held" || row.blockingChecks.length > 0),
-      claimed: data.encounters.filter((row) => row.billing_status === "claimed" || data.chargesByEncounter.get(row.id)?.some((charge) => charge.charge_status === "claim_created")),
+      ready,
+      blocked,
+      readyCharges: data.billing.charges.filter((row) => row.charge_status === "ready_for_claim"),
+      preBatchClaims: data.claims.claims.filter((claim) =>
+        ["ready_for_validation", "ready_for_batch"].includes(String(claim.claim_status)),
+      ),
+      readyForBatch: data.claims.claims.filter((claim) => claim.claim_status === "ready_for_batch"),
+      openBatches: data.claims.batches.filter((batch) => ["created", "ready"].includes(String(batch.batch_status))),
+      submittedBatches: data.claims.batches.filter((batch) => batch.batch_status === "submitted"),
     };
   }, [data]);
 
-  async function runAction(id: string, action: "audit" | "charge") {
+  async function runEncounterAction(id: string, action: "audit" | "charge") {
     setSavingId(id);
     setError(null);
     setMessage(null);
@@ -58,10 +98,11 @@ export function BillingQueuePage() {
         setError(result.details?.length ? `${result.message} ${result.details.join(" ")}` : result.message);
         return;
       }
-      setMessage(action === "audit" ? "Billing-readiness audit completed." : "Charge created and scrubbed for claim creation.");
+      setMessage(action === "audit" ? "Billing-readiness audit completed." : "Charge created.");
+      if (action === "charge") setTab("unbatched");
       await load();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Unable to complete billing action.");
+      setError(err instanceof Error ? err.message : "Unable to complete charge action.");
     } finally {
       setSavingId(null);
     }
@@ -69,7 +110,7 @@ export function BillingQueuePage() {
 
   async function runCreateClaim(encounterId: string) {
     if (!data) return;
-    const chargeIds = (data.chargesByEncounter.get(encounterId) ?? [])
+    const chargeIds = (data.billing.chargesByEncounter.get(encounterId) ?? [])
       .filter((charge) => charge.charge_status === "ready_for_claim")
       .map((charge) => charge.id);
 
@@ -82,13 +123,20 @@ export function BillingQueuePage() {
     setError(null);
     setMessage(null);
     try {
-      const result = await createClaimFromCharges(chargeIds);
-      if (!result.ok) {
-        setError(result.details?.length ? `${result.message} ${result.details.join(" ")}` : result.message);
+      const created = await createClaimFromCharges(chargeIds);
+      if (!created.ok) {
+        setError(created.details?.length ? `${created.message} ${created.details.join(" ")}` : created.message);
         return;
       }
-      setMessage(`Claim ${String(result.value.claim.patient_control_number || "created")} created with ${result.value.lineCount} line(s).`);
-      setTab("claimed");
+
+      const claimId = String(created.value.claim.id);
+      const validation = await validateClaim(claimId);
+      if (!validation.ok) {
+        setMessage(`Claim ${String(created.value.claim.patient_control_number || "created")} was created and moved to Rejections for correction.`);
+      } else {
+        setMessage(`Claim ${String(created.value.claim.patient_control_number || "created")} passed scrub and is ready to batch.`);
+      }
+      setTab("unbatched");
       await load();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unable to create claim.");
@@ -97,42 +145,199 @@ export function BillingQueuePage() {
     }
   }
 
+  async function runValidate(claimId: string) {
+    setSavingId(claimId);
+    setError(null);
+    setMessage(null);
+    try {
+      const result = await validateClaim(claimId);
+      if (!result.ok) {
+        setMessage("Claim scrub failed and the claim moved to Rejections for correction.");
+      } else {
+        setMessage("Claim scrub passed and the claim is ready to batch.");
+      }
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to validate claim.");
+    } finally {
+      setSavingId(null);
+    }
+  }
+
+  async function runCreatePayerBatch(payerId: string) {
+    if (!data) return;
+    const claims = groups.readyForBatch.filter((claim) => String(claim.payer_id ?? "") === payerId);
+    if (!claims.length) {
+      setError("No validated claims are ready for this payer.");
+      return;
+    }
+
+    const payerNames = new Set(claims.map((claim) => claim.payerName));
+    const payerIds = new Set(claims.map((claim) => String(claim.payer_id ?? "")));
+    if (payerIds.size !== 1) {
+      setError("A claim batch must contain one payer only.");
+      return;
+    }
+
+    setSavingId(`batch-${payerId}`);
+    setError(null);
+    setMessage(null);
+    try {
+      const payerName = [...payerNames][0] || "Payer";
+      const result = await createBatch(
+        claims.map((claim) => claim.id),
+        `${payerName} ${new Date().toISOString().slice(0, 10)}`,
+      );
+      if (!result.ok) {
+        setError(result.details?.length ? `${result.message} ${result.details.join(" ")}` : result.message);
+        return;
+      }
+      setMessage(`Payer batch created with ${result.value.claimCount} claim(s).`);
+      setTab("batches");
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to create payer batch.");
+    } finally {
+      setSavingId(null);
+    }
+  }
+
+  async function runSubmitBatch(batchId: string) {
+    setSavingId(batchId);
+    setError(null);
+    setMessage(null);
+    try {
+      const result = await submitBatch(batchId);
+      if (!result.ok) {
+        setError(result.details?.length ? `${result.message} ${result.details.join(" ")}` : result.message);
+        return;
+      }
+      setMessage(`Electronic 837P demo submission created for ${result.value.claimCount} claim(s).`);
+      setTab("submitted");
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to submit batch.");
+    } finally {
+      setSavingId(null);
+    }
+  }
+
+  async function runDownload837(batchId: string) {
+    setSavingId(`download-${batchId}`);
+    setError(null);
+    try {
+      const output = await getBatchExportData(batchId);
+      const text = build837PText(output);
+      const blob = new Blob([text], { type: "text/plain;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = `therassistant-837p-${batchId}.txt`;
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      URL.revokeObjectURL(url);
+      setMessage("837P Demo Export downloaded.");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to create 837P export.");
+    } finally {
+      setSavingId(null);
+    }
+  }
+
+  async function runPrintCms1500(batchId: string, claimId: string) {
+    setSavingId(`print-${claimId}`);
+    setError(null);
+    try {
+      const output = await getBatchExportData(batchId);
+      const item = output.claims.find((row) => String(row.claim.id) === claimId);
+      if (!item) throw new Error("Claim not found in this batch.");
+      const printWindow = window.open("", "_blank", "noopener,noreferrer");
+      if (!printWindow) throw new Error("Allow pop-ups to print CMS-1500.");
+      printWindow.document.open();
+      printWindow.document.write(buildCms1500Html(item));
+      printWindow.document.close();
+      printWindow.focus();
+      printWindow.onafterprint = () => printWindow.close();
+      printWindow.print();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to print CMS-1500.");
+    } finally {
+      setSavingId(null);
+    }
+  }
+
   return (
     <>
-      <div className="thera-page-header split">
+      <div className="thera-page-header">
         <div>
-          <div className="thera-eyebrow">BILLING READINESS</div>
-          <h1>Billing</h1>
-          <p>Signed encounters are audited, corrected, converted to charges, and handed to Claims.</p>
+          <div className="thera-eyebrow">REVENUE CYCLE</div>
+          <h1>Charges</h1>
+          <p>Signed notes become charges here, then claims are scrubbed, batched by payer, submitted electronically, downloaded as 837P, or printed to CMS-1500.</p>
         </div>
-        <Link className="thera-action secondary" href="/claims/submission">Claim Submission</Link>
       </div>
 
       <div className="thera-tabs" style={{ marginBottom: 16 }}>
-        <Tab active={tab === "ready"} onClick={() => setTab("ready")} label={`Ready to Bill (${groups.ready.length})`} />
-        <Tab active={tab === "blocked"} onClick={() => setTab("blocked")} label={`Blocked / Needs Correction (${groups.blocked.length})`} />
-        <Tab active={tab === "charges"} onClick={() => setTab("charges")} label={`Charges Ready for Claim (${data?.charges.filter((row) => row.charge_status === "ready_for_claim").length ?? 0})`} />
-        <Tab active={tab === "claimed"} onClick={() => setTab("claimed")} label={`Claim Created (${groups.claimed.length})`} />
+        <Tab active={tab === "ready"} onClick={() => setTab("ready")} label={`Ready (${groups.ready.length})`} />
+        <Tab active={tab === "blocked"} onClick={() => setTab("blocked")} label={`Blocked (${groups.blocked.length})`} />
+        <Tab active={tab === "unbatched"} onClick={() => setTab("unbatched")} label={`Unbatched (${groups.readyCharges.length + groups.preBatchClaims.length})`} />
+        <Tab active={tab === "batches"} onClick={() => setTab("batches")} label={`Batches (${groups.openBatches.length})`} />
+        <Tab active={tab === "submitted"} onClick={() => setTab("submitted")} label={`Submitted (${groups.submittedBatches.length})`} />
       </div>
 
       {error && <div className="thera-state error" style={{ marginBottom: 12 }}>{error}</div>}
       {message && <div className="thera-alert" style={{ marginBottom: 12 }}>{message}</div>}
-      {loading && <div className="thera-state">Loading billing readiness...</div>}
+      {loading && <div className="thera-state">Loading Charges...</div>}
 
-      {!loading && data && tab === "charges" && (
-        <ChargesTable
+      {!loading && data && tab === "ready" && (
+        <EncounterTable
+          rows={groups.ready}
+          data={data.billing}
+          savingId={savingId}
+          onAudit={(id) => void runEncounterAction(id, "audit")}
+          onCharge={(id) => void runEncounterAction(id, "charge")}
+        />
+      )}
+
+      {!loading && data && tab === "blocked" && (
+        <EncounterTable
+          rows={groups.blocked}
+          data={data.billing}
+          savingId={savingId}
+          onAudit={(id) => void runEncounterAction(id, "audit")}
+          onCharge={(id) => void runEncounterAction(id, "charge")}
+        />
+      )}
+
+      {!loading && data && tab === "unbatched" && (
+        <UnbatchedCharges
           data={data}
           savingId={savingId}
           onCreateClaim={(encounterId) => void runCreateClaim(encounterId)}
+          onValidate={(claimId) => void runValidate(claimId)}
+          onCreatePayerBatch={(payerId) => void runCreatePayerBatch(payerId)}
         />
       )}
-      {!loading && data && tab !== "charges" && (
-        <EncounterTable
-          rows={tab === "ready" ? groups.ready : tab === "blocked" ? groups.blocked : groups.claimed}
-          data={data}
+
+      {!loading && data && tab === "batches" && (
+        <BatchCards
+          rows={groups.openBatches}
+          claims={data.claims.claims}
           savingId={savingId}
-          onAudit={(id) => void runAction(id, "audit")}
-          onCharge={(id) => void runAction(id, "charge")}
+          onSubmit={(id) => void runSubmitBatch(id)}
+          onDownload={(id) => void runDownload837(id)}
+          onPrint={(batchId, claimId) => void runPrintCms1500(batchId, claimId)}
+        />
+      )}
+
+      {!loading && data && tab === "submitted" && (
+        <SubmittedBatches
+          rows={groups.submittedBatches}
+          claims={data.claims.claims}
+          submissions={data.claims.submissions}
+          savingId={savingId}
+          onDownload={(id) => void runDownload837(id)}
+          onPrint={(batchId, claimId) => void runPrintCms1500(batchId, claimId)}
         />
       )}
     </>
@@ -156,7 +361,7 @@ function EncounterTable({
   onAudit: (id: string) => void;
   onCharge: (id: string) => void;
 }) {
-  if (!rows.length) return <section className="thera-card"><div className="thera-empty">No encounters in this billing queue.</div></section>;
+  if (!rows.length) return <section className="thera-card"><div className="thera-empty">No encounters in this queue.</div></section>;
 
   return (
     <section className="thera-card">
@@ -184,39 +389,116 @@ function EncounterTable({
   );
 }
 
-function ChargesTable({
+function UnbatchedCharges({
   data,
   savingId,
   onCreateClaim,
+  onValidate,
+  onCreatePayerBatch,
 }: {
-  data: BillingData;
+  data: ChargesData;
   savingId: string | null;
   onCreateClaim: (encounterId: string) => void;
+  onValidate: (claimId: string) => void;
+  onCreatePayerBatch: (payerId: string) => void;
 }) {
-  const encounters = new Map(data.encounters.map((row) => [row.id, row]));
-  const rows = data.charges.filter((row) => row.charge_status === "ready_for_claim");
-  if (!rows.length) return <section className="thera-card"><div className="thera-empty">No charges are ready for claim creation.</div></section>;
-
-  const grouped = new Map<string, typeof rows>();
-  for (const row of rows) {
+  const encounters = new Map(data.billing.encounters.map((row) => [row.id, row]));
+  const readyCharges = data.billing.charges.filter((row) => row.charge_status === "ready_for_claim");
+  const groupedCharges = new Map<string, typeof readyCharges>();
+  for (const row of readyCharges) {
     const encounterId = String(row.encounter_id ?? "");
-    const list = grouped.get(encounterId) ?? [];
+    const list = groupedCharges.get(encounterId) ?? [];
     list.push(row);
-    grouped.set(encounterId, list);
+    groupedCharges.set(encounterId, list);
   }
 
-  return <div className="thera-stack">{[...grouped.entries()].map(([encounterId, charges]) => {
-    const encounter = encounters.get(encounterId);
-    const total = charges.reduce((sum, charge) => sum + Number(charge.charge_amount_cents ?? 0), 0);
-    return <section className="thera-card" key={encounterId || charges[0].id}>
-      <div className="thera-card-header split">
-        <div>
-          <h2>{encounter?.clientName ?? "Patient"} · {encounter?.payerName ?? "Payer"}</h2>
-          <p>{charges.length} ready charge line(s) · {money(total)}</p>
+  const preBatchClaims = data.claims.claims.filter((claim) =>
+    ["ready_for_validation", "ready_for_batch"].includes(String(claim.claim_status)),
+  );
+  const claimsByPayer = new Map<string, typeof preBatchClaims>();
+  for (const claim of preBatchClaims) {
+    const payerId = String(claim.payer_id ?? "");
+    const list = claimsByPayer.get(payerId) ?? [];
+    list.push(claim);
+    claimsByPayer.set(payerId, list);
+  }
+
+  if (!groupedCharges.size && !claimsByPayer.size) {
+    return <section className="thera-card"><div className="thera-empty">No unbatched charges or claims.</div></section>;
+  }
+
+  return <div className="thera-stack">
+    {[...groupedCharges.entries()].map(([encounterId, charges]) => {
+      const encounter = encounters.get(encounterId);
+      const total = charges.reduce((sum, charge) => sum + Number(charge.charge_amount_cents ?? 0), 0);
+      return <section className="thera-card" key={`charges-${encounterId || charges[0].id}`}>
+        <div className="thera-card-header split">
+          <div><h2>{encounter?.clientName ?? "Patient"} · {encounter?.payerName ?? "Payer"}</h2><p>{charges.length} charge line(s) · {money(total)}</p></div>
+          {encounterId && <button type="button" className="thera-action" disabled={savingId === encounterId} onClick={() => onCreateClaim(encounterId)}>Create & Scrub Claim</button>}
         </div>
-        {encounterId && <button type="button" className="thera-action" disabled={savingId === encounterId} onClick={() => onCreateClaim(encounterId)}>Create Claim</button>}
-      </div>
-      <div className="thera-table-wrap"><table className="thera-table"><thead><tr><th>Service Date</th><th>Provider</th><th>CPT / Dx</th><th>Charge</th><th>Status</th><th>Source</th></tr></thead><tbody>{charges.map((charge) => <tr key={charge.id}><td>{shortDate(String(charge.service_date ?? ""))}</td><td>{encounter?.providerName ?? "—"}</td><td>{String(charge.cpt_code ?? "—")}<div className="thera-table-subtext">Dx {String(charge.diagnosis_code ?? "—")}</div></td><td>{money(Number(charge.charge_amount_cents ?? 0))}</td><td><StatusBadge value={String(charge.charge_status)} /></td><td>{encounter ? <Link className="thera-link" href={`/encounters/${encounter.id}`}>Open Encounter</Link> : "—"}</td></tr>)}</tbody></table></div>
+      </section>;
+    })}
+
+    {[...claimsByPayer.entries()].map(([payerId, claims]) => {
+      const ready = claims.filter((claim) => claim.claim_status === "ready_for_batch");
+      return <section className="thera-card" key={`payer-${payerId || claims[0].payerName}`}>
+        <div className="thera-card-header split">
+          <div><h2>{claims[0].payerName}</h2><p>{ready.length} validated claim(s) ready for this payer batch.</p></div>
+          <button type="button" className="thera-action" disabled={!payerId || ready.length === 0 || savingId === `batch-${payerId}`} onClick={() => onCreatePayerBatch(payerId)}>Batch by Payer ({ready.length})</button>
+        </div>
+        <div className="thera-table-wrap"><table className="thera-table"><thead><tr><th>Claim</th><th>DOS</th><th>Patient</th><th>Charge</th><th>Status</th><th>Action</th></tr></thead><tbody>{claims.map((claim) => <tr key={claim.id}><td><Link className="thera-table-link" href={`/claims/${claim.id}`}>{String(claim.patient_control_number || "Open")}</Link></td><td>{shortDate(String(claim.service_date_from ?? ""))}</td><td>{claim.clientName}</td><td>{money(Number(claim.total_charge_cents ?? 0))}</td><td><StatusBadge value={String(claim.claim_status)} /></td><td>{claim.claim_status === "ready_for_validation" ? <button type="button" className="thera-action" disabled={savingId === claim.id} onClick={() => onValidate(claim.id)}>Scrub Claim</button> : "Ready"}</td></tr>)}</tbody></table></div>
+      </section>;
+    })}
+  </div>;
+}
+
+function BatchCards({
+  rows,
+  claims,
+  savingId,
+  onSubmit,
+  onDownload,
+  onPrint,
+}: {
+  rows: ClaimsData["batches"];
+  claims: ClaimsData["claims"];
+  savingId: string | null;
+  onSubmit: (batchId: string) => void;
+  onDownload: (batchId: string) => void;
+  onPrint: (batchId: string, claimId: string) => void;
+}) {
+  const claimsById = new Map(claims.map((claim) => [claim.id, claim]));
+  if (!rows.length) return <section className="thera-card"><div className="thera-empty">No payer batches are ready.</div></section>;
+
+  return <div className="thera-stack">{rows.map((batch) => <section className="thera-card" key={batch.id}>
+    <div className="thera-card-header split"><div><h2>{String(batch.batch_name || "Payer Batch")}</h2><p>{batch.claimIds.length} claim(s) · {money(Number(batch.total_charge_cents ?? 0))}</p></div><div className="thera-filter-row"><button type="button" className="thera-action secondary" disabled={savingId === `download-${batch.id}`} onClick={() => onDownload(batch.id)}>Download 837P Demo Export</button>{batch.batch_status === "ready" && <button type="button" className="thera-action" disabled={savingId === batch.id} onClick={() => onSubmit(batch.id)}>Submit Electronically</button>}</div></div>
+    <div className="thera-table-wrap"><table className="thera-table"><thead><tr><th>Claim</th><th>Patient</th><th>Payer</th><th>Charge</th><th>CMS-1500</th></tr></thead><tbody>{batch.claimIds.map((claimId: string) => { const claim = claimsById.get(claimId); return <tr key={claimId}><td>{claim ? <Link className="thera-table-link" href={`/claims/${claim.id}`}>{String(claim.patient_control_number || "Open")}</Link> : claimId}</td><td>{claim?.clientName ?? "—"}</td><td>{claim?.payerName ?? "—"}</td><td>{money(Number(claim?.total_charge_cents ?? 0))}</td><td><button type="button" className="thera-action secondary" disabled={!claim || savingId === `print-${claimId}`} onClick={() => claim && onPrint(batch.id, claim.id)}>Print CMS-1500</button></td></tr>; })}</tbody></table></div>
+  </section>)}</div>;
+}
+
+function SubmittedBatches({
+  rows,
+  claims,
+  submissions,
+  savingId,
+  onDownload,
+  onPrint,
+}: {
+  rows: ClaimsData["batches"];
+  claims: ClaimsData["claims"];
+  submissions: ClaimsData["submissions"];
+  savingId: string | null;
+  onDownload: (batchId: string) => void;
+  onPrint: (batchId: string, claimId: string) => void;
+}) {
+  const claimsById = new Map(claims.map((claim) => [claim.id, claim]));
+  if (!rows.length) return <section className="thera-card"><div className="thera-empty">No submitted payer batches.</div></section>;
+
+  return <div className="thera-stack">{rows.map((batch) => {
+    const submission = submissions.find((row) => String(row.batch_id ?? "") === batch.id);
+    return <section className="thera-card" key={batch.id}>
+      <div className="thera-card-header split"><div><h2>{String(batch.batch_name || "Submitted Batch")}</h2><p>Submitted {dateTime(String(batch.submitted_at ?? submission?.submitted_at ?? ""))}</p></div><button type="button" className="thera-action secondary" disabled={savingId === `download-${batch.id}`} onClick={() => onDownload(batch.id)}>Download 837P Demo Export</button></div>
+      <div className="thera-table-wrap"><table className="thera-table"><thead><tr><th>Claim</th><th>Patient</th><th>Status</th><th>CMS-1500</th></tr></thead><tbody>{batch.claimIds.map((claimId: string) => { const claim = claimsById.get(claimId); return <tr key={claimId}><td>{claim ? <Link className="thera-table-link" href={`/claims/${claim.id}`}>{String(claim.patient_control_number || "Open")}</Link> : claimId}</td><td>{claim?.clientName ?? "—"}</td><td>{claim ? <StatusBadge value={String(claim.claim_status)} /> : "—"}</td><td><button type="button" className="thera-action secondary" disabled={!claim || savingId === `print-${claimId}`} onClick={() => claim && onPrint(batch.id, claim.id)}>Print CMS-1500</button></td></tr>; })}</tbody></table></div>
     </section>;
   })}</div>;
 }

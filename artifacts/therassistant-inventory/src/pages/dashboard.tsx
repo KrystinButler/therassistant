@@ -33,10 +33,11 @@ export function DashboardPage() {
 
   const quickLinks = [
     ["Schedule & Readiness", "/schedule"],
-    ["Billing Queue", "/billing"],
-    ["Claim Submission", "/claims/submission"],
-    ["Payments / ERA", "/payments"],
-    ["Work Center", "/work-center"],
+    ["Charges", "/billing/charges"],
+    ["Rejections", "/rejections"],
+    ["Claims", "/claims"],
+    ["Denials", "/denials"],
+    ["Payments", "/payments"],
   ] as const;
 
   return (
@@ -44,8 +45,8 @@ export function DashboardPage() {
       <div className="thera-page-header split">
         <div>
           <div className="thera-eyebrow">THERASSISTANT</div>
-          <h1>Revenue Cycle Command Center</h1>
-          <p>Operational control from pre-session readiness through encounter, billing, claims, payment, denial, and exception work.</p>
+          <h1>Revenue Cycle Overview</h1>
+          <p>Operational overview from pre-session readiness through encounter, billing, claims, payment, denial, and exception work.</p>
         </div>
         <div className="thera-filter-row">
           {quickLinks.map(([label, href]) => (
@@ -67,7 +68,7 @@ export function DashboardPage() {
         <section className="thera-card">
           <div className="thera-card-header">
             <div><h2>Priority Work</h2><p>Exceptions that need operational action.</p></div>
-            <Link href="/work-center" className="thera-link">Open Work Center</Link>
+            <Link href="/billing" className="thera-link">Billing Overview</Link>
           </div>
           {(data.recentWorkItems ?? []).length === 0 ? <div className="thera-empty">No open work.</div> : (
             <div className="thera-stack">

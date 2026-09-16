@@ -141,9 +141,9 @@ export function BillingHubPage() {
         <div>
           <div className="thera-eyebrow">REVENUE CYCLE</div>
           <h1>Billing</h1>
-          <p>Route billing work to the right operational queue without mixing readiness, claims, payments, and A/R into one list.</p>
+          <p>Route billing work to the right operational queue without mixing readiness, claims, payments, and denials into one list.</p>
         </div>
-        <Link className="thera-action" href="/billing/charges">Open Charge Readiness</Link>
+        <Link className="thera-action" href="/billing/charges">Open Charges</Link>
       </div>
 
       {loading && <div className="thera-state">Loading billing work...</div>}
@@ -151,28 +151,28 @@ export function BillingHubPage() {
       {!loading && !error && summary && (
         <div className="thera-stack">
           <section className="thera-card">
-            <div className="thera-card-header"><div><h2>Billing Routing</h2><p>Choose the workflow that matches the exception or financial state.</p></div></div>
+            <div className="thera-card-header"><div><h2>Billing Routing</h2><p>Choose the workflow that owns the exception or financial state.</p></div></div>
             <div className="thera-metric-grid">
               <Metric title="Charges Ready" metric={summary.readyCharges} href="/billing/charges" />
               <Metric title="Claims Needing Action" metric={summary.claimsNeedAction} href="/claims" />
               <Metric title="Unapplied Payments" metric={summary.unappliedPayments} href="/payments" />
-              <Metric title="Insurance A/R" metric={summary.insuranceAr} href="/ar-denials?tab=insurance" />
-              <Metric title="Patient A/R" metric={summary.patientAr} href="/ar-denials?tab=patient" />
-              <Metric title="Active Denials" metric={summary.denials} href="/ar-denials?tab=denials" />
-              <Metric title="Active Appeals" metric={summary.appeals} href="/ar-denials?tab=appeals" />
-              <Metric title="Underpayments" metric={summary.underpayments} href="/ar-denials?tab=variance" />
-              <Metric title="Refunds / Recoupments" metric={summary.recovery} href="/ar-denials?tab=recovery" />
+              <Metric title="Insurance A/R" metric={summary.insuranceAr} href="/claims" />
+              <Metric title="Patient A/R" metric={summary.patientAr} href="/payments" />
+              <Metric title="Active Denials" metric={summary.denials} href="/denials" />
+              <Metric title="Active Appeals" metric={summary.appeals} href="/denials" />
+              <Metric title="Underpayments" metric={summary.underpayments} href="/payments" />
+              <Metric title="Refunds / Recoupments" metric={summary.recovery} href="/payments" />
             </div>
           </section>
 
           <section className="thera-card">
-            <div className="thera-card-header"><div><h2>Primary Workspaces</h2><p>Billing readiness stays separate from claim adjudication and revenue recovery.</p></div></div>
+            <div className="thera-card-header"><div><h2>Revenue Cycle Areas</h2><p>Each operational queue has one owner and one place to work it.</p></div></div>
             <div className="thera-filter-row">
-              <Link className="thera-action" href="/billing/charges">Charge Capture</Link>
+              <Link className="thera-action" href="/billing/charges">Charges</Link>
+              <Link className="thera-action secondary" href="/rejections">Rejections</Link>
               <Link className="thera-action secondary" href="/claims">Claims</Link>
-              <Link className="thera-action secondary" href="/claims/submission">837P Submission</Link>
-              <Link className="thera-action secondary" href="/payments">Payments / ERA</Link>
-              <Link className="thera-action secondary" href="/ar-denials">A/R & Denials</Link>
+              <Link className="thera-action secondary" href="/denials">Denials</Link>
+              <Link className="thera-action secondary" href="/payments">Payments</Link>
             </div>
           </section>
         </div>
