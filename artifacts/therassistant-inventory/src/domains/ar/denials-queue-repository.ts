@@ -4,12 +4,22 @@ import { classifyDenialPolicy, type DenialPolicy } from "./denials";
 export type DataRow = Row & { id: string };
 export type DenialQueueRow = DataRow & {
   claimNumber: string;
+  payerClaimNumber: string;
   clientName: string;
   payerName: string;
+  providerName: string;
   policy: DenialPolicy;
   activeAppealId: string;
   claimStatus: string;
   workStatus: string;
+  serviceDate: string;
+  chargeAmountCents: number;
+  allowedAmountCents: number;
+  paidAmountCents: number;
+  patientResponsibilityCents: number;
+  followUpNote: string;
+  referenceNumber: string;
+  nextFollowUpDate: string;
 };
 export type DenialAppealRow = DataRow & {
   claimNumber: string;
@@ -26,19 +36,33 @@ function personName(row?: Row) {
   return [row.first_name, row.last_name].filter(Boolean).join(" ") || "—";
 }
 
+function metadata(row?: Row) {
+  return row?.metadata && typeof row.metadata === "object" && !Array.isArray(row.metadata)
+    ? row.metadata as Record<string, unknown>
+    : {};
+}
+
+function total(rows: DataRow[], field: string) {
+  return rows.reduce((sum, row) => sum + Number(row[field] ?? 0), 0);
+}
+
 export async function getDenialsQueueData() {
-  const [denials, claims, clients, payers, appeals, workItems] = await Promise.all([
+  const [denials, claims, clients, payers, providers, appeals, workItems, allocations, claimLines] = await Promise.all([
     demoSelect<DataRow>("denials", { order: "created_at.desc" }),
     demoSelect<DataRow>("professional_claims", { order: "created_at.desc" }),
     demoSelect<DataRow>("clients"),
     referenceSelect<DataRow>("payers", { order: "name.asc" }),
+    demoSelect<DataRow>("providers"),
     demoSelect<DataRow>("appeals", { order: "created_at.desc" }),
     demoSelect<DataRow>("workqueue_items", { order: "created_at.desc" }),
+    demoSelect<DataRow>("payment_allocations", { order: "created_at.desc" }),
+    demoSelect<DataRow>("professional_claim_lines", { order: "service_date.asc" }),
   ]);
 
   const claimsById = new Map(claims.map((row) => [row.id, row]));
   const clientsById = new Map(clients.map((row) => [row.id, row]));
   const payersById = new Map(payers.map((row) => [row.id, row]));
+  const providersById = new Map(providers.map((row) => [row.id, row]));
   const denialsById = new Map(denials.map((row) => [row.id, row]));
 
   const activeAppealByDenial = new Map<string, DataRow>();
@@ -67,15 +91,35 @@ export async function getDenialsQueueData() {
     const clientId = String(denial.client_id ?? claim?.client_id ?? "");
     const payerId = String(denial.payer_id ?? claim?.payer_id ?? "");
     const work = activeWorkByDenial.get(denial.id);
+    const claimId = String(claim?.id ?? denial.claim_id ?? "");
+    const lineRows = claimLines.filter((line) => String(line.claim_id ?? "") === claimId);
+    const allowedLines = lineRows.filter((line) => line.allowed_amount_cents !== null && line.allowed_amount_cents !== undefined);
+    const claimMetadata = metadata(claim);
+    const workMetadata = metadata(work);
     return {
       ...denial,
       claimNumber: String(claim?.patient_control_number ?? "—"),
+      payerClaimNumber: String(claim?.payer_claim_number ?? "—"),
       clientName: personName(clientsById.get(clientId)),
       payerName: String(payersById.get(payerId)?.name ?? "—"),
+      providerName: personName(providersById.get(String(claim?.rendering_provider_id ?? ""))),
       policy: classifyDenialPolicy(denial.denial_category),
       activeAppealId: activeAppealByDenial.get(denial.id)?.id ?? "",
       claimStatus: String(claim?.claim_status ?? ""),
       workStatus: String(work?.workqueue_status ?? ""),
+      serviceDate: String(claim?.service_date_from ?? ""),
+      chargeAmountCents: Number(claim?.total_charge_cents ?? 0),
+      allowedAmountCents: allowedLines.length
+        ? total(allowedLines, "allowed_amount_cents")
+        : Number(claim?.allowed_amount_cents ?? 0),
+      paidAmountCents: total(
+        allocations.filter((allocation) => String(allocation.claim_id ?? "") === claimId && !allocation.reversed_at),
+        "amount_cents",
+      ),
+      patientResponsibilityCents: Number(claimMetadata.patient_responsibility_cents ?? 0),
+      followUpNote: String(work?.description ?? ""),
+      referenceNumber: String(workMetadata.payer_reference_number ?? ""),
+      nextFollowUpDate: String(work?.due_date ?? "").slice(0, 10),
     };
   });
 
