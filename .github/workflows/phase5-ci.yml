@@ -70,6 +70,11 @@ jobs:
           routes=(
             "/mailroom"
             "/mailroom/75000000-0000-4000-8000-000000000001"
+            "/billing/charges"
+            "/rejections"
+            "/claims"
+            "/denials"
+            "/payments"
             "/work-center"
           )
 
@@ -78,3 +83,9 @@ jobs:
             test "$code" = "200"
             grep -q '<div id="root"' /tmp/therassistant-route.html
           done
+
+      - name: Install Playwright Chromium
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Browser E2E
+        run: pnpm test:e2e
