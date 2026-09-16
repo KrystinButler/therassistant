@@ -21,7 +21,6 @@ import { PatientChartPage } from "./domains/patients/PatientChartPage";
 import { PatientJournalPage } from "./domains/portal/PatientJournalPage";
 import { PatientPortalPage } from "./domains/portal/PatientPortalPage";
 import { SchedulePage } from "./domains/scheduling/SchedulePage";
-import { PreSessionPage } from "./domains/scheduling/PreSessionPage";
 import { AdministrationPage } from "./pages/administration";
 import { ClientsPage } from "./pages/clients";
 import { DashboardPage } from "./pages/dashboard";
@@ -67,7 +66,6 @@ export default function App() {
         <Route path="/ar-denials"><Redirect to="/denials" /></Route>
         <Route path="/work-center"><Redirect to="/claims" /></Route>
         <Route path="/charges"><Redirect to="/billing/charges" /></Route>
-        <Route path="/schedule/:id"><PreSessionPage /></Route>
         <Route path="/encounters/:id"><EncounterPage /></Route>
         <Route path="/clients/:id"><PatientChartPage /></Route>
         <Route path="/claims/:id"><Claim360Page /></Route>
