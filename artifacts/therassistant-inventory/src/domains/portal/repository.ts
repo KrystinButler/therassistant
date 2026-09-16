@@ -4,6 +4,7 @@ import {
   buildPatientPortalData,
   planCheckInUpdate,
   type CheckInStep,
+  type JournalEntryInput,
   type PortalRow,
 } from "./workflow";
 
@@ -34,7 +35,7 @@ export async function recordCheckIn(
       });
 }
 
-export function addJournalEntry(patientId: string, input: { entryText: string; mood?: string }) {
+export function addJournalEntry(patientId: string, input: JournalEntryInput) {
   return demoInsert<DataRow>("patient_journal_entries", {
     client_id: patientId,
     ...buildJournalEntryValues(input),
@@ -42,7 +43,7 @@ export function addJournalEntry(patientId: string, input: { entryText: string; m
 }
 
 export async function getPatientPortalData(patientId: string) {
-  const [patients, appointments, policies, documents, checkins, journalEntries, balances] = await Promise.all([
+  const [patients, appointments, policies, documents, checkins, journalEntries, balances, treatmentPlans] = await Promise.all([
     demoSelect<DataRow>("clients", { id: `eq.${patientId}`, limit: "1" }),
     demoSelect<DataRow>("appointments", { client_id: `eq.${patientId}`, order: "starts_at.asc" }),
     demoSelect<DataRow>("client_insurance_policies", { client_id: `eq.${patientId}`, order: "created_at.asc" }),
@@ -50,12 +51,13 @@ export async function getPatientPortalData(patientId: string) {
     demoSelect<DataRow>("client_checkins", { client_id: `eq.${patientId}`, order: "created_at.desc" }),
     demoSelect<DataRow>("patient_journal_entries", { client_id: `eq.${patientId}`, order: "entry_date.desc,created_at.desc" }),
     demoSelect<DataRow>("client_balance_summaries", { client_id: `eq.${patientId}`, limit: "1" }),
+    demoSelect<DataRow>("treatment_plans", { client_id: `eq.${patientId}`, order: "effective_date.desc" }),
   ]);
 
   const patient = patients[0];
   if (!patient) throw new Error("Patient not found.");
 
-  return buildPatientPortalData({
+  const portalData = buildPatientPortalData({
     patient: patient as PortalRow,
     appointments: appointments as PortalRow[],
     policies: policies as PortalRow[],
@@ -64,4 +66,22 @@ export async function getPatientPortalData(patientId: string) {
     journalEntries: journalEntries as PortalRow[],
     balance: (balances[0] as PortalRow | undefined) ?? null,
   });
+
+  const activePlan = treatmentPlans.find((row) => String(row.status ?? "") === "active") ?? treatmentPlans[0];
+  const providerId = String(portalData.upcomingAppointments[0]?.provider_id ?? activePlan?.provider_id ?? "");
+
+  const [treatmentGoals, providers] = await Promise.all([
+    activePlan
+      ? demoSelect<DataRow>("treatment_plan_goals", { treatment_plan_id: `eq.${activePlan.id}`, order: "created_at.asc" })
+      : Promise.resolve([] as DataRow[]),
+    providerId
+      ? demoSelect<DataRow>("providers", { id: `eq.${providerId}`, limit: "1" })
+      : Promise.resolve([] as DataRow[]),
+  ]);
+
+  return {
+    ...portalData,
+    treatmentGoals,
+    provider: providers[0] ?? null,
+  };
 }

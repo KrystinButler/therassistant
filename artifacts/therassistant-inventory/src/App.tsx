@@ -18,6 +18,7 @@ import { PaymentsPage } from "./domains/payments/PaymentsPage";
 import { AuthorizationsPage } from "./domains/payer-readiness/AuthorizationsPage";
 import { EligibilityPage } from "./domains/payer-readiness/EligibilityPage";
 import { PatientChartPage } from "./domains/patients/PatientChartPage";
+import { PatientJournalPage } from "./domains/portal/PatientJournalPage";
 import { PatientPortalPage } from "./domains/portal/PatientPortalPage";
 import { SchedulePage } from "./domains/scheduling/SchedulePage";
 import { PreSessionPage } from "./domains/scheduling/PreSessionPage";
@@ -44,11 +45,22 @@ function Redirect({ to }: { to: string }) {
 }
 
 export default function App() {
+  const [location] = useLocation();
+
+  if (location.startsWith("/patient-portal/")) {
+    return (
+      <Switch>
+        <Route path="/patient-portal/:clientId/journal"><PatientJournalPage /></Route>
+        <Route path="/patient-portal/:clientId"><PatientPortalPage /></Route>
+        <Route><div className="thera-state">Patient portal page not found.</div></Route>
+      </Switch>
+    );
+  }
+
   return (
     <AppShell>
       <Switch>
         <Route path="/demo"><DemoControlCenter /></Route>
-        <Route path="/patient-portal/:clientId"><PatientPortalPage /></Route>
         <Route path="/clinical/golden-thread/:clientId"><GoldenThreadPage /></Route>
         <Route path="/claims/submission"><Redirect to="/billing/charges" /></Route>
         <Route path="/claims/follow-up"><Redirect to="/claims" /></Route>

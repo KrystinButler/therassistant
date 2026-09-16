@@ -47,13 +47,30 @@ export function planCheckInUpdate(step: CheckInStep, now = new Date()): Row {
   return { checked_in_at: timestamp };
 }
 
-export function buildJournalEntryValues(input: { entryText: string; mood?: string }): Row {
+export type JournalEntryInput = {
+  entryText: string;
+  mood?: string;
+  visibility?: "private" | "shared_with_provider";
+  tags?: string[];
+  relatedTreatmentGoalId?: string;
+  entryStatus?: "draft" | "submitted";
+};
+
+export function buildJournalEntryValues(input: JournalEntryInput, now = new Date()): Row {
   const text = input.entryText.trim();
   if (!text) throw new Error("Journal entry text is required.");
+
+  const entryStatus = input.entryStatus ?? "submitted";
   return {
+    entry_date: now.toISOString().slice(0, 10),
     entry_text: text,
     mood: input.mood?.trim() || null,
     author_type: "patient",
     review_status: "unreviewed",
+    visibility: input.visibility ?? "shared_with_provider",
+    tags: input.tags ?? [],
+    related_treatment_goal_id: input.relatedTreatmentGoalId || null,
+    entry_status: entryStatus,
+    submitted_at: entryStatus === "submitted" ? now.toISOString() : null,
   };
 }
