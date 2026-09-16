@@ -101,6 +101,7 @@ export function RejectionWorkDrawer({
   }, [claim?.id, open]);
 
   if (!claim) return null;
+  const activeClaim = claim;
 
   function field(key: keyof DrawerForm, value: string | number) {
     setForm((current) => ({ ...current, [key]: value }));
@@ -111,9 +112,9 @@ export function RejectionWorkDrawer({
     setError(null);
     setNotice(null);
     try {
-      await saveClaimIdentityFields(claim.id, form);
-      const result = await saveClaimWorkFields(claim.id, form, revalidate || resubmit);
-      const work = await getClaimWorkData(claim.id);
+      await saveClaimIdentityFields(activeClaim.id, form);
+      const result = await saveClaimWorkFields(activeClaim.id, form, revalidate || resubmit);
+      const work = await getClaimWorkData(activeClaim.id);
       const next = formFrom(work?.claim);
       setForm(next);
       setBaseline(next);
@@ -123,7 +124,7 @@ export function RejectionWorkDrawer({
         return;
       }
       if (resubmit) {
-        const batch = await createBatch([claim.id], `Corrected claim ${claim.patientControlNumber || claim.id}`);
+        const batch = await createBatch([activeClaim.id], `Corrected claim ${activeClaim.patientControlNumber || activeClaim.id}`);
         if (!batch.ok) throw new Error(batch.message || "Unable to create corrected-claim submission batch.");
         const submission = await submitBatch(batch.value.batchId);
         if (!submission.ok) throw new Error(submission.message || "Unable to resubmit corrected claim.");
@@ -163,15 +164,15 @@ export function RejectionWorkDrawer({
       open={open}
       onOpenChange={onOpenChange}
       dirty={dirty}
-      title={claim.clientName}
-      subtitle={`${claim.patientControlNumber || "Claim"} · ${claim.payerName || "No payer"} · DOS ${shortDate(claim.serviceDateFrom)}`}
-      badges={<StatusBadge value={claim.claimStatus} />}
+      title={activeClaim.clientName}
+      subtitle={`${activeClaim.patientControlNumber || "Claim"} · ${activeClaim.payerName || "No payer"} · DOS ${shortDate(activeClaim.serviceDateFrom)}`}
+      badges={<StatusBadge value={activeClaim.claimStatus} />}
       queuePosition={queuePosition}
       onPrevious={() => move("previous")}
       onNext={() => move("next")}
       previousDisabled={previousDisabled}
       nextDisabled={nextDisabled}
-      openFullRecord={() => navigate(`/claims/${claim.id}`)}
+      openFullRecord={() => navigate(`/claims/${activeClaim.id}`)}
       openFullRecordLabel="Open Full Claim 360"
       footer={footer}
     >
@@ -202,19 +203,19 @@ export function RejectionWorkDrawer({
           <section className="thera-card">
             <div className="thera-card-header"><div><h2>Claim correction</h2><p>Compare the submitted value with the corrected value before revalidating.</p></div></div>
             <div className="thera-form-grid" style={{ marginBottom: 12 }}>
-              <div><div className="thera-table-subtext">Current value</div><strong>{claim.clientName}</strong></div>
+              <div><div className="thera-table-subtext">Current value</div><strong>{activeClaim.clientName}</strong></div>
               <label>Corrected value<select className="thera-input" value={form.client_id} onChange={(e) => field("client_id", e.target.value)}><option value="">Select patient</option>{(refs?.clients ?? []).map((row) => <option key={row.id} value={row.id}>{personName(row)}</option>)}</select></label>
-              <div><div className="thera-table-subtext">Current payer</div><strong>{claim.payerName || "—"}</strong></div>
+              <div><div className="thera-table-subtext">Current payer</div><strong>{activeClaim.payerName || "—"}</strong></div>
               <label>Corrected payer<select className="thera-input" value={form.payer_id} onChange={(e) => field("payer_id", e.target.value)}><option value="">Select payer</option>{(refs?.payers ?? []).map((row) => <option key={row.id} value={row.id}>{text(row.name, "Payer")}</option>)}</select></label>
-              <div><div className="thera-table-subtext">Current rendering provider</div><strong>{claim.renderingProviderName || "—"}</strong></div>
+              <div><div className="thera-table-subtext">Current rendering provider</div><strong>{activeClaim.renderingProviderName || "—"}</strong></div>
               <label>Corrected rendering provider<select className="thera-input" value={form.rendering_provider_id} onChange={(e) => field("rendering_provider_id", e.target.value)}><option value="">Select provider</option>{(refs?.providers ?? []).map((row) => <option key={row.id} value={row.id}>{personName(row)}{row.credentials ? `, ${String(row.credentials)}` : ""}</option>)}</select></label>
-              <div><div className="thera-table-subtext">Current patient control #</div><strong>{claim.patientControlNumber || "—"}</strong></div>
+              <div><div className="thera-table-subtext">Current patient control #</div><strong>{activeClaim.patientControlNumber || "—"}</strong></div>
               <label>Corrected patient control #<input className="thera-input" value={form.patient_control_number} onChange={(e) => field("patient_control_number", e.target.value)} /></label>
-              <div><div className="thera-table-subtext">Current payer claim #</div><strong>{claim.payerClaimNumber || "—"}</strong></div>
+              <div><div className="thera-table-subtext">Current payer claim #</div><strong>{activeClaim.payerClaimNumber || "—"}</strong></div>
               <label>Corrected payer claim #<input className="thera-input" value={form.payer_claim_number} onChange={(e) => field("payer_claim_number", e.target.value)} /></label>
-              <div><div className="thera-table-subtext">Current DOS</div><strong>{shortDate(claim.serviceDateFrom)}</strong></div>
+              <div><div className="thera-table-subtext">Current DOS</div><strong>{shortDate(activeClaim.serviceDateFrom)}</strong></div>
               <label>Corrected DOS<input className="thera-input" type="date" value={form.service_date_from} onChange={(e) => field("service_date_from", e.target.value)} /></label>
-              <div><div className="thera-table-subtext">Current charge</div><strong>{money(claim.totalChargeCents)}</strong></div>
+              <div><div className="thera-table-subtext">Current charge</div><strong>{money(activeClaim.totalChargeCents)}</strong></div>
               <label>Corrected charge<input className="thera-input" type="number" min="0" step="0.01" value={(form.total_charge_cents / 100).toFixed(2)} onChange={(e) => field("total_charge_cents", Math.round(Number(e.target.value || 0) * 100))} /></label>
               <label>Place of service<input className="thera-input" value={form.place_of_service_code} onChange={(e) => field("place_of_service_code", e.target.value)} /></label>
               <label>Claim frequency<input className="thera-input" value={form.claim_frequency_code} onChange={(e) => field("claim_frequency_code", e.target.value)} /></label>
