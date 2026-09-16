@@ -65,6 +65,8 @@ Expected rejection categories may include:
 - Claim format.
 - Other.
 
+A claim with multiple unresolved rejection errors may appear in more than one correction-category tab because each unresolved field/error requires work, but it still has only one operational home: Rejections.
+
 Correction lifecycle:
 
 Rejected -> Corrected -> Resubmitted -> Removed from Rejections
@@ -88,6 +90,12 @@ Each payer workqueue contains these tabs:
 - 120+ Days.
 
 This replaces separate Claim Follow-Up, Insurance A/R, aging, and generic claim follow-up workflows.
+
+A claim appears in only one Claims tab at a time. Tab assignment follows this precedence:
+
+1. Deferred, when the claim is intentionally deferred.
+2. No Response, when the submitted claim has no payer/clearinghouse response state recorded.
+3. Otherwise, the appropriate aging bucket using the existing Claims/A/R aging calculation.
 
 Claim disposition:
 
@@ -124,6 +132,13 @@ Every payer denial queue also includes these special tabs:
 - Corrected Claims.
 - Appeals.
 - Deferred.
+
+A denial appears in only one Denials tab at a time. Tab assignment follows this precedence:
+
+1. Deferred.
+2. Appeals, when formal appeal work is active.
+3. Corrected Claims, when the denial is being resolved through a corrected claim.
+4. Otherwise, the mapped CARC denial-reason tab.
 
 Appeals are not a separate top-level operational area. Appeals are a denial disposition/work type inside Denials.
 
@@ -252,8 +267,10 @@ The consolidation is complete when:
 - Validation failures and clearinghouse rejections are corrected through one Rejections flow.
 - Rejections are grouped by payer and correction field/category.
 - Claims has one queue per payer with No Response, Deferred, 0-30, 31-60, 61-90, 91-120, and 120+ tabs.
+- A claim appears in only one Claims tab at a time.
 - Denials has one queue per payer and is organized by CARC-driven denial reasons.
 - Denials includes Corrected Claims, Appeals, and Deferred tabs.
+- A denial appears in only one Denials tab at a time.
 - Authorization has no standalone workqueue.
 - Claim Follow-Up, separate Insurance A/R, separate Appeals, separate Claim Submission, and duplicate Charges implementations no longer exist as independent workflows.
 - Existing underlying claim, denial, appeal, submission, correction, payment, and audit behavior remains functional after consolidation.
