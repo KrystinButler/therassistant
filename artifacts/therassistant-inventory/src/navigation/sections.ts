@@ -1,3 +1,5 @@
+import { SETTINGS_GROUPS } from "../domains/settings/settings-groups";
+
 export type SectionId =
   | "overview"
   | "care-delivery"
@@ -19,6 +21,7 @@ export type NavigationItem = {
   matchPaths?: readonly string[];
   visibility: NavigationVisibility;
   badgeKey?: string;
+  group?: string;
 };
 
 export type NavigationSection = {
@@ -32,6 +35,15 @@ export type NavigationSection = {
 };
 
 const visibleToAll = { mode: "all" } as const;
+const settingsChildren: readonly NavigationItem[] = SETTINGS_GROUPS.flatMap((group) =>
+  group.items.map((item) => ({
+    id: item.id,
+    label: item.label,
+    href: item.href,
+    group: group.label,
+    visibility: visibleToAll,
+  })),
+);
 
 export const NAV_SECTIONS: readonly NavigationSection[] = [
   {
@@ -64,28 +76,10 @@ export const NAV_SECTIONS: readonly NavigationSection[] = [
     primaryHref: "/billing/charges",
     visibility: visibleToAll,
     children: [
-      {
-        id: "charges",
-        label: "Charges",
-        href: "/billing/charges",
-        matchPaths: ["/charges", "/claims/submission"],
-        visibility: visibleToAll,
-      },
+      { id: "charges", label: "Charges", href: "/billing/charges", matchPaths: ["/charges", "/claims/submission"], visibility: visibleToAll },
       { id: "rejections", label: "Rejections", href: "/rejections", visibility: visibleToAll },
-      {
-        id: "claims",
-        label: "Claims",
-        href: "/claims",
-        matchPaths: ["/claims/follow-up"],
-        visibility: visibleToAll,
-      },
-      {
-        id: "denials",
-        label: "Denials",
-        href: "/denials",
-        matchPaths: ["/ar-denials"],
-        visibility: visibleToAll,
-      },
+      { id: "claims", label: "Claims", href: "/claims", matchPaths: ["/claims/follow-up"], visibility: visibleToAll },
+      { id: "denials", label: "Denials", href: "/denials", matchPaths: ["/ar-denials"], visibility: visibleToAll },
       { id: "payments", label: "Payments", href: "/payments", visibility: visibleToAll },
     ],
   },
@@ -98,20 +92,9 @@ export const NAV_SECTIONS: readonly NavigationSection[] = [
     children: [
       { id: "providers", label: "Providers", href: "/providers", visibility: visibleToAll },
       { id: "credentialing", label: "Credentialing", href: "/credentialing", visibility: visibleToAll },
-      {
-        id: "payers-contracts",
-        label: "Payers & Contracts",
-        href: "/payers-contracts",
-        matchPaths: ["/payers"],
-        visibility: visibleToAll,
-      },
+      { id: "payers-contracts", label: "Payers & Contracts", href: "/payers-contracts", matchPaths: ["/payers"], visibility: visibleToAll },
       { id: "mailroom", label: "Mailroom", href: "/mailroom", visibility: visibleToAll },
-      {
-        id: "imports",
-        label: "Imports / Migration",
-        href: "/administration/imports",
-        visibility: visibleToAll,
-      },
+      { id: "imports", label: "Imports / Migration", href: "/administration/imports", visibility: visibleToAll },
     ],
   },
   {
@@ -142,17 +125,10 @@ export const NAV_SECTIONS: readonly NavigationSection[] = [
     id: "settings",
     label: "Settings",
     renderInSidebar: true,
-    primaryHref: "/administration",
+    primaryHref: "/settings",
     visibility: visibleToAll,
-    children: [
-      { id: "administration", label: "Administration", href: "/administration", visibility: visibleToAll },
-      {
-        id: "database-inventory",
-        label: "Database Inventory",
-        href: "/administration/database-inventory",
-        visibility: visibleToAll,
-      },
-    ],
+    children: settingsChildren,
+    contextualPaths: ["/settings"],
   },
 ] as const;
 
@@ -161,26 +137,18 @@ function matchesPath(pathname: string, candidate: string) {
   return pathname === candidate || pathname.startsWith(`${candidate}/`);
 }
 
-type ItemMatch = {
-  section: NavigationSection;
-  item: NavigationItem;
-  candidate: string;
-};
+type ItemMatch = { section: NavigationSection; item: NavigationItem; candidate: string };
 
 function getBestItemMatch(pathname: string): ItemMatch | undefined {
   let best: ItemMatch | undefined;
-
   for (const section of NAV_SECTIONS) {
     for (const item of section.children) {
       for (const candidate of [item.href, ...(item.matchPaths ?? [])]) {
         if (!matchesPath(pathname, candidate)) continue;
-        if (!best || candidate.length > best.candidate.length) {
-          best = { section, item, candidate };
-        }
+        if (!best || candidate.length > best.candidate.length) best = { section, item, candidate };
       }
     }
   }
-
   return best;
 }
 
@@ -195,7 +163,6 @@ export function getActiveItemForPath(pathname: string): NavigationItem | undefin
 export function getSectionForPath(pathname: string): NavigationSection | undefined {
   const itemMatch = getBestItemMatch(pathname);
   if (itemMatch) return itemMatch.section;
-
   let bestSection: NavigationSection | undefined;
   let bestLength = -1;
   for (const section of NAV_SECTIONS) {
@@ -209,10 +176,7 @@ export function getSectionForPath(pathname: string): NavigationSection | undefin
   return bestSection;
 }
 
-export function getNavigationContext(pathname: string): {
-  section?: NavigationSection;
-  item?: NavigationItem;
-} {
+export function getNavigationContext(pathname: string): { section?: NavigationSection; item?: NavigationItem } {
   const itemMatch = getBestItemMatch(pathname);
   if (itemMatch) return { section: itemMatch.section, item: itemMatch.item };
   return { section: getSectionForPath(pathname) };
