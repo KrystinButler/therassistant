@@ -12,14 +12,7 @@ export type ClaimCorrectionTarget =
   | "payer"
   | "patient";
 
-export type ClaimErrorGuidance = {
-  target: ClaimCorrectionTarget;
-  actionLabel: string;
-  whatIsWrong: string;
-  whyItMatters: string;
-  correction: string;
-};
-
+export type ClaimErrorGuidance = { target: ClaimCorrectionTarget; actionLabel: string; whatIsWrong: string; whyItMatters: string; correction: string };
 export function getClaimErrorGuidance(message: string): ClaimErrorGuidance | null {
   const value = message.toLowerCase();
   if (value.includes("service date")) return { target: "service_date_from", actionLabel: "Correct Service Date", whatIsWrong: message, whyItMatters: "The payer needs a valid date of service to identify when the billed service occurred and adjudicate the claim.", correction: "Enter the correct claim date of service. If a line-level date is missing, review Claim Lines as well." };
@@ -29,6 +22,7 @@ export function getClaimErrorGuidance(message: string): ClaimErrorGuidance | nul
   if (value.includes("claim line") && value.includes("charge")) return { target: "claim_lines", actionLabel: "Review Claim Lines", whatIsWrong: message, whyItMatters: "Each billed service line requires a valid charge amount for adjudication.", correction: "Open Claim Lines and correct the charge on the affected service line." };
   if (value.includes("diagnosis pointer")) return { target: "claim_lines", actionLabel: "Correct Diagnosis Pointer", whatIsWrong: message, whyItMatters: "The diagnosis pointer connects a billed service line to the diagnosis that supports medical necessity.", correction: "Review the affected Claim Line and link it to the appropriate diagnosis." };
   if (value.includes("diagnosis")) return { target: "diagnoses", actionLabel: "Review Diagnoses", whatIsWrong: message, whyItMatters: "At least one diagnosis is needed to explain the clinical reason for the billed service.", correction: "Open Diagnoses and add or correct the diagnosis information supporting the claim." };
+  if (value.includes("taxonomy")) return { target: "rendering_provider", actionLabel: "Correct Rendering Provider", whatIsWrong: message, whyItMatters: "The rendering provider's taxonomy identifies the provider type and specialty used by the payer to validate the professional claim.", correction: "Confirm the correct rendering provider is selected. If the provider is correct, update the provider's taxonomy in Provider Detail before retrying the rejected claim." };
   if (value.includes("rendering provider") && value.includes("missing")) return { target: "rendering_provider", actionLabel: "Correct Rendering Provider", whatIsWrong: message, whyItMatters: "The rendering provider identifies who performed the service and drives payer enrollment, NPI, and taxonomy validation.", correction: "Assign the correct rendering provider to the claim." };
   if (value.includes("not approved with the payer")) return { target: "rendering_provider", actionLabel: "Review Provider Enrollment", whatIsWrong: message, whyItMatters: "A claim can deny when the rendering provider is not enrolled or participating for the payer and product being billed.", correction: "Review the rendering provider's payer enrollment before resubmitting the claim. Correct the provider only if the wrong provider was selected." };
   if (value.includes("payer") && value.includes("missing")) return { target: "payer", actionLabel: "Correct Payer", whatIsWrong: message, whyItMatters: "The payer determines where the claim is submitted and which billing rules apply.", correction: "Assign the correct payer for the patient's coverage." };
