@@ -1,0 +1,207 @@
+.schedule-day-table th,
+.schedule-day-table td {
+  vertical-align: top;
+}
+
+.schedule-day-time {
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.schedule-day-patient {
+  display: grid;
+  gap: 0.2rem;
+}
+
+.schedule-day-patient-name {
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: hsl(var(--foreground));
+  font: inherit;
+  font-weight: 700;
+  text-align: left;
+  cursor: pointer;
+}
+
+.schedule-day-patient-name:hover,
+.schedule-day-patient-name:focus-visible {
+  text-decoration: underline;
+}
+
+.schedule-day-insight,
+.schedule-day-focus {
+  max-width: 26rem;
+}
+
+.schedule-day-supporting {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  margin-top: 0.4rem;
+  color: hsl(var(--muted-foreground));
+  font-size: 0.78rem;
+}
+
+.schedule-day-focus-card {
+  border: 1px solid hsl(var(--border));
+  border-radius: var(--radius);
+  padding: 0.65rem 0.75rem;
+  background: hsl(var(--card));
+}
+
+.schedule-day-focus-card strong {
+  display: block;
+  margin-bottom: 0.18rem;
+  color: hsl(var(--foreground));
+}
+
+.schedule-review-stack {
+  display: grid;
+  gap: 0.85rem;
+}
+
+.schedule-review-card {
+  border: 1px solid hsl(var(--border));
+  border-radius: var(--radius);
+  padding: 1rem;
+  background: hsl(var(--card));
+}
+
+.schedule-review-card h3 {
+  margin: 0;
+  font-size: 0.98rem;
+  font-weight: 800;
+}
+
+.schedule-review-card p {
+  margin: 0.45rem 0 0;
+  line-height: 1.55;
+}
+
+.schedule-review-card-header,
+.schedule-review-footer,
+.schedule-review-meta,
+.schedule-readiness-item {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+}
+
+.schedule-review-card-header {
+  justify-content: space-between;
+  margin-bottom: 0.7rem;
+}
+
+.schedule-review-footer {
+  width: 100%;
+  justify-content: space-between;
+}
+
+.schedule-review-list {
+  display: grid;
+  gap: 0.75rem;
+  margin: 0;
+}
+
+.schedule-review-list > div {
+  display: grid;
+  grid-template-columns: minmax(8rem, 0.4fr) minmax(0, 1fr);
+  gap: 0.75rem;
+}
+
+.schedule-review-list dt {
+  color: hsl(var(--muted-foreground));
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.schedule-review-list dd {
+  margin: 0;
+}
+
+.schedule-review-meta {
+  flex-wrap: wrap;
+  margin-top: 0.5rem;
+  color: hsl(var(--muted-foreground));
+  font-size: 0.78rem;
+}
+
+.schedule-review-empty {
+  color: hsl(var(--muted-foreground));
+}
+
+.schedule-patient-source {
+  border: 1px solid hsl(var(--border));
+  border-radius: 999px;
+  padding: 0.2rem 0.5rem;
+  background: hsl(var(--muted));
+  color: hsl(var(--muted-foreground));
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
+.schedule-review-focus {
+  border-color: hsl(145 26% 72%);
+  background: hsl(145 36% 96%);
+}
+
+.schedule-safety-clear {
+  border-color: hsl(145 26% 72%);
+  background: hsl(145 36% 96%);
+}
+
+.schedule-safety-alert {
+  border-color: hsl(var(--destructive));
+  background: hsl(var(--destructive) / 0.08);
+}
+
+.schedule-readiness-list {
+  display: grid;
+  gap: 0.65rem;
+}
+
+.schedule-readiness-item {
+  align-items: flex-start;
+  padding-top: 0.65rem;
+  border-top: 1px solid hsl(var(--border));
+}
+
+.schedule-readiness-item:first-child {
+  padding-top: 0;
+  border-top: 0;
+}
+
+.schedule-readiness-item strong {
+  display: block;
+  font-size: 0.84rem;
+}
+
+.schedule-readiness-item p {
+  margin-top: 0.18rem;
+  color: hsl(var(--muted-foreground));
+  font-size: 0.78rem;
+}
+
+@media (max-width: 900px) {
+  .schedule-day-insight,
+  .schedule-day-focus {
+    min-width: 15rem;
+  }
+}
+
+@media (max-width: 720px) {
+  .schedule-review-list > div {
+    grid-template-columns: 1fr;
+    gap: 0.18rem;
+  }
+
+  .schedule-review-footer {
+    align-items: stretch;
+    flex-direction: column-reverse;
+  }
+
+  .schedule-review-footer .thera-action {
+    width: 100%;
+  }
+}
