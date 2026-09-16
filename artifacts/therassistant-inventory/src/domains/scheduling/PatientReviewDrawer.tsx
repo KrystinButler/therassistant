@@ -41,8 +41,13 @@ export function PatientReviewDrawer({
       open={open}
       onOpenChange={onOpenChange}
       title="Patient Review"
-      subtitle={`${appointment.clientName}${appointment.clientPronouns ? ` (${appointment.clientPronouns})` : ""} · ${dateTime(appointment.startsAt)}`}
-      badges={<StatusBadge value={checkInStatus} />}
+      subtitle={`${appointment.clientName}${appointment.clientPronouns ? ` (${appointment.clientPronouns})` : ""} · ${dateTime(appointment.startsAt)} · ${appointment.serviceType || "Session"}`}
+      badges={
+        <>
+          <StatusBadge value={checkInStatus} />
+          <StatusBadge value={appointment.appointmentStatus} />
+        </>
+      }
       footer={
         <div className="schedule-review-footer">
           <button type="button" className="thera-action secondary" onClick={onOpenChart}>
