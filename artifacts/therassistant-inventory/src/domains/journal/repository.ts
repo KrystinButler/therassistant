@@ -1,9 +1,9 @@
 import { demoInsert, demoUpdate, type Row } from "../../lib/supabase-demo-client";
-import { buildJournalEntryValues } from "../portal/workflow";
+import { buildJournalEntryValues, type JournalEntryInput } from "../portal/workflow";
 
 type DataRow = Row & { id: string };
 
-export function addJournalEntry(patientId: string, input: { entryText: string; mood?: string }) {
+export function addJournalEntry(patientId: string, input: JournalEntryInput) {
   return demoInsert<DataRow>("patient_journal_entries", {
     client_id: patientId,
     ...buildJournalEntryValues(input),
