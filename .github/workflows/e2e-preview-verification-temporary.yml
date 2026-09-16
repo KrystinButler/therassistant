@@ -1,0 +1,42 @@
+name: Temporary preview E2E verification
+
+on:
+  push:
+    branches:
+      - chore/e2e-deterministic-builds
+    paths:
+      - .github/workflows/e2e-preview-verification-temporary.yml
+
+permissions:
+  contents: read
+
+jobs:
+  preview-e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - name: Check out branch
+        uses: actions/checkout@v4
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.28.0
+          run_install: false
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Frozen install
+        run: pnpm install --frozen-lockfile
+
+      - name: Install Chromium
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Run E2E against verified branch preview
+        env:
+          PLAYWRIGHT_BASE_URL: https://therassistant-dtm9xx0ky-therassistant-1064.vercel.app
+        run: pnpm test:e2e
