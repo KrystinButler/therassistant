@@ -1,5 +1,6 @@
 name: Temporary E2E verification
 
+# Rerun after payment selector correction.
 on:
   push:
     branches:
