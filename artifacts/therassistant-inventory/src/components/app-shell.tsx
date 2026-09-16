@@ -2,11 +2,11 @@ import { useEffect, useState, type ReactNode } from "react";
 import { Link, useLocation } from "wouter";
 
 import {
-  getVisibleWorkspaces,
-  getWorkspaceContext,
-  toggleExpandedWorkspace,
-  type WorkspaceId,
-} from "../navigation/workspaces";
+  getNavigationContext,
+  getVisibleSections,
+  toggleExpandedSection,
+  type SectionId,
+} from "../navigation/sections";
 import "../navigation/workspace-navigation.css";
 
 type Props = {
@@ -15,20 +15,20 @@ type Props = {
 
 export function AppShell({ children }: Props) {
   const [location] = useLocation();
-  const context = getWorkspaceContext(location);
-  const activeWorkspaceId = context.workspace?.id ?? null;
-  const [expandedWorkspaceId, setExpandedWorkspaceId] = useState<WorkspaceId | null>(activeWorkspaceId);
+  const context = getNavigationContext(location);
+  const activeSectionId = context.section?.id ?? null;
+  const [expandedSectionId, setExpandedSectionId] = useState<SectionId | null>(activeSectionId);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
 
   useEffect(() => {
-    if (activeWorkspaceId) setExpandedWorkspaceId(activeWorkspaceId);
-  }, [activeWorkspaceId]);
+    if (activeSectionId) setExpandedSectionId(activeSectionId);
+  }, [activeSectionId]);
 
-  const topbarContext = context.workspace
-    ? context.child
-      ? `${context.workspace.label} · ${context.child.label}`
-      : context.workspace.label
-    : "Operational Workspace";
+  const topbarContext = context.section
+    ? context.item
+      ? `${context.section.label} · ${context.item.label}`
+      : context.section.label
+    : "Operations";
 
   return (
     <div className="thera-app">
@@ -50,45 +50,45 @@ export function AppShell({ children }: Props) {
           </div>
         </div>
 
-        <nav className="thera-nav" aria-label="Workspace navigation">
-          {getVisibleWorkspaces().map((workspace) => {
-            const expanded = workspace.id === expandedWorkspaceId;
-            const activeWorkspace = workspace.id === activeWorkspaceId;
+        <nav className="thera-nav" aria-label="Primary navigation">
+          {getVisibleSections().map((section) => {
+            const expanded = section.id === expandedSectionId;
+            const activeSection = section.id === activeSectionId;
 
             return (
-              <div className="thera-workspace" key={workspace.id}>
+              <div className="thera-workspace" key={section.id}>
                 <button
                   type="button"
-                  className={activeWorkspace ? "thera-workspace-button active" : "thera-workspace-button"}
+                  className={activeSection ? "thera-workspace-button active" : "thera-workspace-button"}
                   aria-expanded={expanded}
-                  aria-controls={`thera-workspace-${workspace.id}`}
+                  aria-controls={`thera-section-${section.id}`}
                   onClick={() =>
-                    setExpandedWorkspaceId((current) => toggleExpandedWorkspace(current, workspace.id))
+                    setExpandedSectionId((current) => toggleExpandedSection(current, section.id))
                   }
                 >
-                  <span className="thera-workspace-label">{workspace.label}</span>
+                  <span className="thera-workspace-label">{section.label}</span>
                   <span className="thera-workspace-chevron" aria-hidden="true">
                     {expanded ? "⌄" : "›"}
                   </span>
                 </button>
 
                 <div
-                  id={`thera-workspace-${workspace.id}`}
+                  id={`thera-section-${section.id}`}
                   className="thera-workspace-children"
                   hidden={!expanded}
                 >
                   {expanded
-                    ? workspace.children.map((child) => {
-                        const activeChild = context.child?.id === child.id;
+                    ? section.children.map((item) => {
+                        const activeItem = context.item?.id === item.id;
                         return (
                           <Link
-                            key={child.id}
-                            href={child.href}
-                            className={activeChild ? "thera-workspace-child active" : "thera-workspace-child"}
-                            aria-current={activeChild ? "page" : undefined}
+                            key={item.id}
+                            href={item.href}
+                            className={activeItem ? "thera-workspace-child active" : "thera-workspace-child"}
+                            aria-current={activeItem ? "page" : undefined}
                             onClick={() => setMobileNavOpen(false)}
                           >
-                            {child.label}
+                            {item.label}
                           </Link>
                         );
                       })
