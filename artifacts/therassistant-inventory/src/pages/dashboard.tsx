@@ -45,8 +45,8 @@ export function DashboardPage() {
       <div className="thera-page-header split">
         <div>
           <div className="thera-eyebrow">THERASSISTANT</div>
-          <h1>Revenue Cycle Command Center</h1>
-          <p>Operational control from pre-session readiness through encounter, billing, claims, payment, denial, and exception work.</p>
+          <h1>Revenue Cycle Overview</h1>
+          <p>Operational overview from pre-session readiness through encounter, billing, claims, payment, denial, and exception work.</p>
         </div>
         <div className="thera-filter-row">
           {quickLinks.map(([label, href]) => (
