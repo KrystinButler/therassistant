@@ -206,7 +206,7 @@ Edits practice name, timezone, contact information, and normalized locations. Th
 Edits only the supported optional patient-record toggles. Disabling an optional feature hides its user-facing entry points; it never deletes existing records.
 
 ### Practice Logo
-Uploads/replaces the practice logo. Store logo assets in a dedicated `practice-assets` Supabase Storage bucket using a tenant-prefixed path. Logos are non-PHI branding assets. Writes require practice-admin access. `tenants.settings.branding.logo_path` stores the current object path.
+Uploads/replaces the practice logo. Store logo assets in a dedicated `practice-assets` Supabase Storage bucket using a tenant-prefixed path. Logos are non-PHI branding assets and may be public-read so printed documents and the client portal can render them without privileged credentials. Upload, replace, and delete operations require practice-admin authorization and must use normal authenticated Storage policies; no service-role or secret key may be shipped to the browser. `tenants.settings.branding.logo_path` stores the current object path.
 
 ### Activity Log
 Read-only page combining:
@@ -240,11 +240,11 @@ Edits statement/patient-responsibility defaults only. It does not duplicate Paym
 Shows payment-processing connection status and setup actions. No processor secret keys, API secrets, or private credentials may be written to `tenants.settings`, browser source, or other client-readable tables. A real processor integration must use server-side secrets/connector configuration. Until a processor is connected, the page clearly shows `Not connected` and does not simulate a stored credential.
 
 ### Staff
-Uses `user_profiles`, `tenant_users`, and `tenant_user_roles` to list staff, status, and role assignments. Provider records remain separate; a future optional provider-user association may link clinical staff without merging provider and auth identities.
+Uses `user_profiles`, `tenant_users`, and `tenant_user_roles` to list staff, status, and role assignments. Adding a new staff member is an invitation flow: any Supabase Auth admin/invite operation must run server-side (for example, an authenticated API/Edge Function) and may not expose a service-role key or admin credential in the browser. Provider records remain separate; a future optional provider-user association may link clinical staff without merging provider and auth identities.
 
 ## Authorization
 
-Settings pages are visible to practice administrators by default. `Change Your Password` is visible to every authenticated user. `Activity Log` is admin-only. Staff role assignment is admin-only.
+Settings pages are visible to practice administrators by default. `Change Your Password` is visible to every authenticated user. `Activity Log` is admin-only. Staff invitation and role assignment are admin-only.
 
 The frontend may hide unavailable actions, but database RLS/policies are the enforcement boundary.
 
@@ -271,6 +271,7 @@ Activity-log reads do not modify audit history.
 - Location removal uses `status = inactive` when it has been used operationally.
 - Password errors come from Supabase Auth and are translated into user-readable messages.
 - Payment Processing never asks the user to paste a secret into a browser form.
+- Staff invitation failures do not create orphaned `tenant_users` or role rows; the server-side invitation flow completes auth invitation and tenant membership atomically or compensates on failure.
 
 ## Testing
 
@@ -281,6 +282,7 @@ Activity-log reads do not modify audit history.
 - Catalog normalization/validation rejects blank codes/names and negative fee values.
 - Activity Log normalization combines audit + PHI access rows deterministically.
 - Payment Processing source contains no secret-key storage path.
+- Staff invitation browser code contains no Supabase admin/service-role credential path.
 
 ### Repository tests
 - Tenant settings update targets only the current tenant.
