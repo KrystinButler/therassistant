@@ -2,13 +2,21 @@ import { demoInsert, demoSelect, demoUpdate, type Row } from "../../lib/supabase
 import {
   buildJournalEntryValues,
   buildPatientPortalData,
+  buildPreVisitResponses,
   planCheckInUpdate,
   type CheckInStep,
   type JournalEntryInput,
   type PortalRow,
+  type PreVisitCheckInUpdate,
 } from "./workflow";
 
 type DataRow = Row & { id: string };
+
+function recordOf(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : {};
+}
 
 export async function recordCheckIn(
   appointmentId: string,
@@ -32,6 +40,27 @@ export async function recordCheckIn(
         client_id: patientId,
         responses: responses ?? {},
         ...values,
+      });
+}
+
+export async function savePreVisitCheckIn(
+  appointmentId: string,
+  patientId: string,
+  update: PreVisitCheckInUpdate,
+) {
+  const existing = await demoSelect<DataRow>("client_checkins", {
+    appointment_id: `eq.${appointmentId}`,
+    client_id: `eq.${patientId}`,
+    limit: "1",
+  });
+  const responses = buildPreVisitResponses(recordOf(existing[0]?.responses), update);
+
+  return existing[0]
+    ? demoUpdate<DataRow>("client_checkins", existing[0].id, { responses })
+    : demoInsert<DataRow>("client_checkins", {
+        appointment_id: appointmentId,
+        client_id: patientId,
+        responses,
       });
 }
 
