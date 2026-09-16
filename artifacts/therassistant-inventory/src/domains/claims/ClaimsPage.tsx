@@ -33,6 +33,7 @@ export function ClaimsPage() {
       setRows(data.filter((claim) =>
         getOperationalHome({
           claimStatus: claim.claim_status,
+          latestResponseStatus: claim.clearinghouseStatus,
           hasActiveDenial: claim.hasActiveDenial,
           openBalanceCents: claim.openBalanceCents,
         }) === "claims",
