@@ -31,6 +31,7 @@ export async function saveDenialFollowUp(denialId: string, input: DenialFollowUp
   }
 
   let work = await activeDenialWork(denialId);
+  const oldStatus = String(work?.workqueue_status ?? "open");
   const description = input.actionTaken.trim() || String(denial.reason ?? "Denial follow-up");
   if (work) {
     work = await demoUpdate<DataRow>("workqueue_items", work.id, {
@@ -60,7 +61,7 @@ export async function saveDenialFollowUp(denialId: string, input: DenialFollowUp
 
   await demoInsert<DataRow>("workqueue_history", {
     workqueue_item_id: work.id,
-    old_status: String(work.workqueue_status ?? "in_progress"),
+    old_status: oldStatus,
     new_status: "in_progress",
     note: detail,
   });
