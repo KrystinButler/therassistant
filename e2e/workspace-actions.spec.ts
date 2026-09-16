@@ -53,7 +53,7 @@ test("Payments opens the post-payment drawer without posting", async ({ page }) 
   await page.goto("/payments");
   await page.getByRole("button", { name: "+ Post Payment" }).click();
   await expect(page.getByRole("heading", { name: "Post Payment" })).toBeVisible();
-  await page.getByLabel("Amount").fill("10.00");
+  await page.getByRole("spinbutton", { name: "Amount", exact: true }).fill("10.00");
   await expect(page.getByRole("button", { name: "Post Payment" })).toBeEnabled();
   await page.getByRole("button", { name: "Cancel" }).click();
   await expectWorkspace(page, "Payments");
