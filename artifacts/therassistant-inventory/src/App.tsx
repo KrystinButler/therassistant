@@ -3,7 +3,7 @@ import { Route, Switch, useLocation } from "wouter";
 
 import InventoryApp from "./InventoryApp";
 import { AppShell } from "./components/app-shell";
-import { ArWorkspacePage } from "./domains/ar/ArWorkspacePage";
+import { DenialsPage } from "./domains/ar/DenialsPage";
 import { BillingHubPage } from "./domains/billing/BillingHubPage";
 import { BillingQueuePage } from "./domains/billing/BillingQueuePage";
 import { Claim360Page } from "./domains/claims/Claim360Page";
@@ -64,7 +64,7 @@ export default function App() {
         <Route path="/mailroom/:id"><CorrespondencePage /></Route>
         <Route path="/billing/charges"><BillingQueuePage /></Route>
         <Route path="/rejections"><RejectionsPage /></Route>
-        <Route path="/denials"><ArWorkspacePage /></Route>
+        <Route path="/denials"><DenialsPage /></Route>
         <Route path="/clients"><ClientsPage /></Route>
         <Route path="/providers"><ProvidersPage /></Route>
         <Route path="/schedule"><SchedulePage /></Route>
