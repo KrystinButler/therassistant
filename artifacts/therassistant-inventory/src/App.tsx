@@ -1,4 +1,5 @@
-import { Route, Switch } from "wouter";
+import { useEffect } from "react";
+import { Route, Switch, useLocation } from "wouter";
 
 import InventoryApp from "./InventoryApp";
 import { AppShell } from "./components/app-shell";
@@ -7,7 +8,6 @@ import { BillingHubPage } from "./domains/billing/BillingHubPage";
 import { BillingQueuePage } from "./domains/billing/BillingQueuePage";
 import { Claim360Page } from "./domains/claims/Claim360Page";
 import { ClaimsWorkspacePage } from "./domains/claims/ClaimsWorkspacePage";
-import { ClaimSubmissionPage } from "./domains/claims/ClaimSubmissionPage";
 import { CredentialingPage } from "./domains/credentialing/CredentialingPage";
 import { PayersContractsPage } from "./domains/credentialing/PayersContractsPage";
 import { EncounterPage } from "./domains/encounters/EncounterPage";
@@ -27,16 +27,20 @@ import { DemoControlCenter } from "./pages/demo-control";
 import { PayerDetailPage } from "./pages/payer-detail";
 import { ProviderDetailPage } from "./pages/provider-detail";
 import { ProvidersPage } from "./pages/providers";
-import { WorkCenterPage } from "./pages/work-center";
 import { ReportsPage } from "./pages/operational-workspaces";
 import {
-  ClaimFollowUpPage,
   ClinicalPage,
   GoldenThreadPage,
   ImportsPage,
   JournalPage,
   MedicaidPage,
 } from "./pages/restored-modules";
+
+function Redirect({ to }: { to: string }) {
+  const [, navigate] = useLocation();
+  useEffect(() => navigate(to, { replace: true }), [navigate, to]);
+  return <div className="thera-state">Redirecting...</div>;
+}
 
 export default function App() {
   return (
@@ -45,8 +49,11 @@ export default function App() {
         <Route path="/demo"><DemoControlCenter /></Route>
         <Route path="/patient-portal/:clientId"><PatientPortalPage /></Route>
         <Route path="/clinical/golden-thread/:clientId"><GoldenThreadPage /></Route>
-        <Route path="/claims/submission"><ClaimSubmissionPage /></Route>
-        <Route path="/claims/follow-up"><ClaimFollowUpPage /></Route>
+        <Route path="/claims/submission"><Redirect to="/billing/charges" /></Route>
+        <Route path="/claims/follow-up"><Redirect to="/claims" /></Route>
+        <Route path="/ar-denials"><Redirect to="/denials" /></Route>
+        <Route path="/work-center"><Redirect to="/claims" /></Route>
+        <Route path="/charges"><Redirect to="/billing/charges" /></Route>
         <Route path="/schedule/:id"><PreSessionPage /></Route>
         <Route path="/encounters/:id"><EncounterPage /></Route>
         <Route path="/clients/:id"><PatientChartPage /></Route>
@@ -55,7 +62,8 @@ export default function App() {
         <Route path="/payers/:id"><PayerDetailPage /></Route>
         <Route path="/mailroom/:id"><CorrespondencePage /></Route>
         <Route path="/billing/charges"><BillingQueuePage /></Route>
-        <Route path="/work-center"><WorkCenterPage /></Route>
+        <Route path="/rejections"><ClaimsWorkspacePage /></Route>
+        <Route path="/denials"><ArWorkspacePage /></Route>
         <Route path="/clients"><ClientsPage /></Route>
         <Route path="/providers"><ProvidersPage /></Route>
         <Route path="/schedule"><SchedulePage /></Route>
@@ -65,10 +73,8 @@ export default function App() {
         <Route path="/authorizations"><AuthorizationsPage /></Route>
         <Route path="/medicaid"><MedicaidPage /></Route>
         <Route path="/billing"><BillingHubPage /></Route>
-        <Route path="/charges"><BillingQueuePage /></Route>
         <Route path="/claims"><ClaimsWorkspacePage /></Route>
         <Route path="/payments"><PaymentsPage /></Route>
-        <Route path="/ar-denials"><ArWorkspacePage /></Route>
         <Route path="/credentialing"><CredentialingPage /></Route>
         <Route path="/payers-contracts"><PayersContractsPage /></Route>
         <Route path="/mailroom"><MailroomPage /></Route>
