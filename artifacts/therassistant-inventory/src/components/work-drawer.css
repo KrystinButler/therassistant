@@ -1,0 +1,81 @@
+.thera-work-drawer {
+  width: min(820px, 92vw) !important;
+  max-width: 850px !important;
+  height: 100dvh;
+  padding: 0 !important;
+  gap: 0 !important;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  overflow: hidden;
+}
+
+.thera-work-drawer-header {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  padding: 1.25rem 3.25rem 1rem 1.5rem;
+  border-bottom: 1px solid hsl(var(--border));
+  background: hsl(var(--background));
+}
+
+.thera-work-drawer-heading-row,
+.thera-work-drawer-toolbar,
+.thera-work-drawer-toolbar-actions,
+.thera-work-drawer-badges {
+  display: flex;
+  align-items: center;
+  gap: .75rem;
+}
+
+.thera-work-drawer-heading-row,
+.thera-work-drawer-toolbar {
+  justify-content: space-between;
+}
+
+.thera-work-drawer-badges {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.thera-work-drawer-toolbar {
+  margin-top: 1rem;
+}
+
+.thera-work-drawer-queue {
+  color: hsl(var(--muted-foreground));
+  font-size: .875rem;
+}
+
+.thera-work-drawer-body {
+  min-height: 0;
+  overflow-y: auto;
+  padding: 1.5rem;
+  overscroll-behavior: contain;
+}
+
+.thera-work-drawer-footer {
+  position: sticky;
+  bottom: 0;
+  z-index: 2;
+  padding: 1rem 1.5rem;
+  border-top: 1px solid hsl(var(--border));
+  background: hsl(var(--background));
+}
+
+@media (max-width: 720px) {
+  .thera-work-drawer {
+    width: 100vw !important;
+    max-width: 100vw !important;
+  }
+
+  .thera-work-drawer-heading-row,
+  .thera-work-drawer-toolbar {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .thera-work-drawer-toolbar-actions {
+    width: 100%;
+    flex-wrap: wrap;
+  }
+}
