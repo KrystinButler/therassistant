@@ -112,7 +112,8 @@ function Overview({ data }: { data: Data }) {
     </section>
 
     <section className="thera-card thera-span-2">
-      <div className="thera-card-header split"><div><h2>Next Step</h2><p>Claims move forward only through the workflow state machine.</p></div><Link className="thera-action" href="/claims/submission">Open Claim Submission</Link></div>
+      <h2>Operational Ownership</h2>
+      <p>Claim 360 is a reference and history view. Active work is completed in the owning revenue-cycle queue.</p>
     </section>
   </div>;
 }
