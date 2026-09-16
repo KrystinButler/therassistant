@@ -1,116 +1,15 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link } from "wouter";
-
 import { StatusBadge } from "../../components/status-badge";
 import { shortDate } from "../../lib/format";
 import { runPatientEligibility } from "../eligibility/repository";
+import { EligibilityWorkDrawer } from "./eligibility-work-drawer";
 import { getEligibilityQueueData } from "./repository";
-
 type EligibilityRow = Awaited<ReturnType<typeof getEligibilityQueueData>>[number];
-
 export function EligibilityPage() {
-  const [rows, setRows] = useState<EligibilityRow[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [runningId, setRunningId] = useState<string | null>(null);
-  const [attentionOnly, setAttentionOnly] = useState(false);
-
-  async function load() {
-    setLoading(true);
-    setError(null);
-    try {
-      setRows(await getEligibilityQueueData());
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Unable to load eligibility queue.");
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  useEffect(() => {
-    void load();
-  }, []);
-
-  const visible = useMemo(
-    () => (attentionOnly ? rows.filter((row) => row.needsAttention) : rows),
-    [rows, attentionOnly],
-  );
-  const attentionCount = rows.filter((row) => row.needsAttention).length;
-
-  async function run(row: EligibilityRow) {
-    if (!row.policyId || !row.payerId || !row.memberId) return;
-    setRunningId(row.id);
-    setError(null);
-    try {
-      await runPatientEligibility({
-        patientId: row.patientId,
-        policyId: row.policyId,
-        payerId: row.payerId,
-        memberId: row.memberId,
-        serviceDate: new Date().toISOString().slice(0, 10),
-      });
-      await load();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Unable to run eligibility.");
-    } finally {
-      setRunningId(null);
-    }
-  }
-
-  return (
-    <>
-      <div className="thera-page-header split">
-        <div>
-          <div className="thera-eyebrow">PAYER READINESS</div>
-          <h1>Eligibility</h1>
-          <p>Operational coverage queue using each patient&apos;s active primary policy and latest 270/271 result.</p>
-        </div>
-        <button
-          type="button"
-          className={attentionOnly ? "thera-action" : "thera-action secondary"}
-          onClick={() => setAttentionOnly((value) => !value)}
-        >
-          {attentionOnly ? "Show All" : `Needs Attention (${attentionCount})`}
-        </button>
-      </div>
-
-      {error && <div className="thera-state error" style={{ marginBottom: 12 }}>{error}</div>}
-      {loading ? <div className="thera-state">Loading eligibility queue...</div> : (
-        <section className="thera-card">
-          <div className="thera-table-wrap">
-            <table className="thera-table">
-              <thead>
-                <tr><th>Patient</th><th>Payer</th><th>Member ID</th><th>Latest DOS</th><th>Status</th><th>Actions</th></tr>
-              </thead>
-              <tbody>
-                {visible.map((row) => (
-                  <tr key={row.id}>
-                    <td><Link className="thera-table-link" href={`/clients/${row.patientId}`}>{row.patientName}</Link></td>
-                    <td>{row.payerName}</td>
-                    <td>{row.memberId || "—"}</td>
-                    <td>{row.serviceDate ? shortDate(row.serviceDate) : "—"}</td>
-                    <td><StatusBadge value={row.status} /></td>
-                    <td>
-                      <div className="thera-filter-row">
-                        <button
-                          type="button"
-                          className="thera-action secondary"
-                          disabled={!row.policyId || !row.payerId || !row.memberId || runningId === row.id}
-                          onClick={() => void run(row)}
-                        >
-                          {runningId === row.id ? "Checking..." : "Run Eligibility"}
-                        </button>
-                        <Link className="thera-link" href={`/clients/${row.patientId}`}>Patient Chart</Link>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-                {visible.length === 0 && <tr><td colSpan={6}><div className="thera-empty">No eligibility records match this view.</div></td></tr>}
-              </tbody>
-            </table>
-          </div>
-        </section>
-      )}
-    </>
-  );
+  const [rows, setRows] = useState<EligibilityRow[]>([]); const [loading, setLoading] = useState(true); const [error, setError] = useState<string | null>(null); const [runningId, setRunningId] = useState<string | null>(null); const [attentionOnly, setAttentionOnly] = useState(false); const [activeId, setActiveId] = useState<string | null>(null);
+  async function load() { setLoading(true); setError(null); try { setRows(await getEligibilityQueueData()); } catch (err) { setError(err instanceof Error ? err.message : "Unable to load eligibility queue."); } finally { setLoading(false); } }
+  useEffect(() => { void load(); }, []);
+  const visible = useMemo(() => attentionOnly ? rows.filter((row) => row.needsAttention) : rows, [rows, attentionOnly]); const attentionCount = rows.filter((row) => row.needsAttention).length; const active = rows.find((row) => row.id === activeId) ?? null;
+  async function run(row: EligibilityRow) { if (!row.policyId || !row.payerId || !row.memberId) return; setRunningId(row.id); setError(null); try { await runPatientEligibility({ patientId: row.patientId, policyId: row.policyId, payerId: row.payerId, memberId: row.memberId, serviceDate: new Date().toISOString().slice(0, 10) }); await load(); } catch (err) { setError(err instanceof Error ? err.message : "Unable to run eligibility."); } finally { setRunningId(null); } }
+  return <><div className="thera-page-header split"><div><div className="thera-eyebrow">PAYER READINESS</div><h1>Eligibility</h1><p>Operational coverage queue using each patient&apos;s active primary policy and latest 270/271 result.</p></div><button type="button" className={attentionOnly ? "thera-action" : "thera-action secondary"} onClick={() => setAttentionOnly((value) => !value)}>{attentionOnly ? "Show All" : `Needs Attention (${attentionCount})`}</button></div>{error && <div className="thera-state error" style={{ marginBottom: 12 }}>{error}</div>}{loading ? <div className="thera-state">Loading eligibility queue...</div> : <section className="thera-card"><div className="thera-table-wrap"><table className="thera-table"><thead><tr><th>Patient</th><th>Payer</th><th>Member ID</th><th>Latest DOS</th><th>Status</th><th>Actions</th></tr></thead><tbody>{visible.map((row) => <tr key={row.id}><td>{row.patientName}</td><td>{row.payerName}</td><td>{row.memberId || "—"}</td><td>{row.serviceDate ? shortDate(row.serviceDate) : "—"}</td><td><StatusBadge value={row.status} /></td><td><button type="button" className="thera-action" onClick={() => setActiveId(row.id)}>Work</button></td></tr>)}{visible.length === 0 && <tr><td colSpan={6}><div className="thera-empty">No eligibility records match this view.</div></td></tr>}</tbody></table></div></section>}<EligibilityWorkDrawer record={active} open={Boolean(activeId)} running={runningId === activeId} onOpenChange={(open) => !open && setActiveId(null)} onRun={() => active && void run(active)} /></>;
 }
