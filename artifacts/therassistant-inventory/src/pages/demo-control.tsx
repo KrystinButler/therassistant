@@ -22,10 +22,11 @@ const workflowLinks = [
   ["Clinical", "/clinical"],
   ["Eligibility", "/eligibility"],
   ["Authorizations", "/authorizations"],
-  ["Billing Queue", "/billing"],
-  ["Claim Submission / 837P", "/claims/submission"],
-  ["Payments / ERA", "/payments"],
-  ["Work Center", "/work-center"],
+  ["Charges", "/billing/charges"],
+  ["Rejections", "/rejections"],
+  ["Claims", "/claims"],
+  ["Denials", "/denials"],
+  ["Payments", "/payments"],
 ] as const;
 
 export function DemoControlCenter() {
@@ -39,10 +40,10 @@ export function DemoControlCenter() {
           <h1>Therassistant Phase 1 Demo</h1>
           <p>
             Follow connected synthetic records from scheduling and clinical documentation through billing,
-            837P submission, payer response, payment posting, denials, and operational exception work.
+            claim submission, payer response, payment posting, denials, and operational exception work.
           </p>
         </div>
-        <Link href="/" className="thera-action secondary">Command Center</Link>
+        <Link href="/" className="thera-action secondary">Overview</Link>
       </div>
 
       {error && <div className="thera-state error" style={{ marginBottom: 12 }}>{error}</div>}
@@ -59,8 +60,8 @@ export function DemoControlCenter() {
       <section className="thera-card thera-section-gap">
         <div className="thera-card-header">
           <div>
-            <h2>Canonical Workflow</h2>
-            <p>Open each operational workspace directly. These are the Phase 1 paths covered by the workflow tests.</p>
+            <h2>Canonical Paths</h2>
+            <p>Open each reference page or canonical workqueue directly. These are the Phase 1 paths covered by the workflow tests.</p>
           </div>
         </div>
         <div className="thera-filter-row">
