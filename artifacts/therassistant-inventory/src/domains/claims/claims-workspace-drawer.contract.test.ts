@@ -3,20 +3,20 @@ import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 
 const here = dirname(fileURLToPath(import.meta.url));
-const source = readFileSync(join(here, "ClaimsWorkspacePage.tsx"), "utf8");
+const source = readFileSync(join(here, "ClaimsPage.tsx"), "utf8");
 
 function expectSource(fragment: string) {
   if (!source.includes(fragment)) {
-    throw new Error(`ClaimsWorkspacePage is missing drawer integration fragment: ${fragment}`);
+    throw new Error(`ClaimsPage is missing drawer integration fragment: ${fragment}`);
   }
 }
 
 expectSource('import { ClaimWorkDrawer');
 expectSource('const [activeClaimId, setActiveClaimId]');
-expectSource('onOpenClaim={openClaim}');
 expectSource('<ClaimWorkDrawer');
-expectSource('queuePosition={`${activeClaimIndex + 1} of ${filtered.length}`}');
-expectSource('onPrevious={() => moveActiveClaim(-1)}');
-expectSource('onNext={() => moveActiveClaim(1)}');
+expectSource('mode="claims"');
+expectSource('queuePosition={activeItem ? `${activeIndex + 1} of ${visible.length}`');
+expectSource('onPrevious={() => openAt(activeIndex - 1)}');
+expectSource('onNext={() => openAt(activeIndex + 1)}');
 
-console.log("claims workspace drawer integration contract passed");
+console.log("claims workqueue drawer integration contract passed");
