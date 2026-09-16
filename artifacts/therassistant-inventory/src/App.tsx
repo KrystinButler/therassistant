@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { Route, Switch, useLocation } from "wouter";
+import { Route, Switch, useLocation, useRoute } from "wouter";
 
 import InventoryApp from "./InventoryApp";
 import { AppShell } from "./components/app-shell";
@@ -22,7 +22,6 @@ import { PatientCheckInPage } from "./domains/portal/PatientCheckInPage";
 import { PatientJournalPage } from "./domains/portal/PatientJournalPage";
 import { PatientPortalPage } from "./domains/portal/PatientPortalPage";
 import { SchedulePage } from "./domains/scheduling/SchedulePage";
-import { PreSessionPage } from "./domains/scheduling/PreSessionPage";
 import { AdministrationPage } from "./pages/administration";
 import { ClientsPage } from "./pages/clients";
 import { DashboardPage } from "./pages/dashboard";
@@ -43,6 +42,11 @@ function Redirect({ to }: { to: string }) {
   const [, navigate] = useLocation();
   useEffect(() => navigate(to, { replace: true }), [navigate, to]);
   return <div className="thera-state">Redirecting...</div>;
+}
+
+function ScheduleAppointmentRedirect() {
+  const [, params] = useRoute<{ id: string }>("/schedule/:id");
+  return <Redirect to={`/schedule?appointment=${encodeURIComponent(params?.id ?? "")}`} />;
 }
 
 export default function App() {
@@ -69,7 +73,7 @@ export default function App() {
         <Route path="/ar-denials"><Redirect to="/denials" /></Route>
         <Route path="/work-center"><Redirect to="/claims" /></Route>
         <Route path="/charges"><Redirect to="/billing/charges" /></Route>
-        <Route path="/schedule/:id"><PreSessionPage /></Route>
+        <Route path="/schedule/:id"><ScheduleAppointmentRedirect /></Route>
         <Route path="/encounters/:id"><EncounterPage /></Route>
         <Route path="/clients/:id"><PatientChartPage /></Route>
         <Route path="/claims/:id"><Claim360Page /></Route>
