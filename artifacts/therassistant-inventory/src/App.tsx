@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { Route, Switch, useLocation } from "wouter";
+import { Route, Switch, useLocation, useRoute } from "wouter";
 
 import InventoryApp from "./InventoryApp";
 import { AppShell } from "./components/app-shell";
@@ -43,6 +43,11 @@ function Redirect({ to }: { to: string }) {
   return <div className="thera-state">Redirecting...</div>;
 }
 
+function ScheduleAppointmentRedirect() {
+  const [, params] = useRoute<{ id: string }>("/schedule/:id");
+  return <Redirect to={`/schedule?appointment=${encodeURIComponent(params?.id ?? "")}`} />;
+}
+
 export default function App() {
   const [location] = useLocation();
 
@@ -66,6 +71,7 @@ export default function App() {
         <Route path="/ar-denials"><Redirect to="/denials" /></Route>
         <Route path="/work-center"><Redirect to="/claims" /></Route>
         <Route path="/charges"><Redirect to="/billing/charges" /></Route>
+        <Route path="/schedule/:id"><ScheduleAppointmentRedirect /></Route>
         <Route path="/encounters/:id"><EncounterPage /></Route>
         <Route path="/clients/:id"><PatientChartPage /></Route>
         <Route path="/claims/:id"><Claim360Page /></Route>
