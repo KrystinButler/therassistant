@@ -52,11 +52,8 @@ test("latest rejected response makes submitted or batched claims retryable", () 
   assert.equal(isRetryableRejection("batched", "rejected"), true);
   assert.equal(isRetryableRejection("submitted", "accepted"), false);
   assert.equal(isRetryableRejection("accepted", "rejected"), false);
-  assert.match(rejectionsPageSource, /row\.clearinghouseStatus === "rejected"/);
-  assert.doesNotMatch(
-    rejectionsPageSource,
-    /\.filter\(\(row\) => row\.claim_status === "rejected"\)/,
-  );
+  assert.match(rejectionsPageSource, /latestResponseStatus:\s*row\.clearinghouseStatus/);
+  assert.match(rejectionsPageSource, /getOperationalHome/);
   assert.match(claimsWorkspaceRepositorySource, /submission_responses/);
   assert.match(claimsWorkspaceRepositorySource, /isRetryableRejection/);
 });
