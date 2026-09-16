@@ -8,6 +8,7 @@ import { BillingHubPage } from "./domains/billing/BillingHubPage";
 import { BillingQueuePage } from "./domains/billing/BillingQueuePage";
 import { Claim360Page } from "./domains/claims/Claim360Page";
 import { ClaimsWorkspacePage } from "./domains/claims/ClaimsWorkspacePage";
+import { RejectionsPage } from "./domains/claims/RejectionsPage";
 import { CredentialingPage } from "./domains/credentialing/CredentialingPage";
 import { PayersContractsPage } from "./domains/credentialing/PayersContractsPage";
 import { EncounterPage } from "./domains/encounters/EncounterPage";
@@ -62,7 +63,7 @@ export default function App() {
         <Route path="/payers/:id"><PayerDetailPage /></Route>
         <Route path="/mailroom/:id"><CorrespondencePage /></Route>
         <Route path="/billing/charges"><BillingQueuePage /></Route>
-        <Route path="/rejections"><ClaimsWorkspacePage /></Route>
+        <Route path="/rejections"><RejectionsPage /></Route>
         <Route path="/denials"><ArWorkspacePage /></Route>
         <Route path="/clients"><ClientsPage /></Route>
         <Route path="/providers"><ProvidersPage /></Route>
