@@ -20,6 +20,25 @@ test("operational ownership routes each claim state to one canonical area", () =
   assert.equal(getOperationalHome({ claimStatus: "paid", hasActiveDenial: false, openBalanceCents: 0 }), "payments");
 });
 
+test("latest clearinghouse rejection overrides Charges or Claims but never an active denial", () => {
+  assert.equal(
+    getOperationalHome({ claimStatus: "submitted", latestResponseStatus: "rejected", hasActiveDenial: false, openBalanceCents: 10000 }),
+    "rejections",
+  );
+  assert.equal(
+    getOperationalHome({ claimStatus: "batched", latestResponseStatus: "rejected", hasActiveDenial: false, openBalanceCents: 10000 }),
+    "rejections",
+  );
+  assert.equal(
+    getOperationalHome({ claimStatus: "submitted", latestResponseStatus: "rejected", hasActiveDenial: true, openBalanceCents: 10000 }),
+    "denials",
+  );
+  assert.equal(
+    getOperationalHome({ claimStatus: "accepted", latestResponseStatus: "accepted", hasActiveDenial: false, openBalanceCents: 10000 }),
+    "claims",
+  );
+});
+
 test("Claims tabs are mutually exclusive with deferred and no-response precedence", () => {
   assert.equal(getClaimsTab({ deferred: true, submittedAt: "2026-06-01", serviceDate: "2026-05-30", hasPayerResponse: false }, today), "deferred");
   assert.equal(getClaimsTab({ deferred: false, submittedAt: "2026-09-10", serviceDate: "2026-09-01", hasPayerResponse: false }, today), "no_response");
