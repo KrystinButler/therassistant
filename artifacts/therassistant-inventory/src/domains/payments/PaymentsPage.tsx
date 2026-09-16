@@ -13,11 +13,14 @@ import {
   type RecoveryWorkspaceRow,
   type VarianceWorkspaceRow,
 } from "../ar/repository";
+import { allocateExistingPayment } from "./payment-allocation";
 import {
+  AllocatePaymentDrawer,
   PaymentDetailDrawer,
   PostPaymentDrawer,
   ReversePaymentDrawer,
   type PaymentForm,
+  type PaymentRow,
 } from "./payment-work-drawers";
 import {
   createDenialFromAdjudication,
@@ -30,7 +33,6 @@ import {
 type Data = Awaited<ReturnType<typeof getPaymentsWorkspaceData>>;
 type ExceptionData = Awaited<ReturnType<typeof getArWorkspaceData>>;
 type Tab = "insurance" | "patient" | "era" | "unapplied" | "adjustments" | "underpayments" | "recovery";
-type PaymentRow = Data["payments"][number];
 
 const toCents = (value: string) => Math.round(Number(value || 0) * 100);
 
@@ -44,6 +46,7 @@ export function PaymentsPage() {
   const [message, setMessage] = useState<string | null>(null);
   const [posting, setPosting] = useState(false);
   const [paymentDetail, setPaymentDetail] = useState<PaymentRow | null>(null);
+  const [allocating, setAllocating] = useState<PaymentRow | null>(null);
   const [reversing, setReversing] = useState<PaymentRow | null>(null);
   const [varianceWork, setVarianceWork] = useState<VarianceWorkspaceRow | null>(null);
   const [recoveryWork, setRecoveryWork] = useState<RecoveryWorkspaceRow | null>(null);
@@ -85,6 +88,25 @@ export function PaymentsPage() {
     () => (data?.payments ?? []).filter((payment) => payment.payment_source === "patient"),
     [data],
   );
+  const paymentQueue = tab === "insurance"
+    ? insurancePayments
+    : tab === "patient"
+      ? patientPayments
+      : tab === "unapplied"
+        ? unappliedPayments
+        : [];
+  const paymentDetailIndex = paymentDetail ? paymentQueue.findIndex((row) => row.id === paymentDetail.id) : -1;
+
+  function selectTab(nextTab: Tab) {
+    setTab(nextTab);
+    setPaymentDetail(null);
+    setAllocating(null);
+  }
+
+  function openPaymentAt(index: number) {
+    const row = paymentQueue[index];
+    if (row) setPaymentDetail(row);
+  }
 
   async function runPaidEra(claimId: string, totalChargeCents: number) {
     const paidAmountCents = Math.round(totalChargeCents * 0.8);
@@ -169,6 +191,23 @@ export function PaymentsPage() {
     }
   }
 
+  async function runAllocate(row: PaymentRow, claimId: string, amount: string) {
+    setSavingId(`allocate-${row.id}`);
+    setError(null);
+    setMessage(null);
+    try {
+      const result = await allocateExistingPayment(row.id, claimId, toCents(amount));
+      setMessage(`Applied ${money(result.amountCents)}. ${money(result.unappliedCents)} remains unapplied.`);
+      setAllocating(null);
+      setPaymentDetail(null);
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to allocate payment.");
+    } finally {
+      setSavingId(null);
+    }
+  }
+
   async function runReverse(row: PaymentRow, reason: string) {
     setSavingId(row.id);
     setError(null);
@@ -213,13 +252,13 @@ export function PaymentsPage() {
     </div>
 
     <div className="thera-tabs" style={{ marginBottom: 16 }}>
-      <TabButton active={tab === "insurance"} onClick={() => setTab("insurance")} label={`Insurance Payments (${insurancePayments.length})`} />
-      <TabButton active={tab === "patient"} onClick={() => setTab("patient")} label={`Patient Payments (${patientPayments.length})`} />
-      <TabButton active={tab === "era"} onClick={() => setTab("era")} label={`ERA / 835 (${data?.eraFiles.length ?? 0})`} />
-      <TabButton active={tab === "unapplied"} onClick={() => setTab("unapplied")} label={`Unapplied (${unappliedPayments.length})`} />
-      <TabButton active={tab === "adjustments"} onClick={() => setTab("adjustments")} label={`Adjustments / Reversals (${(data?.adjustments.length ?? 0) + (data?.reversals.length ?? 0)})`} />
-      <TabButton active={tab === "underpayments"} onClick={() => setTab("underpayments")} label={`Underpayments (${exceptionData?.variances.length ?? 0})`} />
-      <TabButton active={tab === "recovery"} onClick={() => setTab("recovery")} label={`Recoupments / Refunds (${exceptionData?.recovery.length ?? 0})`} />
+      <TabButton active={tab === "insurance"} onClick={() => selectTab("insurance")} label={`Insurance Payments (${insurancePayments.length})`} />
+      <TabButton active={tab === "patient"} onClick={() => selectTab("patient")} label={`Patient Payments (${patientPayments.length})`} />
+      <TabButton active={tab === "era"} onClick={() => selectTab("era")} label={`ERA / 835 (${data?.eraFiles.length ?? 0})`} />
+      <TabButton active={tab === "unapplied"} onClick={() => selectTab("unapplied")} label={`Unapplied (${unappliedPayments.length})`} />
+      <TabButton active={tab === "adjustments"} onClick={() => selectTab("adjustments")} label={`Adjustments / Reversals (${(data?.adjustments.length ?? 0) + (data?.reversals.length ?? 0)})`} />
+      <TabButton active={tab === "underpayments"} onClick={() => selectTab("underpayments")} label={`Underpayments (${exceptionData?.variances.length ?? 0})`} />
+      <TabButton active={tab === "recovery"} onClick={() => selectTab("recovery")} label={`Recoupments / Refunds (${exceptionData?.recovery.length ?? 0})`} />
     </div>
 
     {error && <div className="thera-state error" style={{ marginBottom: 12 }}>{error}</div>}
@@ -235,7 +274,20 @@ export function PaymentsPage() {
     {!loading && exceptionData && tab === "recovery" && <RecoveryTable rows={exceptionData.recovery} onOpen={setRecoveryWork} />}
 
     {data && <PostPaymentDrawer open={posting} onOpenChange={setPosting} data={data} saving={savingId === "new-payment"} onSave={saveManual} />}
-    {data && <PaymentDetailDrawer open={Boolean(paymentDetail)} onOpenChange={(open) => { if (!open) setPaymentDetail(null); }} row={paymentDetail} data={data} onReverse={(row) => { setReversing(row); setPaymentDetail(null); }} />}
+    {data && <PaymentDetailDrawer
+      open={Boolean(paymentDetail)}
+      onOpenChange={(open) => { if (!open) setPaymentDetail(null); }}
+      row={paymentDetail}
+      data={data}
+      onAllocate={(row) => { setAllocating(row); setPaymentDetail(null); }}
+      onReverse={(row) => { setReversing(row); setPaymentDetail(null); }}
+      queuePosition={paymentDetailIndex >= 0 ? `${paymentDetailIndex + 1} of ${paymentQueue.length}` : undefined}
+      onPrevious={() => openPaymentAt(paymentDetailIndex - 1)}
+      onNext={() => openPaymentAt(paymentDetailIndex + 1)}
+      previousDisabled={paymentDetailIndex <= 0}
+      nextDisabled={paymentDetailIndex < 0 || paymentDetailIndex >= paymentQueue.length - 1}
+    />}
+    {data && <AllocatePaymentDrawer open={Boolean(allocating)} onOpenChange={(open) => { if (!open) setAllocating(null); }} row={allocating} data={data} saving={Boolean(allocating && savingId === `allocate-${allocating.id}`)} onSave={runAllocate} />}
     <ReversePaymentDrawer open={Boolean(reversing)} onOpenChange={(open) => { if (!open) setReversing(null); }} row={reversing} saving={Boolean(reversing && savingId === reversing.id)} onSave={runReverse} />
     <UnderpaymentReviewDrawer
       open={Boolean(varianceWork)}
