@@ -1,0 +1,15 @@
+export const SETTINGS_ROUTE_CONFIG = [
+  ["/settings/practice", "practice"],
+  ["/settings/logo", "logo"],
+  ["/settings/patient-records", "patient-records"],
+  ["/settings/client-portal", "client-portal"],
+  ["/settings/service-codes", "service-codes"],
+  ["/settings/diagnosis-codes", "diagnosis-codes"],
+  ["/settings/interventions", "interventions"],
+  ["/settings/practice-billing", "practice-billing"],
+  ["/settings/patient-billing", "patient-billing"],
+  ["/settings/payment-processing", "payment-processing"],
+  ["/settings/staff", "staff"],
+  ["/settings/activity-log", "activity-log"],
+  ["/settings/password", "password"],
+] as const;
