@@ -1,37 +1,695 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 import { WorkDrawer } from "../../components/work-drawer";
 import { StatusBadge } from "../../components/status-badge";
 import { dateTime } from "../../lib/format";
+import { startEncounter } from "../encounters/repository";
+import { PatientReviewDrawer } from "./PatientReviewDrawer";
 import { updateAppointment } from "./appointment-edit";
-import { createAppointment, getScheduleData, updateAppointmentStatus, type ScheduleAppointment, type ScheduleData } from "./repository";
+import {
+  createAppointment,
+  getScheduleData,
+  updateAppointmentStatus,
+  type ScheduleAppointment,
+  type ScheduleData,
+} from "./repository";
+import "./schedule-workspace.css";
 
 type ViewMode = "day" | "week" | "month";
-type FormState = { clientId: string; providerId: string; date: string; time: string; durationMinutes: number; locationType: "in_person" | "telehealth" | "phone" | "community" | "home" | "school" | "other"; serviceType: string; cptCode: string };
-const initialForm: FormState = { clientId: "", providerId: "", date: "", time: "09:00", durationMinutes: 60, locationType: "telehealth", serviceType: "Individual Therapy", cptCode: "90837" };
-function personName(row: Record<string, unknown>) { return [row.first_name, row.last_name].filter(Boolean).join(" ") || "Unnamed"; }
-function startOfWeek(date: Date) { const value = new Date(date); value.setHours(0, 0, 0, 0); value.setDate(value.getDate() - value.getDay()); return value; }
-function inView(dateText: string, anchor: Date, view: ViewMode) { const value = new Date(dateText); if (Number.isNaN(value.getTime())) return false; if (view === "day") return value.toDateString() === anchor.toDateString(); if (view === "week") { const start = startOfWeek(anchor); const end = new Date(start); end.setDate(end.getDate() + 7); return value >= start && value < end; } return value.getFullYear() === anchor.getFullYear() && value.getMonth() === anchor.getMonth(); }
-function rangeLabel(anchor: Date, view: ViewMode) { if (view === "day") return anchor.toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric", year: "numeric" }); if (view === "week") { const start = startOfWeek(anchor); const end = new Date(start); end.setDate(end.getDate() + 6); return `${start.toLocaleDateString(undefined, { month: "short", day: "numeric" })} – ${end.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })}`; } return anchor.toLocaleDateString(undefined, { month: "long", year: "numeric" }); }
-function formFrom(appointment: ScheduleAppointment): FormState { const start = new Date(appointment.startsAt); const end = new Date(appointment.endsAt); const pad = (n: number) => String(n).padStart(2, "0"); return { clientId: appointment.clientId, providerId: appointment.providerId ?? "", date: `${start.getFullYear()}-${pad(start.getMonth() + 1)}-${pad(start.getDate())}`, time: `${pad(start.getHours())}:${pad(start.getMinutes())}`, durationMinutes: Math.max(15, Math.round((end.getTime() - start.getTime()) / 60000)), locationType: appointment.locationType as FormState["locationType"], serviceType: appointment.serviceType, cptCode: appointment.cptCode }; }
+type FormState = {
+  clientId: string;
+  providerId: string;
+  date: string;
+  time: string;
+  durationMinutes: number;
+  locationType:
+    | "in_person"
+    | "telehealth"
+    | "phone"
+    | "community"
+    | "home"
+    | "school"
+    | "other";
+  serviceType: string;
+  cptCode: string;
+};
+
+const initialForm: FormState = {
+  clientId: "",
+  providerId: "",
+  date: "",
+  time: "09:00",
+  durationMinutes: 60,
+  locationType: "telehealth",
+  serviceType: "Individual Therapy",
+  cptCode: "90837",
+};
+
+function personName(row: Record<string, unknown>) {
+  return [row.first_name, row.last_name].filter(Boolean).join(" ") || "Unnamed";
+}
+
+function startOfWeek(date: Date) {
+  const value = new Date(date);
+  value.setHours(0, 0, 0, 0);
+  value.setDate(value.getDate() - value.getDay());
+  return value;
+}
+
+function inView(dateText: string, anchor: Date, view: ViewMode) {
+  const value = new Date(dateText);
+  if (Number.isNaN(value.getTime())) return false;
+  if (view === "day") return value.toDateString() === anchor.toDateString();
+  if (view === "week") {
+    const start = startOfWeek(anchor);
+    const end = new Date(start);
+    end.setDate(end.getDate() + 7);
+    return value >= start && value < end;
+  }
+  return (
+    value.getFullYear() === anchor.getFullYear() &&
+    value.getMonth() === anchor.getMonth()
+  );
+}
+
+function rangeLabel(anchor: Date, view: ViewMode) {
+  if (view === "day") {
+    return anchor.toLocaleDateString(undefined, {
+      weekday: "long",
+      month: "long",
+      day: "numeric",
+      year: "numeric",
+    });
+  }
+  if (view === "week") {
+    const start = startOfWeek(anchor);
+    const end = new Date(start);
+    end.setDate(end.getDate() + 6);
+    return `${start.toLocaleDateString(undefined, {
+      month: "short",
+      day: "numeric",
+    })} – ${end.toLocaleDateString(undefined, {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+    })}`;
+  }
+  return anchor.toLocaleDateString(undefined, { month: "long", year: "numeric" });
+}
+
+function formFrom(appointment: ScheduleAppointment): FormState {
+  const start = new Date(appointment.startsAt);
+  const end = new Date(appointment.endsAt);
+  const pad = (number: number) => String(number).padStart(2, "0");
+  return {
+    clientId: appointment.clientId,
+    providerId: appointment.providerId ?? "",
+    date: `${start.getFullYear()}-${pad(start.getMonth() + 1)}-${pad(start.getDate())}`,
+    time: `${pad(start.getHours())}:${pad(start.getMinutes())}`,
+    durationMinutes: Math.max(
+      15,
+      Math.round((end.getTime() - start.getTime()) / 60_000),
+    ),
+    locationType: appointment.locationType as FormState["locationType"],
+    serviceType: appointment.serviceType,
+    cptCode: appointment.cptCode,
+  };
+}
+
+function timeOnly(value: string) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return new Intl.DateTimeFormat("en-US", {
+    hour: "numeric",
+    minute: "2-digit",
+  }).format(date);
+}
+
+function effectiveCheckInStatus(appointment: ScheduleAppointment) {
+  if (["checked_in", "in_session"].includes(appointment.appointmentStatus)) {
+    return "Ready";
+  }
+  return appointment.patientReview.checkInStatus;
+}
 
 export function SchedulePage() {
-  const [data, setData] = useState<ScheduleData | null>(null); const [loading, setLoading] = useState(true); const [error, setError] = useState<string | null>(null); const [view, setView] = useState<ViewMode>("week"); const [anchor, setAnchor] = useState(() => new Date()); const [providerFilter, setProviderFilter] = useState(""); const [statusFilter, setStatusFilter] = useState(""); const [form, setForm] = useState<FormState | null>(null); const [baseline, setBaseline] = useState<FormState | null>(null); const [editingId, setEditingId] = useState<string | null>(null); const [saving, setSaving] = useState(false);
-  async function load() { setLoading(true); setError(null); try { setData(await getScheduleData()); } catch (err) { setError(err instanceof Error ? err.message : "Unable to load schedule."); } finally { setLoading(false); } }
-  useEffect(() => { void load(); }, []);
-  const visible = useMemo(() => data ? data.appointments.filter((appointment) => inView(appointment.startsAt, anchor, view) && (!providerFilter || appointment.providerId === providerFilter) && (!statusFilter || appointment.appointmentStatus === statusFilter)) : [], [data, anchor, view, providerFilter, statusFilter]);
-  const dirty = useMemo(() => Boolean(form && baseline && JSON.stringify(form) !== JSON.stringify(baseline)), [form, baseline]);
-  function move(direction: -1 | 1) { setAnchor((current) => { const next = new Date(current); if (view === "day") next.setDate(next.getDate() + direction); if (view === "week") next.setDate(next.getDate() + direction * 7); if (view === "month") next.setMonth(next.getMonth() + direction); return next; }); }
-  function openNew() { const next = { ...initialForm }; setEditingId(null); setForm(next); setBaseline({ ...next }); }
-  function openEdit(appointment: ScheduleAppointment) { const next = formFrom(appointment); setEditingId(appointment.id); setForm(next); setBaseline({ ...next }); }
-  function closeDrawer() { setForm(null); setBaseline(null); setEditingId(null); }
-  async function changeStatus(id: string, status: string) { try { await updateAppointmentStatus(id, status); await load(); } catch (err) { setError(err instanceof Error ? err.message : "Unable to update appointment."); } }
-  async function saveAppointment() { if (!form) return; setSaving(true); setError(null); try { if (editingId) await updateAppointment(editingId, form); else await createAppointment(form); closeDrawer(); await load(); } catch (err) { setError(err instanceof Error ? err.message : "Unable to save appointment."); } finally { setSaving(false); } }
-  return <>
-    <div className="thera-page-header split"><div><div className="thera-eyebrow">CLINICAL OPERATIONS</div><h1>Schedule</h1><p>Appointments connected to patient coverage, authorization, provider participation, and encounter readiness.</p></div><button type="button" className="thera-action" onClick={openNew}>+ New Appointment</button></div>
-    <section className="thera-card" style={{ marginBottom: 16 }}><div className="thera-card-header"><div><h2>{rangeLabel(anchor, view)}</h2><p>{visible.length} appointment{visible.length === 1 ? "" : "s"} in this view</p></div><div className="thera-filter-row"><button type="button" className="thera-action secondary" onClick={() => move(-1)}>Previous</button><button type="button" className="thera-action secondary" onClick={() => setAnchor(new Date())}>Today</button><button type="button" className="thera-action secondary" onClick={() => move(1)}>Next</button></div></div><div className="thera-filter-row" style={{ marginBottom: 12 }}>{(["day", "week", "month"] as ViewMode[]).map((mode) => <button key={mode} type="button" className={view === mode ? "thera-action" : "thera-action secondary"} onClick={() => setView(mode)}>{mode[0].toUpperCase() + mode.slice(1)}</button>)}<select className="thera-input" value={providerFilter} onChange={(e) => setProviderFilter(e.target.value)}><option value="">All providers</option>{(data?.providers ?? []).map((provider) => <option key={provider.id} value={provider.id}>{personName(provider)}</option>)}</select><select className="thera-input" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}><option value="">All statuses</option>{["scheduled", "confirmed", "client_arrived", "checked_in", "in_session", "completed", "cancelled", "no_show", "late_cancel", "rescheduled"].map((status) => <option key={status} value={status}>{status.replaceAll("_", " ")}</option>)}</select></div></section>
-    {error && <div className="thera-state error" style={{ marginBottom: 12 }}>{error}</div>}{loading && <div className="thera-state">Loading schedule...</div>}
-    {!loading && data && <section className="thera-card">{visible.length === 0 ? <div className="thera-empty">No appointments in this view. Use New Appointment to schedule one.</div> : <div className="thera-table-wrap"><table className="thera-table"><thead><tr><th>Date / Time</th><th>Patient</th><th>Provider</th><th>Service</th><th>Payer</th><th>Readiness</th><th>Status</th><th>Actions</th></tr></thead><tbody>{visible.map((appointment) => <tr key={appointment.id}><td>{dateTime(appointment.startsAt)}</td><td><Link className="thera-table-link" href={`/clients/${appointment.clientId}`}>{appointment.clientName}</Link><div className="thera-table-subtext">Registration: {appointment.registrationStatus.replaceAll("_", " ")}</div></td><td>{appointment.providerName}</td><td>{appointment.serviceType || "—"}<div className="thera-table-subtext">{appointment.cptCode || "No CPT"} · {appointment.locationType.replaceAll("_", " ")}</div></td><td>{appointment.payerName}<div className="thera-table-subtext">{appointment.planName}</div></td><td><StatusBadge value={appointment.readiness.ready ? "ready" : "blocked"} />{!appointment.readiness.ready && <div className="thera-table-subtext">{appointment.readiness.checks.filter((check) => check.blocking).length} blocking issue(s)</div>}</td><td><StatusBadge value={appointment.appointmentStatus} /></td><td><div className="thera-filter-row"><button type="button" className="thera-action secondary" onClick={() => openEdit(appointment)}>Edit</button><Link className="thera-action secondary" href={`/schedule/${appointment.id}`}>Pre-Session</Link>{appointment.appointmentStatus === "scheduled" && <button type="button" className="thera-action secondary" onClick={() => void changeStatus(appointment.id, "confirmed")}>Confirm</button>}{["scheduled", "confirmed", "client_arrived"].includes(appointment.appointmentStatus) && <button type="button" className="thera-action secondary" onClick={() => void changeStatus(appointment.id, "checked_in")}>Check In</button>}{!["completed", "cancelled", "no_show", "late_cancel"].includes(appointment.appointmentStatus) && <button type="button" className="thera-action secondary" onClick={() => void changeStatus(appointment.id, "no_show")}>No Show</button>}{!["completed", "cancelled", "no_show"].includes(appointment.appointmentStatus) && <button type="button" className="thera-action secondary" onClick={() => void changeStatus(appointment.id, "cancelled")}>Cancel</button>}</div></td></tr>)}</tbody></table></div>}</section>}
-    {form && data && <WorkDrawer open={Boolean(form)} onOpenChange={(open) => { if (!open) closeDrawer(); }} dirty={dirty} title={editingId ? "Edit Appointment" : "New Appointment"} subtitle={editingId ? `${data.appointments.find((row) => row.id === editingId)?.clientName ?? "Patient"} · ${data.appointments.find((row) => row.id === editingId)?.providerName ?? "Provider"}` : "Schedule by patient and provider name"} openFullRecord={editingId ? () => { window.location.href = `/schedule/${editingId}`; } : undefined} openFullRecordLabel="Open Pre-Session Record" footer={<div className="thera-filter-row" style={{ justifyContent: "space-between" }}><button type="button" className="thera-action secondary" onClick={closeDrawer}>Cancel</button><button type="button" className="thera-action" disabled={saving || !form.clientId || !form.providerId || !form.date || !form.time} onClick={() => void saveAppointment()}>{saving ? "Saving..." : editingId ? "Save Appointment" : "Schedule Appointment"}</button></div>}><div className="thera-form-grid"><label>Patient<select className="thera-input" value={form.clientId} onChange={(e) => setForm({ ...form, clientId: e.target.value })}><option value="">Select patient</option>{data.clients.map((client) => <option key={client.id} value={client.id}>{personName(client)}</option>)}</select></label><label>Provider<select className="thera-input" value={form.providerId} onChange={(e) => setForm({ ...form, providerId: e.target.value })}><option value="">Select provider</option>{data.providers.map((provider) => <option key={provider.id} value={provider.id}>{personName(provider)}{provider.credentials ? `, ${provider.credentials}` : ""}</option>)}</select></label><label>Date<input className="thera-input" type="date" value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} /></label><label>Time<input className="thera-input" type="time" value={form.time} onChange={(e) => setForm({ ...form, time: e.target.value })} /></label><label>Duration<select className="thera-input" value={form.durationMinutes} onChange={(e) => setForm({ ...form, durationMinutes: Number(e.target.value) })}><option value={30}>30 minutes</option><option value={45}>45 minutes</option><option value={60}>60 minutes</option><option value={90}>90 minutes</option></select></label><label>Location<select className="thera-input" value={form.locationType} onChange={(e) => setForm({ ...form, locationType: e.target.value as FormState["locationType"] })}><option value="telehealth">Telehealth</option><option value="in_person">In Person</option><option value="phone">Phone</option><option value="community">Community</option><option value="home">Home</option><option value="school">School</option><option value="other">Other</option></select></label><label>Service<input className="thera-input" value={form.serviceType} onChange={(e) => setForm({ ...form, serviceType: e.target.value })} /></label><label>CPT / HCPCS<input className="thera-input" value={form.cptCode} onChange={(e) => setForm({ ...form, cptCode: e.target.value })} /></label></div></WorkDrawer>}
-  </>;
+  const [, navigate] = useLocation();
+  const [data, setData] = useState<ScheduleData | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [view, setView] = useState<ViewMode>("day");
+  const [anchor, setAnchor] = useState(() => new Date());
+  const [providerFilter, setProviderFilter] = useState("");
+  const [statusFilter, setStatusFilter] = useState("");
+  const [form, setForm] = useState<FormState | null>(null);
+  const [baseline, setBaseline] = useState<FormState | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [reviewAppointmentId, setReviewAppointmentId] = useState<string | null>(null);
+  const [reviewError, setReviewError] = useState<string | null>(null);
+  const [startingEncounter, setStartingEncounter] = useState(false);
+
+  async function load() {
+    setLoading(true);
+    setError(null);
+    try {
+      setData(await getScheduleData());
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to load schedule.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    void load();
+  }, []);
+
+  const visible = useMemo(
+    () =>
+      data
+        ? data.appointments.filter(
+            (appointment) =>
+              inView(appointment.startsAt, anchor, view) &&
+              (!providerFilter || appointment.providerId === providerFilter) &&
+              (!statusFilter || appointment.appointmentStatus === statusFilter),
+          )
+        : [],
+    [data, anchor, view, providerFilter, statusFilter],
+  );
+
+  const reviewAppointment = useMemo(
+    () =>
+      data?.appointments.find((appointment) => appointment.id === reviewAppointmentId) ??
+      null,
+    [data, reviewAppointmentId],
+  );
+
+  const dirty = useMemo(
+    () => Boolean(form && baseline && JSON.stringify(form) !== JSON.stringify(baseline)),
+    [form, baseline],
+  );
+
+  function move(direction: -1 | 1) {
+    setAnchor((current) => {
+      const next = new Date(current);
+      if (view === "day") next.setDate(next.getDate() + direction);
+      if (view === "week") next.setDate(next.getDate() + direction * 7);
+      if (view === "month") next.setMonth(next.getMonth() + direction);
+      return next;
+    });
+  }
+
+  function openNew() {
+    const next = { ...initialForm };
+    setEditingId(null);
+    setForm(next);
+    setBaseline({ ...next });
+  }
+
+  function openEdit(appointment: ScheduleAppointment) {
+    const next = formFrom(appointment);
+    setEditingId(appointment.id);
+    setForm(next);
+    setBaseline({ ...next });
+  }
+
+  function closeDrawer() {
+    setForm(null);
+    setBaseline(null);
+    setEditingId(null);
+  }
+
+  function openReview(appointmentId: string) {
+    setReviewError(null);
+    setReviewAppointmentId(appointmentId);
+  }
+
+  function closeReview() {
+    setReviewAppointmentId(null);
+    setReviewError(null);
+  }
+
+  async function changeStatus(id: string, status: string) {
+    try {
+      await updateAppointmentStatus(id, status);
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to update appointment.");
+    }
+  }
+
+  async function saveAppointment() {
+    if (!form) return;
+    setSaving(true);
+    setError(null);
+    try {
+      if (editingId) await updateAppointment(editingId, form);
+      else await createAppointment(form);
+      closeDrawer();
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to save appointment.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function beginEncounter() {
+    if (!reviewAppointment) return;
+    setStartingEncounter(true);
+    setReviewError(null);
+    try {
+      const result = await startEncounter(reviewAppointment.id);
+      if (!result.ok) {
+        const details = result.details?.length ? ` ${result.details.join(" ")}` : "";
+        setReviewError(`${result.message}${details}`);
+        return;
+      }
+      navigate(`/encounters/${result.value.id}`);
+    } catch (err) {
+      setReviewError(err instanceof Error ? err.message : "Unable to start encounter.");
+    } finally {
+      setStartingEncounter(false);
+    }
+  }
+
+  function appointmentActions(appointment: ScheduleAppointment) {
+    return (
+      <div className="thera-filter-row">
+        <button
+          type="button"
+          className="thera-action secondary"
+          onClick={() => openReview(appointment.id)}
+        >
+          Review
+        </button>
+        <button
+          type="button"
+          className="thera-action secondary"
+          onClick={() => openEdit(appointment)}
+        >
+          Edit
+        </button>
+        <Link className="thera-action secondary" href={`/schedule/${appointment.id}`}>
+          Pre-Session
+        </Link>
+        {appointment.appointmentStatus === "scheduled" ? (
+          <button
+            type="button"
+            className="thera-action secondary"
+            onClick={() => void changeStatus(appointment.id, "confirmed")}
+          >
+            Confirm
+          </button>
+        ) : null}
+        {["scheduled", "confirmed", "client_arrived"].includes(
+          appointment.appointmentStatus,
+        ) ? (
+          <button
+            type="button"
+            className="thera-action secondary"
+            onClick={() => void changeStatus(appointment.id, "checked_in")}
+          >
+            Check In
+          </button>
+        ) : null}
+        {!["completed", "cancelled", "no_show", "late_cancel"].includes(
+          appointment.appointmentStatus,
+        ) ? (
+          <button
+            type="button"
+            className="thera-action secondary"
+            onClick={() => void changeStatus(appointment.id, "no_show")}
+          >
+            No Show
+          </button>
+        ) : null}
+        {!["completed", "cancelled", "no_show"].includes(
+          appointment.appointmentStatus,
+        ) ? (
+          <button
+            type="button"
+            className="thera-action secondary"
+            onClick={() => void changeStatus(appointment.id, "cancelled")}
+          >
+            Cancel
+          </button>
+        ) : null}
+      </div>
+    );
+  }
+
+  return (
+    <>
+      <div className="thera-page-header split">
+        <div>
+          <div className="thera-eyebrow">CLINICAL OPERATIONS</div>
+          <h1>My Schedule</h1>
+          <p>Appointments with patient check-in, pre-visit insight, session focus, and readiness in one workspace.</p>
+        </div>
+        <button type="button" className="thera-action" onClick={openNew}>
+          + New Appointment
+        </button>
+      </div>
+
+      <section className="thera-card" style={{ marginBottom: 16 }}>
+        <div className="thera-card-header">
+          <div>
+            <h2>{rangeLabel(anchor, view)}</h2>
+            <p>{visible.length} appointment{visible.length === 1 ? "" : "s"} in this view</p>
+          </div>
+          <div className="thera-filter-row">
+            <button type="button" className="thera-action secondary" onClick={() => move(-1)}>
+              Previous
+            </button>
+            <button type="button" className="thera-action secondary" onClick={() => setAnchor(new Date())}>
+              Today
+            </button>
+            <button type="button" className="thera-action secondary" onClick={() => move(1)}>
+              Next
+            </button>
+          </div>
+        </div>
+        <div className="thera-filter-row" style={{ marginBottom: 12 }}>
+          {(["day", "week", "month"] as ViewMode[]).map((mode) => (
+            <button
+              key={mode}
+              type="button"
+              className={view === mode ? "thera-action" : "thera-action secondary"}
+              onClick={() => setView(mode)}
+            >
+              {mode[0].toUpperCase() + mode.slice(1)}
+            </button>
+          ))}
+          <select
+            className="thera-input"
+            value={providerFilter}
+            onChange={(event) => setProviderFilter(event.target.value)}
+          >
+            <option value="">All providers</option>
+            {(data?.providers ?? []).map((provider) => (
+              <option key={provider.id} value={provider.id}>
+                {personName(provider)}
+              </option>
+            ))}
+          </select>
+          <select
+            className="thera-input"
+            value={statusFilter}
+            onChange={(event) => setStatusFilter(event.target.value)}
+          >
+            <option value="">All statuses</option>
+            {[
+              "scheduled",
+              "confirmed",
+              "client_arrived",
+              "checked_in",
+              "in_session",
+              "completed",
+              "cancelled",
+              "no_show",
+              "late_cancel",
+              "rescheduled",
+            ].map((status) => (
+              <option key={status} value={status}>
+                {status.replaceAll("_", " ")}
+              </option>
+            ))}
+          </select>
+        </div>
+      </section>
+
+      {error ? <div className="thera-state error" style={{ marginBottom: 12 }}>{error}</div> : null}
+      {loading ? <div className="thera-state">Loading schedule...</div> : null}
+
+      {!loading && data ? (
+        <section className="thera-card">
+          {visible.length === 0 ? (
+            <div className="thera-empty">No appointments in this view. Use New Appointment to schedule one.</div>
+          ) : view === "day" ? (
+            <div className="thera-table-wrap">
+              <table className="thera-table schedule-day-table">
+                <thead>
+                  <tr>
+                    <th>Time</th>
+                    <th>Patient</th>
+                    <th>Check-In Status</th>
+                    <th>Pre-Visit Insight</th>
+                    <th>Session Focus</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {visible.map((appointment) => {
+                    const review = appointment.patientReview;
+                    return (
+                      <tr key={appointment.id}>
+                        <td className="schedule-day-time">{timeOnly(appointment.startsAt)}</td>
+                        <td>
+                          <div className="schedule-day-patient">
+                            <button
+                              type="button"
+                              className="schedule-day-patient-name"
+                              onClick={() => openReview(appointment.id)}
+                            >
+                              {appointment.clientName}
+                            </button>
+                            <div className="thera-table-subtext">
+                              {appointment.clientPronouns ? `${appointment.clientPronouns} · ` : ""}
+                              {appointment.providerName}
+                            </div>
+                          </div>
+                        </td>
+                        <td>
+                          <StatusBadge value={effectiveCheckInStatus(appointment)} />
+                          <div className="thera-table-subtext">
+                            <StatusBadge value={appointment.appointmentStatus} />
+                          </div>
+                        </td>
+                        <td className="schedule-day-insight">
+                          {review.preVisitInsight}
+                          <div className="schedule-day-supporting">
+                            {review.latestSharedJournal ? <span>Journal shared</span> : <span>No shared journal</span>}
+                            <span>{appointment.readiness.ready ? "Visit ready" : "Readiness issues"}</span>
+                          </div>
+                        </td>
+                        <td className="schedule-day-focus">
+                          <div className="schedule-day-focus-card">
+                            <strong>{review.activeGoal ? "Active Goal" : "Session Focus"}</strong>
+                            <span>{review.sessionFocus}</span>
+                          </div>
+                        </td>
+                        <td>{appointmentActions(appointment)}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <div className="thera-table-wrap">
+              <table className="thera-table">
+                <thead>
+                  <tr>
+                    <th>Date / Time</th>
+                    <th>Patient</th>
+                    <th>Provider</th>
+                    <th>Service</th>
+                    <th>Payer</th>
+                    <th>Readiness</th>
+                    <th>Status</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {visible.map((appointment) => (
+                    <tr key={appointment.id}>
+                      <td>{dateTime(appointment.startsAt)}</td>
+                      <td>
+                        <Link className="thera-table-link" href={`/clients/${appointment.clientId}`}>
+                          {appointment.clientName}
+                        </Link>
+                        <div className="thera-table-subtext">
+                          Registration: {appointment.registrationStatus.replaceAll("_", " ")}
+                        </div>
+                      </td>
+                      <td>{appointment.providerName}</td>
+                      <td>
+                        {appointment.serviceType || "—"}
+                        <div className="thera-table-subtext">
+                          {appointment.cptCode || "No CPT"} · {appointment.locationType.replaceAll("_", " ")}
+                        </div>
+                      </td>
+                      <td>
+                        {appointment.payerName}
+                        <div className="thera-table-subtext">{appointment.planName}</div>
+                      </td>
+                      <td>
+                        <StatusBadge value={appointment.readiness.ready ? "ready" : "blocked"} />
+                        {!appointment.readiness.ready ? (
+                          <div className="thera-table-subtext">
+                            {appointment.readiness.checks.filter((check) => check.blocking).length} blocking issue(s)
+                          </div>
+                        ) : null}
+                      </td>
+                      <td><StatusBadge value={appointment.appointmentStatus} /></td>
+                      <td>{appointmentActions(appointment)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </section>
+      ) : null}
+
+      {form && data ? (
+        <WorkDrawer
+          open={Boolean(form)}
+          onOpenChange={(open) => {
+            if (!open) closeDrawer();
+          }}
+          dirty={dirty}
+          title={editingId ? "Edit Appointment" : "New Appointment"}
+          subtitle={
+            editingId
+              ? `${data.appointments.find((row) => row.id === editingId)?.clientName ?? "Patient"} · ${data.appointments.find((row) => row.id === editingId)?.providerName ?? "Provider"}`
+              : "Schedule by patient and provider name"
+          }
+          openFullRecord={
+            editingId
+              ? () => {
+                  navigate(`/schedule/${editingId}`);
+                }
+              : undefined
+          }
+          openFullRecordLabel="Open Pre-Session Record"
+          footer={
+            <div className="thera-filter-row" style={{ justifyContent: "space-between" }}>
+              <button type="button" className="thera-action secondary" onClick={closeDrawer}>
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="thera-action"
+                disabled={saving || !form.clientId || !form.providerId || !form.date || !form.time}
+                onClick={() => void saveAppointment()}
+              >
+                {saving ? "Saving..." : editingId ? "Save Appointment" : "Schedule Appointment"}
+              </button>
+            </div>
+          }
+        >
+          <div className="thera-form-grid">
+            <label>
+              Patient
+              <select
+                className="thera-input"
+                value={form.clientId}
+                onChange={(event) => setForm({ ...form, clientId: event.target.value })}
+              >
+                <option value="">Select patient</option>
+                {data.clients.map((client) => (
+                  <option key={client.id} value={client.id}>{personName(client)}</option>
+                ))}
+              </select>
+            </label>
+            <label>
+              Provider
+              <select
+                className="thera-input"
+                value={form.providerId}
+                onChange={(event) => setForm({ ...form, providerId: event.target.value })}
+              >
+                <option value="">Select provider</option>
+                {data.providers.map((provider) => (
+                  <option key={provider.id} value={provider.id}>
+                    {personName(provider)}{provider.credentials ? `, ${provider.credentials}` : ""}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              Date
+              <input
+                className="thera-input"
+                type="date"
+                value={form.date}
+                onChange={(event) => setForm({ ...form, date: event.target.value })}
+              />
+            </label>
+            <label>
+              Time
+              <input
+                className="thera-input"
+                type="time"
+                value={form.time}
+                onChange={(event) => setForm({ ...form, time: event.target.value })}
+              />
+            </label>
+            <label>
+              Duration
+              <select
+                className="thera-input"
+                value={form.durationMinutes}
+                onChange={(event) => setForm({ ...form, durationMinutes: Number(event.target.value) })}
+              >
+                <option value={30}>30 minutes</option>
+                <option value={45}>45 minutes</option>
+                <option value={60}>60 minutes</option>
+                <option value={90}>90 minutes</option>
+              </select>
+            </label>
+            <label>
+              Location
+              <select
+                className="thera-input"
+                value={form.locationType}
+                onChange={(event) => setForm({ ...form, locationType: event.target.value as FormState["locationType"] })}
+              >
+                <option value="telehealth">Telehealth</option>
+                <option value="in_person">In Person</option>
+                <option value="phone">Phone</option>
+                <option value="community">Community</option>
+                <option value="home">Home</option>
+                <option value="school">School</option>
+                <option value="other">Other</option>
+              </select>
+            </label>
+            <label>
+              Service
+              <input
+                className="thera-input"
+                value={form.serviceType}
+                onChange={(event) => setForm({ ...form, serviceType: event.target.value })}
+              />
+            </label>
+            <label>
+              CPT / HCPCS
+              <input
+                className="thera-input"
+                value={form.cptCode}
+                onChange={(event) => setForm({ ...form, cptCode: event.target.value })}
+              />
+            </label>
+          </div>
+        </WorkDrawer>
+      ) : null}
+
+      <PatientReviewDrawer
+        appointment={reviewAppointment}
+        open={Boolean(reviewAppointment)}
+        onOpenChange={(open) => {
+          if (!open) closeReview();
+        }}
+        onOpenChart={() => {
+          if (reviewAppointment) navigate(`/clients/${reviewAppointment.clientId}`);
+        }}
+        onStartEncounter={beginEncounter}
+        startingEncounter={startingEncounter}
+        error={reviewError}
+      />
+    </>
+  );
 }
