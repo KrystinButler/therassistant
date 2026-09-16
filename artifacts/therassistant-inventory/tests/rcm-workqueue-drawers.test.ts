@@ -13,6 +13,7 @@ const rejectionsPage = source("../src/domains/claims/RejectionsPage.tsx");
 const rejectionDrawer = source("../src/domains/claims/rejection-work-drawer.tsx");
 const denialsPage = source("../src/domains/ar/DenialsPage.tsx");
 const denialDrawer = source("../src/domains/ar/denial-work-drawer.tsx");
+const denialFollowUp = source("../src/domains/ar/denial-follow-up.ts");
 const paymentsPage = source("../src/domains/payments/PaymentsPage.tsx");
 const paymentDrawers = source("../src/domains/payments/payment-work-drawers.tsx");
 const paymentAllocation = source("../src/domains/payments/payment-allocation.ts");
@@ -51,6 +52,8 @@ test("Denials drawer supports correction and structured follow-up", () => {
   assert.match(denialDrawer, /Save Follow-Up/);
   assert.match(denialDrawer, /Allowed amount/);
   assert.match(denialDrawer, /Paid amount/);
+  assert.match(denialFollowUp, /const oldStatus = String\(work\?\.workqueue_status/);
+  assert.match(denialFollowUp, /old_status: oldStatus/);
 });
 
 test("Payments allow unapplied money to be allocated to an existing claim", () => {
