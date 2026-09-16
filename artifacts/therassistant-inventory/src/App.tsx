@@ -21,7 +21,10 @@ import { PatientChartPage } from "./domains/patients/PatientChartPage";
 import { PatientPortalPage } from "./domains/portal/PatientPortalPage";
 import { SchedulePage } from "./domains/scheduling/SchedulePage";
 import { PreSessionPage } from "./domains/scheduling/PreSessionPage";
-import { AdministrationPage } from "./pages/administration";
+import {
+  SettingsOverviewPage,
+  SettingsPlaceholderPage,
+} from "./domains/settings/SettingsOverviewPage";
 import { ClientsPage } from "./pages/clients";
 import { DashboardPage } from "./pages/dashboard";
 import { DemoControlCenter } from "./pages/demo-control";
@@ -80,9 +83,51 @@ export default function App() {
         <Route path="/payers-contracts"><PayersContractsPage /></Route>
         <Route path="/mailroom"><MailroomPage /></Route>
         <Route path="/reports"><ReportsPage /></Route>
+
+        <Route path="/settings/practice">
+          <SettingsPlaceholderPage title="Practice Information & Locations" description="Change your practice name, contact information, timezone, and locations." />
+        </Route>
+        <Route path="/settings/logo">
+          <SettingsPlaceholderPage title="Practice Logo" description="Upload the logo used on printed documents and the Client Portal." />
+        </Route>
+        <Route path="/settings/patient-records">
+          <SettingsPlaceholderPage title="Patient Records" description="Enable or disable optional features for patient records." />
+        </Route>
+        <Route path="/settings/client-portal">
+          <SettingsPlaceholderPage title="Client Portal" description="Configure Client Portal access, balance limits, and optional features." />
+        </Route>
+        <Route path="/settings/service-codes">
+          <SettingsPlaceholderPage title="Service Codes" description="Customize the CPT, HCPCS, and service codes used by the practice." />
+        </Route>
+        <Route path="/settings/diagnosis-codes">
+          <SettingsPlaceholderPage title="Diagnosis Codes" description="Control which diagnosis codes appear in Therassistant searches." />
+        </Route>
+        <Route path="/settings/interventions">
+          <SettingsPlaceholderPage title="Interventions" description="Customize interventions used in Treatment Plans and Progress Notes." />
+        </Route>
+        <Route path="/settings/practice-billing">
+          <SettingsPlaceholderPage title="Practice Billing" description="Configure practice-wide billing defaults and claim behavior." />
+        </Route>
+        <Route path="/settings/patient-billing">
+          <SettingsPlaceholderPage title="Patient Billing" description="Configure patient billing, statements, thresholds, and payment-plan options." />
+        </Route>
+        <Route path="/settings/payment-processing">
+          <SettingsPlaceholderPage title="Payment Processing" description="Configure secure payment processing for credit, debit, FSA, and HSA cards." />
+        </Route>
+        <Route path="/settings/staff">
+          <SettingsPlaceholderPage title="Staff" description="Add staff and manage account status, roles, and access." />
+        </Route>
+        <Route path="/settings/activity-log">
+          <SettingsPlaceholderPage title="Activity Log" description="Search user activity and protected-health-information access history." />
+        </Route>
+        <Route path="/settings/password">
+          <SettingsPlaceholderPage title="Change Your Password" description="Update your password securely." />
+        </Route>
+        <Route path="/settings"><SettingsOverviewPage /></Route>
+
         <Route path="/administration/imports"><ImportsPage /></Route>
         <Route path="/administration/database-inventory"><InventoryApp /></Route>
-        <Route path="/administration"><AdministrationPage /></Route>
+        <Route path="/administration"><Redirect to="/settings" /></Route>
         <Route path="/"><DashboardPage /></Route>
         <Route><div className="thera-state">Page not found.</div></Route>
       </Switch>
