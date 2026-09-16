@@ -3,18 +3,16 @@ import { useEffect, useMemo, useState } from "react";
 import { StatusBadge } from "../../components/status-badge";
 import { money, shortDate } from "../../lib/format";
 import {
+  getOperationalHome,
   getRejectionCategories,
   type RejectionCategory,
 } from "../rcm/queue-routing";
 import { ClaimWorkDrawer, type ClaimWorkRecord } from "./claim-work-drawer";
-import {
-  getClaimsWorkspaceData,
-  getClaimWorkData,
-  type ClaimsWorkspaceRow,
-} from "./workspace-repository";
+import { getClaimsQueueData, type ClaimsQueueRow } from "./claims-queue-repository";
+import { getClaimWorkData } from "./workspace-repository";
 
 type RejectionItem = {
-  claim: ClaimsWorkspaceRow;
+  claim: ClaimsQueueRow;
   categories: RejectionCategory[];
   messages: string[];
 };
@@ -38,7 +36,7 @@ function splitMessages(value: unknown) {
     .filter(Boolean);
 }
 
-function asDrawerClaim(row: ClaimsWorkspaceRow): ClaimWorkRecord {
+function asDrawerClaim(row: ClaimsQueueRow): ClaimWorkRecord {
   return {
     id: row.id,
     patientControlNumber: String(row.patient_control_number ?? ""),
@@ -64,10 +62,13 @@ export function RejectionsPage() {
     setLoading(true);
     setError(null);
     try {
-      const data = await getClaimsWorkspaceData();
-      const rejected = data.claims.filter((row) =>
-        ["validation_failed", "rejected", "corrected"].includes(String(row.claim_status)) ||
-        row.clearinghouseStatus === "rejected",
+      const data = await getClaimsQueueData();
+      const rejected = data.filter((row) =>
+        getOperationalHome({
+          claimStatus: row.claim_status,
+          hasActiveDenial: row.hasActiveDenial,
+          openBalanceCents: row.openBalanceCents,
+        }) === "rejections",
       );
 
       const next = await Promise.all(rejected.map(async (claim): Promise<RejectionItem> => {
