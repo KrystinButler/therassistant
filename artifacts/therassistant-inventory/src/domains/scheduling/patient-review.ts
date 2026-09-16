@@ -43,6 +43,9 @@ function timestamp(row: ReviewRow) {
 }
 
 function isSharedJournal(row: ReviewRow) {
+  if (String(row.entry_status ?? "submitted").toLowerCase() === "draft") {
+    return false;
+  }
   if (row.share_with_provider === true) return true;
   return String(row.visibility ?? "").toLowerCase() === "shared_with_provider";
 }
