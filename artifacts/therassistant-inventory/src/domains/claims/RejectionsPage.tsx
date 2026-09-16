@@ -183,7 +183,7 @@ export function RejectionsPage() {
                   type="button"
                   key={payer.id}
                   className={payerId === payer.id ? "thera-action" : "thera-action secondary"}
-                  onClick={() => setPayerId(payer.id)}
+                  onClick={() => { setPayerId(payer.id); setActiveClaimId(null); }}
                 >
                   {payer.name} ({payer.count})
                 </button>
@@ -201,7 +201,7 @@ export function RejectionsPage() {
                   aria-selected={category === value}
                   key={value}
                   className={category === value ? "thera-tab active" : "thera-tab"}
-                  onClick={() => setCategory(value)}
+                  onClick={() => { setCategory(value); setActiveClaimId(null); }}
                 >
                   {categoryLabels[value]} ({count})
                 </button>
@@ -243,6 +243,8 @@ export function RejectionsPage() {
             void load();
           }
         }}
+        mode="rejection"
+        initialSection="rejections"
         queuePosition={activeItem ? `${activeIndex + 1} of ${visible.length}` : undefined}
         onPrevious={() => openAt(activeIndex - 1)}
         onNext={() => openAt(activeIndex + 1)}
