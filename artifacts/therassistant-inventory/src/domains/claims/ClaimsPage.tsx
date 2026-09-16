@@ -24,6 +24,10 @@ function asDrawerClaim(row: ClaimsQueueRow): ClaimWorkRecord {
     claimStatus: String(row.claim_status ?? "submitted"),
     serviceDateFrom: row.service_date_from ? String(row.service_date_from) : null,
     totalChargeCents: Number(row.total_charge_cents ?? 0),
+    paidAmountCents: row.paidAmountCents,
+    openBalanceCents: row.openBalanceCents,
+    submittedAt: row.submittedAt,
+    clearinghouseStatus: row.clearinghouseStatus,
     clientName: row.clientName,
     payerName: row.payerName,
     renderingProviderName: row.providerName,
@@ -200,6 +204,7 @@ export function ClaimsPage() {
       <ClaimWorkDrawer
         claim={activeClaim ? asDrawerClaim(activeClaim) : null}
         open={Boolean(activeClaim)}
+        mode="follow_up"
         onOpenChange={(open) => {
           if (!open) {
             setActiveClaimId(null);
