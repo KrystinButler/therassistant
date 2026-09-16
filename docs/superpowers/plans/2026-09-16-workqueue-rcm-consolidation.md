@@ -2,9 +2,9 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Replace overlapping revenue-cycle workspaces/centers with five canonical operational areas—Charges, Rejections, Claims, Denials, and Payments—while preserving existing business logic and making queue ownership mutually exclusive.
+**Goal:** Replace duplicate revenue-cycle workflows with five canonical operational areas: Charges, Rejections, Claims, Denials, and Payments.
 
-**Architecture:** Keep patient/provider/payer/detail screens as record/reference pages. Charges owns signed-note charge creation through payer batching and submission. Rejections owns both pre-submission validation failures and clearinghouse rejections. Claims owns accepted/submitted open balances and payer follow-up. Denials owns CARC-driven adjudicated denial work, corrected claims, appeals, and deferred denial work. Payments owns posting, ERA/835, unapplied funds, adjustments, underpayments, recoupments/refunds, and reversals; it does not duplicate Denials.
+**Architecture:** Records such as patients, providers, payers, encounters, and Claim 360 remain reference/detail pages. Operational work has one owner: Charges from signed note through batching/submission; Rejections for failed scrub or clearinghouse correction; Claims for accepted/submitted open balances; Denials for CARC-driven denied claims, corrected claims, appeals, and deferred denial work; Payments for posting, ERA/835, unapplied funds, adjustments/reversals, underpayments, and recoupments/refunds.
 
 **Tech Stack:** React 19, TypeScript 5.9, Vite, Wouter, Supabase demo client, Playwright, pnpm 10.28.0.
 
@@ -12,85 +12,81 @@
 
 ## Global Constraints
 
-- Operational RCM navigation is exactly: Charges, Rejections, Claims, Denials, Payments.
-- No Work Center UI or operational `/work-center` route remains.
-- No standalone Authorization workqueue is introduced.
+- Revenue Cycle navigation is exactly: Charges, Rejections, Claims, Denials, Payments.
+- No Work Center UI remains.
+- No standalone Authorization workqueue is created.
 - No separate Claim Validation, Claim Follow-Up, Claim Submission, Insurance A/R, or Appeals workflow remains.
-- `ready_for_validation` remains in Charges; only `validation_failed` moves to Rejections.
-- Clearinghouse rejections also move to Rejections.
-- Claims has one payer queue with mutually exclusive tabs: No Response, Deferred, 0-30 Days, 31-60 Days, 61-90 Days, 91-120 Days, 120+ Days.
-- Denials has one payer queue with mutually exclusive CARC/category tabs plus Corrected Claims, Appeals, and Deferred.
-- Charges owns batching by payer, electronic submission, 837P download, and CMS-1500 printing.
-- Payments must retain payment posting, ERA/835, unapplied funds, adjustments/reversals, underpayment review, and recoupment/refund review.
-- Existing claim detail/360, provider detail, audit/history, denial actions, and appeal actions remain available.
-- Reuse current Supabase tables/status history rather than creating duplicate queue-state tables.
-- A claim/charge has one primary operational home at a time.
-- Use `pnpm`; do not add npm/yarn lockfiles.
+- `ready_for_validation` belongs to Charges; `validation_failed` belongs to Rejections.
+- Clearinghouse rejection belongs to Rejections.
+- Claims has one payer queue with exactly these mutually exclusive tabs: No Response, Deferred, 0-30 Days, 31-60 Days, 61-90 Days, 91-120 Days, 120+ Days.
+- Denials has one payer queue with CARC/category tabs plus Corrected Claims, Appeals, Deferred; each denial appears in one tab only.
+- Charges owns payer batching, electronic submission, 837P download, and CMS-1500 printing.
+- Payments retains posting, ERA/835, unapplied funds, adjustments/reversals, underpayments, recoupments/refunds, and does not duplicate Denials.
+- Reuse existing Supabase tables/status history. Do not introduce a second queue-state table.
+- A record can be visible in detail/history views, but only one operational area owns active work.
+- Use pnpm only.
 
 ---
 
-## File Map
+## File Structure
 
-### New files
+### Create
 
-- `artifacts/therassistant-inventory/src/domains/rcm/queue-routing.ts` — pure classification helpers for operational home, Claims aging tabs, Rejection categories, and Denial tabs.
-- `artifacts/therassistant-inventory/src/domains/rcm/queue-routing.contract.test.ts` — deterministic routing tests.
-- `artifacts/therassistant-inventory/src/domains/claims/RejectionsPage.tsx` — canonical payer/correction-category Rejections UI.
-- `artifacts/therassistant-inventory/src/domains/claims/ClaimsPage.tsx` — canonical payer/aging Claims UI.
-- `artifacts/therassistant-inventory/src/domains/ar/DenialsPage.tsx` — canonical payer/CARC Denials UI.
-- `artifacts/therassistant-inventory/src/domains/billing/claim-output.ts` — 837P demo text and CMS-1500 print builders.
-- `artifacts/therassistant-inventory/src/domains/billing/claim-output.contract.test.ts` — deterministic output tests.
-- `artifacts/therassistant-inventory/src/navigation/sections.ts` — non-workspace navigation model.
-- `e2e/rcm-workqueues.spec.ts` — canonical-route and UI acceptance tests.
+- `artifacts/therassistant-inventory/src/domains/rcm/queue-routing.ts`
+- `artifacts/therassistant-inventory/src/domains/rcm/queue-routing.contract.test.ts`
+- `artifacts/therassistant-inventory/src/domains/billing/claim-output.ts`
+- `artifacts/therassistant-inventory/src/domains/billing/claim-output.contract.test.ts`
+- `artifacts/therassistant-inventory/src/domains/claims/RejectionsPage.tsx`
+- `artifacts/therassistant-inventory/src/domains/claims/ClaimsPage.tsx`
+- `artifacts/therassistant-inventory/src/domains/ar/DenialsPage.tsx`
+- `artifacts/therassistant-inventory/src/navigation/sections.ts`
+- `e2e/rcm-workqueues.spec.ts`
 
-### Modified files
+### Modify
 
 - `artifacts/therassistant-inventory/src/App.tsx`
 - `artifacts/therassistant-inventory/src/components/app-shell.tsx`
-- `artifacts/therassistant-inventory/src/navigation/workspace-navigation.css`
 - `artifacts/therassistant-inventory/src/domains/billing/BillingQueuePage.tsx`
 - `artifacts/therassistant-inventory/src/domains/billing/repository.ts`
 - `artifacts/therassistant-inventory/src/domains/claims/repository.ts`
 - `artifacts/therassistant-inventory/src/domains/claims/workflow.ts`
 - `artifacts/therassistant-inventory/src/domains/claims/claim-work-drawer.tsx`
 - `artifacts/therassistant-inventory/src/domains/claims/claim-work-drawer.types.ts`
-- `artifacts/therassistant-inventory/src/domains/claims/workspace-repository.ts`
+- `artifacts/therassistant-inventory/src/domains/claims/workspace-repository.ts` then rename it to `claims-ledger-repository.ts`
 - `artifacts/therassistant-inventory/src/domains/ar/repository.ts`
 - `artifacts/therassistant-inventory/src/domains/ar/denial-repository.ts`
+- `artifacts/therassistant-inventory/src/domains/ar/ar-work-drawers.tsx`
 - `artifacts/therassistant-inventory/src/domains/payments/PaymentsPage.tsx`
 - `artifacts/therassistant-inventory/src/domains/payments/repository.ts`
-- `artifacts/therassistant-inventory/src/domains/ar/ar-work-drawers.tsx`
 - `artifacts/therassistant-inventory/src/pages/restored-modules.tsx`
 - `artifacts/therassistant-inventory/src/pages/dashboard.tsx`
 - `artifacts/therassistant-inventory/src/domains/billing/BillingHubPage.tsx`
 - `e2e/workspaces.spec.ts`
 
-### Delete after references are gone
+### Delete after replacement imports are complete
 
 - `artifacts/therassistant-inventory/src/pages/work-center.tsx`
 - `artifacts/therassistant-inventory/src/navigation/workspaces.ts`
 - `artifacts/therassistant-inventory/src/domains/claims/ClaimSubmissionPage.tsx`
 - `artifacts/therassistant-inventory/src/domains/claims/ClaimsWorkspacePage.tsx`
 - `artifacts/therassistant-inventory/src/domains/ar/ArWorkspacePage.tsx`
-- `artifacts/therassistant-inventory/src/domains/claims/workqueues.ts` after any reusable helper is moved to its owning domain.
+- `artifacts/therassistant-inventory/src/domains/claims/workqueues.ts`
 
 ---
 
-### Task 1: Establish deterministic, mutually exclusive queue routing
+### Task 1: Define canonical queue ownership
 
 **Files:**
 - Create: `artifacts/therassistant-inventory/src/domains/rcm/queue-routing.ts`
 - Create: `artifacts/therassistant-inventory/src/domains/rcm/queue-routing.contract.test.ts`
-- Read/reuse: `artifacts/therassistant-inventory/src/domains/claims/claim-error-guidance.ts`
-- Read/reuse: `artifacts/therassistant-inventory/src/domains/ar/denials.ts`
 
 **Interfaces:**
-- Produces: `getOperationalHome(input): OperationalHome`
-- Produces: `getClaimsTab(input, today): ClaimsTab`
-- Produces: `getRejectionCategories(messages): RejectionCategory[]`
-- Produces: `getDenialTab(input): DenialTab`
+- Produces `getOperationalHome(input): OperationalHome`
+- Produces `getClaimsTab(input, today): ClaimsTab`
+- Produces `getRejectionCategories(messages): RejectionCategory[]`
+- Produces `getDenialTab(input): DenialTab`
 
-- [ ] **Step 1: Write the failing routing contract**
+- [ ] **Step 1: Write the failing contract test**
 
 ```ts
 import assert from "node:assert/strict";
@@ -126,33 +122,27 @@ assert.equal(getDenialTab({ deferred: true, appealActive: true, correctedClaim: 
 assert.equal(getDenialTab({ deferred: false, appealActive: true, correctedClaim: true, denialCategory: "coding" }), "appeals");
 assert.equal(getDenialTab({ deferred: false, appealActive: false, correctedClaim: true, denialCategory: "coding" }), "corrected_claims");
 assert.equal(getDenialTab({ deferred: false, appealActive: false, correctedClaim: false, denialCategory: "timely_filing" }), "timely_filing");
-
-console.log("RCM queue-routing contract passed");
 ```
 
-- [ ] **Step 2: Run it and verify failure**
+- [ ] **Step 2: Verify it fails**
 
 ```bash
 node --experimental-strip-types artifacts/therassistant-inventory/src/domains/rcm/queue-routing.contract.test.ts
 ```
 
-Expected: FAIL because `queue-routing.ts` does not exist.
+Expected: module-not-found for `queue-routing.ts`.
 
-- [ ] **Step 3: Implement the routing helpers**
-
-Use these exact public types and ownership precedence:
+- [ ] **Step 3: Implement the routing model**
 
 ```ts
+import { getClaimErrorGuidance } from "../claims/claim-error-guidance";
+
 export type OperationalHome = "charges" | "rejections" | "claims" | "denials" | "payments" | null;
 export type ClaimsTab = "no_response" | "deferred" | "0_30" | "31_60" | "61_90" | "91_120" | "120_plus";
 export type RejectionCategory = "patient" | "subscriber" | "provider" | "payer" | "diagnosis" | "procedure_modifier" | "authorization" | "claim_format" | "other";
 export type DenialTab = "corrected_claims" | "appeals" | "deferred" | string;
 
-export function getOperationalHome(input: {
-  claimStatus: unknown;
-  hasActiveDenial: boolean;
-  openBalanceCents: number;
-}): OperationalHome {
+export function getOperationalHome(input: { claimStatus: unknown; hasActiveDenial: boolean; openBalanceCents: number }): OperationalHome {
   const status = String(input.claimStatus ?? "");
   if (input.hasActiveDenial || ["denied", "appealed"].includes(status)) return "denials";
   if (["validation_failed", "rejected", "corrected"].includes(status)) return "rejections";
@@ -163,63 +153,40 @@ export function getOperationalHome(input: {
 }
 ```
 
-`getClaimsTab` precedence is exactly `Deferred -> No Response -> aging`. Aging uses `submittedAt` when present, otherwise `serviceDate`. `No Response` means no clearinghouse/payer acknowledgment exists after submission.
+Implement `getClaimsTab` with exact precedence `Deferred -> No Response -> aging`. Aging uses `submittedAt` first and `serviceDate` only as fallback. Use inclusive day ranges 0-30, 31-60, 61-90, 91-120, >120.
 
-`getRejectionCategories` first uses `getClaimErrorGuidance(message)?.target`, then keyword fallback: `subscriber/member -> subscriber`, `authorization/prior auth -> authorization`, `payer -> payer`, `provider/npi/taxonomy -> provider`, `diagnosis -> diagnosis`, `cpt/hcpcs/modifier/procedure -> procedure_modifier`, `patient -> patient`, formatting/control/date/frequency/POS/charge -> claim_format`, otherwise `other`. Return unique categories in first-seen order.
+Implement `getRejectionCategories` by using `getClaimErrorGuidance(message)?.target`, then keyword fallback: `subscriber/member`, `authorization/prior auth`, `payer`, `provider/npi/taxonomy`, `diagnosis`, `cpt/hcpcs/modifier/procedure`, `patient`, then claim-format keywords `date/frequency/place of service/charge/control number`; otherwise `other`. Return unique values in first-seen order.
 
-`getDenialTab` precedence is exactly `Deferred -> Appeals -> Corrected Claims -> normalized denial_category -> other`.
+Implement `getDenialTab` with exact precedence `Deferred -> Appeals -> Corrected Claims -> normalized denialCategory -> other`.
 
-- [ ] **Step 4: Verify contract and typecheck**
+- [ ] **Step 4: Verify and commit**
 
 ```bash
 node --experimental-strip-types artifacts/therassistant-inventory/src/domains/rcm/queue-routing.contract.test.ts
 pnpm typecheck
-```
-
-Expected: PASS.
-
-- [ ] **Step 5: Commit**
-
-```bash
 git add artifacts/therassistant-inventory/src/domains/rcm
 git commit -m "feat: define canonical RCM queue routing"
 ```
 
 ---
 
-### Task 2: Replace workspace navigation and establish canonical routes
+### Task 2: Replace workspace navigation and legacy routes
 
 **Files:**
 - Create: `artifacts/therassistant-inventory/src/navigation/sections.ts`
 - Modify: `artifacts/therassistant-inventory/src/components/app-shell.tsx`
 - Modify: `artifacts/therassistant-inventory/src/App.tsx`
-- Modify: `e2e/workspaces.spec.ts`
 - Create: `e2e/rcm-workqueues.spec.ts`
+- Modify: `e2e/workspaces.spec.ts`
 - Delete: `artifacts/therassistant-inventory/src/navigation/workspaces.ts`
 
 **Interfaces:**
-- Produces: `NAV_SECTIONS`, `getVisibleSections()`, `getNavigationContext(pathname)`, `toggleExpandedSection()`.
-- Canonical operational routes: `/billing/charges`, `/rejections`, `/claims`, `/denials`, `/payments`.
+- Produces `NAV_SECTIONS`, `getVisibleSections`, `getNavigationContext`, `toggleExpandedSection`.
 
-- [ ] **Step 1: Write failing route/navigation tests**
+- [ ] **Step 1: Write failing navigation/redirect tests**
 
 ```ts
 import { expect, test } from "@playwright/test";
-
-const canonical = [
-  ["/billing/charges", "Charges"],
-  ["/rejections", "Rejections"],
-  ["/claims", "Claims"],
-  ["/denials", "Denials"],
-  ["/payments", "Payments"],
-] as const;
-
-for (const [path, heading] of canonical) {
-  test(`${heading} is canonical`, async ({ page }) => {
-    await page.goto(path);
-    await expect(page.getByRole("heading", { level: 1, name: heading })).toBeVisible();
-  });
-}
 
 const redirects = [
   ["/charges", "/billing/charges"],
@@ -236,7 +203,7 @@ for (const [legacy, target] of redirects) {
   });
 }
 
-test("Revenue Cycle navigation exposes only approved operational areas", async ({ page }) => {
+test("Revenue Cycle navigation has the five canonical links", async ({ page }) => {
   await page.goto("/claims");
   const nav = page.getByRole("navigation", { name: "Primary navigation" });
   for (const label of ["Charges", "Rejections", "Claims", "Denials", "Payments"]) {
@@ -248,13 +215,13 @@ test("Revenue Cycle navigation exposes only approved operational areas", async (
 });
 ```
 
-- [ ] **Step 2: Run and confirm failure**
+- [ ] **Step 2: Verify failure**
 
 ```bash
 pnpm test:e2e -- e2e/rcm-workqueues.spec.ts
 ```
 
-- [ ] **Step 3: Create section-based navigation**
+- [ ] **Step 3: Create `sections.ts`**
 
 The Revenue Cycle section is exactly:
 
@@ -273,19 +240,19 @@ The Revenue Cycle section is exactly:
 }
 ```
 
-Keep Patients, Schedule, Clinical, Eligibility, Authorizations, Providers, Credentialing, Payers & Contracts, Mailroom, Imports, Reports, Journal, and Administration as non-RCM navigation items. Authorization stays a page, not a workqueue.
+Keep other application areas as navigation sections/items without calling them workspaces.
 
-- [ ] **Step 4: Update AppShell terminology**
+- [ ] **Step 4: Update AppShell**
 
-Use `section`/`item` names internally and:
+Use section/item terminology and:
 
 ```tsx
 <nav className="thera-nav" aria-label="Primary navigation">
 ```
 
-Fallback topbar context is `Operations`, not `Operational Workspace`.
+Fallback topbar text becomes `Operations`.
 
-- [ ] **Step 5: Add redirect component and canonical routes**
+- [ ] **Step 5: Add redirect-only legacy routes**
 
 ```tsx
 function Redirect({ to }: { to: string }) {
@@ -295,11 +262,11 @@ function Redirect({ to }: { to: string }) {
 }
 ```
 
-During this task only, route `/rejections` to the existing Claims page and `/denials` to the existing A/R page so route tests can progress. Later tasks replace those temporary renderers. Legacy paths render `Redirect` only.
+Add `/rejections` temporarily rendering the current Claims component and `/denials` temporarily rendering the current A/R component. The final components replace these in Tasks 4 and 6. Legacy URLs render only `Redirect`.
 
-- [ ] **Step 6: Rename generic E2E smoke language**
+- [ ] **Step 6: Rename generic route smoke-test language**
 
-In `e2e/workspaces.spec.ts`, rename `workspaces` to `routes` and `${heading} workspace renders` to `${heading} route renders`.
+Change the array name `workspaces` to `routes` and test title `workspace renders` to `route renders` in `e2e/workspaces.spec.ts`.
 
 - [ ] **Step 7: Verify and commit**
 
@@ -313,7 +280,7 @@ git commit -m "refactor: replace workspace navigation with RCM sections"
 
 ---
 
-### Task 3: Make Charges own charge creation, payer batching, submission, 837P download, and CMS-1500 print
+### Task 3: Consolidate charge creation and claim submission into Charges
 
 **Files:**
 - Modify: `artifacts/therassistant-inventory/src/domains/billing/BillingQueuePage.tsx`
@@ -324,12 +291,10 @@ git commit -m "refactor: replace workspace navigation with RCM sections"
 - Modify: `e2e/rcm-workqueues.spec.ts`
 
 **Interfaces:**
-- Reuses: `createClaimFromCharges`, `validateClaim`, `createBatch`, `submitBatch`.
-- Produces: `getBatchExportData(batchId)`.
-- Produces: `build837PText(input): string`.
-- Produces: `buildCms1500Html(input): string`.
+- Reuses `createClaimFromCharges`, `validateClaim`, `createBatch`, `submitBatch`.
+- Produces `getBatchExportData`, `build837PText`, `buildCms1500Html`.
 
-- [ ] **Step 1: Write failing output-builder contract**
+- [ ] **Step 1: Write failing output tests**
 
 ```ts
 import assert from "node:assert/strict";
@@ -344,48 +309,40 @@ const sample = {
   }],
 };
 
-const x12 = build837PText(sample);
-assert.match(x12, /ST\*837\*0001\*005010X222A1~/);
-assert.match(x12, /CLM\*TH-1001\*150\.00/);
-assert.match(x12, /SV1\*HC:90837\*150\.00/);
-assert.match(x12, /IEA\*1\*/);
-
-const cms = buildCms1500Html(sample.claims[0]);
-assert.match(cms, /CMS-1500/);
-assert.match(cms, /Demo Patient/);
-assert.match(cms, /90837/);
-
-console.log("claim output contract passed");
+assert.match(build837PText(sample), /CLM\*TH-1001\*150\.00/);
+assert.match(build837PText(sample), /SV1\*HC:90837\*150\.00/);
+assert.match(buildCms1500Html(sample.claims[0]), /CMS-1500/);
+assert.match(buildCms1500Html(sample.claims[0]), /Demo Patient/);
 ```
 
-- [ ] **Step 2: Run and verify failure**
+- [ ] **Step 2: Verify failure**
 
 ```bash
 node --experimental-strip-types artifacts/therassistant-inventory/src/domains/billing/claim-output.contract.test.ts
 ```
 
-- [ ] **Step 3: Refactor BillingQueuePage into Charges**
+- [ ] **Step 3: Make Charges the canonical UI**
 
-Use heading `Charges`. Use exactly these tabs:
+Set heading to `Charges`. Use exactly:
 
 ```ts
 type ChargesTab = "ready" | "blocked" | "unbatched" | "batches" | "submitted";
 ```
 
-`ready`: signed encounters ready to create charges. `blocked`: signed encounters blocked from charge creation. `unbatched`: claims in `ready_for_validation`, `ready_for_batch`, or `batched` preparation state. `batches`: payer batches ready for output/submission. `submitted`: submitted batch history.
+`ready` = signed encounters ready for charge creation. `blocked` = signed encounters blocked from charge creation. `unbatched` = claims in `ready_for_validation` or `ready_for_batch`. `batches` = payer batches ready for submission/export/print. `submitted` = submitted batch history.
 
-When creating a claim from charges, call `validateClaim` immediately. `ready_for_validation` stays in Charges during the scrub. A failed scrub changes to `validation_failed` and disappears from Charges into Rejections. A passed scrub changes to `ready_for_batch` and remains in Charges.
+After `createClaimFromCharges`, immediately call `validateClaim`. Failed validation becomes `validation_failed` and leaves Charges for Rejections; successful validation becomes `ready_for_batch` and remains in Charges.
 
-Batch selection must enforce one payer per batch before `createBatch`:
+Before `createBatch`, enforce one payer:
 
 ```ts
 const payerIds = new Set(selectedClaims.map((claim) => String(claim.payer_id ?? "")));
 if (payerIds.size !== 1) throw new Error("A claim batch must contain one payer only.");
 ```
 
-Always render toolbar buttons `Download 837P` and `Print CMS-1500`; disable them until a batch/claim selection exists. This keeps E2E deterministic.
+Render `Download 837P` and `Print CMS-1500` buttons in the Charges toolbar at all times; disable until a batch/claim selection exists.
 
-- [ ] **Step 4: Add batch export data**
+- [ ] **Step 4: Add export data**
 
 ```ts
 export async function getBatchExportData(batchId: string) {
@@ -405,48 +362,62 @@ export async function getBatchExportData(batchId: string) {
 }
 ```
 
-- [ ] **Step 5: Implement deterministic 837P demo output**
-
-`build837PText` builds actual segment text from the provided batch data. Required sequence:
+- [ ] **Step 5: Implement the 837P demo builder with no undefined helpers**
 
 ```ts
-const segments = [isa, gs, st, bht];
-for (const [claimIndex, item] of input.claims.entries()) {
-  const controlNumber = String(item.claim.patient_control_number ?? item.claim.id);
-  const total = (Number(item.claim.total_charge_cents ?? 0) / 100).toFixed(2);
-  segments.push(`HL*${claimIndex + 1}**20*1~`);
-  segments.push(`NM1*85*2*${clean(item.claim.providerName ?? "THERASSISTANT")}*****XX*DEMO~`);
-  segments.push(`NM1*IL*1*${clean(item.claim.clientName ?? "PATIENT")}****MI*DEMO~`);
-  segments.push(`CLM*${clean(controlNumber)}*${total}***11:B:1*Y*A*Y*Y~`);
-  for (const [lineIndex, line] of item.lines.entries()) {
-    const amount = (Number(line.charge_amount_cents ?? 0) / 100).toFixed(2);
-    segments.push(`LX*${lineIndex + 1}~`);
-    segments.push(`SV1*HC:${clean(line.cpt_code ?? "") }*${amount}*UN*${Number(line.units ?? 1)}***${clean(line.diagnosis_pointer ?? "1")}~`);
-  }
+export type BatchExportData = Awaited<ReturnType<typeof getBatchExportData>>;
+
+function clean(value: unknown) {
+  return String(value ?? "").replace(/[~*:^]/g, " ").trim();
 }
-segments.push(`SE*${segments.length - 1}*0001~`, `GE*1*1~`, `IEA*1*${control}~`);
-return segments.join("\n");
+
+export function build837PText(input: BatchExportData) {
+  const control = clean(input.batch.id).replace(/\D/g, "").slice(-9).padStart(9, "0") || "000000001";
+  const segments: string[] = [
+    `ISA*00*          *00*          *ZZ*THERASSISTANT   *ZZ*DEMO_PAYER      *260916*1200*^*00501*${control}*0*T*:~`,
+    `GS*HC*THERASSISTANT*DEMO_PAYER*20260916*1200*1*X*005010X222A1~`,
+    `ST*837*0001*005010X222A1~`,
+    `BHT*0019*00*${control}*20260916*1200*CH~`,
+  ];
+
+  for (const [claimIndex, item] of input.claims.entries()) {
+    const controlNumber = clean(item.claim.patient_control_number ?? item.claim.id);
+    const total = (Number(item.claim.total_charge_cents ?? 0) / 100).toFixed(2);
+    segments.push(`HL*${claimIndex + 1}**20*1~`);
+    segments.push(`NM1*85*2*${clean(item.claim.providerName ?? "THERASSISTANT")}*****XX*DEMO~`);
+    segments.push(`NM1*IL*1*${clean(item.claim.clientName ?? "PATIENT")}****MI*DEMO~`);
+    segments.push(`CLM*${controlNumber}*${total}***11:B:1*Y*A*Y*Y~`);
+    for (const [lineIndex, line] of item.lines.entries()) {
+      const amount = (Number(line.charge_amount_cents ?? 0) / 100).toFixed(2);
+      segments.push(`LX*${lineIndex + 1}~`);
+      segments.push(`SV1*HC:${clean(line.cpt_code)}*${amount}*UN*${Number(line.units ?? 1)}***${clean(line.diagnosis_pointer ?? "1")}~`);
+    }
+  }
+
+  segments.push(`SE*${segments.length - 1}*0001~`);
+  segments.push(`GE*1*1~`);
+  segments.push(`IEA*1*${control}~`);
+  return segments.join("\n");
+}
 ```
 
-Use test/demo sender and receiver IDs until real trading-partner IDs are configured. The UI labels this `837P Demo Export`, not production-certified EDI.
+Label the output `837P Demo Export`; do not claim production EDI certification without real trading-partner configuration. Download as `therassistant-837p-<batch-id>.txt`.
 
-Download with a Blob as `therassistant-837p-<batch-id>.txt`.
-
-- [ ] **Step 6: Implement CMS-1500 print HTML**
-
-Render patient, payer, provider, diagnosis, service-line, charge, and total fields into a print-only 8.5x11 layout headed `CMS-1500`. Use:
-
-```css
-@page { size: 8.5in 11in; margin: 0.25in; }
-.cms1500 { width: 8in; min-height: 10.5in; font: 10px Arial, sans-serif; }
-```
-
-The toolbar opens a print window, writes the HTML, calls `print()`, and closes on `afterprint`.
-
-- [ ] **Step 7: Add Charges E2E assertions**
+- [ ] **Step 6: Implement CMS-1500 printable HTML**
 
 ```ts
-test("Charges owns claim outputs", async ({ page }) => {
+export function buildCms1500Html(item: BatchExportData["claims"][number]) {
+  const lines = item.lines.map((line) => `<tr><td>${clean(line.service_date ?? item.claim.service_date_from)}</td><td>${clean(line.cpt_code)}</td><td>${clean(line.diagnosis_pointer ?? "1")}</td><td>${(Number(line.charge_amount_cents ?? 0) / 100).toFixed(2)}</td></tr>`).join("");
+  return `<!doctype html><html><head><title>CMS-1500</title><style>@page{size:8.5in 11in;margin:.25in}.cms1500{width:8in;min-height:10.5in;font:10px Arial,sans-serif}table{width:100%;border-collapse:collapse}td,th{border:1px solid #555;padding:4px}</style></head><body><div class="cms1500"><h1>CMS-1500</h1><p>Patient: ${clean(item.claim.clientName)}</p><p>Payer: ${clean(item.claim.payerName)}</p><p>Provider: ${clean(item.claim.providerName)}</p><table><thead><tr><th>DOS</th><th>CPT/HCPCS</th><th>Dx Ptr</th><th>Charge</th></tr></thead><tbody>${lines}</tbody></table></div></body></html>`;
+}
+```
+
+Open the generated HTML in a print window, call `print()`, close on `afterprint`.
+
+- [ ] **Step 7: Add deterministic Charges UI test**
+
+```ts
+test("Charges owns claim submission outputs", async ({ page }) => {
   await page.goto("/billing/charges");
   await expect(page.getByRole("heading", { level: 1, name: "Charges" })).toBeVisible();
   await expect(page.getByRole("button", { name: /Download 837P/i })).toBeVisible();
@@ -461,28 +432,26 @@ test("Charges owns claim outputs", async ({ page }) => {
 node --experimental-strip-types artifacts/therassistant-inventory/src/domains/billing/claim-output.contract.test.ts
 pnpm typecheck
 pnpm build
-pnpm test:e2e -- e2e/rcm-workqueues.spec.ts -g "Charges"
+pnpm test:e2e -- e2e/rcm-workqueues.spec.ts -g "Charges owns"
 git add artifacts/therassistant-inventory/src/domains/billing artifacts/therassistant-inventory/src/domains/claims/repository.ts e2e/rcm-workqueues.spec.ts
-git commit -m "feat: consolidate claim submission into Charges"
+git commit -m "feat: consolidate submission into Charges"
 ```
 
 ---
 
-### Task 4: Build one Rejections workqueue for validation failures and clearinghouse rejections
+### Task 4: Merge validation failures and clearinghouse rejections into Rejections
 
 **Files:**
 - Create: `artifacts/therassistant-inventory/src/domains/claims/RejectionsPage.tsx`
 - Modify: `artifacts/therassistant-inventory/src/domains/claims/workflow.ts`
-- Modify: `artifacts/therassistant-inventory/src/domains/claims/workspace-repository.ts`
 - Modify: `artifacts/therassistant-inventory/src/domains/claims/claim-work-drawer.tsx`
 - Modify: `artifacts/therassistant-inventory/src/App.tsx`
 - Modify: `e2e/rcm-workqueues.spec.ts`
 
 **Interfaces:**
-- Consumes: `getRejectionCategories()` and `getClaimErrorGuidance()`.
-- Reuses: `validateClaim`, `retryRejectedClaims`, `ClaimWorkDrawer` correction controls.
+- Consumes `getRejectionCategories`, `getClaimErrorGuidance`, `validateClaim`, `retryRejectedClaims`.
 
-- [ ] **Step 1: Add failing Rejections test**
+- [ ] **Step 1: Write failing Rejections test**
 
 ```ts
 test("Rejections is payer and correction-field driven", async ({ page }) => {
@@ -499,25 +468,21 @@ test("Rejections is payer and correction-field driven", async ({ page }) => {
 pnpm test:e2e -- e2e/rcm-workqueues.spec.ts -g "Rejections is payer"
 ```
 
-- [ ] **Step 3: Remove Work Center as the driver of rejection membership**
+- [ ] **Step 3: Stop using Work Center to determine rejection membership**
 
-`validateClaimWorkflow` continues writing claim status/history. On failure set `validation_failed`; on pass set `ready_for_batch`. Rejections derives membership from claim/response state, not a universal Work Center row. Remove user-facing messages saying anything was “routed to Work Center.”
-
-Clearinghouse rejected responses continue setting claim status `rejected` and storing `submission_responses`.
+Keep claim status/history in `validateClaimWorkflow`; remove user-facing “routed to Work Center” messages. Failed scrub = `validation_failed`. Successful scrub = `ready_for_batch`. Clearinghouse reject = `rejected` plus stored submission response.
 
 - [ ] **Step 4: Implement RejectionsPage**
 
-A claim qualifies when `claim_status` is `validation_failed`, `rejected`, or `corrected`, or the latest submission response is `rejected`.
+A claim qualifies when `claim_status` is `validation_failed`, `rejected`, or `corrected`, or latest submission response is `rejected`. Group by payer first. For the selected payer, create tabs from unresolved error messages through `getRejectionCategories`. A claim can appear in several Rejection tabs only when separate unresolved fields/categories exist.
 
-Group first by `payer_id`. Within the selected payer, use `getRejectionCategories(unresolvedMessages)` to build tabs. A claim may appear in more than one Rejections category only when it has multiple unresolved correction categories.
+Use `ClaimWorkDrawer` for correction. `Save & Revalidate` success changes to `ready_for_batch`, removing it from Rejections and returning it to Charges.
 
-Open `ClaimWorkDrawer`. Primary correction action is `Save & Revalidate`. Successful revalidation changes status to `ready_for_batch`, so the record disappears from Rejections and returns to Charges.
+- [ ] **Step 5: Remove Denials/Appeals workflow actions from the generic claim drawer**
 
-- [ ] **Step 5: Remove Denials/Appeals operational ownership from generic claim drawer**
+Keep denial/appeal information in Claim 360 history only. Denials owns denial/appeal actions.
 
-Claim 360 may display denial/appeal history. The generic Claims/Rejections drawer does not offer Denials/Appeals workflow tabs or actions; Denials owns those actions.
-
-- [ ] **Step 6: Wire and verify**
+- [ ] **Step 6: Wire, verify, commit**
 
 ```tsx
 <Route path="/rejections"><RejectionsPage /></Route>
@@ -526,34 +491,29 @@ Claim 360 may display denial/appeal history. The generic Claims/Rejections drawe
 ```bash
 pnpm typecheck
 pnpm test:e2e -- e2e/rcm-workqueues.spec.ts -g "Rejections"
-```
-
-- [ ] **Step 7: Commit**
-
-```bash
 git add artifacts/therassistant-inventory/src/domains/claims artifacts/therassistant-inventory/src/App.tsx e2e/rcm-workqueues.spec.ts
-git commit -m "feat: merge validation and rejection correction"
+git commit -m "feat: consolidate rejection correction"
 ```
 
 ---
 
-### Task 5: Build payer-specific Claims workqueues and remove Claims/A-R duplication
+### Task 5: Build payer-specific Claims workqueues
 
 **Files:**
+- Rename: `artifacts/therassistant-inventory/src/domains/claims/workspace-repository.ts` -> `artifacts/therassistant-inventory/src/domains/claims/claims-ledger-repository.ts`
 - Create: `artifacts/therassistant-inventory/src/domains/claims/ClaimsPage.tsx`
-- Modify: `artifacts/therassistant-inventory/src/domains/claims/workspace-repository.ts`
 - Modify: `artifacts/therassistant-inventory/src/App.tsx`
-- Modify: `e2e/rcm-workqueues.spec.ts`
 - Delete: `artifacts/therassistant-inventory/src/domains/claims/ClaimsWorkspacePage.tsx`
+- Modify: `e2e/rcm-workqueues.spec.ts`
 
 **Interfaces:**
-- Consumes: `getOperationalHome()` and `getClaimsTab()`.
-- Claims does not validate, submit, retry rejections, create generic follow-up tasks, work denials, or work appeals.
+- Rename `getClaimsWorkspaceData()` to `getClaimsQueueData()`.
+- Consumes `getOperationalHome`, `getClaimsTab`.
 
-- [ ] **Step 1: Add failing Claims structure test**
+- [ ] **Step 1: Write failing Claims structure test**
 
 ```ts
-test("Claims has payer queues and approved aging tabs", async ({ page }) => {
+test("Claims has payer queues and the approved tabs", async ({ page }) => {
   await page.goto("/claims");
   await expect(page.getByRole("heading", { level: 1, name: "Claims" })).toBeVisible();
   for (const tab of ["No Response", "Deferred", "0-30 Days", "31-60 Days", "61-90 Days", "91-120 Days", "120+ Days"]) {
@@ -571,9 +531,7 @@ test("Claims has payer queues and approved aging tabs", async ({ page }) => {
 pnpm test:e2e -- e2e/rcm-workqueues.spec.ts -g "Claims has payer"
 ```
 
-- [ ] **Step 3: Expose Claims queue fields**
-
-Extend the enriched claim row with:
+- [ ] **Step 3: Add queue fields to repository rows**
 
 ```ts
 type ClaimsQueueRow = ClaimsWorkspaceRow & {
@@ -584,9 +542,9 @@ type ClaimsQueueRow = ClaimsWorkspaceRow & {
 };
 ```
 
-`hasPayerResponse` is true when a submission response or payer claim number exists. `deferred` is true when the current claim-specific state is pending/snoozed/deferred. Reuse current state/history; do not add a duplicate queue-state table.
+`hasPayerResponse` is true when payer claim number or submission response exists. `deferred` uses current pending/snoozed/deferred state already stored in claim-specific work/history. Do not create a second state column solely for the UI.
 
-- [ ] **Step 4: Implement payer queues + fixed tab order**
+- [ ] **Step 4: Implement payer workqueues**
 
 ```ts
 const CLAIM_TABS = [
@@ -600,16 +558,19 @@ const CLAIM_TABS = [
 ] as const;
 ```
 
-Filter to `getOperationalHome(...) === "claims"`, group by payer, then assign each claim to exactly one `getClaimsTab(...)` result. Rows open Claim 360/drawer for claim details only.
+Filter to `getOperationalHome(...) === "claims"`, group by payer, then classify each claim into one tab using `getClaimsTab`.
 
-- [ ] **Step 5: Wire `/claims`, delete old page, verify**
+Claims has no Validate, Retry Rejected, Create Follow-Up, Denial, Appeal, or Submission actions.
+
+- [ ] **Step 5: Wire, remove old page, verify, commit**
 
 ```bash
 pnpm typecheck
 pnpm test:e2e -- e2e/rcm-workqueues.spec.ts -g "Claims"
+git mv artifacts/therassistant-inventory/src/domains/claims/workspace-repository.ts artifacts/therassistant-inventory/src/domains/claims/claims-ledger-repository.ts
 git rm artifacts/therassistant-inventory/src/domains/claims/ClaimsWorkspacePage.tsx
-git add artifacts/therassistant-inventory/src/domains/claims/ClaimsPage.tsx artifacts/therassistant-inventory/src/domains/claims/workspace-repository.ts artifacts/therassistant-inventory/src/App.tsx e2e/rcm-workqueues.spec.ts
-git commit -m "feat: consolidate payer follow-up into Claims workqueues"
+git add artifacts/therassistant-inventory/src/domains/claims artifacts/therassistant-inventory/src/App.tsx e2e/rcm-workqueues.spec.ts
+git commit -m "feat: consolidate payer follow-up into Claims"
 ```
 
 ---
@@ -619,16 +580,18 @@ git commit -m "feat: consolidate payer follow-up into Claims workqueues"
 **Files:**
 - Create: `artifacts/therassistant-inventory/src/domains/ar/DenialsPage.tsx`
 - Modify: `artifacts/therassistant-inventory/src/domains/ar/repository.ts`
+- Modify: `artifacts/therassistant-inventory/src/domains/ar/denials.ts`
 - Modify: `artifacts/therassistant-inventory/src/domains/ar/denial-repository.ts`
 - Modify: `artifacts/therassistant-inventory/src/App.tsx`
-- Modify: `e2e/rcm-workqueues.spec.ts`
 - Delete: `artifacts/therassistant-inventory/src/domains/ar/ArWorkspacePage.tsx`
+- Modify: `e2e/rcm-workqueues.spec.ts`
 
 **Interfaces:**
-- Consumes: `getDenialTab()`.
-- Reuses: `startDenialWork`, `createDenialAppeal`, `submitAppeal`, `recordAppealOutcome`, `writeOffDenial`, existing denial/appeal drawers.
+- Move `isActiveAppealStatus(status)` from `claims/workqueues.ts` into `ar/denials.ts`.
+- Produces `getDenialsQueueData()`.
+- Consumes `getDenialTab`.
 
-- [ ] **Step 1: Add failing Denials test**
+- [ ] **Step 1: Write failing Denials structure test**
 
 ```ts
 test("Denials is payer-specific and CARC driven", async ({ page }) => {
@@ -650,13 +613,13 @@ test("Denials is payer-specific and CARC driven", async ({ page }) => {
 pnpm test:e2e -- e2e/rcm-workqueues.spec.ts -g "Denials is payer-specific"
 ```
 
-- [ ] **Step 3: Expose only denial-domain data**
+- [ ] **Step 3: Implement `getDenialsQueueData()`**
 
-Add `getDenialsQueueData()` that directly returns `denials`, `appeals`, `payers`, `providers`, and linked claim fields required for corrected-claim detection. Do not return Insurance A/R, Patient A/R, variance, or recovery arrays to `DenialsPage`.
+Return only denial-domain data: denials, appeals, payers, providers, and linked claim fields needed to identify corrected claims. Do not return insurance A/R, patient A/R, variance, or recovery data to Denials.
 
 - [ ] **Step 4: Implement DenialsPage**
 
-Group by payer. For the selected payer, determine exactly one tab:
+Group by payer. Assign one tab per denial:
 
 ```ts
 getDenialTab({
@@ -667,20 +630,20 @@ getDenialTab({
 });
 ```
 
-Render normalized denial-category tabs first, then `Corrected Claims`, `Appeals`, `Deferred`. Show CARC, RARC, denial reason, amount, deadline, and status. Use existing denial/appeal drawers for actions.
+Render dynamic normalized denial-category tabs, then Corrected Claims, Appeals, Deferred. Show CARC, RARC, reason, amount, deadline, status. Reuse existing denial/appeal drawers and actions.
 
-- [ ] **Step 5: Remove Work Center/A-R wording from denial actions**
+- [ ] **Step 5: Remove A/R/Work Center language**
 
-Change history text to `Denial work started from Denials.` / `Denial work resumed from Denials.` Internal `workqueue_items` may remain for local status/audit, but there is no universal Work Center UI.
+Change denial history strings to `Denial work started from Denials.` and `Denial work resumed from Denials.` Internal `workqueue_items` may continue to store local status/history.
 
-- [ ] **Step 6: Wire, verify, delete old mixed page, commit**
+- [ ] **Step 6: Wire, delete old page, verify, commit**
 
 ```bash
 pnpm typecheck
 pnpm test:e2e -- e2e/rcm-workqueues.spec.ts -g "Denials"
 git rm artifacts/therassistant-inventory/src/domains/ar/ArWorkspacePage.tsx
 git add artifacts/therassistant-inventory/src/domains/ar artifacts/therassistant-inventory/src/App.tsx e2e/rcm-workqueues.spec.ts
-git commit -m "feat: consolidate CARC-driven Denials workqueues"
+git commit -m "feat: consolidate CARC-driven Denials"
 ```
 
 ---
@@ -695,16 +658,13 @@ git commit -m "feat: consolidate CARC-driven Denials workqueues"
 - Modify: `e2e/rcm-workqueues.spec.ts`
 
 **Interfaces:**
-- Payments tabs become: Insurance Payments, Patient Payments, ERA / 835, Unapplied, Adjustments / Reversals, Underpayments, Recoupments / Refunds.
-- Denials never renders inside Payments.
-- Reuses the current variance/recovery data and drawers from the old mixed A/R page.
+- Payments tabs: Insurance Payments, Patient Payments, ERA / 835, Unapplied, Adjustments / Reversals, Underpayments, Recoupments / Refunds.
 
-- [ ] **Step 1: Add failing Payments ownership test**
+- [ ] **Step 1: Write failing Payments test**
 
 ```ts
 test("Payments owns payment exceptions but not denials", async ({ page }) => {
   await page.goto("/payments");
-  await expect(page.getByRole("heading", { level: 1, name: "Payments" })).toBeVisible();
   await expect(page.getByRole("tab", { name: /Underpayments/ })).toBeVisible();
   await expect(page.getByRole("tab", { name: /Recoupments \/ Refunds/ })).toBeVisible();
   await expect(page.getByRole("tab", { name: /Denials/ })).toHaveCount(0);
@@ -717,36 +677,32 @@ test("Payments owns payment exceptions but not denials", async ({ page }) => {
 pnpm test:e2e -- e2e/rcm-workqueues.spec.ts -g "Payments owns"
 ```
 
-- [ ] **Step 3: Add variance/recovery data to Payments repository**
+- [ ] **Step 3: Move variance/recovery data ownership to Payments**
 
-Move or reuse the existing `variances` and `recovery` queries from `ar/repository.ts` in `getPaymentsWorkspaceData()`. Keep one query implementation; if moved, remove the duplicate from `getArWorkspaceData()` after Denials no longer uses it.
+Move the existing underpayment variance and recovery/recoupment queries from `ar/repository.ts` into `payments/repository.ts` so `getPaymentsWorkspaceData()` returns `variances` and `recovery`. Remove those query paths from A/R repository after Denials uses `getDenialsQueueData()`.
 
 - [ ] **Step 4: Replace Payments Denials tab**
-
-Remove `exceptions`/Denials from `PaymentsPage`. Add:
 
 ```ts
 type Tab = "insurance" | "patient" | "era" | "unapplied" | "adjustments" | "underpayments" | "recovery";
 ```
 
-Use existing `UnderpaymentReviewDrawer` and `RecoveryReviewDrawer` in these tabs.
+Use existing `UnderpaymentReviewDrawer` and `RecoveryReviewDrawer`. Change user-facing `Route to Work Center` actions to `Start Work`; keep internal `workqueue_items` only as local task/history storage.
 
-Rename the current route-to-Work-Center actions at the UI boundary to `Start Work`. The internal repository may continue creating/updating a local `workqueue_item`, but the row remains visible and actionable inside Payments; no separate center is required.
-
-When `runDenied` creates a denial from ERA adjudication, show `Denial recorded and moved to Denials.` Do not show the denial table in Payments.
+When demo ERA creates a denial, message becomes `Denial recorded and moved to Denials.` Do not render a Denials table in Payments.
 
 - [ ] **Step 5: Verify and commit**
 
 ```bash
 pnpm typecheck
 pnpm test:e2e -- e2e/rcm-workqueues.spec.ts -g "Payments"
-git add artifacts/therassistant-inventory/src/domains/payments artifacts/therassistant-inventory/src/domains/ar/repository.ts artifacts/therassistant-inventory/src/domains/ar/ar-work-drawers.tsx e2e/rcm-workqueues.spec.ts
+git add artifacts/therassistant-inventory/src/domains/payments artifacts/therassistant-inventory/src/domains/ar e2e/rcm-workqueues.spec.ts
 git commit -m "refactor: consolidate payment exceptions into Payments"
 ```
 
 ---
 
-### Task 8: Remove duplicate workflow pages, Work Center, and stale links
+### Task 8: Delete duplicate workflow pages and stale links
 
 **Files:**
 - Modify: `artifacts/therassistant-inventory/src/App.tsx`
@@ -755,14 +711,10 @@ git commit -m "refactor: consolidate payment exceptions into Payments"
 - Modify: `artifacts/therassistant-inventory/src/domains/billing/BillingHubPage.tsx`
 - Delete: `artifacts/therassistant-inventory/src/pages/work-center.tsx`
 - Delete: `artifacts/therassistant-inventory/src/domains/claims/ClaimSubmissionPage.tsx`
-- Delete: `artifacts/therassistant-inventory/src/domains/claims/workqueues.ts` after remaining imports are moved.
+- Delete: `artifacts/therassistant-inventory/src/domains/claims/workqueues.ts`
 - Modify: `e2e/rcm-workqueues.spec.ts`
 
-**Interfaces:**
-- Legacy URLs are redirects only.
-- No source import renders WorkCenterPage, ClaimFollowUpPage, ClaimSubmissionPage, ClaimsWorkspacePage, or ArWorkspacePage.
-
-- [ ] **Step 1: Add failing retired-name regression test**
+- [ ] **Step 1: Write failing stale-workflow regression test**
 
 ```ts
 test("retired workflow names are not visible", async ({ page }) => {
@@ -773,23 +725,21 @@ test("retired workflow names are not visible", async ({ page }) => {
 });
 ```
 
-- [ ] **Step 2: Delete duplicate UI implementations**
+- [ ] **Step 2: Delete old implementations**
 
-Remove `ClaimFollowUpPage` from `restored-modules.tsx`. Delete `work-center.tsx` and `ClaimSubmissionPage.tsx`. Delete the old multi-purpose `claims/workqueues.ts` after moving `isActiveAppealStatus` to the denial domain if still required.
+Remove `ClaimFollowUpPage` from `restored-modules.tsx`. Delete Work Center, standalone Claim Submission, and old claims workqueue builder after imports are migrated.
 
-- [ ] **Step 3: Update dashboard/billing links**
+- [ ] **Step 3: Normalize dashboard/Billing links**
 
-All RCM operational links point only to:
+Only these operational targets remain:
 
 ```text
-Charges -> /billing/charges
-Rejections -> /rejections
-Claims -> /claims
-Denials -> /denials
-Payments -> /payments
+/billing/charges
+/rejections
+/claims
+/denials
+/payments
 ```
-
-Remove separate A/R, Claim Follow-Up, Claim Submission, and Work Center cards/links.
 
 - [ ] **Step 4: Search for stale imports/copy**
 
@@ -797,7 +747,7 @@ Remove separate A/R, Claim Follow-Up, Claim Submission, and Work Center cards/li
 rg -n "Work Center|WorkCenterPage|Claim Follow-Up|ClaimFollowUpPage|ClaimSubmissionPage|ClaimsWorkspacePage|ArWorkspacePage|Insurance A/R|A/R & Denials" artifacts/therassistant-inventory/src e2e
 ```
 
-Expected: only intentional legacy redirect test strings remain.
+Expected: only intentional strings inside legacy redirect tests remain.
 
 - [ ] **Step 5: Verify and commit**
 
@@ -806,7 +756,7 @@ pnpm typecheck
 pnpm build
 pnpm test:e2e -- e2e/rcm-workqueues.spec.ts
 git add artifacts/therassistant-inventory/src e2e/rcm-workqueues.spec.ts
-git rm artifacts/therassistant-inventory/src/pages/work-center.tsx artifacts/therassistant-inventory/src/domains/claims/ClaimSubmissionPage.tsx
+git rm artifacts/therassistant-inventory/src/pages/work-center.tsx artifacts/therassistant-inventory/src/domains/claims/ClaimSubmissionPage.tsx artifacts/therassistant-inventory/src/domains/claims/workqueues.ts
 git commit -m "refactor: remove duplicate revenue cycle workflows"
 ```
 
@@ -818,35 +768,32 @@ git commit -m "refactor: remove duplicate revenue cycle workflows"
 - Modify: `e2e/rcm-workqueues.spec.ts`
 - Modify: `e2e/workspaces.spec.ts`
 
-**Interfaces:**
-- Final tests prevent records from appearing in multiple canonical workqueues/tabs after state transitions.
+- [ ] **Step 1: Add transition assertions**
 
-- [ ] **Step 1: Add end-to-end transition assertions**
-
-Use the existing synthetic/demo controls and records to verify:
+Verify these exact outcomes using the existing synthetic demo controls/data:
 
 ```text
-Signed note -> charge appears in Charges
-Charge -> claim -> successful validation -> Charges ready for batch
-Validation failure -> Rejections and absent from Charges
+Signed note -> Charges
+Successful scrub -> Charges / ready for batch
+Failed scrub -> Rejections and absent from Charges
 Clearinghouse rejection -> Rejections and absent from Claims
-Successful submission/acceptance with open balance -> Claims and absent from Charges/Rejections
-Active denial/CARC -> Denials and absent from Claims/Payments denial views
-Appeal -> Denials > Appeals only
-Deferred claim -> Claims > Deferred only
-Deferred denial -> Denials > Deferred only
-Paid/zero-balance claim -> absent from Claims and Denials; payment remains in Payments/history
+Accepted/submitted open balance -> Claims and absent from Charges/Rejections
+Active CARC denial -> Denials and absent from Claims
+Appeal -> Denials / Appeals only
+Deferred claim -> Claims / Deferred only
+Deferred denial -> Denials / Deferred only
+Paid zero-balance claim -> absent from Claims and Denials; payment remains visible in Payments/history
 ```
 
 - [ ] **Step 2: Guard Claims tab uniqueness**
 
-For one selected payer and claim control number, visit all seven Claims tabs and count matches. Assert total count is `<= 1`.
+For one payer/control number, visit all seven Claims tabs and assert total matching rows across tabs is `<= 1`.
 
 - [ ] **Step 3: Guard Denials tab uniqueness**
 
-For one denial ID/control number, visit all denial-reason tabs plus Corrected Claims, Appeals, Deferred. Assert total count is `<= 1`.
+For one denial/control number, visit all dynamic denial reason tabs plus Corrected Claims, Appeals, Deferred and assert total matching rows is `<= 1`.
 
-- [ ] **Step 4: Run full verification**
+- [ ] **Step 4: Run all verification**
 
 ```bash
 node --experimental-strip-types artifacts/therassistant-inventory/src/domains/rcm/queue-routing.contract.test.ts
@@ -858,40 +805,38 @@ pnpm test:e2e
 
 Expected: all PASS.
 
-- [ ] **Step 5: Review stale terminology**
+- [ ] **Step 5: Review remaining terminology**
 
 ```bash
 rg -n "workspace|work center|claim follow-up|insurance a/r" artifacts/therassistant-inventory/src/domains artifacts/therassistant-inventory/src/components artifacts/therassistant-inventory/src/navigation
 ```
 
-Every user-facing match must be removed. Internal CSS class names may remain only when they do not surface terminology and renaming would add unrelated risk.
+Remove every user-facing match. Internal CSS class names may remain only when not displayed to users.
 
-- [ ] **Step 6: Final commit**
+- [ ] **Step 6: Commit final guards**
 
 ```bash
 git add e2e/rcm-workqueues.spec.ts e2e/workspaces.spec.ts
-git commit -m "test: guard canonical RCM workqueue ownership"
+git commit -m "test: guard canonical RCM queue ownership"
 ```
 
 ---
 
 ## Final Acceptance Checklist
 
-- [ ] Revenue Cycle navigation exposes exactly Charges, Rejections, Claims, Denials, Payments.
-- [ ] `/work-center` no longer renders a Work Center and redirects away.
-- [ ] `/claims/follow-up`, `/claims/submission`, `/ar-denials`, and `/charges` do not render duplicate workflows.
-- [ ] Signed-note charges are created and worked from Charges.
-- [ ] `ready_for_validation` stays in Charges; `validation_failed` moves to Rejections.
-- [ ] Charges batches by one payer and owns electronic submission, 837P demo download, and CMS-1500 printing.
-- [ ] Validation failures and clearinghouse rejections are corrected only in Rejections.
-- [ ] Rejections groups by payer and unresolved correction category.
-- [ ] Claims has one queue per payer and exactly the seven approved tabs.
-- [ ] Claims does not contain validation, rejection, denial, appeal, or submission tabs/actions.
-- [ ] Denials has one queue per payer, dynamic CARC/category tabs, and Corrected Claims/Appeals/Deferred.
-- [ ] Appeals exist only inside Denials.
-- [ ] Payments does not duplicate Denials.
-- [ ] Payments retains underpayments and recoupment/refund review from the retired mixed A/R page.
-- [ ] Authorization remains record/context data only; no authorization workqueue exists.
-- [ ] Claim 360/detail history remains available without becoming a second operational queue.
-- [ ] Queue-routing tests prove mutually exclusive Claims and Denials ownership.
+- [ ] Revenue Cycle navigation is exactly Charges, Rejections, Claims, Denials, Payments.
+- [ ] Work Center is not visible or independently routable.
+- [ ] Legacy `/charges`, `/claims/submission`, `/claims/follow-up`, `/ar-denials`, `/work-center` routes render redirects only.
+- [ ] Signed-note charges and successful pre-submission scrub remain in Charges.
+- [ ] Charges batches one payer at a time and owns electronic submission, 837P demo export, CMS-1500 print.
+- [ ] Failed validation and clearinghouse rejection are corrected only in Rejections.
+- [ ] Rejections is payer-first and correction-category second.
+- [ ] Claims is payer-first with exactly seven mutually exclusive tabs.
+- [ ] Claims has no validation, submission, rejection, denial, or appeal workflow controls.
+- [ ] Denials is payer-first, CARC/category-driven, with Corrected Claims, Appeals, Deferred.
+- [ ] Appeals exists only inside Denials.
+- [ ] Payments has no Denials tab and retains underpayments plus recoupment/refund work.
+- [ ] Authorization has no workqueue.
+- [ ] Claim 360 remains a detail/history view, not another operational queue.
+- [ ] Queue-routing contract proves mutually exclusive ownership.
 - [ ] `pnpm typecheck`, `pnpm build`, and full Playwright E2E pass.
