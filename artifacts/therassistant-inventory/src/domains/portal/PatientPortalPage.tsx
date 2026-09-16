@@ -1,9 +1,8 @@
 import { useEffect, useState } from "react";
-import { useRoute } from "wouter";
+import { Link, useRoute } from "wouter";
 
 import { StatusBadge } from "../../components/status-badge";
 import { dateTime, money } from "../../lib/format";
-import { addJournalEntry } from "../journal/repository";
 import { getPatientPortalData, recordCheckIn } from "./repository";
 
 type PortalData = Awaited<ReturnType<typeof getPatientPortalData>>;
@@ -19,8 +18,6 @@ export function PatientPortalPage() {
   const [data, setData] = useState<PortalData | null>(null);
   const [loading, setLoading] = useState(true);
   const [working, setWorking] = useState<string | null>(null);
-  const [entryText, setEntryText] = useState("");
-  const [mood, setMood] = useState("");
   const [error, setError] = useState<string | null>(null);
 
   async function load() {
@@ -40,18 +37,12 @@ export function PatientPortalPage() {
     finally { setWorking(null); }
   }
 
-  async function addEntry() {
-    setWorking("journal"); setError(null);
-    try { await addJournalEntry(clientId, { entryText, mood }); setEntryText(""); setMood(""); await load(); }
-    catch (err) { setError(err instanceof Error ? err.message : "Unable to save journal entry."); }
-    finally { setWorking(null); }
-  }
-
   if (loading) return <div className="thera-state">Loading patient portal...</div>;
   if (error && !data) return <div className="thera-state error">{error}</div>;
   if (!data) return <div className="thera-state error">Patient portal is unavailable.</div>;
 
   const checkinByAppointment = new Map(data.checkins.map((row) => [String(row.appointment_id ?? ""), row]));
+  const recentJournalEntries = data.journalEntries.slice(0, 3);
 
   return <>
     <div className="thera-page-header split"><div><div className="thera-eyebrow">PATIENT PORTAL · SYNTHETIC DEMO</div><h1>{patientName(data.patient)}</h1><p>Appointments, check-in, coverage confirmation, selected documents, journal, and balance summary.</p></div><div><StatusBadge value={String(data.patient.registration_status ?? "not_started")} /></div></div>
@@ -73,7 +64,10 @@ export function PatientPortalPage() {
 
       <section className="thera-card thera-span-2"><div className="thera-card-header"><div><h2>Forms & Documents</h2><p>Only patient-facing document categories are shown here.</p></div></div>{data.documents.length ? <div className="thera-table-wrap"><table className="thera-table"><thead><tr><th>Date</th><th>Type</th><th>Name</th><th>Status</th></tr></thead><tbody>{data.documents.map((row) => <tr key={row.id}><td>{dateTime(String(row.created_at ?? ""))}</td><td>{String(row.document_type ?? "other").replaceAll("_", " ")}</td><td>{String(row.file_name ?? "—")}</td><td><StatusBadge value={String(row.document_status ?? "uploaded")} /></td></tr>)}</tbody></table></div> : <div className="thera-empty">No patient-facing documents.</div>}</section>
 
-      <section className="thera-card thera-span-2"><div className="thera-card-header"><div><h2>Journal</h2><p>Entries are patient-authored. They do not automatically become part of a signed clinical note.</p></div></div><div className="thera-form-grid" style={{ marginBottom: 16 }}><label className="thera-field"><span className="thera-field-label">Mood / Theme</span><input className="thera-input" value={mood} onChange={(e) => setMood(e.target.value)} /></label><label className="thera-field thera-span-2"><span className="thera-field-label">Reflection</span><textarea className="thera-input" rows={4} value={entryText} onChange={(e) => setEntryText(e.target.value)} /></label><div className="thera-span-2"><button type="button" className="thera-action" disabled={!entryText.trim() || working !== null} onClick={() => void addEntry()}>{working === "journal" ? "Saving..." : "Add Journal Entry"}</button></div></div>{data.journalEntries.length ? <div className="thera-stack">{data.journalEntries.map((entry) => <article key={entry.id} className="thera-work-card"><div className="thera-work-card-top"><strong>{String(entry.mood ?? "Reflection")}</strong><span className="thera-muted">{dateTime(String(entry.created_at ?? ""))}</span></div><p>{String(entry.entry_text ?? "")}</p></article>)}</div> : <div className="thera-empty">No journal entries yet.</div>}</section>
+      <section className="thera-card thera-span-2">
+        <div className="thera-card-header"><div><h2>In-Between Session Journal</h2><p>Capture thoughts, symptoms, progress, and questions between visits. Entries stay patient-authored until a clinician deliberately incorporates relevant information into the clinical record.</p></div><Link href={`/patient-portal/${clientId}/journal`} className="thera-action">Open Journal</Link></div>
+        {recentJournalEntries.length ? <div className="thera-stack">{recentJournalEntries.map((entry) => <article key={entry.id} className="thera-work-card"><div className="thera-work-card-top"><strong>{String(entry.mood ?? "Reflection").replaceAll("_", " ")}</strong><span className="thera-muted">{dateTime(String(entry.created_at ?? ""))}</span></div><p>{String(entry.entry_text ?? "")}</p></article>)}</div> : <div className="thera-empty">No journal entries yet. Open the journal to write your first reflection.</div>}
+      </section>
     </div>
   </>;
 }
