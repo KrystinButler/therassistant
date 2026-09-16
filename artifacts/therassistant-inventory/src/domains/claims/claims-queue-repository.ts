@@ -88,3 +88,5 @@ export async function resumeClaim(claimId: string) {
   });
   return work;
 }
+
+export { retryRejectedClaims } from "./workspace-repository";
