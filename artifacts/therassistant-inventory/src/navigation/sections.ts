@@ -1,3 +1,5 @@
+import { SETTINGS_GROUPS } from "../domains/settings/settings-groups";
+
 export type SectionId =
   | "overview"
   | "care-delivery"
@@ -19,6 +21,7 @@ export type NavigationItem = {
   matchPaths?: readonly string[];
   visibility: NavigationVisibility;
   badgeKey?: string;
+  group?: string;
 };
 
 export type NavigationSection = {
@@ -142,17 +145,18 @@ export const NAV_SECTIONS: readonly NavigationSection[] = [
     id: "settings",
     label: "Settings",
     renderInSidebar: true,
-    primaryHref: "/administration",
+    primaryHref: "/settings",
     visibility: visibleToAll,
-    children: [
-      { id: "administration", label: "Administration", href: "/administration", visibility: visibleToAll },
-      {
-        id: "database-inventory",
-        label: "Database Inventory",
-        href: "/administration/database-inventory",
+    children: SETTINGS_GROUPS.flatMap((group) =>
+      group.items.map((item) => ({
+        id: item.id,
+        label: item.label,
+        href: item.href,
+        group: group.label,
         visibility: visibleToAll,
-      },
-    ],
+      })),
+    ),
+    contextualPaths: ["/administration/database-inventory"],
   },
 ] as const;
 
