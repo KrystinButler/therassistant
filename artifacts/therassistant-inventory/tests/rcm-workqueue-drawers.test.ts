@@ -8,6 +8,7 @@ function source(path: string) {
 
 const claimsPage = source("../src/domains/claims/ClaimsPage.tsx");
 const claimDrawer = source("../src/domains/claims/claim-work-drawer.tsx");
+const claimsQueueRepository = source("../src/domains/claims/claims-queue-repository.ts");
 const rejectionsPage = source("../src/domains/claims/RejectionsPage.tsx");
 const rejectionDrawer = source("../src/domains/claims/rejection-work-drawer.tsx");
 const denialsPage = source("../src/domains/ar/DenialsPage.tsx");
@@ -39,6 +40,7 @@ test("Rejections use a correction-focused drawer and actually resubmit corrected
   assert.match(rejectionDrawer, /Resubmit Claim/);
   assert.match(rejectionDrawer, /createBatch/);
   assert.match(rejectionDrawer, /submitBatch/);
+  assert.match(claimsQueueRepository, /responseIsCurrent/);
 });
 
 test("Denials drawer supports correction and structured follow-up", () => {
