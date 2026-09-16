@@ -7,7 +7,7 @@ import { ArWorkspacePage } from "./domains/ar/ArWorkspacePage";
 import { BillingHubPage } from "./domains/billing/BillingHubPage";
 import { BillingQueuePage } from "./domains/billing/BillingQueuePage";
 import { Claim360Page } from "./domains/claims/Claim360Page";
-import { ClaimsWorkspacePage } from "./domains/claims/ClaimsWorkspacePage";
+import { ClaimsPage } from "./domains/claims/ClaimsPage";
 import { RejectionsPage } from "./domains/claims/RejectionsPage";
 import { CredentialingPage } from "./domains/credentialing/CredentialingPage";
 import { PayersContractsPage } from "./domains/credentialing/PayersContractsPage";
@@ -74,7 +74,7 @@ export default function App() {
         <Route path="/authorizations"><AuthorizationsPage /></Route>
         <Route path="/medicaid"><MedicaidPage /></Route>
         <Route path="/billing"><BillingHubPage /></Route>
-        <Route path="/claims"><ClaimsWorkspacePage /></Route>
+        <Route path="/claims"><ClaimsPage /></Route>
         <Route path="/payments"><PaymentsPage /></Route>
         <Route path="/credentialing"><CredentialingPage /></Route>
         <Route path="/payers-contracts"><PayersContractsPage /></Route>
