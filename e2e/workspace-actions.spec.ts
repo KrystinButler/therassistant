@@ -34,19 +34,34 @@ test("Schedule opens a new-appointment drawer and returns to the schedule", asyn
   expect(new URL(page.url()).pathname).toBe("/schedule");
 });
 
-test("Claims opens claim work from the claims list and returns to the queue", async ({
+test("Claims opens Claim 360 from the payer queue and returns to Claims", async ({
   page,
 }) => {
   await page.goto("/claims");
-  await page.getByRole("button", { name: "Claims List" }).click();
-  const firstRow = page.getByRole("table").locator("tbody tr").first();
-  await expect(firstRow).toBeVisible();
-  await firstRow.getByRole("button").first().click();
-  await expect(page.getByRole("tab", { name: "Claim Fields" })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Save & Revalidate" })).toBeVisible();
-  await page.getByRole("button", { name: "Cancel" }).click();
-  await expect(page.getByRole("tab", { name: "Claim Fields" })).toBeHidden();
   await expectWorkspace(page, "Claims");
+
+  const tabs = page.getByRole("tablist", { name: "Claims aging" }).getByRole("tab");
+  const tabCount = await tabs.count();
+  let selectedPopulatedTab = false;
+  for (let index = 0; index < tabCount; index += 1) {
+    const label = (await tabs.nth(index).textContent()) ?? "";
+    if (!/\(0\)\s*$/.test(label)) {
+      await tabs.nth(index).click();
+      selectedPopulatedTab = true;
+      break;
+    }
+  }
+  expect(selectedPopulatedTab).toBe(true);
+
+  const openClaim = page.getByRole("link", { name: "Open Claim" }).first();
+  await expect(openClaim).toBeVisible();
+  await openClaim.click();
+  await expect.poll(() => new URL(page.url()).pathname).toMatch(/^\/claims\/[^/]+$/);
+  await expect(page.getByText("CLAIM 360", { exact: true })).toBeVisible();
+
+  await page.locator(".thera-breadcrumb").getByRole("link", { name: "Claims", exact: true }).click();
+  await expectWorkspace(page, "Claims");
+  expect(new URL(page.url()).pathname).toBe("/claims");
 });
 
 test("Payments opens the post-payment drawer without posting", async ({ page }) => {
