@@ -49,16 +49,42 @@ test("checked-in patient is Ready and patient focus wins the session-focus fallb
   assert.equal(result.hasSafetyConcern, false);
 });
 
-test("shared journal is selected while private journal is excluded", () => {
+test("shared journal is selected while private and draft journals are excluded", () => {
   const result = buildPatientReviewContext({
     checkin: null,
     journals: [
       {
+        id: "draft-shared",
+        entry_text: "draft",
+        visibility: "shared_with_provider",
+        entry_status: "draft",
+        created_at: "2026-09-16T12:00:00Z",
+      },
+      {
         id: "private",
         entry_text: "private",
-        share_with_provider: false,
+        visibility: "private",
         created_at: "2026-09-15T12:00:00Z",
       },
+      {
+        id: "shared",
+        entry_text: "shared",
+        visibility: "shared_with_provider",
+        entry_status: "submitted",
+        created_at: "2026-09-14T12:00:00Z",
+      },
+    ],
+    activeGoal: null,
+    priorNote: null,
+  });
+
+  assert.equal(result.latestSharedJournal?.id, "shared");
+});
+
+test("legacy shared journal flag remains supported for submitted rows", () => {
+  const result = buildPatientReviewContext({
+    checkin: null,
+    journals: [
       {
         id: "shared",
         entry_text: "shared",
