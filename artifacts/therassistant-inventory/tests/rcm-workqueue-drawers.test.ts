@@ -7,6 +7,7 @@ function source(path: string) {
 }
 
 const claimsPage = source("../src/domains/claims/ClaimsPage.tsx");
+const claimDrawer = source("../src/domains/claims/claim-work-drawer.tsx");
 const rejectionsPage = source("../src/domains/claims/RejectionsPage.tsx");
 const rejectionDrawer = source("../src/domains/claims/rejection-work-drawer.tsx");
 const denialsPage = source("../src/domains/ar/DenialsPage.tsx");
@@ -15,16 +16,19 @@ const paymentsPage = source("../src/domains/payments/PaymentsPage.tsx");
 const paymentDrawers = source("../src/domains/payments/payment-work-drawers.tsx");
 const paymentAllocation = source("../src/domains/payments/payment-allocation.ts");
 
-test("active Claims workqueue opens the shared claim drawer with queue navigation", () => {
+test("active Claims workqueue opens a payer-follow-up drawer with queue navigation", () => {
   assert.match(claimsPage, /import \{ ClaimWorkDrawer/);
   assert.match(claimsPage, /activeClaimId/);
   assert.match(claimsPage, /<ClaimWorkDrawer/);
+  assert.match(claimsPage, /mode="follow_up"/);
   assert.match(claimsPage, /queuePosition=/);
   assert.match(claimsPage, /onPrevious=/);
   assert.match(claimsPage, /onNext=/);
+  assert.match(claimDrawer, /Payer follow-up/);
+  assert.match(claimDrawer, /openBalanceCents/);
 });
 
-test("Rejections use a correction-focused drawer instead of the generic claim workspace", () => {
+test("Rejections use a correction-focused drawer and actually resubmit corrected claims", () => {
   assert.match(rejectionsPage, /import \{ RejectionWorkDrawer/);
   assert.match(rejectionsPage, /<RejectionWorkDrawer/);
   assert.doesNotMatch(rejectionsPage, /<ClaimWorkDrawer/);
@@ -33,6 +37,8 @@ test("Rejections use a correction-focused drawer instead of the generic claim wo
   assert.match(rejectionDrawer, /Corrected value/);
   assert.match(rejectionDrawer, /Revalidate/);
   assert.match(rejectionDrawer, /Resubmit Claim/);
+  assert.match(rejectionDrawer, /createBatch/);
+  assert.match(rejectionDrawer, /submitBatch/);
 });
 
 test("Denials drawer supports correction and structured follow-up", () => {
