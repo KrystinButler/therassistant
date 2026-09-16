@@ -27,15 +27,25 @@ export async function getClaimsQueueData(): Promise<ClaimsQueueRow[]> {
     const submittedHistory = (work?.history ?? []).find((row) =>
       ["submitted", "accepted"].includes(String(row.new_status ?? "")),
     );
+    const submittedAt =
+      claim.submitted_at
+        ? String(claim.submitted_at)
+        : submittedHistory?.created_at
+          ? String(submittedHistory.created_at)
+          : null;
+    const latestResponse = work?.responses[0];
+    const responseAt = latestResponse?.created_at ? String(latestResponse.created_at) : null;
+    const responseIsCurrent = Boolean(latestResponse) && (
+      !submittedAt
+      || !responseAt
+      || new Date(responseAt).getTime() >= new Date(submittedAt).getTime()
+    );
+
     return {
       ...claim,
-      submittedAt:
-        claim.submitted_at
-          ? String(claim.submitted_at)
-          : submittedHistory?.created_at
-            ? String(submittedHistory.created_at)
-            : null,
-      hasPayerResponse: Boolean(claim.payer_claim_number) || (work?.responses.length ?? 0) > 0,
+      clearinghouseStatus: responseIsCurrent ? String(latestResponse?.response_status ?? "—") : "—",
+      submittedAt,
+      hasPayerResponse: latestResponse ? responseIsCurrent : Boolean(claim.payer_claim_number),
       deferred,
       hasActiveDenial: activeDenial,
     };
