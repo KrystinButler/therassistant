@@ -7,7 +7,8 @@ import {
   getRejectionCategories,
   type RejectionCategory,
 } from "../rcm/queue-routing";
-import { ClaimWorkDrawer, type ClaimWorkRecord } from "./claim-work-drawer";
+import type { ClaimWorkRecord } from "./claim-work-drawer";
+import { RejectionWorkDrawer } from "./rejection-work-drawer";
 import { getClaimsQueueData, type ClaimsQueueRow } from "./claims-queue-repository";
 import { getClaimWorkData } from "./workspace-repository";
 
@@ -183,7 +184,7 @@ export function RejectionsPage() {
                   type="button"
                   key={payer.id}
                   className={payerId === payer.id ? "thera-action" : "thera-action secondary"}
-                  onClick={() => setPayerId(payer.id)}
+                  onClick={() => { setPayerId(payer.id); setActiveClaimId(null); }}
                 >
                   {payer.name} ({payer.count})
                 </button>
@@ -201,7 +202,7 @@ export function RejectionsPage() {
                   aria-selected={category === value}
                   key={value}
                   className={category === value ? "thera-tab active" : "thera-tab"}
-                  onClick={() => setCategory(value)}
+                  onClick={() => { setCategory(value); setActiveClaimId(null); }}
                 >
                   {categoryLabels[value]} ({count})
                 </button>
@@ -234,8 +235,9 @@ export function RejectionsPage() {
         </div>
       )}
 
-      <ClaimWorkDrawer
+      <RejectionWorkDrawer
         claim={activeItem ? asDrawerClaim(activeItem.claim) : null}
+        messages={activeItem?.messages ?? []}
         open={Boolean(activeItem)}
         onOpenChange={(open) => {
           if (!open) {
