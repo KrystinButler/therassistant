@@ -12,6 +12,12 @@ function patientName(row: Record<string, unknown>) {
   return [preferred || row.first_name, row.last_name].filter(Boolean).join(" ") || "Patient";
 }
 
+function recordOf(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : {};
+}
+
 export function PatientPortalPage() {
   const [, params] = useRoute<{ clientId: string }>("/patient-portal/:clientId");
   const clientId = params?.clientId ?? "";
@@ -56,7 +62,13 @@ export function PatientPortalPage() {
     </div>
 
     <div className="thera-detail-grid">
-      <section className="thera-card thera-span-2"><div className="thera-card-header"><div><h2>Upcoming Appointments & Check-In</h2><p>Check-in status is saved to the same appointment record context used by the practice schedule.</p></div></div>{data.upcomingAppointments.length ? <div className="thera-stack">{data.upcomingAppointments.map((appointment) => { const checkin = checkinByAppointment.get(appointment.id); return <article className="thera-work-card" key={appointment.id}><div className="thera-work-card-top"><div><strong>{dateTime(String(appointment.starts_at ?? ""))}</strong><div className="thera-table-subtext">{String(appointment.service_type ?? "Appointment")} · {String(appointment.location_type ?? "").replaceAll("_", " ")}</div></div><StatusBadge value={String(appointment.appointment_status ?? "scheduled")} /></div><div className="thera-filter-row"><button type="button" className="thera-action secondary" disabled={Boolean(checkin?.on_my_way_at) || working !== null} onClick={() => void checkIn(appointment.id, "on_my_way")}>{checkin?.on_my_way_at ? "On My Way ✓" : "On My Way"}</button><button type="button" className="thera-action secondary" disabled={Boolean(checkin?.arrived_at) || working !== null} onClick={() => void checkIn(appointment.id, "arrived")}>{checkin?.arrived_at ? "Arrived ✓" : "I Arrived"}</button><button type="button" className="thera-action" disabled={Boolean(checkin?.checked_in_at) || working !== null} onClick={() => void checkIn(appointment.id, "checked_in")}>{checkin?.checked_in_at ? "Checked In ✓" : "Check In"}</button></div></article>; })}</div> : <div className="thera-empty">No upcoming appointments.</div>}</section>
+      <section className="thera-card thera-span-2"><div className="thera-card-header"><div><h2>Upcoming Appointments & Check-In</h2><p>Complete your pre-visit questions before the appointment, then use arrival check-in when you are on your way or at the office.</p></div></div>{data.upcomingAppointments.length ? <div className="thera-stack">{data.upcomingAppointments.map((appointment) => {
+        const checkin = checkinByAppointment.get(appointment.id);
+        const preVisit = recordOf(recordOf(checkin?.responses).pre_visit);
+        const preVisitStarted = Object.keys(preVisit).length > 0;
+        const preVisitSubmitted = Boolean(preVisit.submitted_at);
+        return <article className="thera-work-card" key={appointment.id}><div className="thera-work-card-top"><div><strong>{dateTime(String(appointment.starts_at ?? ""))}</strong><div className="thera-table-subtext">{String(appointment.service_type ?? "Appointment")} · {String(appointment.location_type ?? "").replaceAll("_", " ")}</div></div><StatusBadge value={String(appointment.appointment_status ?? "scheduled")} /></div><div className="thera-filter-row"><Link href={`/patient-portal/${clientId}/check-in/${appointment.id}`} className="thera-action">{preVisitSubmitted ? "Review Pre-Visit Check-In" : preVisitStarted ? "Continue Pre-Visit Check-In" : "Start Pre-Visit Check-In"}</Link><button type="button" className="thera-action secondary" disabled={Boolean(checkin?.on_my_way_at) || working !== null} onClick={() => void checkIn(appointment.id, "on_my_way")}>{checkin?.on_my_way_at ? "On My Way ✓" : "On My Way"}</button><button type="button" className="thera-action secondary" disabled={Boolean(checkin?.arrived_at) || working !== null} onClick={() => void checkIn(appointment.id, "arrived")}>{checkin?.arrived_at ? "Arrived ✓" : "I Arrived"}</button><button type="button" className="thera-action" disabled={Boolean(checkin?.checked_in_at) || working !== null} onClick={() => void checkIn(appointment.id, "checked_in")}>{checkin?.checked_in_at ? "Checked In ✓" : "Check In"}</button></div></article>;
+      })}</div> : <div className="thera-empty">No upcoming appointments.</div>}</section>
 
       <section className="thera-card"><h2>Demographics</h2><div className="thera-definition-grid"><Field label="Name" value={patientName(data.patient)} /><Field label="DOB" value={String(data.patient.date_of_birth ?? "—")} /><Field label="Phone" value={String(data.patient.phone ?? "—")} /><Field label="Email" value={String(data.patient.email ?? "—")} /><Field label="Address" value={[data.patient.address_line1, data.patient.city, data.patient.state, data.patient.postal_code].filter(Boolean).join(", ") || "—"} /></div><p className="thera-muted" style={{ marginTop: 12 }}>Demographic changes are handled through the practice workflow in this demo; the portal deliberately does not expose administrative fields.</p></section>
 

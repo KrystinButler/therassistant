@@ -47,6 +47,56 @@ export function planCheckInUpdate(step: CheckInStep, now = new Date()): Row {
   return { checked_in_at: timestamp };
 }
 
+function recordOf(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : {};
+}
+
+export type PreVisitCheckInUpdate = {
+  demographics_confirmed?: boolean;
+  insurance_confirmed?: boolean;
+  visit_questions?: Record<string, unknown>;
+  consents?: Record<string, unknown>;
+  submitted?: boolean;
+};
+
+export function buildPreVisitResponses(
+  existingResponses: Record<string, unknown>,
+  update: PreVisitCheckInUpdate,
+  now = new Date(),
+): Record<string, unknown> {
+  const previousPreVisit = recordOf(existingResponses.pre_visit);
+  const timestamp = now.toISOString();
+  const nextPreVisit: Record<string, unknown> = {
+    ...previousPreVisit,
+    ...(update.demographics_confirmed !== undefined ? { demographics_confirmed: update.demographics_confirmed } : {}),
+    ...(update.insurance_confirmed !== undefined ? { insurance_confirmed: update.insurance_confirmed } : {}),
+    updated_at: timestamp,
+  };
+
+  if (update.visit_questions) {
+    nextPreVisit.visit_questions = {
+      ...recordOf(previousPreVisit.visit_questions),
+      ...update.visit_questions,
+    };
+  }
+
+  if (update.consents) {
+    nextPreVisit.consents = {
+      ...recordOf(previousPreVisit.consents),
+      ...update.consents,
+    };
+  }
+
+  if (update.submitted === true) nextPreVisit.submitted_at = timestamp;
+
+  return {
+    ...existingResponses,
+    pre_visit: nextPreVisit,
+  };
+}
+
 export type JournalEntryInput = {
   entryText: string;
   mood?: string;

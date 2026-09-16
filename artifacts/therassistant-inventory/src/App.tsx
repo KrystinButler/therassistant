@@ -18,6 +18,7 @@ import { PaymentsPage } from "./domains/payments/PaymentsPage";
 import { AuthorizationsPage } from "./domains/payer-readiness/AuthorizationsPage";
 import { EligibilityPage } from "./domains/payer-readiness/EligibilityPage";
 import { PatientChartPage } from "./domains/patients/PatientChartPage";
+import { PatientCheckInPage } from "./domains/portal/PatientCheckInPage";
 import { PatientJournalPage } from "./domains/portal/PatientJournalPage";
 import { PatientPortalPage } from "./domains/portal/PatientPortalPage";
 import { SchedulePage } from "./domains/scheduling/SchedulePage";
@@ -54,6 +55,7 @@ export default function App() {
   if (location.startsWith("/patient-portal/")) {
     return (
       <Switch>
+        <Route path="/patient-portal/:clientId/check-in/:appointmentId"><PatientCheckInPage /></Route>
         <Route path="/patient-portal/:clientId/journal"><PatientJournalPage /></Route>
         <Route path="/patient-portal/:clientId"><PatientPortalPage /></Route>
         <Route><div className="thera-state">Patient portal page not found.</div></Route>
