@@ -66,6 +66,7 @@ export function RejectionsPage() {
       const rejected = data.filter((row) =>
         getOperationalHome({
           claimStatus: row.claim_status,
+          latestResponseStatus: row.clearinghouseStatus,
           hasActiveDenial: row.hasActiveDenial,
           openBalanceCents: row.openBalanceCents,
         }) === "rejections",
@@ -80,8 +81,8 @@ export function RejectionsPage() {
           )
           .flatMap((row) => splitMessages(row.description));
         const responseMessages = (work?.responses ?? [])
-          .filter((row) => String(row.response_status ?? "").toLowerCase() === "rejected")
           .slice(0, 1)
+          .filter((row) => String(row.response_status ?? "").toLowerCase() === "rejected")
           .flatMap((row) => splitMessages(row.response_message));
         const messages = [...validationMessages, ...responseMessages];
         const categories = getRejectionCategories(messages.length ? messages : ["Other claim correction required."]);
