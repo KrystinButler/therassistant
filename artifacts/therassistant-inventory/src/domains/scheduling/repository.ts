@@ -7,6 +7,10 @@ import {
 } from "../../lib/supabase-demo-client";
 import { evaluatePreSession } from "../readiness/evaluate-pre-session";
 import type { PreSessionReadiness } from "../readiness/types";
+import {
+  buildPatientReviewContext,
+  type PatientReviewContext,
+} from "./patient-review";
 import { buildAppointmentInput, syntheticEligibilityStatus, type AppointmentDraft } from "./workflow";
 
 type DataRow = Row & { id: string };
@@ -15,6 +19,7 @@ export type ScheduleAppointment = {
   id: string;
   clientId: string;
   clientName: string;
+  clientPronouns: string | null;
   providerId: string | null;
   providerName: string;
   payerId: string | null;
@@ -38,6 +43,7 @@ export type ScheduleAppointment = {
   treatmentPlanStatus: string | null;
   treatmentPlanReviewDueDate: string | null;
   readiness: PreSessionReadiness;
+  patientReview: PatientReviewContext;
 };
 
 export type ScheduleData = {
@@ -150,6 +156,54 @@ function remainingUnitsFor(
   );
 }
 
+function checkinForAppointment(rows: DataRow[], appointmentId: string) {
+  return rows
+    .filter((row) => row.appointment_id === appointmentId)
+    .sort((a, b) =>
+      String(b.created_at ?? "").localeCompare(String(a.created_at ?? "")),
+    )[0] ?? null;
+}
+
+function journalsForClient(rows: DataRow[], clientId: string) {
+  return rows.filter((row) => row.client_id === clientId);
+}
+
+function activeGoalForPlan(rows: DataRow[], treatmentPlanId: string | null) {
+  if (!treatmentPlanId) return null;
+  const planGoals = rows.filter((row) => row.treatment_plan_id === treatmentPlanId);
+  return (
+    planGoals.find((row) =>
+      ["active", "in_progress", "on_track"].includes(String(row.status ?? "")),
+    ) ??
+    planGoals[0] ??
+    null
+  );
+}
+
+function latestPriorEncounter(
+  rows: DataRow[],
+  clientId: string,
+  appointmentStart: string,
+) {
+  return rows
+    .filter((row) => {
+      if (row.client_id !== clientId) return false;
+      const startedAt = String(row.started_at ?? "");
+      return Boolean(startedAt) && startedAt < appointmentStart;
+    })
+    .sort((a, b) =>
+      String(b.started_at ?? "").localeCompare(String(a.started_at ?? "")),
+    )[0] ?? null;
+}
+
+function latestNoteForEncounter(rows: DataRow[], encounterId: string) {
+  return rows
+    .filter((row) => row.encounter_id === encounterId)
+    .sort((a, b) =>
+      String(b.created_at ?? "").localeCompare(String(a.created_at ?? "")),
+    )[0] ?? null;
+}
+
 export async function getScheduleData(): Promise<ScheduleData> {
   const [
     appointments,
@@ -161,6 +215,11 @@ export async function getScheduleData(): Promise<ScheduleData> {
     authorizationUnits,
     enrollments,
     treatmentPlans,
+    treatmentGoals,
+    checkins,
+    journalEntries,
+    encounters,
+    notes,
     payers,
     plans,
   ] = await Promise.all([
@@ -173,6 +232,13 @@ export async function getScheduleData(): Promise<ScheduleData> {
     demoSelect<DataRow>("authorization_units"),
     demoSelect<DataRow>("provider_payer_enrollments"),
     demoSelect<DataRow>("treatment_plans"),
+    demoSelect<DataRow>("treatment_plan_goals", { order: "created_at.asc" }),
+    demoSelect<DataRow>("client_checkins"),
+    demoSelect<DataRow>("patient_journal_entries", {
+      order: "entry_date.desc,created_at.desc",
+    }),
+    demoSelect<DataRow>("encounters", { order: "started_at.desc" }),
+    demoSelect<DataRow>("clinical_notes", { order: "created_at.desc" }),
     referenceSelect<DataRow>("payers", { order: "name.asc" }),
     referenceSelect<DataRow>("payer_plans", { order: "name.asc" }),
   ]);
@@ -184,6 +250,7 @@ export async function getScheduleData(): Promise<ScheduleData> {
 
   const enriched = appointments.map((appointment): ScheduleAppointment => {
     const clientId = String(appointment.client_id ?? "");
+    const client = clientsById.get(clientId);
     const providerId = appointment.provider_id ? String(appointment.provider_id) : null;
     const policy = primaryPolicy(policies, clientId);
     const payerId = policy?.payer_id ? String(policy.payer_id) : null;
@@ -206,7 +273,23 @@ export async function getScheduleData(): Promise<ScheduleData> {
         row.payer_id === payerId,
     );
     const serviceDate = String(appointment.starts_at ?? "").slice(0, 10);
+    const appointmentStart = String(appointment.starts_at ?? "");
     const treatmentPlan = currentTreatmentPlan(treatmentPlans, clientId, serviceDate);
+    const activeGoal = activeGoalForPlan(
+      treatmentGoals,
+      treatmentPlan?.id ?? null,
+    );
+    const checkin = checkinForAppointment(checkins, appointment.id);
+    const priorEncounter = latestPriorEncounter(encounters, clientId, appointmentStart);
+    const priorNote = priorEncounter
+      ? latestNoteForEncounter(notes, priorEncounter.id)
+      : null;
+    const patientReview = buildPatientReviewContext({
+      checkin,
+      journals: journalsForClient(journalEntries, clientId),
+      activeGoal,
+      priorNote,
+    });
 
     const readiness = evaluatePreSession({
       policy: policy ? { status: String(policy.status ?? "unknown") } : null,
@@ -237,7 +320,8 @@ export async function getScheduleData(): Promise<ScheduleData> {
     return {
       id: appointment.id,
       clientId,
-      clientName: name(clientsById.get(clientId)),
+      clientName: name(client),
+      clientPronouns: String(client?.pronouns ?? "").trim() || null,
       providerId,
       providerName: name(providerId ? providersById.get(providerId) : null),
       payerId,
@@ -254,7 +338,7 @@ export async function getScheduleData(): Promise<ScheduleData> {
       serviceType: String(appointment.service_type ?? ""),
       cptCode: String(appointment.cpt_code ?? ""),
       registrationStatus: String(
-        clientsById.get(clientId)?.registration_status ?? "not_started",
+        client?.registration_status ?? "not_started",
       ),
       eligibilityStatus: eligibilityRow
         ? String(eligibilityRow.eligibility_status ?? "")
@@ -277,6 +361,7 @@ export async function getScheduleData(): Promise<ScheduleData> {
         ? String(treatmentPlan.review_due_date)
         : null,
       readiness,
+      patientReview,
     };
   });
 
