@@ -32,15 +32,20 @@ export type DenialTab = "corrected_claims" | "appeals" | "deferred" | string;
 
 export function getOperationalHome(input: {
   claimStatus: unknown;
+  latestResponseStatus?: unknown;
   hasActiveDenial: boolean;
   openBalanceCents: number;
 }): OperationalHome {
   const status = String(input.claimStatus ?? "");
+  const latestResponseStatus = String(input.latestResponseStatus ?? "").toLowerCase();
 
   if (input.hasActiveDenial || ["denied", "appealed"].includes(status)) {
     return "denials";
   }
-  if (["validation_failed", "rejected", "corrected"].includes(status)) {
+  if (
+    ["validation_failed", "rejected", "corrected"].includes(status)
+    || (latestResponseStatus === "rejected" && ["submitted", "batched"].includes(status))
+  ) {
     return "rejections";
   }
   if (["ready_for_validation", "ready_for_batch", "batched"].includes(status)) {
