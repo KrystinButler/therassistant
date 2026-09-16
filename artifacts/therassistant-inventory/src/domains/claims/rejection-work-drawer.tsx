@@ -11,9 +11,9 @@ import {
   type ClaimIdentityValues,
 } from "./claim-work-identity";
 import type { ClaimWorkRecord } from "./claim-work-drawer";
+import { createBatch, submitBatch } from "./repository";
 import {
   getClaimWorkData,
-  retryRejectedClaims,
   saveClaimWorkFields,
   type ClaimWorkFieldValues,
 } from "./workspace-repository";
@@ -111,7 +111,6 @@ export function RejectionWorkDrawer({
     setError(null);
     setNotice(null);
     try {
-      if (resubmit) await retryRejectedClaims([claim.id]);
       await saveClaimIdentityFields(claim.id, form);
       const result = await saveClaimWorkFields(claim.id, form, revalidate || resubmit);
       const work = await getClaimWorkData(claim.id);
@@ -124,7 +123,11 @@ export function RejectionWorkDrawer({
         return;
       }
       if (resubmit) {
-        setNotice("Corrected claim was revalidated and returned to the submission queue.");
+        const batch = await createBatch([claim.id], `Corrected claim ${claim.patientControlNumber || claim.id}`);
+        if (!batch.ok) throw new Error(batch.message || "Unable to create corrected-claim submission batch.");
+        const submission = await submitBatch(batch.value.batchId);
+        if (!submission.ok) throw new Error(submission.message || "Unable to resubmit corrected claim.");
+        setNotice("Corrected claim was revalidated and resubmitted.");
         if (onNext && !nextDisabled) onNext();
       } else if (revalidate) {
         setNotice("Claim was saved and revalidated.");
