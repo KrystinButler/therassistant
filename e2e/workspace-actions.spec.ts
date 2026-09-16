@@ -58,6 +58,7 @@ test("Claims opens Claim 360 from the payer queue and returns to Claims", async 
   await openClaim.click();
   await expect.poll(() => new URL(page.url()).pathname).toMatch(/^\/claims\/[^/]+$/);
   await expect(page.getByText("CLAIM 360", { exact: true })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Open Claim Submission", exact: true })).toHaveCount(0);
 
   await page.locator(".thera-breadcrumb").getByRole("link", { name: "Claims", exact: true }).click();
   await expectWorkspace(page, "Claims");
