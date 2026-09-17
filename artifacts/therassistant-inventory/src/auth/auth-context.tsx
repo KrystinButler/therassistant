@@ -7,14 +7,20 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import type { Session, User } from "@supabase/supabase-js";
 
-import { supabase } from "../lib/supabase-client";
+import {
+  getSession,
+  onAuthStateChange,
+  signInWithPassword,
+  signOutSession,
+  type AuthSession,
+  type AuthUser,
+} from "../lib/supabase-client";
 import { setActiveTenantId } from "../lib/tenant-session";
 
 type AuthContextValue = {
-  session: Session | null;
-  user: User | null;
+  session: AuthSession | null;
+  user: AuthUser | null;
   loading: boolean;
   error: string | null;
   signIn(email: string, password: string): Promise<void>;
@@ -23,26 +29,28 @@ type AuthContextValue = {
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
-function messageOf(error: unknown) {
-  return error instanceof Error ? error.message : "Authentication failed.";
-}
-
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [session, setSession] = useState<Session | null>(null);
+  const [session, setSession] = useState<AuthSession | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     let mounted = true;
+    void getSession()
+      .then((nextSession) => {
+        if (!mounted) return;
+        setSession(nextSession);
+        setLoading(false);
+      })
+      .catch((err) => {
+        if (!mounted) return;
+        setError(err instanceof Error ? err.message : "Unable to load authentication session.");
+        setSession(null);
+        setLoading(false);
+      });
 
-    void supabase.auth.getSession().then(({ data, error: sessionError }) => {
+    const unsubscribe = onAuthStateChange((nextSession) => {
       if (!mounted) return;
-      if (sessionError) setError(sessionError.message);
-      setSession(data.session);
-      setLoading(false);
-    });
-
-    const { data: listener } = supabase.auth.onAuthStateChange((_event, nextSession) => {
       setSession(nextSession);
       setError(null);
       setLoading(false);
@@ -51,15 +59,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     return () => {
       mounted = false;
-      listener.subscription.unsubscribe();
+      unsubscribe();
     };
   }, []);
 
   const signIn = useCallback(async (email: string, password: string) => {
     setError(null);
-    const { error: signInError } = await supabase.auth.signInWithPassword({ email, password });
-    if (signInError) {
-      const message = signInError.message;
+    try {
+      const nextSession = await signInWithPassword(email, password);
+      setSession(nextSession);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Unable to sign in.";
       setError(message);
       throw new Error(message);
     }
@@ -68,9 +78,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const signOut = useCallback(async () => {
     setError(null);
     setActiveTenantId(null);
-    const { error: signOutError } = await supabase.auth.signOut();
-    if (signOutError) {
-      const message = signOutError.message;
+    try {
+      await signOutSession();
+      setSession(null);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Unable to sign out.";
       setError(message);
       throw new Error(message);
     }
@@ -96,5 +108,3 @@ export function useAuth() {
   if (!value) throw new Error("useAuth must be used inside AuthProvider.");
   return value;
 }
-
-export { messageOf as authErrorMessage };
