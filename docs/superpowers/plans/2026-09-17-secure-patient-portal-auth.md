@@ -106,7 +106,7 @@ Create `artifacts/therassistant-inventory/tests/patient-portal-auth-contract.tes
 ```ts
 import test from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync, readdirSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 
 function migration(name: string) {
@@ -786,7 +786,7 @@ create or replace function public.portal_add_journal_entry(
   p_entry_text text,
   p_mood text default null,
   p_visibility text default 'shared_with_provider',
-  p_tags text[] default '{}',
+  p_tags jsonb default '[]'::jsonb,
   p_related_treatment_goal_id uuid default null,
   p_entry_status text default 'submitted'
 ) returns jsonb
@@ -821,6 +821,10 @@ begin
     raise exception 'Invalid journal entry status';
   end if;
 
+  if jsonb_typeof(coalesce(p_tags, '[]'::jsonb)) <> 'array' then
+    raise exception 'Journal tags must be an array';
+  end if;
+
   if p_related_treatment_goal_id is not null and not exists (
     select 1
     from public.treatment_plan_goals tpg
@@ -839,7 +843,7 @@ begin
   ) values (
     v_access.tenant_id, v_access.client_id, current_date, trim(p_entry_text),
     nullif(trim(coalesce(p_mood, '')), ''), 'patient', 'unreviewed',
-    p_visibility, coalesce(p_tags, '{}'), p_related_treatment_goal_id,
+    p_visibility, coalesce(p_tags, '[]'::jsonb), p_related_treatment_goal_id,
     p_entry_status,
     case when p_entry_status = 'submitted' then now() else null end
   )
@@ -849,8 +853,8 @@ begin
 end;
 $$;
 
-revoke all on function public.portal_add_journal_entry(text, text, text, text[], uuid, text) from public, anon;
-grant execute on function public.portal_add_journal_entry(text, text, text, text[], uuid, text) to authenticated;
+revoke all on function public.portal_add_journal_entry(text, text, text, jsonb, uuid, text) from public, anon;
+grant execute on function public.portal_add_journal_entry(text, text, text, jsonb, uuid, text) to authenticated;
 ```
 
 - [ ] **Step 6: Explicitly avoid direct patient mutation grants**
