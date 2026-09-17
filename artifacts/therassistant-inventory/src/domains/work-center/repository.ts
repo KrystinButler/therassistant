@@ -110,14 +110,14 @@ export function sourceRouteForWorkItem(type: string, id: string) {
     case "eligibility": return "/eligibility";
     case "charge": return "/billing/charges";
     case "payment": return "/payments";
-    case "denial": return "/denials";
-    case "appeal": return "/denials";
-    case "adjustment": return "/denials";
+    case "denial": return "/ar-denials?tab=denials";
+    case "appeal": return "/ar-denials";
+    case "adjustment": return "/ar-denials?tab=recovery";
     case "era": return "/payments";
-    case "claim_batch": return "/billing/charges";
+    case "claim_batch": return "/claims/submission";
     case "payer_contract": return "/payers-contracts";
     case "mailroom_item": return `/mailroom/${id}`;
-    default: return "/claims";
+    default: return "/work-center";
   }
 }
 
