@@ -11,6 +11,15 @@ function migration(name: string) {
   return readFileSync(join(dir, file), "utf8");
 }
 
+function functionStatement(sql: string, qualifiedName: string) {
+  const marker = `create or replace function ${qualifiedName}(`;
+  const start = sql.toLowerCase().indexOf(marker.toLowerCase());
+  assert.notEqual(start, -1, `missing function: ${qualifiedName}`);
+  const end = sql.indexOf("$;", start);
+  assert.notEqual(end, -1, `unterminated function: ${qualifiedName}`);
+  return sql.slice(start, end + 3);
+}
+
 test("secure patient portal migration defines mapped identity and active-only access", () => {
   const sql = migration("secure_patient_portal_auth");
   assert.match(sql, /create table public\.client_portal_access/i);
@@ -74,15 +83,28 @@ test("portal policy hardening consolidates staff and patient read paths", () => 
 
 test("privileged portal bodies live in private schema behind invoker wrappers", () => {
   const sql = migration("secure_patient_portal_definer_isolation");
+
   for (const name of [
     "activate_my_client_portal_access",
     "revoke_client_portal_access",
     "get_my_portal_provider_summary",
   ]) {
-    assert.match(sql, new RegExp(`private\\.${name}_impl`, "i"));
-    assert.match(sql, new RegExp(`public\\.${name}[\\s\\S]+security invoker`, "i"));
+    const publicWrapper = functionStatement(sql, `public.${name}`);
+    const privateImpl = functionStatement(sql, `private.${name}_impl`);
+
+    assert.match(publicWrapper, /security invoker/i);
+    assert.doesNotMatch(publicWrapper, /security definer/i);
+    assert.match(privateImpl, /security definer/i);
   }
-  assert.match(sql, /private\.activate_my_client_portal_access_impl\(\)[\s\S]+security definer/i);
-  assert.match(sql, /private\.revoke_client_portal_access_impl\(p_client_id uuid\)[\s\S]+security definer/i);
-  assert.match(sql, /private\.get_my_portal_provider_summary_impl\(\)[\s\S]+security definer/i);
+});
+
+test("patient journal uses one combined staff-or-patient read policy", () => {
+  const sql = migration("secure_patient_portal_journal_read_policy");
+  assert.match(sql, /drop policy if exists "journal patient portal select"/i);
+  assert.match(sql, /drop policy if exists "patient_journal_entries tenant select"/i);
+  assert.match(sql, /create policy "patient_journal_entries tenant select"/i);
+  assert.match(
+    sql,
+    /private\.has_tenant_read_access\(tenant_id\)[\s\S]+private\.has_client_portal_access\(tenant_id, client_id\)/i,
+  );
 });
