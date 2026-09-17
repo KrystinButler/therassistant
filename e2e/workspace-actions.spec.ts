@@ -12,9 +12,9 @@ test("Patients opens an add-patient drawer and preserves the workspace on cancel
   await page.goto("/clients");
   await page.getByRole("button", { name: "+ Add Patient" }).click();
   await expect(page.getByRole("heading", { name: "Add Patient" })).toBeVisible();
-  await page.getByLabel("First Name").fill("E2E");
-  await page.getByLabel("Last Name").fill("Patient");
-  await expect(page.getByRole("button", { name: "Save Patient" })).toBeEnabled();
+  await page.getByRole("textbox", { name: "Patient First Name *", exact: true }).fill("E2E");
+  await page.getByRole("textbox", { name: "Patient Last Name *", exact: true }).fill("Patient");
+  await expect(page.getByRole("button", { name: "Save Patient" })).toBeDisabled();
   await page.getByRole("button", { name: "Cancel" }).click();
   await expect(page.getByRole("heading", { name: "Add Patient" })).toBeHidden();
   await expectWorkspace(page, "Patients");
