@@ -11,8 +11,10 @@ import {
 import {
   getSession,
   onAuthStateChange,
+  requestPasswordRecovery,
   signInWithPassword,
   signOutSession,
+  updatePassword,
   type AuthSession,
   type AuthUser,
 } from "../lib/supabase-client";
@@ -23,8 +25,11 @@ type AuthContextValue = {
   user: AuthUser | null;
   loading: boolean;
   error: string | null;
+  passwordRecovery: boolean;
   signIn(email: string, password: string): Promise<void>;
   signOut(): Promise<void>;
+  requestPasswordReset(email: string): Promise<void>;
+  completePasswordRecovery(password: string): Promise<void>;
 };
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -88,16 +93,43 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
+  const requestPasswordReset = useCallback(async (email: string) => {
+    setError(null);
+    try {
+      await requestPasswordRecovery(email);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Unable to request a password reset.";
+      setError(message);
+      throw new Error(message);
+    }
+  }, []);
+
+  const completePasswordRecovery = useCallback(async (password: string) => {
+    setError(null);
+    setActiveTenantId(null);
+    try {
+      await updatePassword(password);
+      setSession(null);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Unable to update password.";
+      setError(message);
+      throw new Error(message);
+    }
+  }, []);
+
   const value = useMemo<AuthContextValue>(
     () => ({
       session,
       user: session?.user ?? null,
       loading,
       error,
+      passwordRecovery: Boolean(session?.recovery),
       signIn,
       signOut,
+      requestPasswordReset,
+      completePasswordRecovery,
     }),
-    [session, loading, error, signIn, signOut],
+    [session, loading, error, signIn, signOut, requestPasswordReset, completePasswordRecovery],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
