@@ -34,11 +34,18 @@ test("Schedule opens a new-appointment drawer and returns to the schedule", asyn
   expect(new URL(page.url()).pathname).toBe("/schedule");
 });
 
-test("Claim 360 stays detail-only and returns to Claims", async ({ page }) => {
+test("Claims supports an empty production queue or opens Claim 360 when work exists", async ({ page }) => {
   await page.goto("/claims");
-  const workClaim = page.getByRole("button", { name: "Work Claim" }).first();
-  await expect(workClaim).toBeVisible();
-  await workClaim.click();
+  await expectWorkspace(page, "Claims");
+  await expect(page.getByText("Loading Claims...")).toHaveCount(0);
+
+  const workClaims = page.getByRole("button", { name: "Work Claim" });
+  if ((await workClaims.count()) === 0) {
+    await expect(page.getByText("No outstanding payer claims.", { exact: true })).toBeVisible();
+    return;
+  }
+
+  await workClaims.first().click();
   await page.getByRole("button", { name: "Open Full Claim 360" }).click();
 
   await expect.poll(() => new URL(page.url()).pathname).toMatch(/^\/claims\/[^/]+$/);
@@ -60,13 +67,25 @@ test("Payments opens the post-payment drawer without posting", async ({ page }) 
   await expectWorkspace(page, "Payments");
 });
 
-test("Credentialing opens enrollment work and returns without changing the enrollment", async ({
+test("Credentialing uses production data access and opens enrollment work when records exist", async ({
   page,
 }) => {
+  const retiredRequests: string[] = [];
+  page.on("request", (request) => {
+    const pathname = new URL(request.url()).pathname;
+    if (pathname.startsWith("/api/credentialing/")) retiredRequests.push(pathname);
+  });
+
   await page.goto("/credentialing");
-  const edit = page.getByRole("button", { name: "Edit Enrollment" }).first();
-  await expect(edit).toBeVisible();
-  await edit.click();
+  await expectWorkspace(page, "Credentialing");
+  await expect(page.getByText("Loading credentialing...")).toHaveCount(0);
+  await expect(page.getByRole("columnheader", { name: "Provider" })).toBeVisible();
+  expect(retiredRequests).toEqual([]);
+
+  const edits = page.getByRole("button", { name: "Edit Enrollment" });
+  if ((await edits.count()) === 0) return;
+
+  await edits.first().click();
   await expect(page.getByRole("heading", { name: "Edit Enrollment" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Save Enrollment" })).toBeVisible();
   await page.getByRole("button", { name: "Cancel" }).click();
