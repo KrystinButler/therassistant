@@ -27,8 +27,21 @@ if (!api.includes('authenticatedFetch')) {
     /let demoTenantPromise[\s\S]*?async function referenceRows/,
     `async function tenantRows(table: string) {\n  const tenantId = requireActiveTenantId();\n  return supabaseRows(table, { tenant_id: \`eq.\${tenantId}\` });\n}\n\nasync function referenceRows`,
   );
-  write(apiPath, api);
 }
+
+// Remove the retired demo-control API surface. Production tenant context comes
+// exclusively from the authenticated session and tenant membership tables.
+api = api.replace(/\nasync function demoStatus\(\) \{[\s\S]*?\n\}\n\nfunction isDirectPath/, '\nfunction isDirectPath');
+api = api.replace('    "/api/demo-control/status",\n', '');
+api = api.replace(/\n  if \(pathname === "\/api\/demo-control\/status"\) \{\n    return \(await demoStatus\(\)\) as T;\n  \}\n/, '\n');
+api = api.replace(/\n      if \(\n        method === "POST" &&\n        parsed\.pathname === "\/api\/demo-control\/reset"\n      \) \{[\s\S]*?\n      \}\n/, '\n');
+if (!api.includes('const nativeFetch = globalThis.fetch.bind(globalThis);')) {
+  api = api.replace(
+    'import { requireActiveTenantId } from "./tenant-session";\n',
+    'import { requireActiveTenantId } from "./tenant-session";\n\nconst nativeFetch = globalThis.fetch.bind(globalThis);\n',
+  );
+}
+write(apiPath, api);
 
 const mailroomPath = 'artifacts/therassistant-inventory/src/domains/mailroom/repository.ts';
 let mailroom = read(mailroomPath);
@@ -89,9 +102,10 @@ const unsupportedClientExports = [
 let migratedFiles = 0;
 for (const path of sourcePaths) {
   let text = read(path);
+  const original = text;
   const hadClient = text.includes('supabase-demo-client');
   const hadStorage = text.includes('supabase-demo-storage');
-  if (!hadClient && !hadStorage) continue;
+  const hadDemoData = /["'][^"']*demo-data["']/.test(text);
 
   if (hadClient) {
     for (const symbol of unsupportedClientExports) {
@@ -101,7 +115,6 @@ for (const path of sourcePaths) {
       }
     }
     text = text.replaceAll('supabase-demo-client', 'tenant-data-client');
-    for (const [from, to] of clientSymbolReplacements) text = text.replaceAll(from, to);
   }
 
   if (hadStorage) {
@@ -109,13 +122,40 @@ for (const path of sourcePaths) {
     for (const [from, to] of storageSymbolReplacements) text = text.replaceAll(from, to);
   }
 
-  write(path, text);
-  migratedFiles += 1;
+  if (hadDemoData) {
+    text = text.replaceAll('demo-data', 'tenant-data-client');
+    text = text.replaceAll('demoRows', 'tenantSelect');
+    text = text.replaceAll('referenceRows', 'referenceSelect');
+  }
+
+  // These legacy adapter names are forbidden anywhere in production staff
+  // source, including source-inspection contract tests.
+  for (const [from, to] of clientSymbolReplacements) text = text.replaceAll(from, to);
+
+  if (text !== original) {
+    write(path, text);
+    migratedFiles += 1;
+  }
 }
 
-const legacyImports = sourcePaths.filter((path) => /supabase-demo-(client|storage)/.test(read(path)));
-if (legacyImports.length) {
-  throw new Error(`Legacy demo adapters remain in: ${legacyImports.join(', ')}`);
+const forbiddenMarkers = [
+  'supabase-demo-client',
+  'supabase-demo-storage',
+  'demoInsert',
+  'demoSelect',
+  'demoUpdate',
+  'demoRpc',
+  'demoTenant',
+];
+const forbiddenFiles = [];
+for (const path of sourcePaths) {
+  const text = read(path);
+  for (const marker of forbiddenMarkers) {
+    if (text.includes(marker)) forbiddenFiles.push(`${path}: ${marker}`);
+  }
+}
+if (forbiddenFiles.length) {
+  throw new Error(`Legacy production markers remain:\n${forbiddenFiles.join('\n')}`);
 }
 
 const navigationPath = 'artifacts/therassistant-inventory/src/navigation/sections.ts';
