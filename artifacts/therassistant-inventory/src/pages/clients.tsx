@@ -3,7 +3,7 @@ import { Link, useLocation } from "wouter";
 import { StatusBadge } from "../components/status-badge";
 import { WorkDrawer } from "../components/work-drawer";
 import { dateTime, money, shortDate } from "../lib/format";
-import { demoInsert, demoUpdate } from "../lib/demo-data";
+import { tenantInsert, tenantUpdate } from "../lib/tenant-data-client";
 import { useApi } from "../lib/therassistant-api";
 
 type ClientRow = { id: string; firstName: string; lastName: string; preferredName?: string | null; dateOfBirth?: string | null; email?: string | null; phone?: string | null; clientStatus: string; registrationStatus: string; billingReadinessStatus: string; payerName?: string | null; planName?: string | null; nextAppointment?: string | null; openBalanceCents?: number };
@@ -15,7 +15,7 @@ export function ClientsPage() {
   const { data, loading, error } = useApi<ClientRow[]>(`/api/clients?search=${encodeURIComponent(search)}&refresh=${version}`);
   const dirty = useMemo(() => Boolean(form && baseline && JSON.stringify(form) !== JSON.stringify(baseline)), [form, baseline]);
   function openForm(next: FormState) { setForm(next); setBaseline({ ...next }); }
-  async function save() { if (!form?.first_name.trim() || !form.last_name.trim()) return; setSaving(true); try { const payload = { first_name: form.first_name.trim(), last_name: form.last_name.trim(), preferred_name: form.preferred_name || null, date_of_birth: form.date_of_birth || null, email: form.email || null, phone: form.phone || null, client_status: form.client_status, registration_status: form.registration_status }; if (form.id) await demoUpdate("clients", form.id, payload); else await demoInsert("clients", { ...payload, billing_readiness_status: "not_ready" }); setForm(null); setBaseline(null); setVersion((v) => v + 1); } finally { setSaving(false); } }
+  async function save() { if (!form?.first_name.trim() || !form.last_name.trim()) return; setSaving(true); try { const payload = { first_name: form.first_name.trim(), last_name: form.last_name.trim(), preferred_name: form.preferred_name || null, date_of_birth: form.date_of_birth || null, email: form.email || null, phone: form.phone || null, client_status: form.client_status, registration_status: form.registration_status }; if (form.id) await tenantUpdate("clients", form.id, payload); else await tenantInsert("clients", { ...payload, billing_readiness_status: "not_ready" }); setForm(null); setBaseline(null); setVersion((v) => v + 1); } finally { setSaving(false); } }
   function edit(client: ClientRow) { openForm({ id: client.id, first_name: client.firstName, last_name: client.lastName, preferred_name: client.preferredName || "", date_of_birth: client.dateOfBirth || "", email: client.email || "", phone: client.phone || "", client_status: client.clientStatus, registration_status: client.registrationStatus }); }
   return <>
     <div className="thera-page-header split"><div><div className="thera-eyebrow">PATIENT OPERATIONS</div><h1>Patients</h1><p>Clinical, payer, authorization, claim, payment, and work history in one record.</p></div><div className="thera-filter-row"><input className="thera-input" placeholder="Search patients..." value={search} onChange={(e) => setSearch(e.target.value)} /><button type="button" className="thera-action" onClick={() => openForm({ ...blank })}>+ Add Patient</button></div></div>

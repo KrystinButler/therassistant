@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "wouter";
 import { StatusBadge } from "../../components/status-badge";
-import { demoRows, referenceRows } from "../../lib/demo-data";
+import { tenantSelect, referenceSelect } from "../../lib/tenant-data-client";
 import { shortDate } from "../../lib/format";
 
 type Row = Record<string, any>;
@@ -33,10 +33,10 @@ export function PayersContractsPage() {
     setLoading(true);
     setError(null);
     Promise.all([
-      referenceRows("payers"),
-      demoRows("payer_contracts"),
-      referenceRows("payer_plans"),
-      demoRows("provider_payer_enrollments"),
+      referenceSelect("payers"),
+      tenantSelect("payer_contracts"),
+      referenceSelect("payer_plans"),
+      tenantSelect("provider_payer_enrollments"),
     ])
       .then(([payerRows, contractRows, planRows, enrollmentRows]) => {
         if (!active) return;

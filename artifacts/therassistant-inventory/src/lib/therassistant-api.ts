@@ -3,6 +3,8 @@ import { useEffect, useState } from "react";
 import { authenticatedFetch, SUPABASE_URL } from "./supabase-client";
 import { requireActiveTenantId } from "./tenant-session";
 
+const nativeFetch = globalThis.fetch.bind(globalThis);
+
 export type ApiState<T> = {
   data: T | null;
   loading: boolean;
@@ -879,39 +881,6 @@ async function preSessionData(appointmentId: string) {
   };
 }
 
-async function demoStatus() {
-  const [tenant, clients, providers, appointments, claims, workItems] =
-    await Promise.all([
-      demoTenant(),
-      tenantRows("clients"),
-      tenantRows("providers"),
-      tenantRows("appointments"),
-      tenantRows("professional_claims"),
-      tenantRows("workqueue_items"),
-    ]);
-
-  return {
-    tenant: {
-      ...tenant,
-      tenantType: tenant.tenant_type,
-    },
-    summary: {
-      clients: clients.length,
-      providers: providers.length,
-      appointments: appointments.length,
-      claims: claims.length,
-      openWorkItems: workItems.filter(
-        (item) =>
-          !["completed", "cancelled"].includes(
-            item.workqueue_status,
-          ),
-      ).length,
-    },
-    managedPractices: [],
-    operationalDemoTenantId: tenant.id,
-  };
-}
-
 function isDirectPath(pathname: string) {
   return [
     "/api/dashboard",
@@ -935,7 +904,6 @@ function isDirectPath(pathname: string) {
     "/api/claim-submission",
     "/api/claim-follow-up",
     "/api/reports",
-    "/api/demo-control/status",
   ].some(
     (prefix) =>
       pathname === prefix || pathname.startsWith(`${prefix}/`),
@@ -1096,9 +1064,6 @@ export async function apiGet<T = unknown>(path: string): Promise<T> {
     return (await reportData()) as T;
   }
 
-  if (pathname === "/api/demo-control/status") {
-    return (await demoStatus()) as T;
-  }
 
   throw new Error(`Unsupported direct Supabase route: ${pathname}`);
 }
@@ -1155,16 +1120,6 @@ function installDirectSupabaseFetch() {
         }
       }
 
-      if (
-        method === "POST" &&
-        parsed.pathname === "/api/demo-control/reset"
-      ) {
-        demoTenantPromise = null;
-        return jsonResponse({
-          ok: true,
-          message: "Live Supabase demo data reloaded.",
-        });
-      }
     }
 
     return nativeFetch(input, init);

@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Link, useLocation } from "wouter";
 import { WorkDrawer } from "../../components/work-drawer";
 import { StatusBadge } from "../../components/status-badge";
-import { demoRows, referenceRows } from "../../lib/demo-data";
+import { tenantSelect, referenceSelect } from "../../lib/tenant-data-client";
 import { shortDate } from "../../lib/format";
 import { availableEnrollmentActions, revalidationState, type EnrollmentStatus } from "./workflow";
 
@@ -14,7 +14,7 @@ async function apiJson(path: string, init: RequestInit) { const response = await
 
 export function CredentialingPage() {
   const [, navigate] = useLocation(); const [version, setVersion] = useState(0); const [loading, setLoading] = useState(true); const [error, setError] = useState<string | null>(null); const [enrollments, setEnrollments] = useState<Row[]>([]); const [providers, setProviders] = useState<Row[]>([]); const [payers, setPayers] = useState<Row[]>([]); const [editForm, setEditForm] = useState<EditForm | null>(null); const [baseline, setBaseline] = useState<EditForm | null>(null); const [saving, setSaving] = useState(false);
-  useEffect(() => { let active = true; setLoading(true); setError(null); apiJson("/api/credentialing/sync-revalidation", { method: "POST" }).catch(() => null); Promise.all([demoRows("provider_payer_enrollments"), demoRows("providers"), referenceRows("payers")]).then(([enrollmentRows, providerRows, payerRows]) => { if (!active) return; setEnrollments(enrollmentRows); setProviders(providerRows); setPayers(payerRows); }).catch((err: unknown) => { if (active) setError(err instanceof Error ? err.message : "Unable to load credentialing data"); }).finally(() => active && setLoading(false)); return () => { active = false; }; }, [version]);
+  useEffect(() => { let active = true; setLoading(true); setError(null); apiJson("/api/credentialing/sync-revalidation", { method: "POST" }).catch(() => null); Promise.all([tenantSelect("provider_payer_enrollments"), tenantSelect("providers"), referenceSelect("payers")]).then(([enrollmentRows, providerRows, payerRows]) => { if (!active) return; setEnrollments(enrollmentRows); setProviders(providerRows); setPayers(payerRows); }).catch((err: unknown) => { if (active) setError(err instanceof Error ? err.message : "Unable to load credentialing data"); }).finally(() => active && setLoading(false)); return () => { active = false; }; }, [version]);
   const providerMap = useMemo(() => byId(providers), [providers]); const payerMap = useMemo(() => byId(payers), [payers]); const dirty = useMemo(() => Boolean(editForm && baseline && JSON.stringify(editForm) !== JSON.stringify(baseline)), [editForm, baseline]); const editingEnrollment = editForm ? enrollments.find((row) => row.id === editForm.id) : null;
   function openEdit(enrollment: Row) { const next = { id: enrollment.id, effective_date: enrollment.effective_date || "", revalidation_due_date: enrollment.revalidation_due_date || "", termination_date: enrollment.termination_date || "", payer_provider_id: enrollment.payer_provider_id || "", notes: enrollment.notes || "" }; setEditForm(next); setBaseline({ ...next }); }
   function closeEdit() { setEditForm(null); setBaseline(null); }

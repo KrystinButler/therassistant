@@ -3,7 +3,7 @@ import { Link } from "wouter";
 import { ClaimWorkDrawer } from "../domains/claims/claim-work-drawer";
 import { StatusBadge } from "../components/status-badge";
 import { money, shortDate } from "../lib/format";
-import { demoInsert, demoUpdate } from "../lib/demo-data";
+import { tenantInsert, tenantUpdate } from "../lib/tenant-data-client";
 import { useApi } from "../lib/therassistant-api";
 
 type ClaimRow = {
@@ -36,12 +36,12 @@ export function ClaimsPage() {
   const selectedClaim = selectedIndex >= 0 ? claims[selectedIndex] : null;
 
   async function updateStatus(id: string, claimStatus: string, extra: Record<string, unknown> = {}) {
-    await demoUpdate("professional_claims", id, { claim_status: claimStatus, ...extra });
+    await tenantUpdate("professional_claims", id, { claim_status: claimStatus, ...extra });
     setVersion((v) => v + 1);
   }
 
   async function createFollowUp(claim: ClaimRow) {
-    await demoInsert("workqueue_items", {
+    await tenantInsert("workqueue_items", {
       workqueue_type: claim.claimStatus === "denied" ? "denial_followup" : "claim_rejection",
       workqueue_status: "open",
       priority: claim.claimStatus === "denied" ? "high" : "normal",

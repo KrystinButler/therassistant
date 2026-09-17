@@ -8,13 +8,13 @@ const drawer = readFileSync(join(here, "claim-work-drawer.tsx"), "utf8");
 
 for (const fragment of [
   "getClaimWorkData",
-  'demoSelect<DataRow>("professional_claim_lines"',
-  'demoSelect<DataRow>("claim_diagnoses"',
-  'demoSelect<DataRow>("submission_responses"',
-  'demoSelect<DataRow>("denials"',
-  'demoSelect<DataRow>("appeals"',
-  'demoSelect<DataRow>("workqueue_items"',
-  'demoSelect<DataRow>("claim_status_history"',
+  'tenantSelect<DataRow>("professional_claim_lines"',
+  'tenantSelect<DataRow>("claim_diagnoses"',
+  'tenantSelect<DataRow>("submission_responses"',
+  'tenantSelect<DataRow>("denials"',
+  'tenantSelect<DataRow>("appeals"',
+  'tenantSelect<DataRow>("workqueue_items"',
+  'tenantSelect<DataRow>("claim_status_history"',
 ]) {
   if (!repository.includes(fragment)) throw new Error(`Missing repository contract: ${fragment}`);
 }
