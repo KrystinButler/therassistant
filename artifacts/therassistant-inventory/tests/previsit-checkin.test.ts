@@ -109,26 +109,31 @@ test("provider patient review ignores incomplete pre-visit drafts and preserves 
   assert.equal(result.hasSubmittedPreVisit, false);
 });
 
-test("provider patient review flags non-empty submitted safety concerns", async () => {
+test("provider patient review maps submitted safety responses and legacy fallback", async () => {
   const { buildPatientReviewCheckIn } = await import("../src/domains/scheduling/patient-review-model.ts");
-  const result = buildPatientReviewCheckIn({
+
+  const concern = buildPatientReviewCheckIn({
     responses: {
       pre_visit: {
         submitted_at: "2026-09-16T20:00:00.000Z",
-        visit_questions: {
-          safety_concerns: "I have had thoughts of hurting myself this week.",
-        },
+        visit_questions: { safety_concerns: "I have had thoughts of hurting myself this week." },
       },
     },
   });
+  assert.equal(concern.safetyConcern, true);
+  assert.equal(concern.safetyText, "I have had thoughts of hurting myself this week.");
 
-  assert.equal(result.safetyConcern, true);
-  assert.equal(result.safetyText, "I have had thoughts of hurting myself this week.");
-});
+  const noConcern = buildPatientReviewCheckIn({
+    responses: {
+      pre_visit: {
+        submitted_at: "2026-09-16T20:00:00.000Z",
+        visit_questions: { safety_concerns: "No safety concerns" },
+      },
+    },
+  });
+  assert.equal(noConcern.safetyConcern, false);
 
-test("provider patient review keeps an empty submitted safety response neutral", async () => {
-  const { buildPatientReviewCheckIn } = await import("../src/domains/scheduling/patient-review-model.ts");
-  const result = buildPatientReviewCheckIn({
+  const emptySubmitted = buildPatientReviewCheckIn({
     responses: {
       pre_visit: {
         submitted_at: "2026-09-16T20:00:00.000Z",
@@ -136,19 +141,11 @@ test("provider patient review keeps an empty submitted safety response neutral",
       },
     },
   });
+  assert.equal(emptySubmitted.safetyConcern, null);
 
-  assert.equal(result.safetyConcern, null);
-  assert.equal(result.safetyText, "");
-});
+  const legacy = buildPatientReviewCheckIn({ safety_concerns: false });
+  assert.equal(legacy.safetyConcern, false);
 
-test("provider patient review retains legacy safety status when no submitted pre-visit answer exists", async () => {
-  const { buildPatientReviewCheckIn } = await import("../src/domains/scheduling/patient-review-model.ts");
-  const result = buildPatientReviewCheckIn({ safety_concerns: false });
-  assert.equal(result.safetyConcern, false);
-});
-
-test("provider patient review leaves legacy safety neutral when no safety value exists", async () => {
-  const { buildPatientReviewCheckIn } = await import("../src/domains/scheduling/patient-review-model.ts");
-  const result = buildPatientReviewCheckIn({});
-  assert.equal(result.safetyConcern, null);
+  const neutral = buildPatientReviewCheckIn({});
+  assert.equal(neutral.safetyConcern, null);
 });
