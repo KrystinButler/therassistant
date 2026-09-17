@@ -163,6 +163,7 @@ export function findCorrespondenceDetail(rows: MailroomInboxItem[], id: string) 
 }
 
 async function loadReferenceRows(): Promise<MailroomReferenceData> {
+  const tenantId = await getCurrentTenantId();
   const [clients, providers, payers, claims, authorizations, appeals, documents, assignees] = await Promise.all([
     tenantSelect<DataRow>("clients", { order: "last_name.asc,first_name.asc" }),
     tenantSelect<DataRow>("providers", { order: "last_name.asc,first_name.asc" }),
@@ -171,7 +172,7 @@ async function loadReferenceRows(): Promise<MailroomReferenceData> {
     tenantSelect<DataRow>("authorizations", { order: "created_at.desc" }),
     tenantSelect<DataRow>("appeals", { order: "created_at.desc" }),
     tenantSelect<DataRow>("documents", { order: "created_at.desc" }),
-    tenantRpc<AssigneeRow[]>("get_demo_mailroom_assignees"),
+    tenantRpc<AssigneeRow[]>("get_mailroom_assignees", { p_tenant_id: tenantId }),
   ]);
 
   return { clients, providers, payers, claims, authorizations, appeals, documents, assignees };
@@ -249,7 +250,7 @@ export function transitionCorrespondence(
   action: CorrespondenceAction,
   reason?: string,
 ) {
-  return tenantRpc<MailroomRow>("transition_demo_mailroom_item", {
+  return tenantRpc<MailroomRow>("transition_mailroom_item", {
     p_mailroom_item_id: id,
     p_action: action,
     p_reason: reason ?? null,
