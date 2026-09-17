@@ -28,7 +28,6 @@ import {
   MEMBER_SETTINGS_DEFAULT_PATH,
 } from "./domains/settings/route-config";
 import { ClientsPage } from "./pages/clients";
-import { DashboardPage } from "./pages/dashboard";
 import { DemoControlCenter } from "./pages/demo-control";
 import { PayerDetailPage } from "./pages/payer-detail";
 import { ProviderDetailPage } from "./pages/provider-detail";
@@ -109,7 +108,7 @@ export default function App() {
         <Route path="/administration/imports"><ImportsPage /></Route>
         <Route path="/administration/database-inventory"><InventoryApp /></Route>
         <Route path="/administration/*?"><Redirect to={ADMIN_SETTINGS_DEFAULT_PATH} /></Route>
-        <Route path="/"><DashboardPage /></Route>
+        <Route path="/"><Redirect to="/schedule" /></Route>
         <Route><div className="thera-state">Page not found.</div></Route>
       </Switch>
     </AppShell>

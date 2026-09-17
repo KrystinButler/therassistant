@@ -35,10 +35,11 @@ test("Schedule opens a new-appointment drawer and returns to the schedule", asyn
 });
 
 test("Claim 360 stays detail-only and returns to Claims", async ({ page }) => {
-  await page.goto("/");
-  const claimLink = page.locator('a[href^="/claims/"]').first();
-  await expect(claimLink).toBeVisible();
-  await claimLink.click();
+  await page.goto("/claims");
+  const workClaim = page.getByRole("button", { name: "Work Claim" }).first();
+  await expect(workClaim).toBeVisible();
+  await workClaim.click();
+  await page.getByRole("button", { name: "Open Full Claim 360" }).click();
 
   await expect.poll(() => new URL(page.url()).pathname).toMatch(/^\/claims\/[^/]+$/);
   await expect(page.getByText("CLAIM 360", { exact: true })).toBeVisible();

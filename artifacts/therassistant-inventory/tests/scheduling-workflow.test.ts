@@ -1,10 +1,29 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import {
+import * as schedulingWorkflow from "../src/domains/scheduling/workflow.ts";
+
+const {
   buildAppointmentInput,
   syntheticEligibilityStatus,
-} from "../src/domains/scheduling/workflow.ts";
+} = schedulingWorkflow;
+
+type SchedulePresentation = {
+  checkInStatus: "Not Checked-In" | "Ready" | "In Progress" | "Balance Issues";
+  preVisitInsights: Array<{ label: string; value: string }>;
+  sessionFocus: string | null;
+};
+
+type PresentationBuilder = (
+  checkin: Record<string, unknown> | null,
+  openBalanceCents: number,
+) => SchedulePresentation;
+
+const buildSchedulePatientPresentation = (
+  schedulingWorkflow as typeof schedulingWorkflow & {
+    buildSchedulePatientPresentation?: PresentationBuilder;
+  }
+).buildSchedulePatientPresentation;
 
 test("appointment input derives workflow context instead of accepting insurance foreign keys", () => {
   const input = buildAppointmentInput({
@@ -36,4 +55,54 @@ test("synthetic eligibility adapter returns active for ordinary demo member IDs"
 test("synthetic eligibility adapter demonstrates inactive and unable-to-verify outcomes", () => {
   assert.equal(syntheticEligibilityStatus("DEMO12340"), "inactive");
   assert.equal(syntheticEligibilityStatus("DEMO12349"), "unable_to_verify");
+});
+
+test("schedule check-in status is restricted to the four approved states", () => {
+  const build = buildSchedulePatientPresentation;
+
+  assert.equal(build?.(null, 0).checkInStatus, "Not Checked-In");
+  assert.equal(
+    build?.({ responses: { pre_visit: { updated_at: "2026-09-17T08:00:00Z" } } }, 0).checkInStatus,
+    "In Progress",
+  );
+  assert.equal(
+    build?.({ responses: { pre_visit: { submitted_at: "2026-09-17T08:05:00Z" } } }, 0).checkInStatus,
+    "Ready",
+  );
+  assert.equal(
+    build?.({ responses: { pre_visit: { submitted_at: "2026-09-17T08:05:00Z" } } }, 2500).checkInStatus,
+    "Balance Issues",
+  );
+});
+
+test("pre-visit insight contains only patient check-in answers and session focus uses focus_today", () => {
+  const presentation = buildSchedulePatientPresentation?.({
+    responses: {
+      pre_visit: {
+        submitted_at: "2026-09-17T08:05:00Z",
+        visit_questions: {
+          focus_today: "Work on sleep and racing thoughts",
+          feeling_since_last_visit: "More anxious this week",
+          important_changes: "Started a new job",
+          safety_concerns: "None",
+          treatment_goal: "Use grounding skills more consistently",
+          anything_else: "No additional concerns",
+        },
+      },
+    },
+  }, 0);
+
+  assert.ok(presentation);
+  assert.equal(presentation.sessionFocus, "Work on sleep and racing thoughts");
+  assert.deepEqual(presentation.preVisitInsights, [
+    { label: "Since last visit", value: "More anxious this week" },
+    { label: "Important changes", value: "Started a new job" },
+    { label: "Safety concerns", value: "None" },
+    { label: "Treatment goal", value: "Use grounding skills more consistently" },
+    { label: "Anything else", value: "No additional concerns" },
+  ]);
+  assert.equal(
+    presentation.preVisitInsights.some((insight) => insight.value === presentation.sessionFocus),
+    false,
+  );
 });

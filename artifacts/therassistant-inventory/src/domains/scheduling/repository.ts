@@ -7,7 +7,14 @@ import {
 } from "../../lib/supabase-demo-client";
 import { evaluatePreSession } from "../readiness/evaluate-pre-session";
 import type { PreSessionReadiness } from "../readiness/types";
-import { buildAppointmentInput, syntheticEligibilityStatus, type AppointmentDraft } from "./workflow";
+import {
+  buildAppointmentInput,
+  buildSchedulePatientPresentation,
+  syntheticEligibilityStatus,
+  type AppointmentDraft,
+  type ScheduleCheckInStatus,
+  type SchedulePreVisitInsight,
+} from "./workflow";
 
 type DataRow = Row & { id: string };
 
@@ -37,6 +44,9 @@ export type ScheduleAppointment = {
   providerEnrollmentStatus: string | null;
   treatmentPlanStatus: string | null;
   treatmentPlanReviewDueDate: string | null;
+  checkInStatus: ScheduleCheckInStatus;
+  preVisitInsights: SchedulePreVisitInsight[];
+  sessionFocus: string | null;
   readiness: PreSessionReadiness;
 };
 
@@ -161,6 +171,8 @@ export async function getScheduleData(): Promise<ScheduleData> {
     authorizationUnits,
     enrollments,
     treatmentPlans,
+    checkins,
+    balances,
     payers,
     plans,
   ] = await Promise.all([
@@ -173,6 +185,8 @@ export async function getScheduleData(): Promise<ScheduleData> {
     demoSelect<DataRow>("authorization_units"),
     demoSelect<DataRow>("provider_payer_enrollments"),
     demoSelect<DataRow>("treatment_plans"),
+    demoSelect<DataRow>("client_checkins"),
+    demoSelect<DataRow>("client_balance_summaries"),
     referenceSelect<DataRow>("payers", { order: "name.asc" }),
     referenceSelect<DataRow>("payer_plans", { order: "name.asc" }),
   ]);
@@ -181,6 +195,12 @@ export async function getScheduleData(): Promise<ScheduleData> {
   const providersById = byId(providers);
   const payersById = byId(payers);
   const plansById = byId(plans);
+  const checkinsByAppointment = new Map(
+    checkins.map((row) => [String(row.appointment_id ?? ""), row]),
+  );
+  const balancesByClient = new Map(
+    balances.map((row) => [String(row.client_id ?? ""), row]),
+  );
 
   const enriched = appointments.map((appointment): ScheduleAppointment => {
     const clientId = String(appointment.client_id ?? "");
@@ -207,6 +227,14 @@ export async function getScheduleData(): Promise<ScheduleData> {
     );
     const serviceDate = String(appointment.starts_at ?? "").slice(0, 10);
     const treatmentPlan = currentTreatmentPlan(treatmentPlans, clientId, serviceDate);
+    const checkin = checkinsByAppointment.get(appointment.id) ?? null;
+    const openBalanceCents = Number(
+      balancesByClient.get(clientId)?.open_balance_cents ?? 0,
+    );
+    const patientPresentation = buildSchedulePatientPresentation(
+      checkin,
+      openBalanceCents,
+    );
 
     const readiness = evaluatePreSession({
       policy: policy ? { status: String(policy.status ?? "unknown") } : null,
@@ -276,6 +304,9 @@ export async function getScheduleData(): Promise<ScheduleData> {
       treatmentPlanReviewDueDate: treatmentPlan?.review_due_date
         ? String(treatmentPlan.review_due_date)
         : null,
+      checkInStatus: patientPresentation.checkInStatus,
+      preVisitInsights: patientPresentation.preVisitInsights,
+      sessionFocus: patientPresentation.sessionFocus,
       readiness,
     };
   });
