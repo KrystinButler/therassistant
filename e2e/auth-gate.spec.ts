@@ -43,7 +43,7 @@ test("Supabase recovery callback opens password update before tenant access", as
   await page.goto("/#access_token=e2e-recovery-token&refresh_token=e2e-refresh-token&type=recovery&expires_in=3600");
 
   await expect(page.getByRole("heading", { name: "Set new password" })).toBeVisible();
-  await expect(page.getByLabel("New password")).toBeVisible();
-  await expect(page.getByLabel("Confirm new password")).toBeVisible();
+  await expect(page.getByLabel("New password", { exact: true })).toBeVisible();
+  await expect(page.getByLabel("Confirm new password", { exact: true })).toBeVisible();
   await expect(page.getByRole("navigation", { name: "Primary navigation" })).toHaveCount(0);
 });
