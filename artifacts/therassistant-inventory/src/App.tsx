@@ -1,7 +1,6 @@
 import { useEffect } from "react";
 import { Route, Switch, useLocation, useRoute } from "wouter";
 
-import InventoryApp from "./InventoryApp";
 import { AppShell } from "./components/app-shell";
 import { DenialsPage } from "./domains/ar/DenialsPage";
 import { BillingHubPage } from "./domains/billing/BillingHubPage";
@@ -98,7 +97,6 @@ export default function App() {
         <Route path="/mailroom"><MailroomPage /></Route>
         <Route path="/reports"><ReportsPage /></Route>
         <Route path="/administration/imports"><ImportsPage /></Route>
-        <Route path="/administration/database-inventory"><InventoryApp /></Route>
         <Route path="/administration"><AdministrationPage /></Route>
         <Route path="/"><Redirect to="/schedule" /></Route>
         <Route><div className="thera-state">Page not found.</div></Route>
