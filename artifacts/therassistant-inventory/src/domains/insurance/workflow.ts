@@ -1,4 +1,4 @@
-import { demoInsert, demoSelect, demoUpdate, type Row } from "../../lib/supabase-demo-client";
+import { tenantInsert, tenantSelect, tenantUpdate, type Row } from "../../lib/tenant-data-client";
 
 export type InsuranceDraft = {
   payerId: string;
@@ -60,22 +60,22 @@ export function terminationValues(terminationDate: string): Row {
 }
 
 export function addInsurancePolicy(patientId: string, input: InsuranceDraft) {
-  return demoInsert<PolicyRow>("client_insurance_policies", {
+  return tenantInsert<PolicyRow>("client_insurance_policies", {
     client_id: patientId,
     ...buildInsuranceValues(input),
   });
 }
 
 export function updateInsurancePolicy(policyId: string, input: InsuranceDraft) {
-  return demoUpdate<PolicyRow>("client_insurance_policies", policyId, buildInsuranceValues(input));
+  return tenantUpdate<PolicyRow>("client_insurance_policies", policyId, buildInsuranceValues(input));
 }
 
 export function terminateInsurancePolicy(policyId: string, terminationDate: string) {
-  return demoUpdate<PolicyRow>("client_insurance_policies", policyId, terminationValues(terminationDate));
+  return tenantUpdate<PolicyRow>("client_insurance_policies", policyId, terminationValues(terminationDate));
 }
 
 export async function setPrimaryInsurance(patientId: string, policyId: string) {
-  const policies = await demoSelect<PolicyRow>("client_insurance_policies", {
+  const policies = await tenantSelect<PolicyRow>("client_insurance_policies", {
     client_id: `eq.${patientId}`,
     order: "created_at.asc",
   });
@@ -83,7 +83,7 @@ export async function setPrimaryInsurance(patientId: string, policyId: string) {
   const results: PolicyRow[] = [];
   for (const update of updates) {
     results.push(
-      await demoUpdate<PolicyRow>("client_insurance_policies", update.id, {
+      await tenantUpdate<PolicyRow>("client_insurance_policies", update.id, {
         insurance_order: update.insurance_order,
       }),
     );
