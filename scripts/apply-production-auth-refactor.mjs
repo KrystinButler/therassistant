@@ -1,4 +1,12 @@
-import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import {
+  existsSync,
+  readFileSync,
+  readdirSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from 'node:fs';
+import { join } from 'node:path';
 
 function read(path) { return readFileSync(path, 'utf8'); }
 function write(path, text) { writeFileSync(path, text); }
@@ -24,17 +32,18 @@ if (!api.includes('authenticatedFetch')) {
 
 const mailroomPath = 'artifacts/therassistant-inventory/src/domains/mailroom/repository.ts';
 let mailroom = read(mailroomPath);
-const symbolReplacements = [
+const mailroomReplacements = [
   ['../../lib/supabase-demo-client', '../../lib/tenant-data-client'],
   ['../../lib/supabase-demo-storage', '../../lib/storage-client'],
   ['demoInsert', 'tenantInsert'],
   ['demoRpc', 'tenantRpc'],
   ['demoSelect', 'tenantSelect'],
+  ['demoUpdateExact', 'tenantUpdateExact'],
   ['demoUpdate', 'tenantUpdate'],
   ['getDemoTenantId', 'getCurrentTenantId'],
   ['demoStorage', 'storageClient'],
 ];
-for (const [from, to] of symbolReplacements) mailroom = mailroom.replaceAll(from, to);
+for (const [from, to] of mailroomReplacements) mailroom = mailroom.replaceAll(from, to);
 if (!mailroom.includes('const tenantId = await getCurrentTenantId();')) {
   mailroom = mailroom.replace(
     'async function loadReferenceRows(): Promise<MailroomReferenceData> {\n  const [clients, providers, payers, claims, authorizations, appeals, documents, assignees] = await Promise.all([',
@@ -47,6 +56,67 @@ mailroom = mailroom.replace(
 );
 mailroom = mailroom.replaceAll('transition_demo_mailroom_item', 'transition_mailroom_item');
 write(mailroomPath, mailroom);
+
+const srcRoot = 'artifacts/therassistant-inventory/src';
+const sourcePaths = [];
+function collectSourceFiles(root) {
+  for (const entry of readdirSync(root)) {
+    const path = join(root, entry);
+    const stat = statSync(path);
+    if (stat.isDirectory()) collectSourceFiles(path);
+    else if (/\.(ts|tsx)$/.test(entry)) sourcePaths.push(path);
+  }
+}
+collectSourceFiles(srcRoot);
+
+const clientSymbolReplacements = [
+  ['demoUpdateExact', 'tenantUpdateExact'],
+  ['demoInsert', 'tenantInsert'],
+  ['demoSelect', 'tenantSelect'],
+  ['demoUpdate', 'tenantUpdate'],
+  ['demoRpc', 'tenantRpc'],
+  ['getDemoTenantId', 'getCurrentTenantId'],
+];
+const storageSymbolReplacements = [
+  ['createDemoStorage', 'createStorageClient'],
+  ['demoStorage', 'storageClient'],
+];
+const unsupportedClientExports = [
+  'createDemoClient',
+  'SUPABASE_PUBLISHABLE_KEY',
+];
+
+let migratedFiles = 0;
+for (const path of sourcePaths) {
+  let text = read(path);
+  const hadClient = text.includes('supabase-demo-client');
+  const hadStorage = text.includes('supabase-demo-storage');
+  if (!hadClient && !hadStorage) continue;
+
+  if (hadClient) {
+    for (const symbol of unsupportedClientExports) {
+      const importPattern = new RegExp(`import[\\s\\S]*?\\b${symbol}\\b[\\s\\S]*?from ["'][^"']*supabase-demo-client["']`);
+      if (importPattern.test(text)) {
+        throw new Error(`${path} imports unsupported legacy export ${symbol}`);
+      }
+    }
+    text = text.replaceAll('supabase-demo-client', 'tenant-data-client');
+    for (const [from, to] of clientSymbolReplacements) text = text.replaceAll(from, to);
+  }
+
+  if (hadStorage) {
+    text = text.replaceAll('supabase-demo-storage', 'storage-client');
+    for (const [from, to] of storageSymbolReplacements) text = text.replaceAll(from, to);
+  }
+
+  write(path, text);
+  migratedFiles += 1;
+}
+
+const legacyImports = sourcePaths.filter((path) => /supabase-demo-(client|storage)/.test(read(path)));
+if (legacyImports.length) {
+  throw new Error(`Legacy demo adapters remain in: ${legacyImports.join(', ')}`);
+}
 
 const navigationPath = 'artifacts/therassistant-inventory/src/navigation/sections.ts';
 let navigation = read(navigationPath);
@@ -83,10 +153,4 @@ for (const path of [
   if (existsSync(path)) rmSync(path);
 }
 
-for (const [path, text] of [[apiPath, read(apiPath)], [mailroomPath, read(mailroomPath)]]) {
-  for (const marker of ['supabase-demo-client', 'supabase-demo-storage', 'DemoControlCenter']) {
-    if (text.includes(marker)) throw new Error(`${path} still contains ${marker}`);
-  }
-}
-
-console.log('Production auth refactor finalized.');
+console.log(`Production auth refactor finalized. Migrated ${migratedFiles} remaining source files.`);
