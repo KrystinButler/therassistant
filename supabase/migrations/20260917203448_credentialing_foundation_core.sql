@@ -1,0 +1,3 @@
+-- Backfilled migration marker for schema already applied to the linked Supabase project.
+-- The credentialing foundation created by this remote migration is consolidated and
+-- reproducibly enforced by the later credentialing integrity synchronization migration.
