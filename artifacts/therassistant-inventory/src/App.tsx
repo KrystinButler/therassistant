@@ -4,6 +4,7 @@ import { Route, Switch, useLocation, useRoute } from "wouter";
 import { AuthProvider, useAuth } from "./auth/auth-context";
 import { LoginPage } from "./auth/LoginPage";
 import { OrganizationSetup } from "./auth/OrganizationSetup";
+import { PasswordRecoveryPage } from "./auth/PasswordRecoveryPage";
 import { TenantProvider, useTenant } from "./auth/tenant-context";
 import { AppShell } from "./components/app-shell";
 import { DenialsPage } from "./domains/ar/DenialsPage";
@@ -104,9 +105,10 @@ function TenantGate() {
 }
 
 function StaffGate() {
-  const { session, loading } = useAuth();
+  const { session, loading, passwordRecovery } = useAuth();
   if (loading) return <div className="thera-state">Checking session...</div>;
   if (!session) return <LoginPage />;
+  if (passwordRecovery) return <PasswordRecoveryPage />;
   return (
     <TenantProvider>
       <TenantGate />
