@@ -86,3 +86,25 @@ test("provider patient review prioritizes submitted pre-visit visit questions", 
   assert.equal(result.safetyText, "No safety concerns");
   assert.equal(result.safetyConcern, false);
 });
+
+test("provider patient review ignores incomplete pre-visit drafts and preserves legacy check-in fallback", async () => {
+  const { buildPatientReviewCheckIn } = await import("../src/domains/scheduling/patient-review-model.ts");
+  const result = buildPatientReviewCheckIn({
+    focus_today: "Legacy focus",
+    mood: "Legacy mood",
+    recent_changes: "Legacy change",
+    responses: {
+      pre_visit: {
+        visit_questions: {
+          focus_today: "Unsubmitted draft focus",
+          feeling_since_last_visit: "Unsubmitted draft mood",
+        },
+      },
+    },
+  });
+
+  assert.equal(result.focus, "Legacy focus");
+  assert.equal(result.mood, "Legacy mood");
+  assert.deepEqual(result.changes, ["Legacy change"]);
+  assert.equal(result.hasSubmittedPreVisit, false);
+});
