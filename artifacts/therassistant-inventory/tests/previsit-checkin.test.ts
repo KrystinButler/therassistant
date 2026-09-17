@@ -108,3 +108,20 @@ test("provider patient review ignores incomplete pre-visit drafts and preserves 
   assert.deepEqual(result.changes, ["Legacy change"]);
   assert.equal(result.hasSubmittedPreVisit, false);
 });
+
+test("provider patient review flags non-empty submitted safety concerns", async () => {
+  const { buildPatientReviewCheckIn } = await import("../src/domains/scheduling/patient-review-model.ts");
+  const result = buildPatientReviewCheckIn({
+    responses: {
+      pre_visit: {
+        submitted_at: "2026-09-16T20:00:00.000Z",
+        visit_questions: {
+          safety_concerns: "I have had thoughts of hurting myself this week.",
+        },
+      },
+    },
+  });
+
+  assert.equal(result.safetyConcern, true);
+  assert.equal(result.safetyText, "I have had thoughts of hurting myself this week.");
+});
