@@ -146,3 +146,9 @@ test("provider patient review retains legacy safety status when no submitted pre
   const result = buildPatientReviewCheckIn({ safety_concerns: false });
   assert.equal(result.safetyConcern, false);
 });
+
+test("provider patient review leaves legacy safety neutral when no safety value exists", async () => {
+  const { buildPatientReviewCheckIn } = await import("../src/domains/scheduling/patient-review-model.ts");
+  const result = buildPatientReviewCheckIn({});
+  assert.equal(result.safetyConcern, null);
+});
