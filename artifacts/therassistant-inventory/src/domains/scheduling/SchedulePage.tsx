@@ -81,22 +81,11 @@ function formFrom(appointment: ScheduleAppointment): FormState {
   };
 }
 
-function checkInPresentation(appointment: ScheduleAppointment) {
-  if (["checked_in", "client_arrived", "in_session"].includes(appointment.appointmentStatus)) return { label: "In Progress", tone: "progress" };
-  if (["confirmed"].includes(appointment.appointmentStatus)) return { label: "Ready", tone: "ready" };
-  if (["completed"].includes(appointment.appointmentStatus)) return { label: "Completed", tone: "ready" };
-  if (["cancelled", "late_cancel", "no_show"].includes(appointment.appointmentStatus)) return { label: appointment.appointmentStatus.replaceAll("_", " "), tone: "issue" };
-  if (!appointment.readiness.ready) return { label: "Needs Attention", tone: "issue" };
-  return { label: "Not Checked In", tone: "waiting" };
-}
-
-function sessionFocus(appointment: ScheduleAppointment) {
-  const blocking = appointment.readiness.checks.find((check) => check.blocking);
-  if (blocking) return { label: "RESOLVE", detail: blocking.action || blocking.message, tone: "resolve" };
-  if (appointment.treatmentPlanStatus && !["active", "signed"].includes(appointment.treatmentPlanStatus)) {
-    return { label: "UPDATE", detail: "Review treatment plan and current goals.", tone: "update" };
-  }
-  return { label: "WORK ON", detail: "Continue the current treatment focus and goals.", tone: "work" };
+function checkInTone(appointment: ScheduleAppointment) {
+  if (appointment.checkInStatus === "Ready") return "ready";
+  if (appointment.checkInStatus === "In Progress") return "progress";
+  if (appointment.checkInStatus === "Balance Issues") return "issue";
+  return "waiting";
 }
 
 export function SchedulePage() {
@@ -210,15 +199,23 @@ export function SchedulePage() {
 
     {!loading && data && <section className="schedule-card">
       {visible.length === 0 ? <div className="thera-empty">No appointments in this view.</div> : <div className="schedule-table-wrap"><table className="schedule-table"><thead><tr><th>Time</th><th>Patient</th><th>Check-In Status</th><th>Pre-Visit Insight</th><th>Session Focus</th><th aria-label="Open" /></tr></thead><tbody>{visible.map((appointment) => {
-        const status = checkInPresentation(appointment);
-        const focus = sessionFocus(appointment);
-        const readinessDetail = appointment.readiness.ready ? "Ready for today's session." : `${appointment.readiness.checks.filter((check) => check.blocking).length} item(s) need attention.`;
+        const statusTone = checkInTone(appointment);
         return <tr key={appointment.id} className="schedule-row" onClick={() => openReview(appointment)}>
           <td className="schedule-time">{appointmentTime(appointment.startsAt)}</td>
           <td><strong>{appointment.clientName}</strong><span>{appointment.serviceType || "Appointment"}</span></td>
-          <td><span className={`schedule-status ${status.tone}`}><StatusBadge value={status.label} /></span></td>
-          <td><div className="schedule-insight"><strong>{readinessDetail}</strong><span>{appointment.eligibilityStatus ? `Eligibility: ${appointment.eligibilityStatus.replaceAll("_", " ")}` : "Open patient review for details"}</span></div></td>
-          <td><div className={`schedule-focus ${focus.tone}`}><strong>{focus.label}</strong><span>{focus.detail}</span></div></td>
+          <td><span className={`schedule-status ${statusTone}`}><StatusBadge value={appointment.checkInStatus} /></span></td>
+          <td>
+            <div className="schedule-insight">
+              {appointment.preVisitInsights.length > 0
+                ? appointment.preVisitInsights.slice(0, 2).map((insight) => <span key={insight.label}><strong>{insight.label}:</strong> {insight.value}</span>)
+                : <span>No check-in responses provided.</span>}
+            </div>
+          </td>
+          <td>
+            <div className="schedule-focus work">
+              <strong>{appointment.sessionFocus ?? "Not provided"}</strong>
+            </div>
+          </td>
           <td className="schedule-chevron"><ChevronRight size={17} /></td>
         </tr>;
       })}</tbody></table></div>}
