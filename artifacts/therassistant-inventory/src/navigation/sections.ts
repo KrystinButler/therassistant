@@ -133,10 +133,16 @@ export const NAV_SECTIONS: readonly NavigationSection[] = [
     id: "settings",
     label: "Settings",
     renderInSidebar: true,
-    primaryHref: "/administration",
+    primaryHref: "/settings/general",
     visibility: visibleToAll,
     children: [
-      { id: "administration", label: "Administration", href: "/administration", visibility: visibleToAll },
+      {
+        id: "settings-home",
+        label: "Settings",
+        href: "/settings/general",
+        matchPaths: ["/settings", "/member/settings"],
+        visibility: visibleToAll,
+      },
       {
         id: "database-inventory",
         label: "Database Inventory",
@@ -144,6 +150,7 @@ export const NAV_SECTIONS: readonly NavigationSection[] = [
         visibility: visibleToAll,
       },
     ],
+    contextualPaths: ["/administration"],
   },
 ] as const;
 
