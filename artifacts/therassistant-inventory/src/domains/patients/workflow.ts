@@ -1,4 +1,4 @@
-import { demoInsert, demoUpdate, type Row } from "../../lib/supabase-demo-client";
+import { tenantInsert, tenantUpdate, type Row } from "../../lib/tenant-data-client";
 
 export type DemographicsDraft = {
   firstName: string;
@@ -80,16 +80,16 @@ export function validateContact(input: ContactDraft): Row {
 }
 
 export function updatePatientDemographics(patientId: string, input: DemographicsDraft) {
-  return demoUpdate<Row & { id: string }>("clients", patientId, validateDemographics(input));
+  return tenantUpdate<Row & { id: string }>("clients", patientId, validateDemographics(input));
 }
 
 export function addPatientContact(patientId: string, input: ContactDraft) {
-  return demoInsert<Row & { id: string }>("client_contacts", {
+  return tenantInsert<Row & { id: string }>("client_contacts", {
     client_id: patientId,
     ...validateContact(input),
   });
 }
 
 export function updatePatientContact(contactId: string, input: ContactDraft) {
-  return demoUpdate<Row & { id: string }>("client_contacts", contactId, validateContact(input));
+  return tenantUpdate<Row & { id: string }>("client_contacts", contactId, validateContact(input));
 }
