@@ -51,3 +51,37 @@ test("provider portal surface is a narrow summary instead of full provider row a
   assert.match(sql, /'id'.*'first_name'.*'last_name'.*'credentials'.*'primary_specialty'/is);
   assert.doesNotMatch(sql, /grant select on public\.providers to authenticated/i);
 });
+
+
+test("portal policy hardening consolidates staff and patient read paths", () => {
+  const sql = migration("secure_patient_portal_auth_hardening");
+  assert.match(sql, /client_portal_access_created_by_idx/i);
+  for (const legacyPolicy of [
+    "appointments patient portal select",
+    "balances patient portal select",
+    "checkins patient portal select",
+    "insurance patient portal select",
+    "clients patient portal select",
+    "documents patient portal select",
+    "treatment plans patient portal select",
+    "treatment goals patient portal select",
+  ]) {
+    assert.match(sql, new RegExp(`drop policy if exists "${legacyPolicy}"`, "i"));
+  }
+  assert.match(sql, /private\.has_tenant_read_access\(tenant_id\)[\s\S]+private\.has_client_portal_access/i);
+});
+
+test("privileged portal bodies live in private schema behind invoker wrappers", () => {
+  const sql = migration("secure_patient_portal_definer_isolation");
+  for (const name of [
+    "activate_my_client_portal_access",
+    "revoke_client_portal_access",
+    "get_my_portal_provider_summary",
+  ]) {
+    assert.match(sql, new RegExp(`private\\.${name}_impl`, "i"));
+    assert.match(sql, new RegExp(`public\\.${name}[\\s\\S]+security invoker`, "i"));
+  }
+  assert.match(sql, /private\.activate_my_client_portal_access_impl\(\)[\s\S]+security definer/i);
+  assert.match(sql, /private\.revoke_client_portal_access_impl\(p_client_id uuid\)[\s\S]+security definer/i);
+  assert.match(sql, /private\.get_my_portal_provider_summary_impl\(\)[\s\S]+security definer/i);
+});
