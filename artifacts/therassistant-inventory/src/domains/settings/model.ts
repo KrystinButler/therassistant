@@ -93,6 +93,19 @@ export const SETTINGS_LABELS_BY_SECTION: Record<AdminSettingsSlug, readonly stri
   "my-account": ["Profile", "Preferences"],
 };
 
+export const DEFAULT_SETTINGS_SECTION_STATUS: SettingsSectionStatus = "Not Configured";
+
+export type SettingsSectionStatusOverrides = Partial<
+  Record<AdminSettingsSlug, SettingsSectionStatus>
+>;
+
+export function getSettingsSectionStatus(
+  slug: AdminSettingsSlug,
+  overrides: SettingsSectionStatusOverrides = {},
+): SettingsSectionStatus {
+  return overrides[slug] ?? DEFAULT_SETTINGS_SECTION_STATUS;
+}
+
 function matchesRoute(pathname: string, route: string) {
   return pathname === route || pathname.startsWith(`${route}/`);
 }

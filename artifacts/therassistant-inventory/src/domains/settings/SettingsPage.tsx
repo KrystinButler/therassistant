@@ -3,7 +3,9 @@ import { Link, useLocation } from "wouter";
 import {
   ADMIN_SETTINGS_SECTIONS,
   MEMBER_SETTINGS_SECTIONS,
+  SETTINGS_LABELS_BY_SECTION,
   getSettingsSectionByRoute,
+  getSettingsSectionStatus,
   type SettingsSection,
 } from "./model";
 import { ADMIN_SETTINGS_GROUPS, MEMBER_SETTINGS_GROUPS } from "./route-config";
@@ -35,6 +37,9 @@ export function SettingsPage({ mode }: SettingsPageProps) {
     return <div className="thera-state">Settings page not found.</div>;
   }
 
+  const status = getSettingsSectionStatus(section.slug);
+  const labels = SETTINGS_LABELS_BY_SECTION[section.slug];
+
   return (
     <div className="thera-settings-page">
       <header className="thera-page-header">
@@ -65,10 +70,29 @@ export function SettingsPage({ mode }: SettingsPageProps) {
         </aside>
 
         <main className="thera-settings-content">
-          <div className="thera-card">
-            <div className="thera-page-kicker">{section.group}</div>
-            <h2>{section.label}</h2>
-            <p>This settings area is ready for its configuration controls.</p>
+          <div className="thera-card thera-stack">
+            <div className="thera-card-header">
+              <div>
+                <div className="thera-page-kicker">{section.group}</div>
+                <h2>{section.label}</h2>
+              </div>
+              <div aria-label="Settings status">
+                <div className="thera-page-kicker">Settings status</div>
+                <strong>{status}</strong>
+              </div>
+            </div>
+
+            {labels.length > 0 ? (
+              <div className="thera-stack">
+                {labels.map((label) => (
+                  <div className="thera-card" key={label}>
+                    <strong>{label}</strong>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="thera-state">Configuration controls are not connected yet.</div>
+            )}
           </div>
         </main>
       </div>
