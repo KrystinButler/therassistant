@@ -1,10 +1,10 @@
 import {
-  demoInsert,
-  demoSelect,
-  demoUpdate,
+  tenantInsert,
+  tenantSelect,
+  tenantUpdate,
   referenceSelect,
   type Row,
-} from "../../lib/supabase-demo-client";
+} from "../../lib/tenant-data-client";
 import type { BillingReadinessInput } from "../readiness/evaluate-billing-readiness";
 import {
   createChargeFromEncounterWorkflow,
@@ -32,30 +32,30 @@ function metadata(row?: Row | null) {
 
 async function getBillingContext(encounterId: string): Promise<BillingReadinessInput> {
   const encounter = first(
-    await demoSelect<DataRow>("encounters", { id: `eq.${encounterId}`, limit: "1" }),
+    await tenantSelect<DataRow>("encounters", { id: `eq.${encounterId}`, limit: "1" }),
   );
   if (!encounter) throw new Error("Encounter not found.");
 
   const [notes, diagnoses, serviceLines, policies, eligibilityRows, authorizationRows, enrollmentRows] = await Promise.all([
-    demoSelect<DataRow>("clinical_notes", { encounter_id: `eq.${encounterId}`, order: "created_at.desc", limit: "1" }),
-    demoSelect<DataRow>("encounter_diagnoses", { encounter_id: `eq.${encounterId}`, order: "sequence_number.asc" }),
-    demoSelect<DataRow>("encounter_service_lines", { encounter_id: `eq.${encounterId}`, order: "created_at.asc" }),
+    tenantSelect<DataRow>("clinical_notes", { encounter_id: `eq.${encounterId}`, order: "created_at.desc", limit: "1" }),
+    tenantSelect<DataRow>("encounter_diagnoses", { encounter_id: `eq.${encounterId}`, order: "sequence_number.asc" }),
+    tenantSelect<DataRow>("encounter_service_lines", { encounter_id: `eq.${encounterId}`, order: "created_at.asc" }),
     encounter.insurance_policy_id
-      ? demoSelect<DataRow>("client_insurance_policies", { id: `eq.${String(encounter.insurance_policy_id)}`, limit: "1" })
+      ? tenantSelect<DataRow>("client_insurance_policies", { id: `eq.${String(encounter.insurance_policy_id)}`, limit: "1" })
       : Promise.resolve([]),
-    demoSelect<DataRow>("eligibility_checks", {
+    tenantSelect<DataRow>("eligibility_checks", {
       client_id: `eq.${String(encounter.client_id)}`,
       ...(encounter.insurance_policy_id ? { insurance_policy_id: `eq.${String(encounter.insurance_policy_id)}` } : {}),
       order: "created_at.desc",
       limit: "1",
     }),
-    demoSelect<DataRow>("authorizations", {
+    tenantSelect<DataRow>("authorizations", {
       client_id: `eq.${String(encounter.client_id)}`,
       ...(encounter.payer_id ? { payer_id: `eq.${String(encounter.payer_id)}` } : {}),
       order: "created_at.desc",
     }),
     encounter.provider_id && encounter.payer_id
-      ? demoSelect<DataRow>("provider_payer_enrollments", {
+      ? tenantSelect<DataRow>("provider_payer_enrollments", {
           provider_id: `eq.${String(encounter.provider_id)}`,
           payer_id: `eq.${String(encounter.payer_id)}`,
           order: "created_at.desc",
@@ -70,7 +70,7 @@ async function getBillingContext(encounterId: string): Promise<BillingReadinessI
   const authorization =
     authorizationRows.find((row) => row.status === "approved") ?? authorizationRows[0] ?? null;
   const units = authorization
-    ? await demoSelect<DataRow>("authorization_units", {
+    ? await tenantSelect<DataRow>("authorization_units", {
         authorization_id: `eq.${authorization.id}`,
       })
     : [];
@@ -99,14 +99,14 @@ const repository: BillingRepository = {
   getBillingContext,
 
   async replaceReadinessChecks(encounterId, checks) {
-    const existing = await demoSelect<DataRow>("encounter_readiness_checks", {
+    const existing = await tenantSelect<DataRow>("encounter_readiness_checks", {
       encounter_id: `eq.${encounterId}`,
     });
     const existingByCode = new Map(existing.map((row) => [String(row.check_code), row]));
     const currentCodes = new Set(checks.map((check) => String(check.check_code)));
 
     for (const stale of existing.filter((row) => !currentCodes.has(String(row.check_code)))) {
-      await demoUpdate<DataRow>("encounter_readiness_checks", stale.id, {
+      await tenantUpdate<DataRow>("encounter_readiness_checks", stale.id, {
         check_status: "pass",
         blocking: false,
         message: "Superseded by the latest billing-readiness audit.",
@@ -119,9 +119,9 @@ const repository: BillingRepository = {
       const code = String(check.check_code);
       const current = existingByCode.get(code);
       if (current) {
-        await demoUpdate<DataRow>("encounter_readiness_checks", current.id, check);
+        await tenantUpdate<DataRow>("encounter_readiness_checks", current.id, check);
       } else {
-        await demoInsert<DataRow>("encounter_readiness_checks", {
+        await tenantInsert<DataRow>("encounter_readiness_checks", {
           encounter_id: encounterId,
           ...check,
         });
@@ -132,34 +132,34 @@ const repository: BillingRepository = {
   async upsertWorkItem(values) {
     const sourceId = String(values.source_object_id ?? "");
     const type = String(values.workqueue_type ?? "general_task");
-    const existing = await demoSelect<DataRow>("workqueue_items", {
+    const existing = await tenantSelect<DataRow>("workqueue_items", {
       source_object_type: "eq.encounter",
       source_object_id: `eq.${sourceId}`,
       workqueue_type: `eq.${type}`,
       workqueue_status: "in.(open,in_progress,pending,snoozed,reopened)",
       limit: "1",
     });
-    if (existing[0]) return demoUpdate<DataRow>("workqueue_items", existing[0].id, values);
-    return demoInsert<DataRow>("workqueue_items", values);
+    if (existing[0]) return tenantUpdate<DataRow>("workqueue_items", existing[0].id, values);
+    return tenantInsert<DataRow>("workqueue_items", values);
   },
 
   updateEncounter(id, values) {
-    return demoUpdate<DataRow>("encounters", id, values);
+    return tenantUpdate<DataRow>("encounters", id, values);
   },
 
   getExistingCharges(encounterId) {
-    return demoSelect<DataRow>("charge_capture_items", {
+    return tenantSelect<DataRow>("charge_capture_items", {
       encounter_id: `eq.${encounterId}`,
       order: "created_at.asc",
     });
   },
 
   createCharge(values) {
-    return demoInsert<DataRow>("charge_capture_items", values);
+    return tenantInsert<DataRow>("charge_capture_items", values);
   },
 
   updateServiceLine(id, values) {
-    return demoUpdate<DataRow>("encounter_service_lines", id, values);
+    return tenantUpdate<DataRow>("encounter_service_lines", id, values);
   },
 };
 
@@ -173,12 +173,12 @@ export function createChargeFromEncounter(encounterId: string) {
 
 export async function getBillingQueueData() {
   const [encounters, clients, providers, charges, payers, readinessChecks] = await Promise.all([
-    demoSelect<DataRow>("encounters", { order: "updated_at.desc" }),
-    demoSelect<DataRow>("clients"),
-    demoSelect<DataRow>("providers"),
-    demoSelect<DataRow>("charge_capture_items", { order: "created_at.desc" }),
+    tenantSelect<DataRow>("encounters", { order: "updated_at.desc" }),
+    tenantSelect<DataRow>("clients"),
+    tenantSelect<DataRow>("providers"),
+    tenantSelect<DataRow>("charge_capture_items", { order: "created_at.desc" }),
     referenceSelect<DataRow>("payers", { order: "name.asc" }),
-    demoSelect<DataRow>("encounter_readiness_checks"),
+    tenantSelect<DataRow>("encounter_readiness_checks"),
   ]);
 
   const clientsById = new Map(clients.map((row) => [row.id, row]));

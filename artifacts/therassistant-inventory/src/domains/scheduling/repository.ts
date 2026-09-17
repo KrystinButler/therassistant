@@ -1,10 +1,10 @@
 import {
-  demoInsert,
-  demoSelect,
-  demoUpdate,
+  tenantInsert,
+  tenantSelect,
+  tenantUpdate,
   referenceSelect,
   type Row,
-} from "../../lib/supabase-demo-client";
+} from "../../lib/tenant-data-client";
 import { evaluatePreSession } from "../readiness/evaluate-pre-session";
 import type { PreSessionReadiness } from "../readiness/types";
 import {
@@ -176,17 +176,17 @@ export async function getScheduleData(): Promise<ScheduleData> {
     payers,
     plans,
   ] = await Promise.all([
-    demoSelect<DataRow>("appointments", { order: "starts_at.asc" }),
-    demoSelect<DataRow>("clients", { order: "last_name.asc,first_name.asc" }),
-    demoSelect<DataRow>("providers", { order: "last_name.asc,first_name.asc" }),
-    demoSelect<DataRow>("client_insurance_policies"),
-    demoSelect<DataRow>("eligibility_checks"),
-    demoSelect<DataRow>("authorizations"),
-    demoSelect<DataRow>("authorization_units"),
-    demoSelect<DataRow>("provider_payer_enrollments"),
-    demoSelect<DataRow>("treatment_plans"),
-    demoSelect<DataRow>("client_checkins"),
-    demoSelect<DataRow>("client_balance_summaries"),
+    tenantSelect<DataRow>("appointments", { order: "starts_at.asc" }),
+    tenantSelect<DataRow>("clients", { order: "last_name.asc,first_name.asc" }),
+    tenantSelect<DataRow>("providers", { order: "last_name.asc,first_name.asc" }),
+    tenantSelect<DataRow>("client_insurance_policies"),
+    tenantSelect<DataRow>("eligibility_checks"),
+    tenantSelect<DataRow>("authorizations"),
+    tenantSelect<DataRow>("authorization_units"),
+    tenantSelect<DataRow>("provider_payer_enrollments"),
+    tenantSelect<DataRow>("treatment_plans"),
+    tenantSelect<DataRow>("client_checkins"),
+    tenantSelect<DataRow>("client_balance_summaries"),
     referenceSelect<DataRow>("payers", { order: "name.asc" }),
     referenceSelect<DataRow>("payer_plans", { order: "name.asc" }),
   ]);
@@ -324,13 +324,13 @@ export async function getPreSessionData(appointmentId: string) {
 export async function createAppointment(draft: AppointmentDraft) {
   if (!draft.clientId) throw new Error("Select a patient.");
   if (!draft.providerId) throw new Error("Select a provider.");
-  return demoInsert<DataRow>("appointments", buildAppointmentInput(draft));
+  return tenantInsert<DataRow>("appointments", buildAppointmentInput(draft));
 }
 
 export async function updateAppointmentStatus(id: string, status: string) {
   const values: Row = { appointment_status: status };
   if (status === "completed") values.completed_at = new Date().toISOString();
-  return demoUpdate<DataRow>("appointments", id, values);
+  return tenantUpdate<DataRow>("appointments", id, values);
 }
 
 export async function runEligibility(appointmentId: string) {
@@ -342,7 +342,7 @@ export async function runEligibility(appointmentId: string) {
   const status = syntheticEligibilityStatus(appointment.memberId);
   const serviceDate = appointment.startsAt.slice(0, 10);
 
-  return demoInsert<DataRow>("eligibility_checks", {
+  return tenantInsert<DataRow>("eligibility_checks", {
     client_id: appointment.clientId,
     insurance_policy_id: appointment.policyId,
     payer_id: appointment.payerId,

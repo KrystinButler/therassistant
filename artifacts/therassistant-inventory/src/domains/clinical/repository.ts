@@ -1,9 +1,9 @@
 import {
-  demoInsert,
-  demoSelect,
-  demoUpdate,
+  tenantInsert,
+  tenantSelect,
+  tenantUpdate,
   type Row,
-} from "../../lib/supabase-demo-client";
+} from "../../lib/tenant-data-client";
 import { routeEncounterToBilling } from "../billing/repository";
 import { updateEncounter } from "../encounters/repository";
 import { signNoteWorkflow, type ClinicalSigningRepository } from "./workflow";
@@ -16,17 +16,17 @@ function first<T>(rows: T[]) {
 
 async function clinicalState(encounterId: string) {
   const [encounters, notes, diagnoses, serviceLines] = await Promise.all([
-    demoSelect<DataRow>("encounters", { id: `eq.${encounterId}`, limit: "1" }),
-    demoSelect<DataRow>("clinical_notes", {
+    tenantSelect<DataRow>("encounters", { id: `eq.${encounterId}`, limit: "1" }),
+    tenantSelect<DataRow>("clinical_notes", {
       encounter_id: `eq.${encounterId}`,
       order: "created_at.desc",
       limit: "1",
     }),
-    demoSelect<DataRow>("encounter_diagnoses", {
+    tenantSelect<DataRow>("encounter_diagnoses", {
       encounter_id: `eq.${encounterId}`,
       order: "sequence_number.asc",
     }),
-    demoSelect<DataRow>("encounter_service_lines", {
+    tenantSelect<DataRow>("encounter_service_lines", {
       encounter_id: `eq.${encounterId}`,
       order: "created_at.asc",
     }),
@@ -43,10 +43,10 @@ async function clinicalState(encounterId: string) {
 const signingRepository: ClinicalSigningRepository = {
   getClinicalState: clinicalState,
   createSignature(values) {
-    return demoInsert<DataRow>("clinical_note_signatures", values);
+    return tenantInsert<DataRow>("clinical_note_signatures", values);
   },
   updateNote(id, values) {
-    return demoUpdate<DataRow>("clinical_notes", id, values);
+    return tenantUpdate<DataRow>("clinical_notes", id, values);
   },
   async runBillingReadiness(encounterId) {
     const state = await clinicalState(encounterId);
@@ -59,7 +59,7 @@ const signingRepository: ClinicalSigningRepository = {
     });
 
     if (state.encounter.appointment_id) {
-      await demoUpdate<DataRow>("appointments", String(state.encounter.appointment_id), {
+      await tenantUpdate<DataRow>("appointments", String(state.encounter.appointment_id), {
         appointment_status: "completed",
         completed_at: completedAt,
       });
@@ -89,7 +89,7 @@ export async function saveClinicalNote(
     if (["signed", "locked", "voided"].includes(status)) {
       throw new Error("Signed or locked documentation cannot be edited. Amend the note instead.");
     }
-    return demoUpdate<DataRow>("clinical_notes", state.note.id, {
+    return tenantUpdate<DataRow>("clinical_notes", state.note.id, {
       note_type: values.noteType || state.note.note_type || "psychotherapy",
       note_status: "ready_for_signature",
       note_text: values.noteText,
@@ -98,7 +98,7 @@ export async function saveClinicalNote(
   }
 
   const serviceDate = String(state.encounter.started_at ?? new Date().toISOString()).slice(0, 10);
-  return demoInsert<DataRow>("clinical_notes", {
+  return tenantInsert<DataRow>("clinical_notes", {
     encounter_id: encounterId,
     client_id: state.encounter.client_id,
     appointment_id: state.encounter.appointment_id || null,
@@ -120,12 +120,12 @@ export async function addEncounterDiagnosis(
   },
 ) {
   if (!values.diagnosisCode.trim()) throw new Error("Diagnosis code is required.");
-  const existing = await demoSelect<DataRow>("encounter_diagnoses", {
+  const existing = await tenantSelect<DataRow>("encounter_diagnoses", {
     encounter_id: `eq.${encounterId}`,
     order: "sequence_number.asc",
   });
 
-  return demoInsert<DataRow>("encounter_diagnoses", {
+  return tenantInsert<DataRow>("encounter_diagnoses", {
     encounter_id: encounterId,
     diagnosis_code: values.diagnosisCode.trim().toUpperCase(),
     diagnosis_description: values.diagnosisDescription?.trim() || null,
@@ -150,7 +150,7 @@ export async function addEncounterServiceLine(
   if (values.units <= 0) throw new Error("Units must be greater than zero.");
   if (values.chargeAmountCents < 0) throw new Error("Charge amount cannot be negative.");
 
-  return demoInsert<DataRow>("encounter_service_lines", {
+  return tenantInsert<DataRow>("encounter_service_lines", {
     encounter_id: encounterId,
     cpt_hcpcs_code: values.cptCode.trim().toUpperCase(),
     modifier1: values.modifier1?.trim().toUpperCase() || null,

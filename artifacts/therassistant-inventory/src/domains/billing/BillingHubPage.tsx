@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Link } from "wouter";
 
 import { money } from "../../lib/format";
-import { demoSelect, type Row } from "../../lib/supabase-demo-client";
+import { tenantSelect, type Row } from "../../lib/tenant-data-client";
 import { calculateOpenBalance } from "../ar/aging";
 import { getArWorkspaceData } from "../ar/repository";
 import { isRecoveryAdjustment } from "../ar/variance";
@@ -58,13 +58,13 @@ export function BillingHubPage() {
     let active = true;
     setLoading(true);
     Promise.all([
-      demoSelect<DataRow>("charge_capture_items", { order: "created_at.desc" }),
-      demoSelect<DataRow>("professional_claims", { order: "created_at.desc" }),
-      demoSelect<DataRow>("payments", { order: "created_at.desc" }),
-      demoSelect<DataRow>("denials", { order: "created_at.desc" }),
-      demoSelect<DataRow>("appeals", { order: "created_at.desc" }),
-      demoSelect<DataRow>("payment_allocations", { order: "created_at.desc" }),
-      demoSelect<DataRow>("adjustments", { order: "created_at.desc" }),
+      tenantSelect<DataRow>("charge_capture_items", { order: "created_at.desc" }),
+      tenantSelect<DataRow>("professional_claims", { order: "created_at.desc" }),
+      tenantSelect<DataRow>("payments", { order: "created_at.desc" }),
+      tenantSelect<DataRow>("denials", { order: "created_at.desc" }),
+      tenantSelect<DataRow>("appeals", { order: "created_at.desc" }),
+      tenantSelect<DataRow>("payment_allocations", { order: "created_at.desc" }),
+      tenantSelect<DataRow>("adjustments", { order: "created_at.desc" }),
       getArWorkspaceData(),
     ])
       .then(([charges, claims, payments, denials, appeals, allocations, adjustments, arData]) => {

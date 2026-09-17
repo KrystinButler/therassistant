@@ -1,9 +1,9 @@
-import { demoInsert, demoSelect, type Row } from "../../lib/supabase-demo-client";
+import { tenantInsert, tenantSelect, type Row } from "../../lib/tenant-data-client";
 
 type DataRow = Row & { id: string };
 
 export async function getPatientDocuments(patientId: string) {
-  return demoSelect<DataRow>("documents", {
+  return tenantSelect<DataRow>("documents", {
     client_id: `eq.${patientId}`,
     order: "created_at.desc",
   });
@@ -20,7 +20,7 @@ export function addSyntheticDocumentMetadata(
 ) {
   const fileName = input.fileName.trim();
   if (!fileName) throw new Error("File name is required.");
-  return demoInsert<DataRow>("documents", {
+  return tenantInsert<DataRow>("documents", {
     client_id: patientId,
     document_type: input.documentType || "other",
     document_status: "uploaded",

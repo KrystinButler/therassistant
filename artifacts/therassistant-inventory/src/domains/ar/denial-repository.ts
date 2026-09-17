@@ -1,9 +1,9 @@
 import {
-  demoInsert,
-  demoSelect,
-  demoUpdate,
+  tenantInsert,
+  tenantSelect,
+  tenantUpdate,
   type Row,
-} from "../../lib/supabase-demo-client";
+} from "../../lib/tenant-data-client";
 import { calculateOpenBalance } from "./aging";
 import {
   assertAppealAllowed,
@@ -17,7 +17,7 @@ type DataRow = Row & { id: string };
 const ACTIVE_APPEAL_STATUSES = ["not_started", "drafting", "submitted", "pending"];
 
 async function first<T extends Row>(table: string, id: string) {
-  return (await demoSelect<T>(table, { id: `eq.${id}`, limit: "1" }))[0] ?? null;
+  return (await tenantSelect<T>(table, { id: `eq.${id}`, limit: "1" }))[0] ?? null;
 }
 
 function total(rows: DataRow[], field: string) {
@@ -28,8 +28,8 @@ async function getClaimFinancialState(claimId: string) {
   const claim = await first<DataRow>("professional_claims", claimId);
   if (!claim) throw new Error("Linked claim not found.");
   const [allocations, adjustments] = await Promise.all([
-    demoSelect<DataRow>("payment_allocations", { claim_id: `eq.${claimId}`, order: "created_at.desc" }),
-    demoSelect<DataRow>("adjustments", { claim_id: `eq.${claimId}`, order: "created_at.desc" }),
+    tenantSelect<DataRow>("payment_allocations", { claim_id: `eq.${claimId}`, order: "created_at.desc" }),
+    tenantSelect<DataRow>("adjustments", { claim_id: `eq.${claimId}`, order: "created_at.desc" }),
   ]);
   const paidCents = total(allocations.filter((row) => !row.reversed_at), "amount_cents");
   const activeAdjustments = adjustments.filter(
@@ -53,7 +53,7 @@ async function getClaimFinancialState(claimId: string) {
 }
 
 async function addHistory(workItemId: string, note: string, oldStatus?: string, newStatus?: string) {
-  return demoInsert<DataRow>("workqueue_history", {
+  return tenantInsert<DataRow>("workqueue_history", {
     workqueue_item_id: workItemId,
     old_status: oldStatus ?? null,
     new_status: newStatus ?? null,
@@ -62,7 +62,7 @@ async function addHistory(workItemId: string, note: string, oldStatus?: string, 
 }
 
 async function findActiveWork(sourceType: string, sourceId: string, workqueueType: string) {
-  const rows = await demoSelect<DataRow>("workqueue_items", {
+  const rows = await tenantSelect<DataRow>("workqueue_items", {
     source_object_type: `eq.${sourceType}`,
     source_object_id: `eq.${sourceId}`,
     workqueue_type: `eq.${workqueueType}`,
@@ -80,14 +80,14 @@ export async function startDenialWork(denialId: string) {
     throw new Error("This denial follows the configured write-off policy. Use Write Off instead of appeal follow-up.");
   }
 
-  await demoUpdate<DataRow>("denials", denialId, {
+  await tenantUpdate<DataRow>("denials", denialId, {
     denial_status: "reviewing",
     workability: policy,
   });
 
   let work = await findActiveWork("denial", denialId, "denial_followup");
   if (!work) {
-    work = await demoInsert<DataRow>("workqueue_items", {
+    work = await tenantInsert<DataRow>("workqueue_items", {
       workqueue_type: "denial_followup",
       workqueue_status: "in_progress",
       priority: "high",
@@ -100,7 +100,7 @@ export async function startDenialWork(denialId: string) {
     await addHistory(work.id, "Denial work started from A/R workspace.", "open", "in_progress");
   } else if (work.workqueue_status !== "in_progress") {
     const oldStatus = String(work.workqueue_status ?? "open");
-    await demoUpdate<DataRow>("workqueue_items", work.id, { workqueue_status: "in_progress" });
+    await tenantUpdate<DataRow>("workqueue_items", work.id, { workqueue_status: "in_progress" });
     await addHistory(work.id, "Denial work resumed from A/R workspace.", oldStatus, "in_progress");
   }
 
@@ -110,14 +110,14 @@ export async function startDenialWork(denialId: string) {
 export async function createDenialAppeal(denialId: string, level: number, dueDate: string, notes: string) {
   const denial = await first<DataRow>("denials", denialId);
   if (!denial) throw new Error("Denial not found.");
-  const activeAppeals = await demoSelect<DataRow>("appeals", {
+  const activeAppeals = await tenantSelect<DataRow>("appeals", {
     denial_id: `eq.${denialId}`,
     appeal_status: `in.(${ACTIVE_APPEAL_STATUSES.join(",")})`,
     limit: "1",
   });
   assertAppealAllowed({ category: denial.denial_category, hasActiveAppeal: Boolean(activeAppeals[0]) });
   const draft = createAppealInput(denial, level, dueDate, notes);
-  const appeal = await demoInsert<DataRow>("appeals", {
+  const appeal = await tenantInsert<DataRow>("appeals", {
     denial_id: draft.denial_id,
     claim_id: draft.claim_id,
     appeal_level: draft.appeal_level,
@@ -126,12 +126,12 @@ export async function createDenialAppeal(denialId: string, level: number, dueDat
     notes: draft.notes,
   });
 
-  await demoUpdate<DataRow>("denials", denialId, { denial_status: "appealed", workability: "workable" });
+  await tenantUpdate<DataRow>("denials", denialId, { denial_status: "appealed", workability: "workable" });
   if (denial.claim_id) {
-    await demoUpdate<DataRow>("professional_claims", String(denial.claim_id), { claim_status: "appealed" });
+    await tenantUpdate<DataRow>("professional_claims", String(denial.claim_id), { claim_status: "appealed" });
   }
 
-  const work = await demoInsert<DataRow>("workqueue_items", {
+  const work = await tenantInsert<DataRow>("workqueue_items", {
     workqueue_type: "appeal_deadline",
     workqueue_status: "open",
     priority: "high",
@@ -151,7 +151,7 @@ export async function submitAppeal(appealId: string) {
   if (!["not_started", "drafting"].includes(String(appeal.appeal_status))) {
     throw new Error("Only a not-started or drafting appeal can be submitted.");
   }
-  return demoUpdate<DataRow>("appeals", appealId, {
+  return tenantUpdate<DataRow>("appeals", appealId, {
     appeal_status: "submitted",
     submitted_at: new Date().toISOString(),
   });
@@ -160,15 +160,15 @@ export async function submitAppeal(appealId: string) {
 export async function recordAppealOutcome(appealId: string, outcome: "approved" | "partially_approved" | "denied" | "withdrawn") {
   const appeal = await first<DataRow>("appeals", appealId);
   if (!appeal) throw new Error("Appeal not found.");
-  await demoUpdate<DataRow>("appeals", appealId, { appeal_status: outcome, outcome });
+  await tenantUpdate<DataRow>("appeals", appealId, { appeal_status: outcome, outcome });
   if (appeal.denial_id) {
     const denialStatus = outcome === "denied" ? "upheld" : outcome === "withdrawn" ? "closed" : "reviewing";
-    await demoUpdate<DataRow>("denials", String(appeal.denial_id), { denial_status: denialStatus });
+    await tenantUpdate<DataRow>("denials", String(appeal.denial_id), { denial_status: denialStatus });
   }
   const work = await findActiveWork("appeal", appealId, "appeal_deadline");
   if (work) {
     const oldStatus = String(work.workqueue_status ?? "open");
-    await demoUpdate<DataRow>("workqueue_items", work.id, {
+    await tenantUpdate<DataRow>("workqueue_items", work.id, {
       workqueue_status: "completed",
       completed_at: new Date().toISOString(),
     });
@@ -195,7 +195,7 @@ export async function writeOffDenial(denialId: string) {
 
   const type = denial.denial_category === "credentialing" ? "credentialing_writeoff" : "payer_writeoff";
   if (writeOffAmount > 0) {
-    await demoInsert<DataRow>("adjustments", {
+    await tenantInsert<DataRow>("adjustments", {
       client_id: denial.client_id ?? null,
       claim_id: denial.claim_id ?? null,
       payer_id: denial.payer_id ?? null,
@@ -207,22 +207,22 @@ export async function writeOffDenial(denialId: string) {
       posted_at: new Date().toISOString(),
     });
   }
-  await demoUpdate<DataRow>("denials", denialId, {
+  await tenantUpdate<DataRow>("denials", denialId, {
     denial_status: "resolved_writeoff",
     workability: "auto_writeoff",
   });
   if (denial.claim_id && claimOpenBalance !== null) {
     const remainingBalance = Math.max(0, claimOpenBalance - writeOffAmount);
     if (remainingBalance === 0) {
-      await demoUpdate<DataRow>("professional_claims", String(denial.claim_id), { claim_status: "paid" });
+      await tenantUpdate<DataRow>("professional_claims", String(denial.claim_id), { claim_status: "paid" });
     } else {
-      await demoUpdate<DataRow>("professional_claims", String(denial.claim_id), { claim_status: "partially_paid" });
+      await tenantUpdate<DataRow>("professional_claims", String(denial.claim_id), { claim_status: "partially_paid" });
     }
   }
   const work = await findActiveWork("denial", denialId, "denial_followup");
   if (work) {
     const oldStatus = String(work.workqueue_status ?? "open");
-    await demoUpdate<DataRow>("workqueue_items", work.id, { workqueue_status: "completed", completed_at: new Date().toISOString() });
+    await tenantUpdate<DataRow>("workqueue_items", work.id, { workqueue_status: "completed", completed_at: new Date().toISOString() });
     await addHistory(work.id, "Denial resolved through configured write-off policy.", oldStatus, "completed");
   }
 }

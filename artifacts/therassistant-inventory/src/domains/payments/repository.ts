@@ -1,11 +1,11 @@
 import {
-  demoInsert,
-  demoRpc,
-  demoSelect,
-  demoUpdate,
+  tenantInsert,
+  tenantRpc,
+  tenantSelect,
+  tenantUpdate,
   referenceSelect,
   type Row,
-} from "../../lib/supabase-demo-client";
+} from "../../lib/tenant-data-client";
 import { isRecoveryAdjustment } from "../ar/variance";
 import {
   buildAllocationPlan,
@@ -47,31 +47,31 @@ function total(rows: DataRow[], field: string) {
 
 const repository: PaymentRepository = {
   async getClaim(claimId) {
-    return first(await demoSelect<DataRow>("professional_claims", { id: `eq.${claimId}`, limit: "1" }));
+    return first(await tenantSelect<DataRow>("professional_claims", { id: `eq.${claimId}`, limit: "1" }));
   },
-  createPayment(values) { return demoInsert<DataRow>("payments", values); },
-  updatePayment(id, values) { return demoUpdate<DataRow>("payments", id, values); },
-  createPaymentAllocation(values) { return demoInsert<DataRow>("payment_allocations", values); },
-  createAdjustment(values) { return demoInsert<DataRow>("adjustments", values); },
-  createAdjustmentAllocation(values) { return demoInsert<DataRow>("adjustment_allocations", values); },
-  createEraFile(values) { return demoInsert<DataRow>("era_files", values); },
-  createEraClaim(values) { return demoInsert<DataRow>("era_claims", values); },
-  createEraMatch(values) { return demoInsert<DataRow>("era_matches", values); },
-  updateEraFile(id, values) { return demoUpdate<DataRow>("era_files", id, values); },
-  updateClaim(id, values) { return demoUpdate<DataRow>("professional_claims", id, values); },
-  createDenial(values) { return demoInsert<DataRow>("denials", values); },
+  createPayment(values) { return tenantInsert<DataRow>("payments", values); },
+  updatePayment(id, values) { return tenantUpdate<DataRow>("payments", id, values); },
+  createPaymentAllocation(values) { return tenantInsert<DataRow>("payment_allocations", values); },
+  createAdjustment(values) { return tenantInsert<DataRow>("adjustments", values); },
+  createAdjustmentAllocation(values) { return tenantInsert<DataRow>("adjustment_allocations", values); },
+  createEraFile(values) { return tenantInsert<DataRow>("era_files", values); },
+  createEraClaim(values) { return tenantInsert<DataRow>("era_claims", values); },
+  createEraMatch(values) { return tenantInsert<DataRow>("era_matches", values); },
+  updateEraFile(id, values) { return tenantUpdate<DataRow>("era_files", id, values); },
+  updateClaim(id, values) { return tenantUpdate<DataRow>("professional_claims", id, values); },
+  createDenial(values) { return tenantInsert<DataRow>("denials", values); },
   async upsertWorkItem(values) {
     const sourceId = String(values.source_object_id ?? "");
     const type = String(values.workqueue_type ?? "general_task");
-    const existing = await demoSelect<DataRow>("workqueue_items", {
+    const existing = await tenantSelect<DataRow>("workqueue_items", {
       source_object_type: `eq.${String(values.source_object_type ?? "denial")}`,
       source_object_id: `eq.${sourceId}`,
       workqueue_type: `eq.${type}`,
       workqueue_status: "in.(open,in_progress,pending,snoozed,reopened)",
       limit: "1",
     });
-    if (existing[0]) return demoUpdate<DataRow>("workqueue_items", existing[0].id, values);
-    return demoInsert<DataRow>("workqueue_items", values);
+    if (existing[0]) return tenantUpdate<DataRow>("workqueue_items", existing[0].id, values);
+    return tenantInsert<DataRow>("workqueue_items", values);
   },
 };
 
@@ -81,8 +81,8 @@ export function createDenialFromAdjudication(input: Parameters<typeof createDeni
 
 async function getClaimFinancialState(claim: DataRow) {
   const [allocations, adjustments] = await Promise.all([
-    demoSelect<DataRow>("payment_allocations", { claim_id: `eq.${claim.id}`, order: "created_at.desc" }),
-    demoSelect<DataRow>("adjustments", { claim_id: `eq.${claim.id}`, order: "created_at.desc" }),
+    tenantSelect<DataRow>("payment_allocations", { claim_id: `eq.${claim.id}`, order: "created_at.desc" }),
+    tenantSelect<DataRow>("adjustments", { claim_id: `eq.${claim.id}`, order: "created_at.desc" }),
   ]);
   const paidCents = total(allocations.filter((row) => !row.reversed_at), "amount_cents");
   const activeAdjustments = adjustments.filter(
@@ -118,7 +118,7 @@ export async function postManualPayment(input: {
   let claim: DataRow | null = null;
   let allocationCents = 0;
   if (input.claimId) {
-    claim = first(await demoSelect<DataRow>("professional_claims", { id: `eq.${input.claimId}`, limit: "1" }));
+    claim = first(await tenantSelect<DataRow>("professional_claims", { id: `eq.${input.claimId}`, limit: "1" }));
     if (!claim) throw new Error("Selected claim was not found.");
     const financials = await getClaimFinancialState(claim);
     allocationCents = capAllocationToOpenBalance(requestedAllocationCents, financials.openBalanceCents);
@@ -131,7 +131,7 @@ export async function postManualPayment(input: {
     claimClientId: claim ? String(claim.client_id ?? "") || undefined : undefined,
     claimPayerId: claim ? String(claim.payer_id ?? "") || undefined : undefined,
   });
-  return demoRpc<DemoManualPaymentResult>("post_demo_manual_payment", {
+  return tenantRpc<DemoManualPaymentResult>("post_demo_manual_payment", {
     p_amount_cents: draft.amountCents,
     p_source: draft.source,
     p_method: draft.method,
@@ -148,7 +148,7 @@ export async function postManualPayment(input: {
 export async function reversePayment(paymentId: string, reason: string) {
   if (!paymentId) throw new Error("Payment is required.");
   if (!reason.trim()) throw new Error("Reversal reason is required.");
-  return demoRpc<DemoPaymentReversalResult>("reverse_demo_payment", {
+  return tenantRpc<DemoPaymentReversalResult>("reverse_demo_payment", {
     p_payment_id: paymentId,
     p_reason: reason.trim(),
   });
@@ -161,16 +161,16 @@ function personName(row?: Row) {
 
 export async function getPaymentsWorkspaceData() {
   const [claims, clients, payers, payments, allocations, reversals, adjustments, eraFiles, eraClaims, denials] = await Promise.all([
-    demoSelect<DataRow>("professional_claims", { order: "created_at.desc" }),
-    demoSelect<DataRow>("clients"),
+    tenantSelect<DataRow>("professional_claims", { order: "created_at.desc" }),
+    tenantSelect<DataRow>("clients"),
     referenceSelect<DataRow>("payers", { order: "name.asc" }),
-    demoSelect<DataRow>("payments", { order: "created_at.desc" }),
-    demoSelect<DataRow>("payment_allocations", { order: "created_at.desc" }),
-    demoSelect<DataRow>("payment_reversals", { order: "created_at.desc" }),
-    demoSelect<DataRow>("adjustments", { order: "created_at.desc" }),
-    demoSelect<DataRow>("era_files", { order: "created_at.desc" }),
-    demoSelect<DataRow>("era_claims", { order: "created_at.desc" }),
-    demoSelect<DataRow>("denials", { order: "created_at.desc" }),
+    tenantSelect<DataRow>("payments", { order: "created_at.desc" }),
+    tenantSelect<DataRow>("payment_allocations", { order: "created_at.desc" }),
+    tenantSelect<DataRow>("payment_reversals", { order: "created_at.desc" }),
+    tenantSelect<DataRow>("adjustments", { order: "created_at.desc" }),
+    tenantSelect<DataRow>("era_files", { order: "created_at.desc" }),
+    tenantSelect<DataRow>("era_claims", { order: "created_at.desc" }),
+    tenantSelect<DataRow>("denials", { order: "created_at.desc" }),
   ]);
 
   const clientsById = new Map(clients.map((row) => [row.id, row]));

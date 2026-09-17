@@ -1,4 +1,4 @@
-import { demoInsert, demoSelect, demoUpdate, referenceSelect, type Row } from "../../lib/supabase-demo-client";
+import { tenantInsert, tenantSelect, tenantUpdate, referenceSelect, type Row } from "../../lib/tenant-data-client";
 import { classifyDenialPolicy, type DenialPolicy } from "./denials";
 import { isRecoveryAdjustment } from "./variance";
 
@@ -39,15 +39,15 @@ function total(rows: DataRow[], field: string) {
 
 export async function getDenialsQueueData() {
   const [denials, claims, clients, providers, payers, appeals, workItems, allocations, adjustments] = await Promise.all([
-    demoSelect<DataRow>("denials", { order: "created_at.desc" }),
-    demoSelect<DataRow>("professional_claims", { order: "created_at.desc" }),
-    demoSelect<DataRow>("clients"),
-    demoSelect<DataRow>("providers"),
+    tenantSelect<DataRow>("denials", { order: "created_at.desc" }),
+    tenantSelect<DataRow>("professional_claims", { order: "created_at.desc" }),
+    tenantSelect<DataRow>("clients"),
+    tenantSelect<DataRow>("providers"),
     referenceSelect<DataRow>("payers", { order: "name.asc" }),
-    demoSelect<DataRow>("appeals", { order: "created_at.desc" }),
-    demoSelect<DataRow>("workqueue_items", { order: "created_at.desc" }),
-    demoSelect<DataRow>("payment_allocations", { order: "created_at.desc" }),
-    demoSelect<DataRow>("adjustments", { order: "created_at.desc" }),
+    tenantSelect<DataRow>("appeals", { order: "created_at.desc" }),
+    tenantSelect<DataRow>("workqueue_items", { order: "created_at.desc" }),
+    tenantSelect<DataRow>("payment_allocations", { order: "created_at.desc" }),
+    tenantSelect<DataRow>("adjustments", { order: "created_at.desc" }),
   ]);
 
   const claimsById = new Map(claims.map((row) => [row.id, row]));
@@ -133,7 +133,7 @@ export async function getDenialsQueueData() {
 
 async function activeDenialWork(denialId: string) {
   return (
-    await demoSelect<DataRow>("workqueue_items", {
+    await tenantSelect<DataRow>("workqueue_items", {
       source_object_type: "eq.denial",
       source_object_id: `eq.${denialId}`,
       workqueue_type: "eq.denial_followup",
@@ -145,8 +145,8 @@ async function activeDenialWork(denialId: string) {
 
 export async function deferDenial(denialId: string) {
   const work = await activeDenialWork(denialId);
-  if (work) return demoUpdate<DataRow>("workqueue_items", work.id, { workqueue_status: "snoozed" });
-  return demoInsert<DataRow>("workqueue_items", {
+  if (work) return tenantUpdate<DataRow>("workqueue_items", work.id, { workqueue_status: "snoozed" });
+  return tenantInsert<DataRow>("workqueue_items", {
     workqueue_type: "denial_followup",
     workqueue_status: "snoozed",
     priority: "normal",
@@ -160,5 +160,5 @@ export async function deferDenial(denialId: string) {
 export async function resumeDenial(denialId: string) {
   const work = await activeDenialWork(denialId);
   if (!work) return null;
-  return demoUpdate<DataRow>("workqueue_items", work.id, { workqueue_status: "open" });
+  return tenantUpdate<DataRow>("workqueue_items", work.id, { workqueue_status: "open" });
 }

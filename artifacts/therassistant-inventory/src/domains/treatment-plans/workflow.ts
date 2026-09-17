@@ -1,4 +1,4 @@
-import type { Row } from "../../lib/supabase-demo-client";
+import type { Row } from "../../lib/tenant-data-client";
 
 export type TreatmentPlanDraft = {
   providerId: string;

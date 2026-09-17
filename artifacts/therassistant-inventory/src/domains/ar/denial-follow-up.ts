@@ -1,4 +1,4 @@
-import { demoInsert, demoSelect, demoUpdate, type Row } from "../../lib/supabase-demo-client";
+import { tenantInsert, tenantSelect, tenantUpdate, type Row } from "../../lib/tenant-data-client";
 
 type DataRow = Row & { id: string };
 
@@ -11,7 +11,7 @@ export type DenialFollowUpInput = {
 
 async function activeDenialWork(denialId: string) {
   return (
-    await demoSelect<DataRow>("workqueue_items", {
+    await tenantSelect<DataRow>("workqueue_items", {
       source_object_type: "eq.denial",
       source_object_id: `eq.${denialId}`,
       workqueue_type: "eq.denial_followup",
@@ -23,7 +23,7 @@ async function activeDenialWork(denialId: string) {
 
 export async function saveDenialFollowUp(denialId: string, input: DenialFollowUpInput) {
   const denial = (
-    await demoSelect<DataRow>("denials", { id: `eq.${denialId}`, limit: "1" })
+    await tenantSelect<DataRow>("denials", { id: `eq.${denialId}`, limit: "1" })
   )[0];
   if (!denial) throw new Error("Denial not found.");
   if (!input.actionTaken.trim() && !input.notes.trim()) {
@@ -34,13 +34,13 @@ export async function saveDenialFollowUp(denialId: string, input: DenialFollowUp
   const oldStatus = String(work?.workqueue_status ?? "open");
   const description = input.actionTaken.trim() || String(denial.reason ?? "Denial follow-up");
   if (work) {
-    work = await demoUpdate<DataRow>("workqueue_items", work.id, {
+    work = await tenantUpdate<DataRow>("workqueue_items", work.id, {
       workqueue_status: "in_progress",
       due_date: input.nextFollowUpDate || null,
       description,
     });
   } else {
-    work = await demoInsert<DataRow>("workqueue_items", {
+    work = await tenantInsert<DataRow>("workqueue_items", {
       workqueue_type: "denial_followup",
       workqueue_status: "in_progress",
       priority: "high",
@@ -59,14 +59,14 @@ export async function saveDenialFollowUp(denialId: string, input: DenialFollowUp
     input.notes.trim() ? `Notes: ${input.notes.trim()}` : "",
   ].filter(Boolean).join(" | ");
 
-  await demoInsert<DataRow>("workqueue_history", {
+  await tenantInsert<DataRow>("workqueue_history", {
     workqueue_item_id: work.id,
     old_status: oldStatus,
     new_status: "in_progress",
     note: detail,
   });
 
-  await demoUpdate<DataRow>("denials", denialId, {
+  await tenantUpdate<DataRow>("denials", denialId, {
     denial_status: "reviewing",
     notes: input.notes.trim() || denial.notes || null,
   });

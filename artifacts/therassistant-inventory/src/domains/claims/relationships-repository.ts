@@ -1,4 +1,4 @@
-import { demoSelect, type Row } from "../../lib/supabase-demo-client";
+import { tenantSelect, type Row } from "../../lib/tenant-data-client";
 import { buildClaim360Relationships } from "./relationships";
 
 type DataRow = Row & { id: string };
@@ -9,15 +9,15 @@ function inFilter(ids: string[]) {
 
 export async function getClaim360RelationshipsData(claimId: string) {
   const [batchItems, denials, directSubmissions] = await Promise.all([
-    demoSelect<DataRow>("claim_batch_items", {
+    tenantSelect<DataRow>("claim_batch_items", {
       claim_id: `eq.${claimId}`,
       order: "created_at.desc",
     }),
-    demoSelect<DataRow>("denials", {
+    tenantSelect<DataRow>("denials", {
       claim_id: `eq.${claimId}`,
       order: "created_at.desc",
     }),
-    demoSelect<DataRow>("claim_submissions", {
+    tenantSelect<DataRow>("claim_submissions", {
       claim_id: `eq.${claimId}`,
       order: "created_at.desc",
     }),
@@ -30,25 +30,25 @@ export async function getClaim360RelationshipsData(claimId: string) {
 
   const [batchSubmissions, claimWork, denialWork, batchWork] = await Promise.all([
     batchIds.length
-      ? demoSelect<DataRow>("claim_submissions", {
+      ? tenantSelect<DataRow>("claim_submissions", {
           batch_id: inFilter(batchIds),
           order: "created_at.desc",
         })
       : Promise.resolve([]),
-    demoSelect<DataRow>("workqueue_items", {
+    tenantSelect<DataRow>("workqueue_items", {
       source_object_type: "eq.claim",
       source_object_id: `eq.${claimId}`,
       order: "created_at.desc",
     }),
     denialIds.length
-      ? demoSelect<DataRow>("workqueue_items", {
+      ? tenantSelect<DataRow>("workqueue_items", {
           source_object_type: "eq.denial",
           source_object_id: inFilter(denialIds),
           order: "created_at.desc",
         })
       : Promise.resolve([]),
     batchIds.length
-      ? demoSelect<DataRow>("workqueue_items", {
+      ? tenantSelect<DataRow>("workqueue_items", {
           source_object_type: "eq.claim_batch",
           source_object_id: inFilter(batchIds),
           order: "created_at.desc",

@@ -1,4 +1,4 @@
-import { demoInsert, demoSelect, type Row } from "../../lib/supabase-demo-client";
+import { tenantInsert, tenantSelect, type Row } from "../../lib/tenant-data-client";
 import {
   buildSyntheticEligibilityResponse,
   parseEligibilityBenefits,
@@ -8,7 +8,7 @@ import {
 type DataRow = Row & { id: string };
 
 export async function getEligibilityHistory(patientId: string) {
-  const rows = await demoSelect<DataRow>("eligibility_checks", {
+  const rows = await tenantSelect<DataRow>("eligibility_checks", {
     client_id: `eq.${patientId}`,
     order: "service_date.desc,created_at.desc",
   });
@@ -34,7 +34,7 @@ export async function runPatientEligibility(input: {
   const status = syntheticEligibilityStatus(input.memberId);
   const raw = buildSyntheticEligibilityResponse(input.memberId, status);
 
-  return demoInsert<DataRow>("eligibility_checks", {
+  return tenantInsert<DataRow>("eligibility_checks", {
     client_id: input.patientId,
     insurance_policy_id: input.policyId,
     payer_id: input.payerId,

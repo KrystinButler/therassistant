@@ -1,10 +1,10 @@
 import {
-  demoInsert,
-  demoSelect,
-  demoUpdate,
+  tenantInsert,
+  tenantSelect,
+  tenantUpdate,
   referenceSelect,
   type Row,
-} from "../../lib/supabase-demo-client";
+} from "../../lib/tenant-data-client";
 import {
   applySyntheticClearinghouseResponseWorkflow,
   createBatchWorkflow,
@@ -34,32 +34,32 @@ function inFilter(ids: string[]) {
 
 const claimCreationRepository: ClaimCreationRepository = {
   getCharges(chargeIds) {
-    return demoSelect<DataRow>("charge_capture_items", {
+    return tenantSelect<DataRow>("charge_capture_items", {
       id: inFilter(chargeIds),
       order: "service_date.asc",
     });
   },
   createClaim(values) {
-    return demoInsert<DataRow>("professional_claims", values);
+    return tenantInsert<DataRow>("professional_claims", values);
   },
   createClaimLine(values) {
-    return demoInsert<DataRow>("professional_claim_lines", values);
+    return tenantInsert<DataRow>("professional_claim_lines", values);
   },
   createClaimDiagnosis(values) {
-    return demoInsert<DataRow>("claim_diagnoses", values);
+    return tenantInsert<DataRow>("claim_diagnoses", values);
   },
   updateCharge(id, values) {
-    return demoUpdate<DataRow>("charge_capture_items", id, values);
+    return tenantUpdate<DataRow>("charge_capture_items", id, values);
   },
   updateEncounter(id, values) {
-    return demoUpdate<DataRow>("encounters", id, values);
+    return tenantUpdate<DataRow>("encounters", id, values);
   },
 };
 
 const repository: ClaimsRepository = {
   async getClaim(claimId) {
     return first(
-      await demoSelect<DataRow>("professional_claims", {
+      await tenantSelect<DataRow>("professional_claims", {
         id: `eq.${claimId}`,
         limit: "1",
       }),
@@ -67,14 +67,14 @@ const repository: ClaimsRepository = {
   },
 
   getClaimLines(claimId) {
-    return demoSelect<DataRow>("professional_claim_lines", {
+    return tenantSelect<DataRow>("professional_claim_lines", {
       claim_id: `eq.${claimId}`,
       order: "service_date.asc,created_at.asc",
     });
   },
 
   getClaimDiagnoses(claimId) {
-    return demoSelect<DataRow>("claim_diagnoses", {
+    return tenantSelect<DataRow>("claim_diagnoses", {
       claim_id: `eq.${claimId}`,
       order: "pointer_order.asc",
     });
@@ -83,7 +83,7 @@ const repository: ClaimsRepository = {
   async getProviderEnrollmentStatus(claim) {
     if (!claim.rendering_provider_id || !claim.payer_id) return null;
     const enrollment = first(
-      await demoSelect<DataRow>("provider_payer_enrollments", {
+      await tenantSelect<DataRow>("provider_payer_enrollments", {
         provider_id: `eq.${String(claim.rendering_provider_id)}`,
         payer_id: `eq.${String(claim.payer_id)}`,
         order: "created_at.desc",
@@ -96,7 +96,7 @@ const repository: ClaimsRepository = {
   async getEncounterBillingStatus(claim) {
     if (!claim.source_encounter_id) return null;
     const encounter = first(
-      await demoSelect<DataRow>("encounters", {
+      await tenantSelect<DataRow>("encounters", {
         id: `eq.${String(claim.source_encounter_id)}`,
         limit: "1",
       }),
@@ -105,24 +105,24 @@ const repository: ClaimsRepository = {
   },
 
   updateClaim(id, values) {
-    return demoUpdate<DataRow>("professional_claims", id, values);
+    return tenantUpdate<DataRow>("professional_claims", id, values);
   },
 
   insertClaimHistory(values) {
-    return demoInsert<DataRow>("claim_status_history", values);
+    return tenantInsert<DataRow>("claim_status_history", values);
   },
 
   createBatch(values) {
-    return demoInsert<DataRow>("claim_batches", values);
+    return tenantInsert<DataRow>("claim_batches", values);
   },
 
   addClaimToBatch(values) {
-    return demoInsert<DataRow>("claim_batch_items", values);
+    return tenantInsert<DataRow>("claim_batch_items", values);
   },
 
   async getBatch(batchId) {
     return first(
-      await demoSelect<DataRow>("claim_batches", {
+      await tenantSelect<DataRow>("claim_batches", {
         id: `eq.${batchId}`,
         limit: "1",
       }),
@@ -130,29 +130,29 @@ const repository: ClaimsRepository = {
   },
 
   async getBatchClaims(batchId) {
-    const items = await demoSelect<DataRow>("claim_batch_items", {
+    const items = await tenantSelect<DataRow>("claim_batch_items", {
       batch_id: `eq.${batchId}`,
       order: "created_at.asc",
     });
     const claimIds = items.map((item) => String(item.claim_id ?? "")).filter(Boolean);
     if (!claimIds.length) return [];
-    return demoSelect<DataRow>("professional_claims", {
+    return tenantSelect<DataRow>("professional_claims", {
       id: inFilter(claimIds),
       order: "service_date_from.asc",
     });
   },
 
   updateBatch(id, values) {
-    return demoUpdate<DataRow>("claim_batches", id, values);
+    return tenantUpdate<DataRow>("claim_batches", id, values);
   },
 
   createSubmission(values) {
-    return demoInsert<DataRow>("claim_submissions", values);
+    return tenantInsert<DataRow>("claim_submissions", values);
   },
 
   async getSubmission(submissionId) {
     return first(
-      await demoSelect<DataRow>("claim_submissions", {
+      await tenantSelect<DataRow>("claim_submissions", {
         id: `eq.${submissionId}`,
         limit: "1",
       }),
@@ -160,25 +160,25 @@ const repository: ClaimsRepository = {
   },
 
   updateSubmission(id, values) {
-    return demoUpdate<DataRow>("claim_submissions", id, values);
+    return tenantUpdate<DataRow>("claim_submissions", id, values);
   },
 
   createSubmissionResponse(values) {
-    return demoInsert<DataRow>("submission_responses", values);
+    return tenantInsert<DataRow>("submission_responses", values);
   },
 
   async upsertWorkItem(values) {
     const sourceId = String(values.source_object_id ?? "");
     const type = String(values.workqueue_type ?? "general_task");
-    const existing = await demoSelect<DataRow>("workqueue_items", {
+    const existing = await tenantSelect<DataRow>("workqueue_items", {
       source_object_type: "eq.claim",
       source_object_id: `eq.${sourceId}`,
       workqueue_type: `eq.${type}`,
       workqueue_status: "in.(open,in_progress,pending,snoozed,reopened)",
       limit: "1",
     });
-    if (existing[0]) return demoUpdate<DataRow>("workqueue_items", existing[0].id, values);
-    return demoInsert<DataRow>("workqueue_items", values);
+    if (existing[0]) return tenantUpdate<DataRow>("workqueue_items", existing[0].id, values);
+    return tenantInsert<DataRow>("workqueue_items", values);
   },
 };
 
@@ -220,14 +220,14 @@ function personName(row?: Row) {
 
 export async function getClaimSubmissionData() {
   const [claims, clients, providers, payers, batches, batchItems, submissions, responses] = await Promise.all([
-    demoSelect<DataRow>("professional_claims", { order: "created_at.desc" }),
-    demoSelect<DataRow>("clients"),
-    demoSelect<DataRow>("providers"),
+    tenantSelect<DataRow>("professional_claims", { order: "created_at.desc" }),
+    tenantSelect<DataRow>("clients"),
+    tenantSelect<DataRow>("providers"),
     referenceSelect<DataRow>("payers", { order: "name.asc" }),
-    demoSelect<DataRow>("claim_batches", { order: "created_at.desc" }),
-    demoSelect<DataRow>("claim_batch_items", { order: "created_at.desc" }),
-    demoSelect<DataRow>("claim_submissions", { order: "created_at.desc" }),
-    demoSelect<DataRow>("submission_responses", { order: "created_at.desc" }),
+    tenantSelect<DataRow>("claim_batches", { order: "created_at.desc" }),
+    tenantSelect<DataRow>("claim_batch_items", { order: "created_at.desc" }),
+    tenantSelect<DataRow>("claim_submissions", { order: "created_at.desc" }),
+    tenantSelect<DataRow>("submission_responses", { order: "created_at.desc" }),
   ]);
 
   const clientsById = new Map(clients.map((row) => [row.id, row]));
@@ -281,18 +281,18 @@ export async function getClaim360Data(claimId: string) {
   const [lines, diagnoses, history, submissions, responses, denials, appeals, workItems, encounters, clients, providers, payers] = await Promise.all([
     repository.getClaimLines(claimId),
     repository.getClaimDiagnoses(claimId),
-    demoSelect<DataRow>("claim_status_history", { claim_id: `eq.${claimId}`, order: "created_at.asc" }),
-    demoSelect<DataRow>("claim_submissions", { claim_id: `eq.${claimId}`, order: "created_at.desc" }),
-    demoSelect<DataRow>("submission_responses", { claim_id: `eq.${claimId}`, order: "created_at.desc" }),
-    demoSelect<DataRow>("denials", { claim_id: `eq.${claimId}`, order: "created_at.desc" }),
-    demoSelect<DataRow>("appeals", { claim_id: `eq.${claimId}`, order: "created_at.desc" }),
-    demoSelect<DataRow>("workqueue_items", { source_object_type: "eq.claim", source_object_id: `eq.${claimId}`, order: "created_at.desc" }),
+    tenantSelect<DataRow>("claim_status_history", { claim_id: `eq.${claimId}`, order: "created_at.asc" }),
+    tenantSelect<DataRow>("claim_submissions", { claim_id: `eq.${claimId}`, order: "created_at.desc" }),
+    tenantSelect<DataRow>("submission_responses", { claim_id: `eq.${claimId}`, order: "created_at.desc" }),
+    tenantSelect<DataRow>("denials", { claim_id: `eq.${claimId}`, order: "created_at.desc" }),
+    tenantSelect<DataRow>("appeals", { claim_id: `eq.${claimId}`, order: "created_at.desc" }),
+    tenantSelect<DataRow>("workqueue_items", { source_object_type: "eq.claim", source_object_id: `eq.${claimId}`, order: "created_at.desc" }),
     claim.source_encounter_id
-      ? demoSelect<DataRow>("encounters", { id: `eq.${String(claim.source_encounter_id)}`, limit: "1" })
+      ? tenantSelect<DataRow>("encounters", { id: `eq.${String(claim.source_encounter_id)}`, limit: "1" })
       : Promise.resolve([]),
-    demoSelect<DataRow>("clients", { id: `eq.${String(claim.client_id)}`, limit: "1" }),
+    tenantSelect<DataRow>("clients", { id: `eq.${String(claim.client_id)}`, limit: "1" }),
     claim.rendering_provider_id
-      ? demoSelect<DataRow>("providers", { id: `eq.${String(claim.rendering_provider_id)}`, limit: "1" })
+      ? tenantSelect<DataRow>("providers", { id: `eq.${String(claim.rendering_provider_id)}`, limit: "1" })
       : Promise.resolve([]),
     claim.payer_id
       ? referenceSelect<DataRow>("payers", { id: `eq.${String(claim.payer_id)}`, limit: "1" })

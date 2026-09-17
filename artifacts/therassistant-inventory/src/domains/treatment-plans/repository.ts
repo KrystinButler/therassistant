@@ -1,4 +1,4 @@
-import { demoInsert, demoSelect, demoUpdate, type Row } from "../../lib/supabase-demo-client";
+import { tenantInsert, tenantSelect, tenantUpdate, type Row } from "../../lib/tenant-data-client";
 import {
   buildTreatmentGoalValues,
   buildTreatmentPlanValues,
@@ -10,24 +10,24 @@ import {
 type DataRow = Row & { id: string };
 
 export function createTreatmentPlan(patientId: string, input: TreatmentPlanDraft) {
-  return demoInsert<DataRow>("treatment_plans", { client_id: patientId, ...buildTreatmentPlanValues(input) });
+  return tenantInsert<DataRow>("treatment_plans", { client_id: patientId, ...buildTreatmentPlanValues(input) });
 }
 export function updateTreatmentPlan(planId: string, input: TreatmentPlanDraft) {
-  return demoUpdate<DataRow>("treatment_plans", planId, buildTreatmentPlanValues(input));
+  return tenantUpdate<DataRow>("treatment_plans", planId, buildTreatmentPlanValues(input));
 }
 export function addTreatmentGoal(planId: string, input: TreatmentGoalDraft) {
-  return demoInsert<DataRow>("treatment_plan_goals", { treatment_plan_id: planId, ...buildTreatmentGoalValues(input) });
+  return tenantInsert<DataRow>("treatment_plan_goals", { treatment_plan_id: planId, ...buildTreatmentGoalValues(input) });
 }
 export function updateTreatmentGoal(goalId: string, input: TreatmentGoalDraft) {
-  return demoUpdate<DataRow>("treatment_plan_goals", goalId, buildTreatmentGoalValues(input));
+  return tenantUpdate<DataRow>("treatment_plan_goals", goalId, buildTreatmentGoalValues(input));
 }
 export async function getTreatmentPlanOptions() {
-  return demoSelect<DataRow>("providers", { order: "last_name.asc,first_name.asc" });
+  return tenantSelect<DataRow>("providers", { order: "last_name.asc,first_name.asc" });
 }
 export async function getTreatmentPlanWorkspace(patientId: string) {
   const [plans, goals] = await Promise.all([
-    demoSelect<DataRow>("treatment_plans", { client_id: `eq.${patientId}`, order: "effective_date.desc.nullslast,created_at.desc" }),
-    demoSelect<DataRow>("treatment_plan_goals", { order: "created_at.asc" }),
+    tenantSelect<DataRow>("treatment_plans", { client_id: `eq.${patientId}`, order: "effective_date.desc.nullslast,created_at.desc" }),
+    tenantSelect<DataRow>("treatment_plan_goals", { order: "created_at.asc" }),
   ]);
   const planIds = new Set(plans.map((row) => row.id));
   return plans.map((plan) => ({

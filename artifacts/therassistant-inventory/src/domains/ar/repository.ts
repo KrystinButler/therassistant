@@ -1,4 +1,4 @@
-import { demoInsert, demoSelect, demoUpdate, referenceSelect, type Row } from "../../lib/supabase-demo-client";
+import { tenantInsert, tenantSelect, tenantUpdate, referenceSelect, type Row } from "../../lib/tenant-data-client";
 import { agingBucket, calculateOpenBalance, daysOutstanding, type AgingBucket } from "./aging";
 import { classifyDenialPolicy, type DenialPolicy } from "./denials";
 import { calculateContractVariance, expectedAllowedForLine, isRecoveryAdjustment } from "./variance";
@@ -97,7 +97,7 @@ function activeWorkFor(
 }
 
 async function addWorkHistory(workItemId: string, note: string, oldStatus?: string, newStatus?: string) {
-  return demoInsert<DataRow>("workqueue_history", {
+  return tenantInsert<DataRow>("workqueue_history", {
     workqueue_item_id: workItemId,
     old_status: oldStatus ?? null,
     new_status: newStatus ?? null,
@@ -106,7 +106,7 @@ async function addWorkHistory(workItemId: string, note: string, oldStatus?: stri
 }
 
 export async function routeVarianceToWork(row: VarianceWorkspaceRow) {
-  const existing = (await demoSelect<DataRow>("workqueue_items", {
+  const existing = (await tenantSelect<DataRow>("workqueue_items", {
     workqueue_type: "eq.contract_variance",
     source_object_type: "eq.claim",
     source_object_id: `eq.${row.id}`,
@@ -115,14 +115,14 @@ export async function routeVarianceToWork(row: VarianceWorkspaceRow) {
   }))[0];
   const description = `Expected allowed ${row.expectedAllowedCents} cents; actual allowed ${row.actualAllowedCents} cents; variance ${row.varianceCents} cents.`;
   if (existing) {
-    const updated = await demoUpdate<DataRow>("workqueue_items", existing.id, {
+    const updated = await tenantUpdate<DataRow>("workqueue_items", existing.id, {
       priority: "high",
       description,
     });
     await addWorkHistory(existing.id, "Contract variance refreshed from A/R underpayment analysis.", String(existing.workqueue_status ?? "open"), String(existing.workqueue_status ?? "open"));
     return updated;
   }
-  const created = await demoInsert<DataRow>("workqueue_items", {
+  const created = await tenantInsert<DataRow>("workqueue_items", {
     workqueue_type: "contract_variance",
     workqueue_status: "open",
     priority: "high",
@@ -137,7 +137,7 @@ export async function routeVarianceToWork(row: VarianceWorkspaceRow) {
 
 export async function routeRecoveryToWork(row: RecoveryWorkspaceRow) {
   const workqueueType = row.adjustment_type === "refund_correction" ? "refund_review" : "overpayment_review";
-  const existing = (await demoSelect<DataRow>("workqueue_items", {
+  const existing = (await tenantSelect<DataRow>("workqueue_items", {
     workqueue_type: `eq.${workqueueType}`,
     source_object_type: "eq.adjustment",
     source_object_id: `eq.${row.id}`,
@@ -145,7 +145,7 @@ export async function routeRecoveryToWork(row: RecoveryWorkspaceRow) {
     limit: "1",
   }))[0];
   if (existing) return existing;
-  const created = await demoInsert<DataRow>("workqueue_items", {
+  const created = await tenantInsert<DataRow>("workqueue_items", {
     workqueue_type: workqueueType,
     workqueue_status: "open",
     priority: "high",
@@ -175,20 +175,20 @@ export async function getArWorkspaceData(asOfDate = new Date().toISOString().sli
     feeSchedules,
     feeScheduleLines,
   ] = await Promise.all([
-    demoSelect<DataRow>("professional_claims", { order: "service_date_from.asc" }),
-    demoSelect<DataRow>("professional_claim_lines", { order: "service_date.asc" }),
-    demoSelect<DataRow>("clients"),
-    demoSelect<DataRow>("providers"),
+    tenantSelect<DataRow>("professional_claims", { order: "service_date_from.asc" }),
+    tenantSelect<DataRow>("professional_claim_lines", { order: "service_date.asc" }),
+    tenantSelect<DataRow>("clients"),
+    tenantSelect<DataRow>("providers"),
     referenceSelect<DataRow>("payers", { order: "name.asc" }),
-    demoSelect<DataRow>("payment_allocations", { order: "created_at.desc" }),
-    demoSelect<DataRow>("payments", { order: "created_at.desc" }),
-    demoSelect<DataRow>("adjustments", { order: "created_at.desc" }),
-    demoSelect<DataRow>("denials", { order: "created_at.desc" }),
-    demoSelect<DataRow>("appeals", { order: "created_at.desc" }),
-    demoSelect<DataRow>("workqueue_items", { order: "created_at.desc" }),
-    demoSelect<DataRow>("payer_contracts", { order: "effective_date.desc" }),
-    demoSelect<DataRow>("fee_schedules", { order: "effective_date.desc" }),
-    demoSelect<DataRow>("fee_schedule_lines"),
+    tenantSelect<DataRow>("payment_allocations", { order: "created_at.desc" }),
+    tenantSelect<DataRow>("payments", { order: "created_at.desc" }),
+    tenantSelect<DataRow>("adjustments", { order: "created_at.desc" }),
+    tenantSelect<DataRow>("denials", { order: "created_at.desc" }),
+    tenantSelect<DataRow>("appeals", { order: "created_at.desc" }),
+    tenantSelect<DataRow>("workqueue_items", { order: "created_at.desc" }),
+    tenantSelect<DataRow>("payer_contracts", { order: "effective_date.desc" }),
+    tenantSelect<DataRow>("fee_schedules", { order: "effective_date.desc" }),
+    tenantSelect<DataRow>("fee_schedule_lines"),
   ]);
 
   const clientsById = new Map(clients.map((row) => [row.id, row]));

@@ -1,4 +1,4 @@
-import { demoSelect, type Row } from "../../lib/supabase-demo-client";
+import { tenantSelect, type Row } from "../../lib/tenant-data-client";
 import { getClaimSubmissionData } from "../claims/repository";
 import type { BatchOutputData, ClaimOutputItem } from "./claim-output";
 
@@ -17,11 +17,11 @@ export async function getBatchExportData(batchId: string): Promise<BatchOutputDa
   if (!claimIds.length) return { batch, claims: [] };
 
   const [lines, diagnoses] = await Promise.all([
-    demoSelect<DataRow>("professional_claim_lines", {
+    tenantSelect<DataRow>("professional_claim_lines", {
       claim_id: inFilter(claimIds),
       order: "service_date.asc,created_at.asc",
     }),
-    demoSelect<DataRow>("claim_diagnoses", {
+    tenantSelect<DataRow>("claim_diagnoses", {
       claim_id: inFilter(claimIds),
       order: "pointer_order.asc",
     }),

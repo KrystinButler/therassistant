@@ -1,4 +1,4 @@
-import { demoInsert, demoSelect, demoUpdate, type Row } from "../../lib/supabase-demo-client";
+import { tenantInsert, tenantSelect, tenantUpdate, type Row } from "../../lib/tenant-data-client";
 import { calculateOpenBalance } from "../ar/aging";
 import { isRecoveryAdjustment } from "../ar/variance";
 
@@ -15,8 +15,8 @@ export async function allocateExistingPayment(paymentId: string, claimId: string
   }
 
   const [payment, claim] = await Promise.all([
-    demoSelect<DataRow>("payments", { id: `eq.${paymentId}`, limit: "1" }).then((rows) => rows[0] ?? null),
-    demoSelect<DataRow>("professional_claims", { id: `eq.${claimId}`, limit: "1" }).then((rows) => rows[0] ?? null),
+    tenantSelect<DataRow>("payments", { id: `eq.${paymentId}`, limit: "1" }).then((rows) => rows[0] ?? null),
+    tenantSelect<DataRow>("professional_claims", { id: `eq.${claimId}`, limit: "1" }).then((rows) => rows[0] ?? null),
   ]);
   if (!payment) throw new Error("Payment not found.");
   if (!claim) throw new Error("Claim not found.");
@@ -33,10 +33,10 @@ export async function allocateExistingPayment(paymentId: string, claimId: string
   }
 
   const [allocations, adjustments] = await Promise.all([
-    demoSelect<DataRow>("payment_allocations", { claim_id: `eq.${claimId}`, order: "created_at.desc" }),
-    demoSelect<DataRow>("adjustments", { claim_id: `eq.${claimId}`, order: "created_at.desc" }),
+    tenantSelect<DataRow>("payment_allocations", { claim_id: `eq.${claimId}`, order: "created_at.desc" }),
+    tenantSelect<DataRow>("adjustments", { claim_id: `eq.${claimId}`, order: "created_at.desc" }),
   ]);
-  const paymentAllocations = await demoSelect<DataRow>("payment_allocations", {
+  const paymentAllocations = await tenantSelect<DataRow>("payment_allocations", {
     payment_id: `eq.${paymentId}`,
     order: "created_at.desc",
   });
@@ -62,7 +62,7 @@ export async function allocateExistingPayment(paymentId: string, claimId: string
   const amountCents = Math.min(requestedAmountCents, availablePaymentCents, claimOpenBalanceCents);
   if (amountCents <= 0) throw new Error("No allocatable balance remains for this payment and claim.");
 
-  const allocation = await demoInsert<DataRow>("payment_allocations", {
+  const allocation = await tenantInsert<DataRow>("payment_allocations", {
     payment_id: paymentId,
     client_id: claim.client_id || payment.client_id || null,
     claim_id: claimId,
@@ -73,7 +73,7 @@ export async function allocateExistingPayment(paymentId: string, claimId: string
   const totalAllocatedCents = alreadyAllocatedCents + amountCents;
   const unappliedCents = Math.max(0, paymentAmountCents - totalAllocatedCents);
   const paymentStatus = unappliedCents > 0 ? "partially_applied" : "posted";
-  await demoUpdate<DataRow>("payments", paymentId, {
+  await tenantUpdate<DataRow>("payments", paymentId, {
     payment_status: paymentStatus,
     posted_at: new Date().toISOString(),
     ...(source === "insurance" && !payment.payer_id ? { payer_id: claim.payer_id || null } : {}),
@@ -86,7 +86,7 @@ export async function allocateExistingPayment(paymentId: string, claimId: string
     : source === "patient" && String(claim.claim_status ?? "") === "patient_responsibility"
       ? "patient_responsibility"
       : "partially_paid";
-  await demoUpdate<DataRow>("professional_claims", claimId, {
+  await tenantUpdate<DataRow>("professional_claims", claimId, {
     claim_status: claimStatus,
     ...(claimStatus === "paid" ? { paid_at: new Date().toISOString() } : {}),
   });
