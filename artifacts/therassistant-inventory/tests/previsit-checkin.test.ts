@@ -125,3 +125,18 @@ test("provider patient review flags non-empty submitted safety concerns", async 
   assert.equal(result.safetyConcern, true);
   assert.equal(result.safetyText, "I have had thoughts of hurting myself this week.");
 });
+
+test("provider patient review keeps an empty submitted safety response neutral", async () => {
+  const { buildPatientReviewCheckIn } = await import("../src/domains/scheduling/patient-review-model.ts");
+  const result = buildPatientReviewCheckIn({
+    responses: {
+      pre_visit: {
+        submitted_at: "2026-09-16T20:00:00.000Z",
+        visit_questions: { safety_concerns: "" },
+      },
+    },
+  });
+
+  assert.equal(result.safetyConcern, null);
+  assert.equal(result.safetyText, "");
+});
