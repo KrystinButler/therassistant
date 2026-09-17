@@ -3,6 +3,7 @@ import { Route, Switch, useLocation, useRoute } from "wouter";
 
 import { AuthProvider, useAuth } from "./auth/auth-context";
 import { LoginPage } from "./auth/LoginPage";
+import { OrganizationSetup } from "./auth/OrganizationSetup";
 import { TenantProvider, useTenant } from "./auth/tenant-context";
 import { AppShell } from "./components/app-shell";
 import { DenialsPage } from "./domains/ar/DenialsPage";
@@ -94,9 +95,10 @@ function StaffRoutes() {
 }
 
 function TenantGate() {
-  const { loading, error, tenantId } = useTenant();
+  const { loading, error, tenantId, needsOrganizationSetup } = useTenant();
   if (loading) return <div className="thera-state">Loading organization...</div>;
   if (error) return <div className="thera-state error">{error}</div>;
+  if (needsOrganizationSetup) return <OrganizationSetup />;
   if (!tenantId) return <div className="thera-state error">No active organization is available.</div>;
   return <StaffRoutes />;
 }
