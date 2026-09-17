@@ -1,0 +1,237 @@
+/* Therassistant EHR reference theme
+   Matches the light clinical palette in the provider schedule concept. */
+
+:root {
+  --background: 204 100% 98%;
+  --foreground: 220 86% 25%;
+  --border: 209 42% 89%;
+  --card: 0 0% 100%;
+  --card-foreground: 220 86% 25%;
+  --card-border: 209 42% 89%;
+  --popover: 0 0% 100%;
+  --popover-foreground: 220 86% 25%;
+  --popover-border: 209 42% 89%;
+  --primary: 209 60% 44%;
+  --primary-foreground: 0 0% 100%;
+  --secondary: 204 62% 95%;
+  --secondary-foreground: 214 58% 31%;
+  --muted: 204 62% 95%;
+  --muted-foreground: 211 16% 43%;
+  --accent: 180 19% 49%;
+  --accent-foreground: 220 86% 25%;
+  --input: 209 42% 86%;
+  --ring: 209 60% 44%;
+  --sidebar: 204 62% 96%;
+  --sidebar-foreground: 220 86% 25%;
+  --sidebar-border: 209 42% 89%;
+  --sidebar-primary: 209 60% 44%;
+  --sidebar-primary-foreground: 0 0% 100%;
+  --sidebar-accent: 184 27% 89%;
+  --sidebar-accent-foreground: 220 86% 25%;
+  --sidebar-ring: 209 60% 44%;
+  --radius: 0.5rem;
+
+  --thera-navy: #082a78;
+  --thera-navy-deep: #061f62;
+  --thera-blue: #2d72b5;
+  --thera-blue-soft: #eaf4fb;
+  --thera-sage: #649494;
+  --thera-sage-dark: #4f7f7f;
+  --thera-cream: #f4faff;
+  --thera-paper: #ffffff;
+  --thera-border: #d7e4f0;
+  --thera-text: #173f78;
+  --thera-muted: #5c6c7c;
+  --thera-success-bg: #e7f7f0;
+  --thera-success: #17815f;
+  --thera-warning-bg: #fff4df;
+  --thera-warning: #a86f13;
+  --thera-danger-bg: #fff0ee;
+  --thera-danger: #bd4a45;
+  --thera-neutral-bg: #f0f3f6;
+  --thera-neutral: #5c6c7c;
+}
+
+body {
+  background-color: var(--thera-cream);
+  background-image: none;
+  color: var(--thera-text);
+}
+
+.thera-app {
+  background: var(--thera-cream);
+  color: var(--thera-text);
+}
+
+.thera-sidebar {
+  background: linear-gradient(180deg, #f9fcfe 0%, #edf6fb 58%, #e5f0f6 100%);
+  color: var(--thera-navy);
+  border-right: 1px solid var(--thera-border);
+  box-shadow: 4px 0 16px rgba(23, 63, 120, 0.035);
+}
+
+.thera-brand {
+  border-bottom-color: #dce8f1;
+}
+
+.thera-brand-mark {
+  background: linear-gradient(145deg, #2d72b5, #649494);
+  color: #fff;
+  border-radius: 9px;
+  box-shadow: 0 3px 8px rgba(45, 114, 181, 0.16);
+}
+
+.thera-brand-name {
+  color: var(--thera-navy);
+  letter-spacing: 0.055em;
+}
+
+.thera-brand-subtitle {
+  color: #668198;
+}
+
+.thera-workspace-button,
+.thera-nav-link {
+  color: #173f78;
+}
+
+.thera-workspace-button:hover,
+.thera-workspace-button.active,
+.thera-nav-link:hover {
+  background: rgba(45, 114, 181, 0.075);
+}
+
+.thera-workspace-button.active {
+  color: var(--thera-navy);
+}
+
+.thera-workspace-chevron {
+  color: var(--thera-blue);
+}
+
+.thera-workspace-child {
+  color: #56739e;
+  border-left-color: rgba(100, 148, 148, 0.34);
+}
+
+.thera-workspace-child:hover {
+  color: var(--thera-navy);
+  background: rgba(45, 114, 181, 0.055);
+}
+
+.thera-workspace-child.active,
+.thera-nav-link.active {
+  color: var(--thera-navy);
+  background: #dcebec;
+  border-left-color: var(--thera-blue);
+  font-weight: 800;
+}
+
+.thera-sidebar-footer {
+  border-top-color: #dce8f1;
+}
+
+.thera-practice-label,
+.thera-practice-meta {
+  color: #6f8799;
+}
+
+.thera-practice-name {
+  color: var(--thera-navy);
+}
+
+.thera-topbar {
+  background: rgba(255, 255, 255, 0.97);
+  border-bottom-color: var(--thera-border);
+  box-shadow: 0 1px 6px rgba(23, 63, 120, 0.04);
+}
+
+.thera-topbar-practice {
+  color: var(--thera-navy);
+}
+
+.thera-topbar-product {
+  color: #668198;
+}
+
+.thera-demo-chip {
+  background: var(--thera-success-bg);
+  color: #367c69;
+  border: 1px solid #d2ece2;
+}
+
+.thera-page-header h1,
+.thera-card h2,
+.thera-card h3,
+.thera-metric-value,
+.thera-work-title,
+.thera-table-link,
+.thera-link {
+  color: var(--thera-navy);
+}
+
+.thera-card,
+.thera-metric-card {
+  border-color: var(--thera-border);
+  background: var(--thera-paper);
+  box-shadow: 0 2px 8px rgba(27, 59, 96, 0.045);
+}
+
+.thera-story,
+.thera-work-card {
+  background: #fbfdff;
+  border-color: var(--thera-border);
+}
+
+.thera-work-card {
+  border-left-color: var(--thera-sage);
+}
+
+.thera-table th {
+  background: #eaf4fb;
+  color: #3d6188;
+  border-bottom-color: var(--thera-border);
+}
+
+.thera-table td {
+  border-bottom-color: #e6edf5;
+}
+
+.thera-table tbody tr:hover {
+  background: #f8fbfe;
+}
+
+.thera-input {
+  border-color: var(--thera-border);
+  background: #fff;
+  color: var(--thera-text);
+}
+
+.thera-input:focus {
+  border-color: var(--thera-blue);
+  box-shadow: 0 0 0 3px rgba(45, 114, 181, 0.11);
+}
+
+.thera-sidebar-toggle {
+  border-color: var(--thera-border);
+  background: #fff;
+  color: var(--thera-navy);
+}
+
+.thera-sidebar-backdrop {
+  background: rgba(8, 42, 120, 0.22);
+}
+
+/* Keep common surfaces consistent with the reference's soft blue/white visual system. */
+.bg-background { background-color: #f4faff !important; }
+.bg-card { background-color: #ffffff !important; }
+.bg-muted { background-color: #eaf4fb !important; }
+.text-foreground { color: #173f78 !important; }
+.text-muted-foreground { color: #5c6c7c !important; }
+.border-border { border-color: #d7e4f0 !important; }
+
+@media (max-width: 900px) {
+  .thera-sidebar {
+    box-shadow: 8px 0 24px rgba(8, 42, 120, 0.12);
+  }
+}
