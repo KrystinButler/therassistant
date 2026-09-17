@@ -1,5 +1,4 @@
 export type SectionId =
-  | "overview"
   | "care-delivery"
   | "revenue-cycle"
   | "operations"
@@ -34,14 +33,6 @@ export type NavigationSection = {
 const visibleToAll = { mode: "all" } as const;
 
 export const NAV_SECTIONS: readonly NavigationSection[] = [
-  {
-    id: "overview",
-    label: "Overview",
-    renderInSidebar: true,
-    primaryHref: "/",
-    visibility: visibleToAll,
-    children: [{ id: "home", label: "Home", href: "/", visibility: visibleToAll }],
-  },
   {
     id: "care-delivery",
     label: "Care Delivery",
