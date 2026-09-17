@@ -5,7 +5,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { sourceRouteForWorkItem } from "../src/domains/work-center/repository.ts";
 
 const finalReversalHardeningUrl = new URL(
-  "../../../supabase/migrations/20260914_phase3_finalize_atomic_reversal_permissions.sql",
+  "../../../supabase/migrations/20260914010342_phase3_finalize_atomic_reversal_permissions.sql",
   import.meta.url,
 );
 
