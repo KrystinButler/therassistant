@@ -2,9 +2,10 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 
 function migration(name: string) {
-  const dir = join(process.cwd(), "supabase/migrations");
+  const dir = fileURLToPath(new URL("../../../supabase/migrations/", import.meta.url));
   const file = readdirSync(dir).find((entry) => entry.endsWith(`_${name}.sql`));
   assert.ok(file, `missing migration: ${name}`);
   return readFileSync(join(dir, file), "utf8");
