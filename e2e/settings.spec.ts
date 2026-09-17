@@ -17,3 +17,10 @@ test("Settings renders a dedicated two-column configuration layout on desktop", 
   const columnCount = columns.split(" ").filter(Boolean).length;
   expect(columnCount).toBeGreaterThanOrEqual(2);
 });
+
+test("Settings preserves a single document main landmark", async ({ page }) => {
+  await page.goto("/settings/general");
+
+  await expect(page.getByRole("main")).toHaveCount(1);
+  await expect(page.locator(".thera-settings-content")).toBeVisible();
+});
