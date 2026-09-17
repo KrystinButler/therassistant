@@ -42,9 +42,10 @@ export function sanitizeStorageFileName(fileName: string) {
 
 export function createStorageClient(
   fetchImpl: FetchLike = globalThis.fetch.bind(globalThis),
+  tokenProvider: () => Promise<string | null> = getAccessToken,
 ) {
   async function authFetch(input: RequestInfo | URL, init: RequestInit = {}) {
-    const token = await getAccessToken();
+    const token = await tokenProvider();
     if (!token) throw new Error("Authentication is required.");
     const headers = new Headers(init.headers);
     headers.set("apikey", SUPABASE_PUBLISHABLE_KEY);
