@@ -79,7 +79,9 @@ test("Credentialing uses production data access and opens enrollment work when r
   await page.goto("/credentialing");
   await expectWorkspace(page, "Credentialing");
   await expect(page.getByText("Loading credentialing...")).toHaveCount(0);
-  await expect(page.getByRole("columnheader", { name: "Provider" })).toBeVisible();
+  await expect(
+    page.getByRole("columnheader", { name: "Provider", exact: true }),
+  ).toBeVisible();
   expect(retiredRequests).toEqual([]);
 
   const edits = page.getByRole("button", { name: "Edit Enrollment" });
