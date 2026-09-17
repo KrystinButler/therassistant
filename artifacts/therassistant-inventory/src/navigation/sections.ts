@@ -137,12 +137,6 @@ export const NAV_SECTIONS: readonly NavigationSection[] = [
     visibility: visibleToAll,
     children: [
       { id: "administration", label: "Administration", href: "/administration", visibility: visibleToAll },
-      {
-        id: "database-inventory",
-        label: "Database Inventory",
-        href: "/administration/database-inventory",
-        visibility: visibleToAll,
-      },
     ],
   },
 ] as const;

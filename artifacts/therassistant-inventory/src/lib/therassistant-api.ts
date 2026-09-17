@@ -1,5 +1,8 @@
 import { useEffect, useState } from "react";
 
+import { authenticatedFetch, SUPABASE_URL } from "./supabase-client";
+import { requireActiveTenantId } from "./tenant-session";
+
 export type ApiState<T> = {
   data: T | null;
   loading: boolean;
@@ -7,14 +10,6 @@ export type ApiState<T> = {
 };
 
 type Row = Record<string, any>;
-
-const SUPABASE_URL =
-  "https://lpjwfdvaxobewxcklenl.supabase.co";
-const SUPABASE_KEY =
-  "sb_publishable_JaHqUqIU43A0EwuE5yPXEw_VZYIASqH";
-const DEMO_TENANT_NAME = "Therassistant Demo";
-
-const nativeFetch = globalThis.fetch.bind(globalThis);
 
 function camelKey(value: string) {
   return value.replace(/_([a-z])/g, (_, letter: string) =>
@@ -76,11 +71,8 @@ async function supabaseRows(
     url.searchParams.set(key, value);
   }
 
-  const response = await nativeFetch(url, {
-    headers: {
-      apikey: SUPABASE_KEY,
-      Accept: "application/json",
-    },
+  const response = await authenticatedFetch(url, {
+    headers: { Accept: "application/json" },
   });
 
   if (!response.ok) {
@@ -96,29 +88,9 @@ async function supabaseRows(
   return hybridRows(data);
 }
 
-let demoTenantPromise: Promise<Row> | null = null;
-
-async function demoTenant() {
-  if (!demoTenantPromise) {
-    demoTenantPromise = supabaseRows("tenants", {
-      name: `eq.${DEMO_TENANT_NAME}`,
-      limit: "1",
-    }).then((rows) => {
-      if (!rows[0]) {
-        throw new Error("Therassistant Demo tenant not found.");
-      }
-      return rows[0];
-    });
-  }
-
-  return demoTenantPromise;
-}
-
 async function tenantRows(table: string) {
-  const tenant = await demoTenant();
-  return supabaseRows(table, {
-    tenant_id: `eq.${tenant.id}`,
-  });
+  const tenantId = requireActiveTenantId();
+  return supabaseRows(table, { tenant_id: `eq.${tenantId}` });
 }
 
 async function referenceRows(table: string) {
