@@ -70,12 +70,12 @@ export function SettingsPage({ mode }: SettingsPageProps) {
           ))}
         </nav>
 
-        <main className="thera-settings-content">
+        <section className="thera-settings-content" aria-labelledby="thera-settings-section-title">
           <div className="thera-card thera-stack">
             <div className="thera-card-header">
               <div>
                 <div className="thera-page-kicker">{section.group}</div>
-                <h2>{section.label}</h2>
+                <h2 id="thera-settings-section-title">{section.label}</h2>
               </div>
               <div aria-label="Settings status">
                 <div className="thera-page-kicker">Settings status</div>
@@ -95,7 +95,7 @@ export function SettingsPage({ mode }: SettingsPageProps) {
               <div className="thera-state">Configuration controls are not connected yet.</div>
             )}
           </div>
-        </main>
+        </section>
       </div>
     </div>
   );
