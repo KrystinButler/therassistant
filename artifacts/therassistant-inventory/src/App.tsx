@@ -22,7 +22,11 @@ import { PatientCheckInPage } from "./domains/portal/PatientCheckInPage";
 import { PatientJournalPage } from "./domains/portal/PatientJournalPage";
 import { PatientPortalPage } from "./domains/portal/PatientPortalPage";
 import { SchedulePage } from "./domains/scheduling/SchedulePage";
-import { AdministrationPage } from "./pages/administration";
+import { SettingsPage } from "./domains/settings/SettingsPage";
+import {
+  ADMIN_SETTINGS_DEFAULT_PATH,
+  MEMBER_SETTINGS_DEFAULT_PATH,
+} from "./domains/settings/route-config";
 import { ClientsPage } from "./pages/clients";
 import { DashboardPage } from "./pages/dashboard";
 import { DemoControlCenter } from "./pages/demo-control";
@@ -98,9 +102,13 @@ export default function App() {
         <Route path="/payers-contracts"><PayersContractsPage /></Route>
         <Route path="/mailroom"><MailroomPage /></Route>
         <Route path="/reports"><ReportsPage /></Route>
+        <Route path="/settings"><Redirect to={ADMIN_SETTINGS_DEFAULT_PATH} /></Route>
+        <Route path="/settings/:rest*"><SettingsPage mode="admin" /></Route>
+        <Route path="/member/settings"><Redirect to={MEMBER_SETTINGS_DEFAULT_PATH} /></Route>
+        <Route path="/member/settings/:rest*"><SettingsPage mode="member" /></Route>
         <Route path="/administration/imports"><ImportsPage /></Route>
         <Route path="/administration/database-inventory"><InventoryApp /></Route>
-        <Route path="/administration"><AdministrationPage /></Route>
+        <Route path="/administration/*?"><Redirect to={ADMIN_SETTINGS_DEFAULT_PATH} /></Route>
         <Route path="/"><DashboardPage /></Route>
         <Route><div className="thera-state">Page not found.</div></Route>
       </Switch>
