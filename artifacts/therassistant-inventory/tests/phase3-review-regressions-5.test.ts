@@ -77,10 +77,10 @@ test("payment reversal is a single constrained database RPC with no direct anon 
   assert.match(sql, /security\s+invoker/i);
 
   const reverseSection = paymentRepositorySource.split("export async function reversePayment")[1] ?? "";
-  assert.match(reverseSection, /demoRpc/);
+  assert.match(reverseSection, /tenantRpc/);
   assert.match(reverseSection, /reverse_demo_payment/);
-  assert.doesNotMatch(reverseSection, /demoUpdateExact<DataRow>\("payment_allocations"/);
-  assert.doesNotMatch(reverseSection, /demoInsert<DataRow>\("payment_reversals"/);
+  assert.doesNotMatch(reverseSection, /tenantUpdate<DataRow>\("payment_allocations"/);
+  assert.doesNotMatch(reverseSection, /tenantInsert<DataRow>\("payment_reversals"/);
 });
 
 test("ERA adjudication can post a durable patient-responsibility balance", async () => {
