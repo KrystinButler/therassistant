@@ -2,8 +2,9 @@ import { useEffect, useMemo, useState } from "react";
 import { Link, useLocation } from "wouter";
 import { StatusBadge } from "../components/status-badge";
 import { WorkDrawer } from "../components/work-drawer";
+import { validatePatientIntakeEmergencyContact } from "../domains/patients/workflow";
 import { dateTime, money, shortDate } from "../lib/format";
-import { referenceSelect, tenantInsert, tenantUpdate, type Row } from "../lib/tenant-data-client";
+import { getCurrentTenantId, referenceSelect, tenantRpc, tenantUpdate, type Row } from "../lib/tenant-data-client";
 import { useApi } from "../lib/therassistant-api";
 
 type ClientRow = {
@@ -155,6 +156,30 @@ function subscriberValues(form: FormState, coverage: InsuranceForm) {
   };
 }
 
+function coveragePayload(plans: PayerPlanRow[], coverage: InsuranceForm, patient: FormState): Row {
+  const subscriber = subscriberValues(patient, coverage);
+  return {
+    payer_id: coverage.payer_id,
+    payer_plan_id: findPlanId(plans, coverage.payer_id, coverage.plan_name),
+    member_id: coverage.member_id.trim(),
+    group_number: coverage.group_number.trim() || null,
+    subscriber_name: [subscriber.firstName, subscriber.lastName].filter(Boolean).join(" ") || null,
+    subscriber_dob: subscriber.dob || null,
+    relationship_to_subscriber: coverage.relationship_to_subscriber || null,
+    metadata: {
+      plan_name: coverage.plan_name.trim() || null,
+      product: coverage.product.trim() || null,
+      subscriber: {
+        first_name: subscriber.firstName || null,
+        last_name: subscriber.lastName || null,
+        sex: subscriber.sex || null,
+        address: subscriber.address || null,
+        phone: subscriber.phone || null,
+      },
+    },
+  };
+}
+
 export function ClientsPage() {
   const [, navigate] = useLocation();
   const [search, setSearch] = useState("");
@@ -204,34 +229,6 @@ export function ClientsPage() {
     setForm((current) => current ? { ...current, [which]: { ...current[which], ...values } } : current);
   }
 
-  async function insertCoverage(patientId: string, which: CoverageKey, coverage: InsuranceForm, patient: FormState) {
-    const subscriber = subscriberValues(patient, coverage);
-    const payerPlanId = findPlanId(plans, coverage.payer_id, coverage.plan_name);
-    return tenantInsert<CreatedRow>("client_insurance_policies", {
-      client_id: patientId,
-      payer_id: coverage.payer_id,
-      payer_plan_id: payerPlanId,
-      insurance_order: which,
-      status: "pending_verification",
-      member_id: coverage.member_id.trim(),
-      group_number: coverage.group_number.trim() || null,
-      subscriber_name: [subscriber.firstName, subscriber.lastName].filter(Boolean).join(" ") || null,
-      subscriber_dob: subscriber.dob || null,
-      relationship_to_subscriber: coverage.relationship_to_subscriber || null,
-      metadata: {
-        plan_name: coverage.plan_name.trim() || null,
-        product: coverage.product.trim() || null,
-        subscriber: {
-          first_name: subscriber.firstName || null,
-          last_name: subscriber.lastName || null,
-          sex: subscriber.sex || null,
-          address: subscriber.address || null,
-          phone: subscriber.phone || null,
-        },
-      },
-    });
-  }
-
   async function save(enrollPortal = false) {
     if (!form) return;
     setFormError(null);
@@ -272,39 +269,40 @@ export function ClientsPage() {
       return;
     }
 
+    let emergencyContact: Row | null;
+    try {
+      emergencyContact = validatePatientIntakeEmergencyContact({
+        name: form.emergency_contact_name,
+        phone: form.emergency_contact_phone,
+        relationship: form.emergency_contact_relationship,
+      });
+    } catch (err) {
+      setFormError(err instanceof Error ? err.message : "Emergency contact information is incomplete.");
+      return;
+    }
+
     setSaving(true);
     try {
-      const created = await tenantInsert<CreatedRow>("clients", {
-        first_name: form.first_name.trim(),
-        last_name: form.last_name.trim(),
-        preferred_name: form.preferred_name.trim() || null,
-        date_of_birth: form.date_of_birth,
-        email: form.email.trim(),
-        phone: form.phone.trim(),
-        address_line1: form.address_line1.trim(),
-        client_status: form.client_status,
-        registration_status: form.registration_status,
-        billing_readiness_status: "not_ready",
-        metadata: {
+      const tenantId = await getCurrentTenantId();
+      const created = await tenantRpc<CreatedRow>("create_patient_intake", {
+        p_tenant_id: tenantId,
+        p_patient: {
+          first_name: form.first_name.trim(),
+          last_name: form.last_name.trim(),
+          preferred_name: form.preferred_name.trim() || null,
+          date_of_birth: form.date_of_birth,
           sex: form.sex,
-          portal_enrolled: enrollPortal,
-          portal_enrolled_at: enrollPortal ? new Date().toISOString() : null,
+          email: form.email.trim(),
+          phone: form.phone.trim(),
+          address_line1: form.address_line1.trim(),
+          client_status: form.client_status,
+          registration_status: form.registration_status,
         },
+        p_emergency_contact: emergencyContact,
+        p_primary_insurance: coveragePayload(plans, form.primary, form),
+        p_secondary_insurance: hasSecondaryData(form.secondary) ? coveragePayload(plans, form.secondary, form) : null,
+        p_portal_enrolled: enrollPortal,
       });
-
-      if (form.emergency_contact_name.trim()) {
-        await tenantInsert<CreatedRow>("client_contacts", {
-          client_id: created.id,
-          contact_name: form.emergency_contact_name.trim(),
-          phone: form.emergency_contact_phone.trim() || null,
-          relationship: form.emergency_contact_relationship.trim() || null,
-          is_emergency_contact: true,
-          is_responsible_party: false,
-        });
-      }
-
-      await insertCoverage(created.id, "primary", form.primary, form);
-      if (hasSecondaryData(form.secondary)) await insertCoverage(created.id, "secondary", form.secondary, form);
 
       closeForm();
       setVersion((v) => v + 1);
