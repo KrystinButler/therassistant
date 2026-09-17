@@ -9,6 +9,7 @@ import {
   type SettingsSection,
 } from "./model";
 import { ADMIN_SETTINGS_GROUPS, MEMBER_SETTINGS_GROUPS } from "./route-config";
+import "./settings.css";
 
 type SettingsPageProps = {
   mode: "admin" | "member";
@@ -51,7 +52,7 @@ export function SettingsPage({ mode }: SettingsPageProps) {
       </header>
 
       <div className="thera-settings-layout">
-        <aside className="thera-settings-nav" aria-label="Settings navigation">
+        <nav className="thera-settings-nav" aria-label="Settings navigation">
           {groups.map((group) => (
             <section key={group.label} className="thera-settings-nav-group">
               <div className="thera-settings-nav-label">{group.label}</div>
@@ -67,7 +68,7 @@ export function SettingsPage({ mode }: SettingsPageProps) {
               ))}
             </section>
           ))}
-        </aside>
+        </nav>
 
         <main className="thera-settings-content">
           <div className="thera-card thera-stack">
