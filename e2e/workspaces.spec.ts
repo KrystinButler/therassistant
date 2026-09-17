@@ -1,7 +1,6 @@
 import { expect, test } from "@playwright/test";
 
 const routes = [
-  { path: "/", heading: "Revenue Cycle Overview" },
   { path: "/clients", heading: "Patients" },
   { path: "/schedule", heading: "Schedule" },
   { path: "/claims", heading: "Claims" },
@@ -23,6 +22,16 @@ for (const route of routes) {
     ).toBeVisible();
   });
 }
+
+test("provider root redirects to Schedule and does not expose Overview or Home", async ({ page }) => {
+  await page.goto("/");
+  await expect.poll(() => new URL(page.url()).pathname).toBe("/schedule");
+  await expect(page.getByRole("heading", { level: 1, name: "My Schedule" })).toBeVisible();
+
+  const nav = page.getByRole("navigation", { name: "Primary navigation" });
+  await expect(nav.getByText("Overview", { exact: true })).toHaveCount(0);
+  await expect(nav.getByRole("link", { name: "Home", exact: true })).toHaveCount(0);
+});
 
 test("demo exposes canonical RCM workqueues without retired center or workflow labels", async ({ page }) => {
   await page.goto("/demo");
