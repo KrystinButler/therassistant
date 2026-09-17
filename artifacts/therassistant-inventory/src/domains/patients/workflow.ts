@@ -26,6 +26,12 @@ export type ContactDraft = {
   isResponsibleParty?: boolean;
 };
 
+export type PatientIntakeEmergencyContactDraft = {
+  name?: string;
+  phone?: string;
+  relationship?: string;
+};
+
 const CLIENT_STATUSES = new Set(["active", "inactive", "intake", "waitlist", "discharged", "deceased", "archived"]);
 const REGISTRATION_STATUSES = new Set(["not_started", "in_progress", "pending_review", "complete", "needs_correction", "archived"]);
 
@@ -76,6 +82,24 @@ export function validateContact(input: ContactDraft): Row {
     email: input.email?.trim() || null,
     is_emergency_contact: input.isEmergencyContact === true,
     is_responsible_party: input.isResponsibleParty === true,
+  };
+}
+
+export function validatePatientIntakeEmergencyContact(input: PatientIntakeEmergencyContactDraft): Row | null {
+  const name = input.name?.trim() || "";
+  const phone = input.phone?.trim() || "";
+  const relationship = input.relationship?.trim() || "";
+  const hasDetails = Boolean(name || phone || relationship);
+
+  if (!hasDetails) return null;
+  if (!name) throw new Error("Emergency contact name is required when phone or relationship is entered.");
+
+  return {
+    contact_name: name,
+    phone: normalizePhone(phone) || null,
+    relationship: relationship || null,
+    is_emergency_contact: true,
+    is_responsible_party: false,
   };
 }
 
