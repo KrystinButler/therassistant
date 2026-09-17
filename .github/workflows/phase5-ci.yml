@@ -91,4 +91,7 @@ jobs:
         run: pnpm exec playwright install --with-deps chromium
 
       - name: Browser E2E
+        env:
+          E2E_STAFF_EMAIL: ${{ secrets.E2E_STAFF_EMAIL }}
+          E2E_STAFF_PASSWORD: ${{ secrets.E2E_STAFF_PASSWORD }}
         run: pnpm test:e2e
