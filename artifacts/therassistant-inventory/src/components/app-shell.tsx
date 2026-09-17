@@ -1,6 +1,8 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Link, useLocation } from "wouter";
 
+import { useAuth } from "../auth/auth-context";
+import { useTenant } from "../auth/tenant-context";
 import {
   getNavigationContext,
   getVisibleSections,
@@ -15,10 +17,13 @@ type Props = {
 
 export function AppShell({ children }: Props) {
   const [location] = useLocation();
+  const { user, signOut } = useAuth();
+  const { tenantName, roles } = useTenant();
   const context = getNavigationContext(location);
   const activeSectionId = context.section?.id ?? null;
   const [expandedSectionId, setExpandedSectionId] = useState<SectionId | null>(activeSectionId);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const [signingOut, setSigningOut] = useState(false);
 
   useEffect(() => {
     if (activeSectionId) setExpandedSectionId(activeSectionId);
@@ -29,6 +34,21 @@ export function AppShell({ children }: Props) {
       ? `${context.section.label} · ${context.item.label}`
       : context.section.label
     : "Operations";
+
+  const userLabel = useMemo(() => {
+    const metadata = user?.user_metadata ?? {};
+    const name = [metadata.first_name, metadata.last_name].filter(Boolean).join(" ").trim();
+    return String(metadata.display_name ?? metadata.full_name ?? name ?? "").trim() || user?.email || "Signed-in user";
+  }, [user]);
+
+  async function handleSignOut() {
+    setSigningOut(true);
+    try {
+      await signOut();
+    } finally {
+      setSigningOut(false);
+    }
+  }
 
   return (
     <div className="thera-app">
@@ -100,9 +120,9 @@ export function AppShell({ children }: Props) {
         </nav>
 
         <div className="thera-sidebar-footer">
-          <div className="thera-practice-label">DEMO PRACTICE</div>
-          <div className="thera-practice-name">Front Range Behavioral Health</div>
-          <div className="thera-practice-meta">Therassistant Billing Services</div>
+          <div className="thera-practice-label">ORGANIZATION</div>
+          <div className="thera-practice-name">{tenantName ?? "Therassistant"}</div>
+          <div className="thera-practice-meta">{user?.email ?? userLabel}</div>
         </div>
       </aside>
 
@@ -119,11 +139,16 @@ export function AppShell({ children }: Props) {
               ☰
             </button>
             <div className="thera-topbar-context">
-              <div className="thera-topbar-practice">Front Range Behavioral Health</div>
+              <div className="thera-topbar-practice">{tenantName ?? "Therassistant"}</div>
               <div className="thera-topbar-product">{topbarContext}</div>
             </div>
           </div>
-          <div className="thera-demo-chip">SYNTHETIC DEMO DATA</div>
+          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+            <div className="thera-practice-meta">{roles.length ? roles.join(" · ").replaceAll("_", " ") : userLabel}</div>
+            <button type="button" className="thera-action secondary" onClick={() => void handleSignOut()} disabled={signingOut}>
+              {signingOut ? "Signing out..." : "Sign out"}
+            </button>
+          </div>
         </header>
         <section className="thera-content">{children}</section>
       </main>
