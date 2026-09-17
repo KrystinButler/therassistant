@@ -1,8 +1,9 @@
 import {
+  getAccessToken,
   SUPABASE_PUBLISHABLE_KEY,
   SUPABASE_URL,
-  type FetchLike,
-} from "./supabase-demo-client";
+} from "./supabase-client";
+import type { FetchLike } from "./tenant-data-client";
 
 const MAILROOM_BUCKET = "therassistant-documents";
 
@@ -39,10 +40,18 @@ export function sanitizeStorageFileName(fileName: string) {
   return extension ? `${stem}.${extension}` : stem;
 }
 
-export function createDemoStorage(
+export function createStorageClient(
   fetchImpl: FetchLike = globalThis.fetch.bind(globalThis),
+  tokenProvider: () => Promise<string | null> = getAccessToken,
 ) {
-  const commonHeaders = { apikey: SUPABASE_PUBLISHABLE_KEY };
+  async function authFetch(input: RequestInfo | URL, init: RequestInit = {}) {
+    const token = await tokenProvider();
+    if (!token) throw new Error("Authentication is required.");
+    const headers = new Headers(init.headers);
+    headers.set("apikey", SUPABASE_PUBLISHABLE_KEY);
+    headers.set("Authorization", `Bearer ${token}`);
+    return fetchImpl(input, { ...init, headers });
+  }
 
   async function uploadMailroomFile(input: {
     tenantId: string;
@@ -52,39 +61,30 @@ export function createDemoStorage(
     contentType?: string;
   }) {
     const safeFileName = sanitizeStorageFileName(input.fileName);
-    const path = `demo/${input.tenantId}/mailroom/${input.mailroomItemId}/${safeFileName}`;
+    const path = `${input.tenantId}/mailroom/${input.mailroomItemId}/${safeFileName}`;
     const url = `${SUPABASE_URL}/storage/v1/object/${MAILROOM_BUCKET}/${encodeStoragePath(path)}`;
-    const response = await fetchImpl(url, {
+    const response = await authFetch(url, {
       method: "POST",
       headers: {
-        ...commonHeaders,
         "Content-Type": input.contentType || input.file.type || "application/octet-stream",
         "x-upsert": "false",
       },
       body: input.file,
     });
     const body = await responseBody(response);
-    if (!response.ok) {
-      throw new Error(errorMessage(body, `Storage upload failed (${response.status}).`));
-    }
+    if (!response.ok) throw new Error(errorMessage(body, `Storage upload failed (${response.status}).`));
     return { path };
   }
 
   async function createSignedDocumentUrl(path: string, expiresIn = 300) {
     const url = `${SUPABASE_URL}/storage/v1/object/sign/${MAILROOM_BUCKET}/${encodeStoragePath(path)}`;
-    const response = await fetchImpl(url, {
+    const response = await authFetch(url, {
       method: "POST",
-      headers: {
-        ...commonHeaders,
-        Accept: "application/json",
-        "Content-Type": "application/json",
-      },
+      headers: { Accept: "application/json", "Content-Type": "application/json" },
       body: JSON.stringify({ expiresIn }),
     });
     const body = await responseBody(response);
-    if (!response.ok) {
-      throw new Error(errorMessage(body, `Unable to create signed document URL (${response.status}).`));
-    }
+    if (!response.ok) throw new Error(errorMessage(body, `Unable to create signed document URL (${response.status}).`));
     const signed = String(body?.signedURL ?? body?.signedUrl ?? "");
     if (!signed) throw new Error("Supabase Storage returned no signed document URL.");
     return signed.startsWith("http") ? signed : new URL(signed, SUPABASE_URL).toString();
@@ -92,26 +92,16 @@ export function createDemoStorage(
 
   async function deleteObject(path: string) {
     const url = `${SUPABASE_URL}/storage/v1/object/${MAILROOM_BUCKET}`;
-    const response = await fetchImpl(url, {
+    const response = await authFetch(url, {
       method: "DELETE",
-      headers: {
-        ...commonHeaders,
-        Accept: "application/json",
-        "Content-Type": "application/json",
-      },
+      headers: { Accept: "application/json", "Content-Type": "application/json" },
       body: JSON.stringify({ prefixes: [path] }),
     });
     const body = await responseBody(response);
-    if (!response.ok) {
-      throw new Error(errorMessage(body, `Storage cleanup failed (${response.status}).`));
-    }
+    if (!response.ok) throw new Error(errorMessage(body, `Storage cleanup failed (${response.status}).`));
   }
 
-  return {
-    uploadMailroomFile,
-    createSignedDocumentUrl,
-    deleteObject,
-  };
+  return { uploadMailroomFile, createSignedDocumentUrl, deleteObject };
 }
 
-export const demoStorage = createDemoStorage();
+export const storageClient = createStorageClient();

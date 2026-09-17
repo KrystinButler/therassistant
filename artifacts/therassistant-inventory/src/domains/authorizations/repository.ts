@@ -1,4 +1,4 @@
-import { demoInsert, demoSelect, demoUpdate, type Row } from "../../lib/supabase-demo-client";
+import { tenantInsert, tenantSelect, tenantUpdate, type Row } from "../../lib/tenant-data-client";
 import {
   authorizationAlert,
   buildAuthorizationUnitValues,
@@ -11,18 +11,18 @@ import {
 type DataRow = Row & { id: string };
 
 export async function createAuthorization(patientId: string, input: AuthorizationDraft) {
-  return demoInsert<DataRow>("authorizations", {
+  return tenantInsert<DataRow>("authorizations", {
     client_id: patientId,
     ...buildAuthorizationValues(input),
   });
 }
 
 export function updateAuthorization(authorizationId: string, input: AuthorizationDraft) {
-  return demoUpdate<DataRow>("authorizations", authorizationId, buildAuthorizationValues(input));
+  return tenantUpdate<DataRow>("authorizations", authorizationId, buildAuthorizationValues(input));
 }
 
 export async function setAuthorizationUnits(authorizationId: string, input: AuthorizationUnitDraft) {
-  const existing = await demoSelect<DataRow>("authorization_units", {
+  const existing = await tenantSelect<DataRow>("authorization_units", {
     authorization_id: `eq.${authorizationId}`,
     cpt_code: input.cptCode ? `eq.${input.cptCode}` : "is.null",
     limit: "1",
@@ -32,12 +32,12 @@ export async function setAuthorizationUnits(authorizationId: string, input: Auth
     ...buildAuthorizationUnitValues(input),
   };
   return existing[0]
-    ? demoUpdate<DataRow>("authorization_units", existing[0].id, values)
-    : demoInsert<DataRow>("authorization_units", values);
+    ? tenantUpdate<DataRow>("authorization_units", existing[0].id, values)
+    : tenantInsert<DataRow>("authorization_units", values);
 }
 
 export async function recordAuthorizationUse(authorizationId: string, cptCode: string, units: number) {
-  const rows = await demoSelect<DataRow>("authorization_units", {
+  const rows = await tenantSelect<DataRow>("authorization_units", {
     authorization_id: `eq.${authorizationId}`,
     cpt_code: `eq.${cptCode}`,
     limit: "1",
@@ -49,13 +49,13 @@ export async function recordAuthorizationUse(authorizationId: string, cptCode: s
     usedUnits: Number(row.used_units ?? 0),
     requestedUnits: units,
   });
-  return demoUpdate<DataRow>("authorization_units", row.id, { used_units: usedUnits });
+  return tenantUpdate<DataRow>("authorization_units", row.id, { used_units: usedUnits });
 }
 
 export async function getAuthorizationWorkspace(patientId: string) {
   const [authorizations, units] = await Promise.all([
-    demoSelect<DataRow>("authorizations", { client_id: `eq.${patientId}`, order: "created_at.desc" }),
-    demoSelect<DataRow>("authorization_units", { order: "created_at.asc" }),
+    tenantSelect<DataRow>("authorizations", { client_id: `eq.${patientId}`, order: "created_at.desc" }),
+    tenantSelect<DataRow>("authorization_units", { order: "created_at.asc" }),
   ]);
   return authorizations.map((authorization) => {
     const authUnits = units.filter((row) => row.authorization_id === authorization.id);

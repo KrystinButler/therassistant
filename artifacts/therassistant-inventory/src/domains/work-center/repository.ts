@@ -1,10 +1,10 @@
 import {
-  demoInsert,
-  demoSelect,
-  demoUpdate,
+  tenantInsert,
+  tenantSelect,
+  tenantUpdate,
   referenceSelect,
   type Row,
-} from "../../lib/supabase-demo-client";
+} from "../../lib/tenant-data-client";
 import {
   changePriority,
   completeWork,
@@ -23,17 +23,17 @@ function first<T>(rows: T[]) {
 const repository: WorkCenterRepository = {
   async getWorkItem(id) {
     return first(
-      await demoSelect<DataRow>("workqueue_items", {
+      await tenantSelect<DataRow>("workqueue_items", {
         id: `eq.${id}`,
         limit: "1",
       }),
     );
   },
   updateWorkItem(id, values) {
-    return demoUpdate<DataRow>("workqueue_items", id, values);
+    return tenantUpdate<DataRow>("workqueue_items", id, values);
   },
   insertHistory(values) {
-    return demoInsert<DataRow>("workqueue_history", values);
+    return tenantInsert<DataRow>("workqueue_history", values);
   },
 };
 
@@ -142,24 +142,24 @@ export async function getWorkCenterData() {
     payerContracts,
     mailroomItems,
   ] = await Promise.all([
-    demoSelect<DataRow>("workqueue_items", { order: "created_at.desc" }),
-    demoSelect<DataRow>("workqueue_history", { order: "created_at.desc" }),
-    demoSelect<DataRow>("clients"),
-    demoSelect<DataRow>("providers"),
+    tenantSelect<DataRow>("workqueue_items", { order: "created_at.desc" }),
+    tenantSelect<DataRow>("workqueue_history", { order: "created_at.desc" }),
+    tenantSelect<DataRow>("clients"),
+    tenantSelect<DataRow>("providers"),
     referenceSelect<DataRow>("payers", { order: "name.asc" }),
-    demoSelect<DataRow>("professional_claims"),
-    demoSelect<DataRow>("encounters"),
-    demoSelect<DataRow>("appointments"),
-    demoSelect<DataRow>("charge_capture_items"),
-    demoSelect<DataRow>("authorizations"),
-    demoSelect<DataRow>("eligibility_checks"),
-    demoSelect<DataRow>("payments"),
-    demoSelect<DataRow>("denials"),
-    demoSelect<DataRow>("adjustments"),
-    demoSelect<DataRow>("claim_batches"),
-    demoSelect<DataRow>("era_files"),
-    demoSelect<DataRow>("payer_contracts"),
-    demoSelect<DataRow>("mailroom_items"),
+    tenantSelect<DataRow>("professional_claims"),
+    tenantSelect<DataRow>("encounters"),
+    tenantSelect<DataRow>("appointments"),
+    tenantSelect<DataRow>("charge_capture_items"),
+    tenantSelect<DataRow>("authorizations"),
+    tenantSelect<DataRow>("eligibility_checks"),
+    tenantSelect<DataRow>("payments"),
+    tenantSelect<DataRow>("denials"),
+    tenantSelect<DataRow>("adjustments"),
+    tenantSelect<DataRow>("claim_batches"),
+    tenantSelect<DataRow>("era_files"),
+    tenantSelect<DataRow>("payer_contracts"),
+    tenantSelect<DataRow>("mailroom_items"),
   ]);
 
   const clientsById = new Map(clients.map((row) => [row.id, row]));

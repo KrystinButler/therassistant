@@ -33,6 +33,9 @@ jobs:
       - name: Tests
         run: pnpm --filter ./scripts exec tsx --test ../artifacts/therassistant-inventory/tests/**/*.test.ts
 
+      - name: Production auth contract
+        run: node scripts/check-production-auth.mjs
+
       - name: Production TypeScript gate
         run: pnpm --filter @workspace/therassistant-inventory run typecheck:phase3
 
@@ -88,4 +91,7 @@ jobs:
         run: pnpm exec playwright install --with-deps chromium
 
       - name: Browser E2E
+        env:
+          E2E_STAFF_EMAIL: ${{ secrets.E2E_STAFF_EMAIL }}
+          E2E_STAFF_PASSWORD: ${{ secrets.E2E_STAFF_PASSWORD }}
         run: pnpm test:e2e

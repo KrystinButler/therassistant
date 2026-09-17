@@ -1,13 +1,13 @@
 import {
-  demoInsert,
-  demoRpc,
-  demoSelect,
-  demoUpdate,
-  getDemoTenantId,
+  tenantInsert,
+  tenantRpc,
+  tenantSelect,
+  tenantUpdate,
+  getCurrentTenantId,
   referenceSelect,
   type Row,
-} from "../../lib/supabase-demo-client";
-import { demoStorage } from "../../lib/supabase-demo-storage";
+} from "../../lib/tenant-data-client";
+import { storageClient } from "../../lib/storage-client";
 import { correspondenceDueState } from "./workflow";
 import type {
   ClassifyCorrespondenceInput,
@@ -163,15 +163,16 @@ export function findCorrespondenceDetail(rows: MailroomInboxItem[], id: string) 
 }
 
 async function loadReferenceRows(): Promise<MailroomReferenceData> {
+  const tenantId = await getCurrentTenantId();
   const [clients, providers, payers, claims, authorizations, appeals, documents, assignees] = await Promise.all([
-    demoSelect<DataRow>("clients", { order: "last_name.asc,first_name.asc" }),
-    demoSelect<DataRow>("providers", { order: "last_name.asc,first_name.asc" }),
+    tenantSelect<DataRow>("clients", { order: "last_name.asc,first_name.asc" }),
+    tenantSelect<DataRow>("providers", { order: "last_name.asc,first_name.asc" }),
     referenceSelect<DataRow>("payers", { order: "name.asc" }),
-    demoSelect<DataRow>("professional_claims", { order: "created_at.desc" }),
-    demoSelect<DataRow>("authorizations", { order: "created_at.desc" }),
-    demoSelect<DataRow>("appeals", { order: "created_at.desc" }),
-    demoSelect<DataRow>("documents", { order: "created_at.desc" }),
-    demoRpc<AssigneeRow[]>("get_demo_mailroom_assignees"),
+    tenantSelect<DataRow>("professional_claims", { order: "created_at.desc" }),
+    tenantSelect<DataRow>("authorizations", { order: "created_at.desc" }),
+    tenantSelect<DataRow>("appeals", { order: "created_at.desc" }),
+    tenantSelect<DataRow>("documents", { order: "created_at.desc" }),
+    tenantRpc<AssigneeRow[]>("get_mailroom_assignees", { p_tenant_id: tenantId }),
   ]);
 
   return { clients, providers, payers, claims, authorizations, appeals, documents, assignees };
@@ -179,10 +180,10 @@ async function loadReferenceRows(): Promise<MailroomReferenceData> {
 
 async function loadAggregateInput() {
   const [mailroomItems, referenceData, statusHistory, workItems] = await Promise.all([
-    demoSelect<DataRow>("mailroom_items", { order: "received_date.desc,created_at.desc" }),
+    tenantSelect<DataRow>("mailroom_items", { order: "received_date.desc,created_at.desc" }),
     loadReferenceRows(),
-    demoSelect<DataRow>("status_history", { target_type: "eq.mailroom_item", order: "created_at.asc" }),
-    demoSelect<DataRow>("workqueue_items", {
+    tenantSelect<DataRow>("status_history", { target_type: "eq.mailroom_item", order: "created_at.asc" }),
+    tenantSelect<DataRow>("workqueue_items", {
       source_object_type: "eq.mailroom_item",
       workqueue_type: "eq.correspondence",
       order: "created_at.desc",
@@ -210,7 +211,7 @@ export function getMailroomReferenceData() {
 }
 
 export function createCorrespondence(input: CreateCorrespondenceInput) {
-  return demoInsert<MailroomRow>("mailroom_items", {
+  return tenantInsert<MailroomRow>("mailroom_items", {
     subject: input.subject,
     received_date: input.receivedDate,
     correspondence_type: input.correspondenceType,
@@ -241,7 +242,7 @@ export function classifyCorrespondence(id: string, input: ClassifyCorrespondence
   if (input.assignedUserId !== undefined) values.assigned_user_id = input.assignedUserId;
   if (input.dueDate !== undefined) values.due_date = input.dueDate;
   if (input.notes !== undefined) values.notes = input.notes;
-  return demoUpdate<MailroomRow>("mailroom_items", id, values);
+  return tenantUpdate<MailroomRow>("mailroom_items", id, values);
 }
 
 export function transitionCorrespondence(
@@ -249,7 +250,7 @@ export function transitionCorrespondence(
   action: CorrespondenceAction,
   reason?: string,
 ) {
-  return demoRpc<MailroomRow>("transition_demo_mailroom_item", {
+  return tenantRpc<MailroomRow>("transition_mailroom_item", {
     p_mailroom_item_id: id,
     p_action: action,
     p_reason: reason ?? null,
@@ -257,7 +258,7 @@ export function transitionCorrespondence(
 }
 
 export function linkCorrespondenceDocument(id: string, documentId: string) {
-  return demoUpdate<MailroomRow>("mailroom_items", id, { document_id: documentId });
+  return tenantUpdate<MailroomRow>("mailroom_items", id, { document_id: documentId });
 }
 
 export function documentTypeForCorrespondence(correspondenceType: string) {
@@ -319,14 +320,14 @@ export async function addCorrespondenceDocumentWithDependencies(
 
 export function addCorrespondenceDocument(correspondence: MailroomRow, file: File) {
   return addCorrespondenceDocumentWithDependencies(correspondence, file, {
-    getTenantId: getDemoTenantId,
-    uploadMailroomFile: demoStorage.uploadMailroomFile,
-    insertDocument: (values) => demoInsert<DataRow>("documents", values),
+    getTenantId: getCurrentTenantId,
+    uploadMailroomFile: storageClient.uploadMailroomFile,
+    insertDocument: (values) => tenantInsert<DataRow>("documents", values),
     linkDocument: linkCorrespondenceDocument,
-    deleteObject: demoStorage.deleteObject,
+    deleteObject: storageClient.deleteObject,
   });
 }
 
 export function openCorrespondenceDocument(storagePath: string, expiresIn = 300) {
-  return demoStorage.createSignedDocumentUrl(storagePath, expiresIn);
+  return storageClient.createSignedDocumentUrl(storagePath, expiresIn);
 }

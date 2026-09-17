@@ -1,4 +1,4 @@
-import { referenceSelect, type Row } from "../../lib/supabase-demo-client";
+import { referenceSelect, type Row } from "../../lib/tenant-data-client";
 
 type DataRow = Row & { id: string };
 

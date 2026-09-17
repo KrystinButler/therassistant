@@ -2,6 +2,7 @@ import { defineConfig, devices } from "@playwright/test";
 
 const externalBaseURL = process.env.PLAYWRIGHT_BASE_URL;
 const localBaseURL = "http://127.0.0.1:4173";
+const staffStorageState = ".playwright/auth/staff.json";
 
 export default defineConfig({
   testDir: "./e2e",
@@ -19,8 +20,23 @@ export default defineConfig({
   },
   projects: [
     {
-      name: "chromium",
+      name: "auth-gate",
+      testMatch: /auth-gate\.spec\.ts/,
       use: { ...devices["Desktop Chrome"] },
+    },
+    {
+      name: "staff-setup",
+      testMatch: /staff-auth\.setup\.ts/,
+      use: { ...devices["Desktop Chrome"] },
+    },
+    {
+      name: "staff-chromium",
+      testIgnore: [/auth-gate\.spec\.ts/, /staff-auth\.setup\.ts/],
+      dependencies: ["staff-setup"],
+      use: {
+        ...devices["Desktop Chrome"],
+        storageState: staffStorageState,
+      },
     },
   ],
   webServer: externalBaseURL
@@ -33,3 +49,5 @@ export default defineConfig({
         timeout: 120_000,
       },
 });
+
+export { staffStorageState };

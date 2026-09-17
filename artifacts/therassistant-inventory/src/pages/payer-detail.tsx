@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Link, useRoute } from "wouter";
 import { StatusBadge } from "../components/status-badge";
 import { buildPayer360View } from "../domains/credentialing/payer-360";
-import { demoRows, referenceRows } from "../lib/demo-data";
+import { tenantSelect, referenceSelect } from "../lib/tenant-data-client";
 import { money, shortDate } from "../lib/format";
 
 type Row = Record<string, any>;
@@ -36,13 +36,13 @@ export function PayerDetailPage() {
     setLoading(true);
     setError(null);
     Promise.all([
-      referenceRows("payers"),
-      referenceRows("payer_plans"),
-      demoRows("providers"),
-      demoRows("provider_payer_enrollments"),
-      demoRows("payer_contracts"),
-      demoRows("fee_schedules"),
-      demoRows("fee_schedule_lines"),
+      referenceSelect("payers"),
+      referenceSelect("payer_plans"),
+      tenantSelect("providers"),
+      tenantSelect("provider_payer_enrollments"),
+      tenantSelect("payer_contracts"),
+      tenantSelect("fee_schedules"),
+      tenantSelect("fee_schedule_lines"),
     ])
       .then(([payers, plans, providers, enrollments, contracts, feeSchedules, feeScheduleLines]) => {
         if (!active) return;

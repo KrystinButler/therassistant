@@ -1,4 +1,9 @@
-import { demoInsert, demoSelect, demoUpdate, type Row } from "../../lib/supabase-demo-client";
+import {
+  portalInsert,
+  portalSelect,
+  portalUpdate,
+  type PortalRow as DataValue,
+} from "../../lib/portal-public-client";
 import {
   buildJournalEntryValues,
   buildPatientPortalData,
@@ -10,7 +15,7 @@ import {
   type PreVisitCheckInUpdate,
 } from "./workflow";
 
-type DataRow = Row & { id: string };
+type DataRow = DataValue & { id: string };
 
 function recordOf(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" && !Array.isArray(value)
@@ -24,18 +29,18 @@ export async function recordCheckIn(
   step: CheckInStep,
   responses?: Record<string, unknown>,
 ) {
-  const existing = await demoSelect<DataRow>("client_checkins", {
+  const existing = await portalSelect<DataRow>("client_checkins", patientId, {
     appointment_id: `eq.${appointmentId}`,
     client_id: `eq.${patientId}`,
     limit: "1",
   });
-  const values: Row = {
+  const values: DataValue = {
     ...planCheckInUpdate(step),
     ...(responses ? { responses } : {}),
   };
   return existing[0]
-    ? demoUpdate<DataRow>("client_checkins", existing[0].id, values)
-    : demoInsert<DataRow>("client_checkins", {
+    ? portalUpdate<DataRow>("client_checkins", patientId, existing[0].id, values)
+    : portalInsert<DataRow>("client_checkins", patientId, {
         appointment_id: appointmentId,
         client_id: patientId,
         responses: responses ?? {},
@@ -48,7 +53,7 @@ export async function savePreVisitCheckIn(
   patientId: string,
   update: PreVisitCheckInUpdate,
 ) {
-  const existing = await demoSelect<DataRow>("client_checkins", {
+  const existing = await portalSelect<DataRow>("client_checkins", patientId, {
     appointment_id: `eq.${appointmentId}`,
     client_id: `eq.${patientId}`,
     limit: "1",
@@ -56,8 +61,8 @@ export async function savePreVisitCheckIn(
   const responses = buildPreVisitResponses(recordOf(existing[0]?.responses), update);
 
   return existing[0]
-    ? demoUpdate<DataRow>("client_checkins", existing[0].id, { responses })
-    : demoInsert<DataRow>("client_checkins", {
+    ? portalUpdate<DataRow>("client_checkins", patientId, existing[0].id, { responses })
+    : portalInsert<DataRow>("client_checkins", patientId, {
         appointment_id: appointmentId,
         client_id: patientId,
         responses,
@@ -65,7 +70,7 @@ export async function savePreVisitCheckIn(
 }
 
 export function addJournalEntry(patientId: string, input: JournalEntryInput) {
-  return demoInsert<DataRow>("patient_journal_entries", {
+  return portalInsert<DataRow>("patient_journal_entries", patientId, {
     client_id: patientId,
     ...buildJournalEntryValues(input),
   });
@@ -73,14 +78,14 @@ export function addJournalEntry(patientId: string, input: JournalEntryInput) {
 
 export async function getPatientPortalData(patientId: string) {
   const [patients, appointments, policies, documents, checkins, journalEntries, balances, treatmentPlans] = await Promise.all([
-    demoSelect<DataRow>("clients", { id: `eq.${patientId}`, limit: "1" }),
-    demoSelect<DataRow>("appointments", { client_id: `eq.${patientId}`, order: "starts_at.asc" }),
-    demoSelect<DataRow>("client_insurance_policies", { client_id: `eq.${patientId}`, order: "created_at.asc" }),
-    demoSelect<DataRow>("documents", { client_id: `eq.${patientId}`, order: "created_at.desc" }),
-    demoSelect<DataRow>("client_checkins", { client_id: `eq.${patientId}`, order: "created_at.desc" }),
-    demoSelect<DataRow>("patient_journal_entries", { client_id: `eq.${patientId}`, order: "entry_date.desc,created_at.desc" }),
-    demoSelect<DataRow>("client_balance_summaries", { client_id: `eq.${patientId}`, limit: "1" }),
-    demoSelect<DataRow>("treatment_plans", { client_id: `eq.${patientId}`, order: "effective_date.desc" }),
+    portalSelect<DataRow>("clients", patientId, { id: `eq.${patientId}`, limit: "1" }),
+    portalSelect<DataRow>("appointments", patientId, { client_id: `eq.${patientId}`, order: "starts_at.asc" }),
+    portalSelect<DataRow>("client_insurance_policies", patientId, { client_id: `eq.${patientId}`, order: "created_at.asc" }),
+    portalSelect<DataRow>("documents", patientId, { client_id: `eq.${patientId}`, order: "created_at.desc" }),
+    portalSelect<DataRow>("client_checkins", patientId, { client_id: `eq.${patientId}`, order: "created_at.desc" }),
+    portalSelect<DataRow>("patient_journal_entries", patientId, { client_id: `eq.${patientId}`, order: "entry_date.desc,created_at.desc" }),
+    portalSelect<DataRow>("client_balance_summaries", patientId, { client_id: `eq.${patientId}`, limit: "1" }),
+    portalSelect<DataRow>("treatment_plans", patientId, { client_id: `eq.${patientId}`, order: "effective_date.desc" }),
   ]);
 
   const patient = patients[0];
@@ -101,10 +106,10 @@ export async function getPatientPortalData(patientId: string) {
 
   const [treatmentGoals, providers] = await Promise.all([
     activePlan
-      ? demoSelect<DataRow>("treatment_plan_goals", { treatment_plan_id: `eq.${activePlan.id}`, order: "created_at.asc" })
+      ? portalSelect<DataRow>("treatment_plan_goals", patientId, { treatment_plan_id: `eq.${activePlan.id}`, order: "created_at.asc" })
       : Promise.resolve([] as DataRow[]),
     providerId
-      ? demoSelect<DataRow>("providers", { id: `eq.${providerId}`, limit: "1" })
+      ? portalSelect<DataRow>("providers", patientId, { id: `eq.${providerId}`, limit: "1" })
       : Promise.resolve([] as DataRow[]),
   ]);
 

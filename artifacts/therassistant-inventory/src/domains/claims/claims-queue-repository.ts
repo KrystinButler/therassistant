@@ -1,4 +1,4 @@
-import { demoInsert, demoSelect, demoUpdate, type Row } from "../../lib/supabase-demo-client";
+import { tenantInsert, tenantSelect, tenantUpdate, type Row } from "../../lib/tenant-data-client";
 import { getClaimsWorkspaceData, getClaimWorkData, type ClaimsWorkspaceRow } from "./workspace-repository";
 
 type DataRow = Row & { id: string };
@@ -53,7 +53,7 @@ export async function getClaimsQueueData(): Promise<ClaimsQueueRow[]> {
 }
 
 async function activeFollowUp(claimId: string) {
-  return (await demoSelect<DataRow>("workqueue_items", {
+  return (await tenantSelect<DataRow>("workqueue_items", {
     source_object_type: "eq.claim",
     source_object_id: `eq.${claimId}`,
     workqueue_type: "eq.claim_followup",
@@ -74,9 +74,9 @@ export async function deferClaim(claimId: string, note: string) {
     description: note.trim() || "Deferred for later payer follow-up.",
   };
   const work = current
-    ? await demoUpdate<DataRow>("workqueue_items", current.id, values)
-    : await demoInsert<DataRow>("workqueue_items", values);
-  await demoInsert<DataRow>("workqueue_history", {
+    ? await tenantUpdate<DataRow>("workqueue_items", current.id, values)
+    : await tenantInsert<DataRow>("workqueue_items", values);
+  await tenantInsert<DataRow>("workqueue_history", {
     workqueue_item_id: work.id,
     old_status: current?.workqueue_status ?? null,
     new_status: "pending",
@@ -89,8 +89,8 @@ export async function resumeClaim(claimId: string) {
   const current = await activeFollowUp(claimId);
   if (!current) return null;
   const oldStatus = String(current.workqueue_status ?? "pending");
-  const work = await demoUpdate<DataRow>("workqueue_items", current.id, { workqueue_status: "in_progress" });
-  await demoInsert<DataRow>("workqueue_history", {
+  const work = await tenantUpdate<DataRow>("workqueue_items", current.id, { workqueue_status: "in_progress" });
+  await tenantInsert<DataRow>("workqueue_history", {
     workqueue_item_id: work.id,
     old_status: oldStatus,
     new_status: "in_progress",

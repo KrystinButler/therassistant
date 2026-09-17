@@ -37,9 +37,9 @@ test("manual payment posting uses one constrained database transaction", () => {
   assert.match(sql, /security\s+invoker/i);
 
   const manualSection = paymentRepositorySource.split("export async function postManualPayment")[1]?.split("export async function reversePayment")[0] ?? "";
-  assert.match(manualSection, /demoRpc<[^>]+>\("post_demo_manual_payment"/);
-  assert.doesNotMatch(manualSection, /demoInsert<DataRow>\("payments"/);
-  assert.doesNotMatch(manualSection, /demoInsert<DataRow>\("payment_allocations"/);
+  assert.match(manualSection, /tenantRpc<[^>]+>\("post_demo_manual_payment"/);
+  assert.doesNotMatch(manualSection, /tenantInsert<DataRow>\("payments"/);
+  assert.doesNotMatch(manualSection, /tenantInsert<DataRow>\("payment_allocations"/);
 });
 
 test("adjudicated balances preserve independent patient and insurance portions", () => {

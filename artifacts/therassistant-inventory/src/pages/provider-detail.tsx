@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Link, useRoute } from "wouter";
 import { StatusBadge } from "../components/status-badge";
 import { buildProviderCredentialingView } from "../domains/credentialing/workflow";
-import { demoRows, referenceRows } from "../lib/demo-data";
+import { tenantSelect, referenceSelect } from "../lib/tenant-data-client";
 import { money, shortDate } from "../lib/format";
 import { useApi } from "../lib/therassistant-api";
 
@@ -46,9 +46,9 @@ export function ProviderDetailPage() {
     setCredentialingError(null);
 
     Promise.all([
-      demoRows("provider_identifiers"),
-      demoRows("provider_payer_enrollments"),
-      referenceRows("payers"),
+      tenantSelect("provider_identifiers"),
+      tenantSelect("provider_payer_enrollments"),
+      referenceSelect("payers"),
     ])
       .then(([identifiers, enrollments, payerRows]) => {
         if (!active) return;

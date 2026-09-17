@@ -1,6 +1,10 @@
 import { useEffect } from "react";
 import { Route, Switch, useLocation, useRoute } from "wouter";
 
+import { AuthProvider, useAuth } from "./auth/auth-context";
+import { LoginPage } from "./auth/LoginPage";
+import { OrganizationSetup } from "./auth/OrganizationSetup";
+import { TenantProvider, useTenant } from "./auth/tenant-context";
 import { AppShell } from "./components/app-shell";
 import { DenialsPage } from "./domains/ar/DenialsPage";
 import { BillingHubPage } from "./domains/billing/BillingHubPage";
@@ -23,7 +27,6 @@ import { PatientPortalPage } from "./domains/portal/PatientPortalPage";
 import { SchedulePage } from "./domains/scheduling/SchedulePage";
 import { AdministrationPage } from "./pages/administration";
 import { ClientsPage } from "./pages/clients";
-import { DemoControlCenter } from "./pages/demo-control";
 import { PayerDetailPage } from "./pages/payer-detail";
 import { ProviderDetailPage } from "./pages/provider-detail";
 import { ProvidersPage } from "./pages/providers";
@@ -47,24 +50,10 @@ function ScheduleAppointmentRedirect() {
   return <Redirect to={`/schedule?appointment=${encodeURIComponent(params?.id ?? "")}`} />;
 }
 
-export default function App() {
-  const [location] = useLocation();
-
-  if (location.startsWith("/patient-portal/")) {
-    return (
-      <Switch>
-        <Route path="/patient-portal/:clientId/check-in/:appointmentId"><PatientCheckInPage /></Route>
-        <Route path="/patient-portal/:clientId/journal"><PatientJournalPage /></Route>
-        <Route path="/patient-portal/:clientId"><PatientPortalPage /></Route>
-        <Route><div className="thera-state">Patient portal page not found.</div></Route>
-      </Switch>
-    );
-  }
-
+function StaffRoutes() {
   return (
     <AppShell>
       <Switch>
-        <Route path="/demo"><DemoControlCenter /></Route>
         <Route path="/clinical/golden-thread/:clientId"><GoldenThreadPage /></Route>
         <Route path="/claims/submission"><Redirect to="/billing/charges" /></Route>
         <Route path="/claims/follow-up"><Redirect to="/claims" /></Route>
@@ -102,5 +91,46 @@ export default function App() {
         <Route><div className="thera-state">Page not found.</div></Route>
       </Switch>
     </AppShell>
+  );
+}
+
+function TenantGate() {
+  const { loading, error, tenantId, needsOrganizationSetup } = useTenant();
+  if (loading) return <div className="thera-state">Loading organization...</div>;
+  if (error) return <div className="thera-state error">{error}</div>;
+  if (needsOrganizationSetup) return <OrganizationSetup />;
+  if (!tenantId) return <div className="thera-state error">No active organization is available.</div>;
+  return <StaffRoutes />;
+}
+
+function StaffGate() {
+  const { session, loading } = useAuth();
+  if (loading) return <div className="thera-state">Checking session...</div>;
+  if (!session) return <LoginPage />;
+  return (
+    <TenantProvider>
+      <TenantGate />
+    </TenantProvider>
+  );
+}
+
+export default function App() {
+  const [location] = useLocation();
+
+  if (location.startsWith("/patient-portal/")) {
+    return (
+      <Switch>
+        <Route path="/patient-portal/:clientId/check-in/:appointmentId"><PatientCheckInPage /></Route>
+        <Route path="/patient-portal/:clientId/journal"><PatientJournalPage /></Route>
+        <Route path="/patient-portal/:clientId"><PatientPortalPage /></Route>
+        <Route><div className="thera-state">Patient portal page not found.</div></Route>
+      </Switch>
+    );
+  }
+
+  return (
+    <AuthProvider>
+      <StaffGate />
+    </AuthProvider>
   );
 }

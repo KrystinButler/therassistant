@@ -32,7 +32,7 @@ test("manual allocation is capped at the claim open balance", () => {
 
 test("credentialing or contracting write-off also closes the linked claim financial state", () => {
   const writeOffSection = denialRepositorySource.split("export async function writeOffDenial")[1] ?? "";
-  assert.match(writeOffSection, /demoUpdate<DataRow>\("professional_claims"/);
+  assert.match(writeOffSection, /tenantUpdate<DataRow>\("professional_claims"/);
   assert.match(writeOffSection, /claim_status:\s*"paid"/);
 });
 
@@ -84,7 +84,7 @@ test("adjustment work items resolve to recovery context and route", () => {
   if (sourceRouteForWorkItem) {
     assert.equal(sourceRouteForWorkItem("adjustment", "adj-1"), "/ar-denials?tab=recovery");
   }
-  assert.match(workCenterRepositorySource, /demoSelect<DataRow>\("adjustments"/);
+  assert.match(workCenterRepositorySource, /tenantSelect<DataRow>\("adjustments"/);
   assert.match(workCenterRepositorySource, /adjustmentsById/);
   assert.match(workCenterRepositorySource, /type === "adjustment"/);
 });

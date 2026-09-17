@@ -6,7 +6,7 @@ const here = dirname(fileURLToPath(import.meta.url));
 const repository = readFileSync(join(here, "workspace-repository.ts"), "utf8");
 const drawer = readFileSync(join(here, "claim-work-drawer.tsx"), "utf8");
 
-for (const fragment of ["saveClaimWorkFields", "demoUpdate<DataRow>(\"professional_claims\"", "validateClaim(claimId)"]) {
+for (const fragment of ["saveClaimWorkFields", "tenantUpdate<DataRow>(\"professional_claims\"", "validateClaim(claimId)"]) {
   if (!repository.includes(fragment)) throw new Error(`Missing claim edit repository contract: ${fragment}`);
 }
 
