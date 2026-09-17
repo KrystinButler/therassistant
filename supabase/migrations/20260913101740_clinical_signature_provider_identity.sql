@@ -1,7 +1,3 @@
--- Clinical signing identity must not require an authenticated auth.users row.
--- Production can populate signer_id (auth actor), while the browser-only demo records
--- the licensed/rendering provider in provider_id.
-
 alter table public.clinical_note_signatures
   add column if not exists provider_id uuid references public.providers(id);
 

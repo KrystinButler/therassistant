@@ -227,3 +227,4 @@ revoke all on function public.post_demo_manual_payment(bigint, public.payment_so
 revoke all on function public.post_demo_manual_payment(bigint, public.payment_source_enum, public.payment_method_enum, uuid, uuid, uuid, bigint, text, text, text) from anon;
 revoke all on function public.post_demo_manual_payment(bigint, public.payment_source_enum, public.payment_method_enum, uuid, uuid, uuid, bigint, text, text, text) from authenticated;
 grant execute on function public.post_demo_manual_payment(bigint, public.payment_source_enum, public.payment_method_enum, uuid, uuid, uuid, bigint, text, text, text) to anon;
+
