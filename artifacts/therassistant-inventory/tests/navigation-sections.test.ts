@@ -66,3 +66,11 @@ test("section context and accordion behavior replace workspace terminology", () 
   assert.equal(toggleExpandedSection("revenue-cycle", "revenue-cycle"), null);
   assert.equal(getVisibleSections().some((section) => section.id === "revenue-cycle"), true);
 });
+
+test("provider navigation does not expose an Overview or Home destination", () => {
+  assert.equal(NAV_SECTIONS.some((section) => section.id === "overview"), false);
+  assert.equal(
+    getVisibleSections().some((section) => section.children.some((item) => item.label === "Home")),
+    false,
+  );
+});
