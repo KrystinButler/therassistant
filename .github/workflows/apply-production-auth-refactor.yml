@@ -1,0 +1,35 @@
+name: Apply production auth refactor
+
+on:
+  push:
+    branches:
+      - feature/production-auth-tenant-context
+    paths:
+      - scripts/apply-production-auth-refactor.mjs
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/production-auth-tenant-context
+          fetch-depth: 0
+      - name: Apply guarded refactor
+        run: node scripts/apply-production-auth-refactor.mjs
+      - name: Commit generated refactor
+        shell: bash
+        run: |
+          if git diff --quiet && git diff --cached --quiet; then
+            echo "No changes produced."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "refactor: remove anonymous staff demo runtime"
+          git push origin HEAD:feature/production-auth-tenant-context
