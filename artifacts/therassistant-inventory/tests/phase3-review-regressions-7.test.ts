@@ -11,7 +11,7 @@ const paymentRepositorySource = readFileSync(
   "utf8",
 );
 const atomicPostingMigrationUrl = new URL(
-  "../../../supabase/migrations/20260914_phase3_atomic_demo_manual_payment.sql",
+  "../../../supabase/migrations/20260914031048_phase3_atomic_demo_manual_payment.sql",
   import.meta.url,
 );
 
