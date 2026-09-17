@@ -20,7 +20,7 @@ const paymentRepositorySource = readFileSync(
   "utf8",
 );
 const atomicReversalMigrationUrl = new URL(
-  "../../../supabase/migrations/20260913_phase3_atomic_demo_payment_reversal.sql",
+  "../../../supabase/migrations/20260914005021_phase3_atomic_demo_payment_reversal.sql",
   import.meta.url,
 );
 
