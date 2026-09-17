@@ -349,7 +349,8 @@ begin
     'last_name', v_client.last_name,
     'access_id', v_access.id,
     'access_status', v_access.status,
-    'access_user_id', v_access.user_id
+    'access_user_id', v_access.user_id,
+    'access_invited_at', v_access.invited_at
   );
 end;
 $$;
@@ -664,14 +665,117 @@ revoke all on function public.portal_record_checkin(uuid, text) from public, ano
 grant execute on function public.portal_record_checkin(uuid, text) to authenticated;
 ```
 
-For `portal_save_previsit_checkin`, merge only these keys from `p_update`:
-- `demographics_confirmed`
-- `insurance_confirmed`
-- `visit_questions`
-- `consents`
-- `submitted`
+Implement `portal_save_previsit_checkin` with an explicit allow-list and server-side merge:
 
-Do not concatenate arbitrary top-level keys. Build `responses.pre_visit` server-side and set `updated_at`; if `submitted=true`, set `submitted_at=now()`.
+```sql
+create or replace function public.portal_save_previsit_checkin(
+  p_appointment_id uuid,
+  p_update jsonb
+) returns jsonb
+language plpgsql
+security definer
+set search_path = ''
+as $
+declare
+  v_appt public.appointments%rowtype;
+  v_checkin public.client_checkins%rowtype;
+  v_previous jsonb := '{}'::jsonb;
+  v_next jsonb := '{}'::jsonb;
+  v_responses jsonb := '{}'::jsonb;
+begin
+  select * into v_appt
+  from public.appointments
+  where id = p_appointment_id;
+
+  if not found
+     or not private.has_client_portal_access(v_appt.tenant_id, v_appt.client_id) then
+    raise exception 'Appointment is unavailable';
+  end if;
+
+  if exists (
+    select 1
+    from jsonb_object_keys(coalesce(p_update, '{}'::jsonb)) as allowed(key)
+    where allowed.key not in (
+      'demographics_confirmed',
+      'insurance_confirmed',
+      'visit_questions',
+      'consents',
+      'submitted'
+    )
+  ) then
+    raise exception 'Unsupported pre-visit field';
+  end if;
+
+  select * into v_checkin
+  from public.client_checkins
+  where appointment_id = v_appt.id
+  limit 1;
+
+  v_responses := coalesce(v_checkin.responses, '{}'::jsonb);
+  v_previous := coalesce(v_responses -> 'pre_visit', '{}'::jsonb);
+  v_next := v_previous || jsonb_build_object('updated_at', now());
+
+  if p_update ? 'demographics_confirmed' then
+    v_next := v_next || jsonb_build_object(
+      'demographics_confirmed',
+      (p_update ->> 'demographics_confirmed')::boolean
+    );
+  end if;
+
+  if p_update ? 'insurance_confirmed' then
+    v_next := v_next || jsonb_build_object(
+      'insurance_confirmed',
+      (p_update ->> 'insurance_confirmed')::boolean
+    );
+  end if;
+
+  if p_update ? 'visit_questions' then
+    if jsonb_typeof(p_update -> 'visit_questions') <> 'object' then
+      raise exception 'Visit questions must be an object';
+    end if;
+    v_next := v_next || jsonb_build_object(
+      'visit_questions',
+      coalesce(v_previous -> 'visit_questions', '{}'::jsonb)
+        || (p_update -> 'visit_questions')
+    );
+  end if;
+
+  if p_update ? 'consents' then
+    if jsonb_typeof(p_update -> 'consents') <> 'object' then
+      raise exception 'Consents must be an object';
+    end if;
+    v_next := v_next || jsonb_build_object(
+      'consents',
+      coalesce(v_previous -> 'consents', '{}'::jsonb)
+        || (p_update -> 'consents')
+    );
+  end if;
+
+  if coalesce((p_update ->> 'submitted')::boolean, false) then
+    v_next := v_next || jsonb_build_object('submitted_at', now());
+  end if;
+
+  v_responses := v_responses || jsonb_build_object('pre_visit', v_next);
+
+  insert into public.client_checkins (
+    tenant_id, appointment_id, client_id, responses
+  ) values (
+    v_appt.tenant_id, v_appt.id, v_appt.client_id, v_responses
+  )
+  on conflict (appointment_id) do update set
+    responses = excluded.responses,
+    updated_at = now()
+  returning * into v_checkin;
+
+  return to_jsonb(v_checkin);
+end;
+$;
+
+revoke all on function public.portal_save_previsit_checkin(uuid, jsonb) from public, anon;
+grant execute on function public.portal_save_previsit_checkin(uuid, jsonb) to authenticated;
+```
+
+Only the five listed pre-visit keys are accepted; arbitrary top-level values are rejected.
 
 - [ ] **Step 5: Implement patient journal insertion**
 
@@ -892,9 +996,31 @@ import { decideInviteAction, normalizeInviteRequest } from "./logic.ts";
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const PUBLISHABLE_KEY = Deno.env.get("SUPABASE_ANON_KEY")!;
 const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-const PORTAL_BASE_URL = Deno.env.get("PORTAL_BASE_URL")!;
+const PORTAL_BASE_URL = Deno.env.get("PORTAL_BASE_URL")!.replace(/\/$/, "");
+
+function corsHeaders(req: Request) {
+  const origin = req.headers.get("Origin");
+  return {
+    "Access-Control-Allow-Origin": origin === PORTAL_BASE_URL ? PORTAL_BASE_URL : "",
+    "Access-Control-Allow-Headers": "authorization, apikey, content-type",
+    "Access-Control-Allow-Methods": "POST, OPTIONS",
+    "Content-Type": "application/json",
+    "Vary": "Origin",
+  };
+}
+
+function json(payload: Record<string, unknown>, status: number, req: Request) {
+  return new Response(JSON.stringify(payload), {
+    status,
+    headers: corsHeaders(req),
+  });
+}
 
 Deno.serve(async (req) => {
+  const origin = req.headers.get("Origin");
+  if (origin && origin !== PORTAL_BASE_URL) {
+    return json({ error: "Origin is not allowed." }, 403, req);
+  }
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders(req) });
   }
@@ -924,6 +1050,12 @@ Deno.serve(async (req) => {
     return json({ error: "Patient is unavailable for portal enrollment." }, 403, req);
   }
 
+  const { data: staffAuth, error: staffAuthError } = await userClient.auth.getUser();
+  const staffUser = staffAuth.user;
+  if (staffAuthError || !staffUser) {
+    return json({ error: "Authenticated staff identity is unavailable." }, 401, req);
+  }
+
   const email = String(context.email ?? "").trim().toLowerCase();
   if (!email) return json({ error: "Patient email is required before portal enrollment." }, 422, req);
 
@@ -932,7 +1064,7 @@ Deno.serve(async (req) => {
       client_id: clientId,
       status: context.access_status,
       invited_email: email,
-      invited_at: context.invited_at ?? null,
+      invited_at: context.access_invited_at ?? null,
     }, 200, req);
   }
 
@@ -964,7 +1096,7 @@ Deno.serve(async (req) => {
     status: "invited",
     invited_email: email,
     invited_at: invitedAt,
-    created_by: authorizationUserId(authorization),
+    created_by: staffUser.id,
   });
 
   if (mappingError) {
@@ -981,11 +1113,7 @@ Deno.serve(async (req) => {
 });
 ```
 
-Do not literally implement `authorizationUserId()` by decoding an unverified token. Instead, obtain the staff user ID from a validated user-scoped call:
-- either call `userClient.auth.getUser()` and use `data.user.id`
-- or add `created_by` to the invite-context RPC based on `auth.uid()`
-
-Use the first option to avoid expanding the database API.
+The handler obtains `staffUser.id` from `userClient.auth.getUser()`; it never decodes an unverified token for authorization or audit identity.
 
 CORS must allow only `PORTAL_BASE_URL` as the browser origin. Reject other origins for non-OPTIONS requests.
 
@@ -1044,13 +1172,6 @@ test("patient portal routes contain no client id authority", () => {
   assert.doesNotMatch(app, /patient-portal\/:clientId/);
   assert.match(app, /<AuthProvider>/);
   assert.match(app, /PatientPortalGate/);
-});
-
-test("legacy public portal client is retired", () => {
-  assert.equal(
-    existsSync("artifacts/therassistant-inventory/src/lib/portal-public-client.ts"),
-    false,
-  );
 });
 ```
 
@@ -1226,7 +1347,7 @@ pnpm --filter ./scripts exec tsx --test ../artifacts/therassistant-inventory/tes
 pnpm --filter @workspace/therassistant-inventory run typecheck:phase3
 ```
 
-Expected: PASS after Task 5 deletes the legacy public client; until then, run all assertions except the deletion assertion or land Task 4 and Task 5 in one review batch.
+Expected: PASS for all Task 4 route/auth assertions.
 
 - [ ] **Step 8: Commit**
 
@@ -1274,6 +1395,11 @@ for (const file of [
   assert.doesNotMatch(source, /clientId/);
   assert.doesNotMatch(source, /\/patient-portal\/\$\{clientId\}/);
 }
+
+assert.equal(
+  existsSync("artifacts/therassistant-inventory/src/lib/portal-public-client.ts"),
+  false,
+);
 ```
 
 Expected: FAIL against current pages.
@@ -1610,16 +1736,89 @@ Update drawer copy from "save the patient and open their portal immediately" to 
 
 - [ ] **Step 6: Replace staff "Open Patient Portal" with Portal Access panel**
 
-`PortalAccessPanel`:
-- load `client_portal_access` for the patient
-- no row -> "Not enrolled" + Send Invite
-- invited -> show email, invited timestamp, pending state
-- active -> show email, activated timestamp + Revoke Access
-- revoked -> show revoked state; no automatic relink/reinvite in v1
-- Send Invite calls Edge Function
-- Revoke calls RPC
-- refresh after actions
-- never renders a direct link into patient portal because staff sessions are not patient identities
+Implement `PortalAccessPanel` with explicit load/action states:
+
+```tsx
+export function PortalAccessPanel({ clientId }: { clientId: string }) {
+  const [access, setAccess] = useState<ClientPortalAccess | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [working, setWorking] = useState<"invite" | "revoke" | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  async function load() {
+    setLoading(true);
+    setError(null);
+    try {
+      setAccess(await getClientPortalAccess(clientId));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to load portal access.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => { void load(); }, [clientId]);
+
+  async function invite() {
+    setWorking("invite");
+    setError(null);
+    try {
+      await invitePatientPortal(clientId);
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to send portal invitation.");
+    } finally {
+      setWorking(null);
+    }
+  }
+
+  async function revoke() {
+    setWorking("revoke");
+    setError(null);
+    try {
+      await revokeClientPortalAccess(clientId);
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to revoke portal access.");
+    } finally {
+      setWorking(null);
+    }
+  }
+
+  if (loading) return <section className="thera-card"><h2>Patient Portal</h2><p>Loading portal access...</p></section>;
+
+  return (
+    <section className="thera-card">
+      <h2>Patient Portal</h2>
+      {error && <div className="thera-state error">{error}</div>}
+      {!access && (
+        <>
+          <p>Status: Not enrolled</p>
+          <button className="thera-action" type="button" disabled={working !== null} onClick={() => void invite()}>
+            {working === "invite" ? "Sending..." : "Send Portal Invite"}
+          </button>
+        </>
+      )}
+      {access?.status === "invited" && (
+        <p>Invitation pending for {access.invited_email}.</p>
+      )}
+      {access?.status === "active" && (
+        <>
+          <p>Portal active for {access.invited_email}.</p>
+          <button className="thera-action secondary" type="button" disabled={working !== null} onClick={() => void revoke()}>
+            {working === "revoke" ? "Revoking..." : "Revoke Portal Access"}
+          </button>
+        </>
+      )}
+      {access?.status === "revoked" && (
+        <p>Portal access was revoked. Automatic relinking is not available in this release.</p>
+      )}
+    </section>
+  );
+}
+```
+
+The component never renders a direct link into the patient portal because a staff session is not a patient identity.
 
 Modify `PatientChartPage`:
 
