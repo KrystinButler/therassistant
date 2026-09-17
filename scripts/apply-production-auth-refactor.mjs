@@ -1,5 +1,6 @@
 import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 
+// This script is intentionally one-shot and guarded by exact source patterns.
 function read(path) { return readFileSync(path, 'utf8'); }
 function write(path, text) { writeFileSync(path, text); }
 function requiredReplace(text, search, replacement, label) {
