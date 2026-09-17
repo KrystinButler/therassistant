@@ -1,8 +1,4 @@
-import {
-  authenticatedFetch,
-  SUPABASE_URL,
-  type SUPABASE_PUBLISHABLE_KEY,
-} from "./supabase-client";
+import { authenticatedFetch, SUPABASE_URL } from "./supabase-client";
 import { requireActiveTenantId } from "./tenant-session";
 
 export type Row = Record<string, unknown>;
