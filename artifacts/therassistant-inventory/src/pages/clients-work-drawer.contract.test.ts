@@ -35,8 +35,8 @@ for (const fragment of [
   "Enroll in Patient Portal",
 ]) if (!page.includes(fragment)) throw new Error(`Missing patient drawer contract: ${fragment}`);
 
-if (!page.includes('value="self"') || !page.includes('value="spouse"') || !page.includes('value="child"') || !page.includes('value="parent"') || !page.includes('value="other"')) {
-  throw new Error("Subscriber relationship dropdown options are incomplete.");
+for (const relationship of ['["self", "Self"]', '["spouse", "Spouse"]', '["child", "Child"]', '["parent", "Parent"]', '["other", "Other"]']) {
+  if (!page.includes(relationship)) throw new Error(`Missing subscriber relationship option: ${relationship}`);
 }
 if (page.includes('position:"fixed"')) throw new Error("Patient form still uses centered fixed overlay.");
 console.log("patient work drawer contract passed");
