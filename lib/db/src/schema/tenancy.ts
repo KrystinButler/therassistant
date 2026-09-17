@@ -1,4 +1,5 @@
 import {
+  customType,
   jsonb,
   pgTable,
   text,
@@ -12,6 +13,12 @@ import {
   tenantTypeEnum,
   userStatusEnum,
 } from "./enums";
+
+const citext = customType<{ data: string }>({
+  dataType() {
+    return "citext";
+  },
+});
 
 export const tenantsTable = pgTable("tenants", {
   id: uuid("id").primaryKey().defaultRandom(),
@@ -33,7 +40,7 @@ export const userProfilesTable = pgTable("user_profiles", {
   firstName: text("first_name"),
   lastName: text("last_name"),
   displayName: text("display_name"),
-  email: text("email"),
+  email: citext("email"),
   phone: text("phone"),
   status: userStatusEnum("status").notNull().default("active"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
