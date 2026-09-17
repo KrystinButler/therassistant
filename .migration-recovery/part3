@@ -1,0 +1,37 @@
+nd coalesce((t.settings ->> 'demo')::boolean, false) is true
+    and tu.status = 'active'::public.user_status_enum
+  order by display_label, tu.user_id;
+$$;
+
+revoke all on function public.get_demo_mailroom_assignees() from public;
+grant execute on function public.get_demo_mailroom_assignees() to anon, authenticated;
+
+create or replace function public.transition_demo_mailroom_item(
+  p_mailroom_item_id uuid,
+  p_action text,
+  p_reason text default null
+)
+returns public.mailroom_items
+language plpgsql
+security invoker
+set search_path = public, pg_temp
+as $$
+declare
+  v_item public.mailroom_items%rowtype;
+  v_old_status text;
+  v_new_status text;
+  v_work public.workqueue_items%rowtype;
+  v_old_work_status public.workqueue_status_enum;
+  v_priority public.workqueue_priority_enum;
+  v_now timestamptz := now();
+begin
+  select * into v_item from public.mailroom_items where id = p_mailroom_item_id for update;
+  if not found then raise exception 'Mailroom item not found.' using errcode = 'P0002'; end if;
+  if not exists (select 1 from public.tenants t where t.id = v_item.tenant_id and t.name = 'Therassistant Demo' and coalesce((t.settings ->> 'demo')::boolean, false) is true) then raise exception 'Mailroom transition is limited to the Therassistant Demo tenant.' using errcode = '42501'; end if;
+  v_old_status := v_item.status;
+  case p_action
+    when 'review' then if v_old_status <> 'new' then raise exception 'Review is only allowed from new.' using errcode = '22023'; end if; v_new_status := 'reviewed';
+    when 'require_action' then if v_old_status not in ('new', 'reviewed') then raise exception 'Action Required is only allowed from new or reviewed.' using errcode = '22023'; end if; v_new_status := 'action_required';
+    when 'start' then if v_old_status not in ('action_required', 'pending') then raise exception 'Start is only allowed from action required or pending.' using errcode = '22023'; end if; v_new_status := 'in_progress';
+    when 'pend' then if v_old_status not in ('action_required', 'in_progress') then raise exception 'Pend is only allowed from action required or in progress.' using errcode = '22023'; end if; if nullif(trim(coalesce(p_reason, '')), '') is null then raise exception 'A pending reason is required.' using errcode = '22023'; end if; v_new_status := 'pending';
+    when 'resolve' then if v_old_status not in ('action_required', 'in_progress', 

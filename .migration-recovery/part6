@@ -1,0 +1,21 @@
+d_at desc limit 1 for update;
+      if v_work.id is not null then
+        v_old_work_status := v_work.workqueue_status;
+        update public.workqueue_items set workqueue_status = 'reopened', due_date = v_item.due_date, assigned_user_id = v_item.assigned_user_id, completed_at = null, completed_by = null, updated_at = v_now where id = v_work.id returning * into v_work;
+        insert into public.workqueue_history (tenant_id, workqueue_item_id, old_status, new_status, old_priority, new_priority, changed_by, note) values (v_item.tenant_id, v_work.id, v_old_work_status, v_work.workqueue_status, v_work.priority, v_work.priority, auth.uid(), coalesce(nullif(trim(p_reason), ''), 'Correspondence reopened.'));
+      else
+        insert into public.workqueue_items (tenant_id, workqueue_type, workqueue_status, priority, source_object_type, source_object_id, title, description, due_date, assigned_user_id, created_by)
+        values (v_item.tenant_id, 'correspondence', 'open', v_priority, 'mailroom_item', v_item.id, v_item.subject, replace(v_item.correspondence_type, '_', ' ') || ' correspondence requires follow-up.', v_item.due_date, v_item.assigned_user_id, auth.uid()) returning * into v_work;
+      end if;
+    end if;
+  end if;
+  update public.mailroom_items set status = v_new_status, reviewed_at = case when p_action = 'review' then coalesce(reviewed_at, v_now) else reviewed_at end, closed_at = case when p_action = 'close' then v_now when p_action = 'reopen' then null else closed_at end, updated_at = v_now where id = v_item.id returning * into v_item;
+  insert into public.status_history (tenant_id, target_type, target_id, old_status, new_status, changed_by, reason) values (v_item.tenant_id, 'mailroom_item', v_item.id, v_old_status, v_new_status, auth.uid(), nullif(trim(coalesce(p_reason, '')), ''));
+  return v_item;
+end;
+$$;
+
+revoke all on function public.transition_demo_mailroom_item(uuid, text, text) from public;
+grant execute on function public.transition_demo_mailroom_item(uuid, text, text) to anon, authenticated;
+
+commit;
