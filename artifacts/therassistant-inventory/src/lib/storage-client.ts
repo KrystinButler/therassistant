@@ -1,5 +1,6 @@
 import {
-  authenticatedFetch,
+  getAccessToken,
+  SUPABASE_PUBLISHABLE_KEY,
   SUPABASE_URL,
 } from "./supabase-client";
 import type { FetchLike } from "./tenant-data-client";
@@ -43,10 +44,12 @@ export function createStorageClient(
   fetchImpl: FetchLike = globalThis.fetch.bind(globalThis),
 ) {
   async function authFetch(input: RequestInfo | URL, init: RequestInit = {}) {
-    if (fetchImpl !== globalThis.fetch) {
-      return authenticatedFetch(input, { ...init, body: init.body });
-    }
-    return authenticatedFetch(input, init);
+    const token = await getAccessToken();
+    if (!token) throw new Error("Authentication is required.");
+    const headers = new Headers(init.headers);
+    headers.set("apikey", SUPABASE_PUBLISHABLE_KEY);
+    headers.set("Authorization", `Bearer ${token}`);
+    return fetchImpl(input, { ...init, headers });
   }
 
   async function uploadMailroomFile(input: {
