@@ -13,6 +13,7 @@ export type AuthSession = {
   expires_in?: number;
   expires_at?: number;
   token_type?: string;
+  recovery?: boolean;
   user: AuthUser;
 };
 
@@ -21,6 +22,7 @@ type AuthListener = (session: AuthSession | null) => void;
 const STORAGE_KEY = "therassistant.auth.session.v1";
 const listeners = new Set<AuthListener>();
 let refreshPromise: Promise<AuthSession | null> | null = null;
+let validatedAccessToken: string | null = null;
 
 function storageAvailable() {
   return typeof window !== "undefined" && typeof window.localStorage !== "undefined";
@@ -47,6 +49,7 @@ function persistSession(session: AuthSession | null) {
     if (session) window.localStorage.setItem(STORAGE_KEY, JSON.stringify(session));
     else window.localStorage.removeItem(STORAGE_KEY);
   }
+  if (!session) validatedAccessToken = null;
   notify(session);
 }
 
@@ -90,6 +93,7 @@ async function refreshSession(refreshToken: string): Promise<AuthSession | null>
     })
       .then((payload) => {
         const session = normalizeSession(payload);
+        validatedAccessToken = session.access_token;
         persistSession(session);
         return session;
       })
@@ -117,34 +121,46 @@ function sessionFromUrl(): AuthSession | null {
     expires_in: expiresIn,
     expires_at: Math.floor(Date.now() / 1000) + expiresIn,
     token_type: params.get("token_type") ?? "bearer",
+    recovery: params.get("type") === "recovery",
     user: { id: "" },
   } satisfies AuthSession;
   window.history.replaceState(null, document.title, `${window.location.pathname}${window.location.search}`);
   return session;
 }
 
-async function hydrateUser(session: AuthSession): Promise<AuthSession> {
-  if (session.user?.id) return session;
-  const response = await fetch(`${SUPABASE_URL}/auth/v1/user`, {
-    headers: {
-      apikey: SUPABASE_PUBLISHABLE_KEY,
-      Authorization: `Bearer ${session.access_token}`,
-    },
-  });
-  if (!response.ok) return session;
+async function validateSessionWithAuth(session: AuthSession): Promise<AuthSession | null> {
+  if (validatedAccessToken === session.access_token && session.user?.id) return session;
+
+  let response: Response;
+  try {
+    response = await fetch(`${SUPABASE_URL}/auth/v1/user`, {
+      headers: {
+        apikey: SUPABASE_PUBLISHABLE_KEY,
+        Authorization: `Bearer ${session.access_token}`,
+      },
+    });
+  } catch {
+    throw new Error("Unable to verify your authentication session. Check your connection and try again.");
+  }
+
+  if (response.status === 401 || response.status === 403) {
+    persistSession(null);
+    return null;
+  }
+  if (!response.ok) {
+    throw new Error(`Unable to verify your authentication session (${response.status}).`);
+  }
+
   const user = (await response.json()) as AuthUser;
   const next = { ...session, user };
+  validatedAccessToken = session.access_token;
   persistSession(next);
   return next;
 }
 
 export async function getSession(): Promise<AuthSession | null> {
   const urlSession = sessionFromUrl();
-  if (urlSession) {
-    const hydrated = await hydrateUser(urlSession);
-    persistSession(hydrated);
-    return hydrated;
-  }
+  if (urlSession) return validateSessionWithAuth(urlSession);
 
   const session = readStoredSession();
   if (!session) return null;
@@ -152,14 +168,47 @@ export async function getSession(): Promise<AuthSession | null> {
   if (expiresAt && expiresAt <= Math.floor(Date.now() / 1000) + 60) {
     return refreshSession(session.refresh_token);
   }
-  return hydrateUser(session);
+  return validateSessionWithAuth(session);
 }
 
 export async function signInWithPassword(email: string, password: string) {
   const payload = await authRequest("/auth/v1/token?grant_type=password", { email, password });
   const session = normalizeSession(payload);
+  validatedAccessToken = session.access_token;
   persistSession(session);
   return session;
+}
+
+export async function requestPasswordRecovery(email: string) {
+  await authRequest("/auth/v1/recover", { email });
+}
+
+export async function updatePassword(password: string) {
+  const session = await getSession();
+  if (!session?.access_token || !session.recovery) {
+    throw new Error("A valid password recovery session is required.");
+  }
+
+  const response = await fetch(`${SUPABASE_URL}/auth/v1/user`, {
+    method: "PUT",
+    headers: {
+      apikey: SUPABASE_PUBLISHABLE_KEY,
+      Authorization: `Bearer ${session.access_token}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ password }),
+  });
+  const payload = (await response.json().catch(() => ({}))) as Record<string, unknown>;
+  if (!response.ok) {
+    throw new Error(String(payload.msg ?? payload.message ?? payload.error_description ?? payload.error ?? `Unable to update password (${response.status}).`));
+  }
+
+  try {
+    await authRequest("/auth/v1/logout", {}, session.access_token);
+  } catch {
+    // The password update may already revoke the recovery session.
+  }
+  persistSession(null);
 }
 
 export async function signOutSession() {
@@ -191,6 +240,9 @@ export async function authenticatedFetch(input: RequestInfo | URL, init: Request
 
 if (typeof window !== "undefined") {
   window.addEventListener("storage", (event) => {
-    if (event.key === STORAGE_KEY) notify(readStoredSession());
+    if (event.key === STORAGE_KEY) {
+      validatedAccessToken = null;
+      notify(readStoredSession());
+    }
   });
 }
