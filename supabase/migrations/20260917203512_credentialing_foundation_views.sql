@@ -1,0 +1,3 @@
+-- Backfilled migration marker for a remote-applied credentialing migration.
+-- Current credentialing schema and protections are consolidated by the later
+-- credentialing integrity synchronization migration in this branch.
