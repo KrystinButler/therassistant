@@ -9,6 +9,8 @@ import {
   submitAppeal,
   writeOffDenial,
 } from "./denial-repository";
+import { saveDenialFollowUp, type DenialFollowUpInput } from "./denial-follow-up";
+import { DenialWorkDrawer } from "./denial-work-drawer";
 import {
   deferDenial,
   getDenialsQueueData,
@@ -16,7 +18,7 @@ import {
   type DenialAppealRow,
   type DenialQueueRow,
 } from "./denials-queue-repository";
-import { AppealOutcomeDrawer, CreateAppealDrawer, WorkDenialDrawer } from "./ar-work-drawers";
+import { AppealOutcomeDrawer, CreateAppealDrawer } from "./ar-work-drawers";
 
 type Data = Awaited<ReturnType<typeof getDenialsQueueData>>;
 type TabKey = "corrected_claims" | "appeals" | "deferred" | string;
@@ -111,6 +113,7 @@ export function DenialsPage() {
     }),
     [data, payerRows],
   );
+  const denialWorkIndex = denialWork ? tabRows.findIndex((row) => row.id === denialWork.id) : -1;
 
   useEffect(() => {
     if (tabs.includes(tab)) return;
@@ -133,6 +136,11 @@ export function DenialsPage() {
     }
   }
 
+  function openDenialAt(index: number) {
+    const row = tabRows[index];
+    if (row) setDenialWork(row);
+  }
+
   return (
     <>
       <div className="thera-page-header">
@@ -153,7 +161,7 @@ export function DenialsPage() {
                 <h2>Payer Queue</h2>
                 <p>Select a payer, then work the applicable CARC or special queue.</p>
               </div>
-              <select className="thera-input" value={payerId} onChange={(event) => setPayerId(event.target.value)}>
+              <select className="thera-input" value={payerId} onChange={(event) => { setPayerId(event.target.value); setDenialWork(null); }}>
                 {payerOptions.length === 0 && <option value="">No active payer denials</option>}
                 {payerOptions.map((payer) => <option key={payer.id} value={payer.id}>{payer.name}</option>)}
               </select>
@@ -168,7 +176,7 @@ export function DenialsPage() {
           <div className="thera-tabs" style={{ marginBottom: 4 }}>
             {tabs.map((value) => {
               const count = value === "appeals" ? appealRows.length : payerRows.filter((row) => denialTab(row) === value).length;
-              return <button key={value} type="button" className={tab === value ? "thera-tab active" : "thera-tab"} onClick={() => setTab(value)}>{tabLabel(value)} ({count})</button>;
+              return <button key={value} type="button" className={tab === value ? "thera-tab active" : "thera-tab"} onClick={() => { setTab(value); setDenialWork(null); }}>{tabLabel(value)} ({count})</button>;
             })}
           </div>
 
@@ -178,14 +186,21 @@ export function DenialsPage() {
         </div>
       )}
 
-      <WorkDenialDrawer
+      <DenialWorkDrawer
         open={Boolean(denialWork)}
         onOpenChange={(open) => { if (!open) setDenialWork(null); }}
         row={denialWork}
         saving={saving}
+        queuePosition={denialWorkIndex >= 0 ? `${denialWorkIndex + 1} of ${tabRows.length}` : undefined}
+        onPrevious={() => openDenialAt(denialWorkIndex - 1)}
+        onNext={() => openDenialAt(denialWorkIndex + 1)}
+        previousDisabled={denialWorkIndex <= 0}
+        nextDisabled={denialWorkIndex < 0 || denialWorkIndex >= tabRows.length - 1}
         onStartWork={(row) => void act("Denial work started.", () => startDenialWork(row.id))}
-        onCreateAppeal={(row) => { setAppealDenial(row as DenialQueueRow); setDenialWork(null); }}
+        onCreateAppeal={(row) => { setAppealDenial(row); setDenialWork(null); }}
         onWriteOff={(row) => void act("Denial written off under configured policy.", () => writeOffDenial(row.id), () => setDenialWork(null))}
+        onCorrectClaim={(row) => { if (row.claim_id) window.location.href = `/claims/${String(row.claim_id)}`; }}
+        onSaveFollowUp={(row, input: DenialFollowUpInput) => act("Denial follow-up saved.", () => saveDenialFollowUp(row.id, input), () => setDenialWork(null))}
       />
       <CreateAppealDrawer
         open={Boolean(appealDenial)}

@@ -1,15 +1,22 @@
 import { demoInsert, demoSelect, demoUpdate, referenceSelect, type Row } from "../../lib/supabase-demo-client";
 import { classifyDenialPolicy, type DenialPolicy } from "./denials";
+import { isRecoveryAdjustment } from "./variance";
 
 export type DataRow = Row & { id: string };
 export type DenialQueueRow = DataRow & {
   claimNumber: string;
+  payerClaimNumber: string;
   clientName: string;
   payerName: string;
+  providerName: string;
   policy: DenialPolicy;
   activeAppealId: string;
   claimStatus: string;
   workStatus: string;
+  serviceDate: string;
+  chargeAmountCents: number;
+  allowedAmountCents: number;
+  paidAmountCents: number;
 };
 export type DenialAppealRow = DataRow & {
   claimNumber: string;
@@ -26,18 +33,26 @@ function personName(row?: Row) {
   return [row.first_name, row.last_name].filter(Boolean).join(" ") || "—";
 }
 
+function total(rows: DataRow[], field: string) {
+  return rows.reduce((sum, row) => sum + Number(row[field] ?? 0), 0);
+}
+
 export async function getDenialsQueueData() {
-  const [denials, claims, clients, payers, appeals, workItems] = await Promise.all([
+  const [denials, claims, clients, providers, payers, appeals, workItems, allocations, adjustments] = await Promise.all([
     demoSelect<DataRow>("denials", { order: "created_at.desc" }),
     demoSelect<DataRow>("professional_claims", { order: "created_at.desc" }),
     demoSelect<DataRow>("clients"),
+    demoSelect<DataRow>("providers"),
     referenceSelect<DataRow>("payers", { order: "name.asc" }),
     demoSelect<DataRow>("appeals", { order: "created_at.desc" }),
     demoSelect<DataRow>("workqueue_items", { order: "created_at.desc" }),
+    demoSelect<DataRow>("payment_allocations", { order: "created_at.desc" }),
+    demoSelect<DataRow>("adjustments", { order: "created_at.desc" }),
   ]);
 
   const claimsById = new Map(claims.map((row) => [row.id, row]));
   const clientsById = new Map(clients.map((row) => [row.id, row]));
+  const providersById = new Map(providers.map((row) => [row.id, row]));
   const payersById = new Map(payers.map((row) => [row.id, row]));
   const denialsById = new Map(denials.map((row) => [row.id, row]));
 
@@ -67,15 +82,35 @@ export async function getDenialsQueueData() {
     const clientId = String(denial.client_id ?? claim?.client_id ?? "");
     const payerId = String(denial.payer_id ?? claim?.payer_id ?? "");
     const work = activeWorkByDenial.get(denial.id);
+    const claimId = String(claim?.id ?? "");
+    const claimAllocations = allocations.filter((row) => String(row.claim_id ?? "") === claimId && !row.reversed_at);
+    const claimAdjustments = adjustments.filter((row) =>
+      String(row.claim_id ?? "") === claimId
+      && !["reversed", "voided"].includes(String(row.adjustment_status ?? ""))
+      && !isRecoveryAdjustment(row.adjustment_type),
+    );
+    const chargeAmountCents = Number(claim?.total_charge_cents ?? 0);
+    const paidAmountCents = total(claimAllocations, "amount_cents");
+    const explicitAllowedCents = Number(claim?.allowed_amount_cents ?? claim?.allowed_cents ?? 0);
+    const allowedAmountCents = explicitAllowedCents > 0
+      ? explicitAllowedCents
+      : Math.max(0, chargeAmountCents - total(claimAdjustments, "amount_cents"));
+
     return {
       ...denial,
       claimNumber: String(claim?.patient_control_number ?? "—"),
+      payerClaimNumber: String(claim?.payer_claim_number ?? "—"),
       clientName: personName(clientsById.get(clientId)),
       payerName: String(payersById.get(payerId)?.name ?? "—"),
+      providerName: personName(providersById.get(String(claim?.rendering_provider_id ?? ""))),
       policy: classifyDenialPolicy(denial.denial_category),
       activeAppealId: activeAppealByDenial.get(denial.id)?.id ?? "",
       claimStatus: String(claim?.claim_status ?? ""),
       workStatus: String(work?.workqueue_status ?? ""),
+      serviceDate: String(claim?.service_date_from ?? ""),
+      chargeAmountCents,
+      allowedAmountCents,
+      paidAmountCents,
     };
   });
 

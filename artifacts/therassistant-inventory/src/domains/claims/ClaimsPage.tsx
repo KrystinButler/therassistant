@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link } from "wouter";
 
 import { StatusBadge } from "../../components/status-badge";
 import { money, shortDate } from "../../lib/format";
 import { getClaimsTab, getOperationalHome, type ClaimsTab } from "../rcm/queue-routing";
+import { ClaimWorkDrawer, type ClaimWorkRecord } from "./claim-work-drawer";
 import { deferClaim, getClaimsQueueData, resumeClaim, type ClaimsQueueRow } from "./claims-queue-repository";
 
 const CLAIM_TABS: ReadonlyArray<[ClaimsTab, string]> = [
@@ -16,10 +16,29 @@ const CLAIM_TABS: ReadonlyArray<[ClaimsTab, string]> = [
   ["120_plus", "120+ Days"],
 ];
 
+function asDrawerClaim(row: ClaimsQueueRow): ClaimWorkRecord {
+  return {
+    id: row.id,
+    patientControlNumber: String(row.patient_control_number ?? ""),
+    payerClaimNumber: row.payer_claim_number ? String(row.payer_claim_number) : null,
+    claimStatus: String(row.claim_status ?? "submitted"),
+    serviceDateFrom: row.service_date_from ? String(row.service_date_from) : null,
+    totalChargeCents: Number(row.total_charge_cents ?? 0),
+    paidAmountCents: row.paidAmountCents,
+    openBalanceCents: row.openBalanceCents,
+    submittedAt: row.submittedAt,
+    clearinghouseStatus: row.clearinghouseStatus,
+    clientName: row.clientName,
+    payerName: row.payerName,
+    renderingProviderName: row.providerName,
+  };
+}
+
 export function ClaimsPage() {
   const [rows, setRows] = useState<ClaimsQueueRow[]>([]);
   const [payerId, setPayerId] = useState("");
   const [tab, setTab] = useState<ClaimsTab>("no_response");
+  const [activeClaimId, setActiveClaimId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [savingId, setSavingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -88,6 +107,13 @@ export function ClaimsPage() {
   }, [payerRows]);
 
   const visible = rowsByTab.get(tab) ?? [];
+  const activeIndex = visible.findIndex((claim) => claim.id === activeClaimId);
+  const activeClaim = activeIndex >= 0 ? visible[activeIndex] : null;
+
+  function openAt(index: number) {
+    const claim = visible[index];
+    if (claim) setActiveClaimId(claim.id);
+  }
 
   async function runDefer(claim: ClaimsQueueRow) {
     const note = window.prompt("Why is this claim being deferred?")?.trim();
@@ -98,6 +124,7 @@ export function ClaimsPage() {
     try {
       await deferClaim(claim.id, note);
       setMessage("Claim moved to Deferred.");
+      setActiveClaimId(null);
       setTab("deferred");
       await load();
     } catch (err) {
@@ -114,6 +141,7 @@ export function ClaimsPage() {
     try {
       await resumeClaim(claim.id);
       setMessage("Claim returned to active payer follow-up.");
+      setActiveClaimId(null);
       await load();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unable to resume claim.");
@@ -143,12 +171,12 @@ export function ClaimsPage() {
           <section className="thera-card">
             <div className="thera-card-header"><div><h2>Payer Workqueues</h2><p>Select a payer to work its outstanding claims.</p></div></div>
             <div className="thera-filter-row" style={{ flexWrap: "wrap" }}>
-              {payerQueues.map((payer) => <button type="button" key={payer.id} className={payerId === payer.id ? "thera-action" : "thera-action secondary"} onClick={() => setPayerId(payer.id)}>{payer.name} ({payer.count})</button>)}
+              {payerQueues.map((payer) => <button type="button" key={payer.id} className={payerId === payer.id ? "thera-action" : "thera-action secondary"} onClick={() => { setPayerId(payer.id); setActiveClaimId(null); }}>{payer.name} ({payer.count})</button>)}
             </div>
           </section>
 
           <div className="thera-tabs" role="tablist" aria-label="Claims aging">
-            {CLAIM_TABS.map(([key, label]) => <button type="button" role="tab" aria-selected={tab === key} key={key} className={tab === key ? "thera-tab active" : "thera-tab"} onClick={() => setTab(key)}>{label} ({rowsByTab.get(key)?.length ?? 0})</button>)}
+            {CLAIM_TABS.map(([key, label]) => <button type="button" role="tab" aria-selected={tab === key} key={key} className={tab === key ? "thera-tab active" : "thera-tab"} onClick={() => { setTab(key); setActiveClaimId(null); }}>{label} ({rowsByTab.get(key)?.length ?? 0})</button>)}
           </div>
 
           <section className="thera-card">
@@ -156,7 +184,7 @@ export function ClaimsPage() {
               <table className="thera-table">
                 <thead><tr><th>Claim</th><th>Patient</th><th>DOS</th><th>Provider</th><th>Submitted</th><th>Charge</th><th>Paid</th><th>Open</th><th>Status</th><th>Actions</th></tr></thead>
                 <tbody>{visible.map((claim) => <tr key={claim.id}>
-                  <td><Link className="thera-table-link" href={`/claims/${claim.id}`}>{String(claim.patient_control_number ?? claim.id)}</Link></td>
+                  <td><button type="button" className="thera-table-link" onClick={() => setActiveClaimId(claim.id)}>{String(claim.patient_control_number ?? claim.id)}</button></td>
                   <td>{claim.clientName}</td>
                   <td>{shortDate(String(claim.service_date_from ?? ""))}</td>
                   <td>{claim.providerName}</td>
@@ -165,13 +193,30 @@ export function ClaimsPage() {
                   <td>{money(claim.paidAmountCents)}</td>
                   <td>{money(claim.openBalanceCents)}</td>
                   <td><StatusBadge value={String(claim.claim_status ?? "submitted")} /></td>
-                  <td><div className="thera-filter-row"><Link className="thera-action secondary" href={`/claims/${claim.id}`}>Open Claim</Link>{claim.deferred ? <button type="button" className="thera-action" disabled={savingId === claim.id} onClick={() => void runResume(claim)}>Resume</button> : <button type="button" className="thera-action secondary" disabled={savingId === claim.id} onClick={() => void runDefer(claim)}>Defer</button>}</div></td>
+                  <td><div className="thera-filter-row"><button type="button" className="thera-action" onClick={() => setActiveClaimId(claim.id)}>Work Claim</button>{claim.deferred ? <button type="button" className="thera-action secondary" disabled={savingId === claim.id} onClick={() => void runResume(claim)}>Resume</button> : <button type="button" className="thera-action secondary" disabled={savingId === claim.id} onClick={() => void runDefer(claim)}>Defer</button>}</div></td>
                 </tr>)}</tbody>
               </table>
             </div>}
           </section>
         </div>
       )}
+
+      <ClaimWorkDrawer
+        claim={activeClaim ? asDrawerClaim(activeClaim) : null}
+        open={Boolean(activeClaim)}
+        mode="follow_up"
+        onOpenChange={(open) => {
+          if (!open) {
+            setActiveClaimId(null);
+            void load();
+          }
+        }}
+        queuePosition={activeClaim ? `${activeIndex + 1} of ${visible.length}` : undefined}
+        onPrevious={() => openAt(activeIndex - 1)}
+        onNext={() => openAt(activeIndex + 1)}
+        previousDisabled={activeIndex <= 0}
+        nextDisabled={activeIndex < 0 || activeIndex >= visible.length - 1}
+      />
     </>
   );
 }
