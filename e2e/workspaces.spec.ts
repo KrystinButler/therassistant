@@ -33,16 +33,19 @@ test("provider root redirects to Schedule and does not expose Overview or Home",
   await expect(nav.getByRole("link", { name: "Home", exact: true })).toHaveCount(0);
 });
 
-test("demo exposes canonical RCM workqueues without retired center or workflow labels", async ({ page }) => {
-  await page.goto("/demo");
-  await expect(page.getByRole("heading", { level: 1, name: "Therassistant Phase 1 Demo" })).toBeVisible();
+test("production Revenue Cycle navigation exposes canonical workqueues without retired labels", async ({ page }) => {
+  await page.goto("/claims");
+  await expect(page.getByRole("heading", { level: 1, name: "Claims" })).toBeVisible();
+
+  const nav = page.getByRole("navigation", { name: "Primary navigation" });
+  await expect(nav.getByRole("button", { name: /Revenue Cycle/ })).toHaveAttribute("aria-expanded", "true");
 
   for (const label of ["Charges", "Rejections", "Claims", "Denials", "Payments"]) {
-    await expect(page.getByRole("link", { name: label, exact: true })).toBeVisible();
+    await expect(nav.getByRole("link", { name: label, exact: true })).toBeVisible();
   }
 
-  await expect(page.getByText("Command Center", { exact: true })).toHaveCount(0);
-  await expect(page.getByText("Work Center", { exact: true })).toHaveCount(0);
-  await expect(page.getByText("Claim Submission / 837P", { exact: true })).toHaveCount(0);
+  await expect(nav.getByText("Command Center", { exact: true })).toHaveCount(0);
+  await expect(nav.getByText("Work Center", { exact: true })).toHaveCount(0);
+  await expect(nav.getByText("Claim Submission / 837P", { exact: true })).toHaveCount(0);
   await expect(page.getByText(/operational workspace/i)).toHaveCount(0);
 });
