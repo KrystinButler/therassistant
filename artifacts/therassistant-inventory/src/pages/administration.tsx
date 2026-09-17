@@ -3,13 +3,6 @@ import { Link } from "wouter";
 export function AdministrationPage() {
   const tools = [
     {
-      name: "Database Inventory",
-      description:
-        "Review the original Therassistant Supabase schema inventory, database objects, policies, functions, triggers, and metadata.",
-      href: "/administration/database-inventory",
-      available: true,
-    },
-    {
       name: "Providers",
       description:
         "Provider operational workspace and billing-readiness issues.",
@@ -50,9 +43,8 @@ export function AdministrationPage() {
           <h1>Administration</h1>
 
           <p>
-            Configuration, database visibility,
-            access control, auditing, and practice
-            management.
+            Configuration, access control, auditing,
+            and practice management.
           </p>
         </div>
       </div>
@@ -75,7 +67,7 @@ export function AdministrationPage() {
               </Link>
             ) : (
               <span className="thera-coming">
-                Later Demo Phase
+                Not yet available
               </span>
             )}
           </div>
