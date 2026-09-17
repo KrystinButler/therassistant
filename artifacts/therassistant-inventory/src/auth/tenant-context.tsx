@@ -1,5 +1,6 @@
 import {
   createContext,
+  useCallback,
   useContext,
   useEffect,
   useMemo,
@@ -18,6 +19,8 @@ type TenantRow = {
   status: string;
 };
 
+type OrganizationType = "billing_company" | "practice";
+
 type TenantContextValue = {
   tenantId: string | null;
   tenantName: string | null;
@@ -25,6 +28,8 @@ type TenantContextValue = {
   roles: string[];
   loading: boolean;
   error: string | null;
+  needsOrganizationSetup: boolean;
+  bootstrapOrganization(name: string, type: OrganizationType): Promise<void>;
 };
 
 const TenantContext = createContext<TenantContextValue | null>(null);
@@ -47,12 +52,15 @@ export function TenantProvider({ children }: { children: ReactNode }) {
   const [roles, setRoles] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [needsOrganizationSetup, setNeedsOrganizationSetup] = useState(false);
+  const [reloadVersion, setReloadVersion] = useState(0);
 
   useEffect(() => {
     let active = true;
     setActiveTenantId(null);
     setTenant(null);
     setRoles([]);
+    setNeedsOrganizationSetup(false);
 
     if (!user) {
       setLoading(false);
@@ -74,7 +82,11 @@ export function TenantProvider({ children }: { children: ReactNode }) {
           },
         );
         const tenantId = memberships[0]?.tenant_id;
-        if (!tenantId) throw new Error("Your account is not assigned to an active Therassistant organization.");
+        if (!tenantId) {
+          if (!active) return;
+          setNeedsOrganizationSetup(true);
+          return;
+        }
 
         const [tenantRows, roleRows] = await Promise.all([
           selectRows<TenantRow>("tenants", { id: `eq.${tenantId}`, limit: "1" }),
@@ -104,7 +116,44 @@ export function TenantProvider({ children }: { children: ReactNode }) {
       active = false;
       setActiveTenantId(null);
     };
-  }, [user]);
+  }, [user, reloadVersion]);
+
+  const bootstrapOrganization = useCallback(
+    async (name: string, type: OrganizationType) => {
+      if (!user) throw new Error("An authenticated account is required.");
+      const organizationName = name.trim();
+      if (!organizationName) throw new Error("Organization name is required.");
+
+      const response = await authenticatedFetch(
+        `${SUPABASE_URL}/rest/v1/rpc/bootstrap_tenant_for_user`,
+        {
+          method: "POST",
+          headers: {
+            Accept: "application/json",
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            p_tenant_name: organizationName,
+            p_tenant_type: type,
+            p_timezone: "America/Denver",
+            p_email: user.email ?? null,
+            p_display_name: null,
+          }),
+        },
+      );
+
+      if (!response.ok) {
+        const text = await response.text();
+        throw new Error(
+          `Unable to create your Therassistant organization (${response.status})${text ? `: ${text}` : ""}`,
+        );
+      }
+
+      setNeedsOrganizationSetup(false);
+      setReloadVersion((version) => version + 1);
+    },
+    [user],
+  );
 
   const value = useMemo<TenantContextValue>(
     () => ({
@@ -114,8 +163,10 @@ export function TenantProvider({ children }: { children: ReactNode }) {
       roles,
       loading,
       error,
+      needsOrganizationSetup,
+      bootstrapOrganization,
     }),
-    [tenant, roles, loading, error],
+    [tenant, roles, loading, error, needsOrganizationSetup, bootstrapOrganization],
   );
 
   return <TenantContext.Provider value={value}>{children}</TenantContext.Provider>;
