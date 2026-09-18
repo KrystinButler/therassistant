@@ -428,20 +428,17 @@ export function CredentialingPage() {
                   <th>Priority</th>
                   <th>Due</th>
                   <th>Source</th>
+                  <th>Action</th>
                 </tr>
               </thead>
               <tbody>
                 {credentialingWork.length === 0 ? (
-                  <tr><td colSpan={6}>No open credentialing work.</td></tr>
+                  <tr><td colSpan={7}>No open credentialing work.</td></tr>
                 ) : null}
                 {credentialingWork.map((item) => {
                   const linkedCase = caseForWorkItem(item);
                   return (
-                    <tr
-                      key={item.id}
-                      onClick={() => linkedCase && openCase(linkedCase)}
-                      style={{ cursor: linkedCase ? "pointer" : "default" }}
-                    >
+                    <tr key={item.id}>
                       <td>
                         <strong>{item.title}</strong>
                         {item.description ? <div>{item.description}</div> : null}
@@ -451,6 +448,13 @@ export function CredentialingPage() {
                       <td><StatusBadge value={item.priority} /></td>
                       <td>{shortDate(item.due_date)}</td>
                       <td>{linkedCase?.provider_name || linkedCase?.payer_name || "Credentialing"}</td>
+                      <td>
+                        {linkedCase ? (
+                          <button type="button" className="thera-action secondary" onClick={() => openCase(linkedCase)}>
+                            Open Case
+                          </button>
+                        ) : "—"}
+                      </td>
                     </tr>
                   );
                 })}
@@ -484,14 +488,15 @@ export function CredentialingPage() {
                   <th>Age</th>
                   <th>Next Follow-Up</th>
                   <th>Priority</th>
+                  <th>Action</th>
                 </tr>
               </thead>
               <tbody>
                 {cases.length === 0 ? (
-                  <tr><td colSpan={9}>No credentialing applications on file.</td></tr>
+                  <tr><td colSpan={10}>No credentialing applications on file.</td></tr>
                 ) : null}
                 {cases.map((row) => (
-                  <tr key={row.application_id} onClick={() => openCase(row)} style={{ cursor: "pointer" }}>
+                  <tr key={row.application_id}>
                     <td>{row.provider_name || "—"}</td>
                     <td>{row.payer_name || "—"}</td>
                     <td>{row.payer_plan_name || "All products"}</td>
@@ -501,6 +506,11 @@ export function CredentialingPage() {
                     <td>{row.application_age_days ?? "—"}{row.application_age_days != null ? " days" : ""}</td>
                     <td>{shortDate(row.next_followup_date)}</td>
                     <td><StatusBadge value={row.priority} /></td>
+                    <td>
+                      <button type="button" className="thera-action secondary" onClick={() => openCase(row)}>
+                        Open Case
+                      </button>
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -534,14 +544,15 @@ export function CredentialingPage() {
                   <th>Directory</th>
                   <th>Effective</th>
                   <th>Verified</th>
+                  <th>Action</th>
                 </tr>
               </thead>
               <tbody>
                 {participation.length === 0 ? (
-                  <tr><td colSpan={10}>No payer enrollment records on file.</td></tr>
+                  <tr><td colSpan={11}>No payer enrollment records on file.</td></tr>
                 ) : null}
                 {participation.map((row) => (
-                  <tr key={row.enrollment_id} onClick={() => openCase(row)} style={{ cursor: "pointer" }}>
+                  <tr key={row.enrollment_id}>
                     <td>{row.provider_name || "—"}</td>
                     <td>{row.payer_name || "—"}</td>
                     <td>{row.payer_plan_name || "All products"}</td>
@@ -552,6 +563,11 @@ export function CredentialingPage() {
                     <td><StatusBadge value={row.directory_status || "unknown"} /></td>
                     <td>{shortDate(row.effective_date)}</td>
                     <td>{shortDate(row.participation_last_verified_at)}</td>
+                    <td>
+                      <button type="button" className="thera-action secondary" onClick={() => openCase(row)}>
+                        Open Case
+                      </button>
+                    </td>
                   </tr>
                 ))}
               </tbody>
