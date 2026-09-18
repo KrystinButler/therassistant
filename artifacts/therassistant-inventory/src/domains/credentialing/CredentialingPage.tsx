@@ -301,8 +301,10 @@ export function CredentialingPage() {
     setLoading(true);
     setError(null);
 
-    void getCurrentTenantId()
-      .then(async (tenantId) => {
+    void (async () => {
+      try {
+        const tenantId = await getCurrentTenantId();
+
         await Promise.allSettled([
           tenantRpc<number>("sync_provider_revalidation_work", {
             p_tenant_id: tenantId,
@@ -311,26 +313,8 @@ export function CredentialingPage() {
             p_tenant_id: tenantId,
           }),
         ]);
-      })
-      .catch(() => null);
 
-    Promise.all([
-      tenantSelect("v_credentialing_case_summary"),
-      tenantSelect("v_provider_enrollment_matrix"),
-      tenantSelect("v_credentialing_expirations"),
-      tenantSelect("workqueue_items"),
-      tenantSelect("credentialing_requirements"),
-      tenantSelect("credentialing_followups"),
-      tenantSelect("status_history"),
-      tenantSelect("provider_payer_enrollments"),
-      tenantSelect("documents"),
-      tenantSelect("credentialing_document_links"),
-      tenantSelect("participation_verifications"),
-      tenantSelect("provider_network_participation"),
-      tenantSelect("roster_actions"),
-    ])
-      .then(
-        ([
+        const [
           caseRows,
           matrixRows,
           expirationRows,
@@ -344,34 +328,47 @@ export function CredentialingPage() {
           verificationHistoryRows,
           networkParticipationHistoryRows,
           rosterActionRows,
-        ]) => {
-          if (!active) return;
-          setCases(caseRows);
-          setParticipation(matrixRows);
-          setExpirations(expirationRows);
-          setWorkItems(workRows);
-          setRequirements(requirementRows);
-          setFollowups(followupRows);
-          setStatusHistory(historyRows);
-          setEnrollments(enrollmentRows);
-          setDocuments(documentRows);
-          setDocumentLinks(documentLinkRows);
-          setVerificationRows(verificationHistoryRows);
-          setNetworkParticipationRows(networkParticipationHistoryRows);
-          setRosterActions(rosterActionRows);
-        },
-      )
-      .catch((err: unknown) => {
+        ] = await Promise.all([
+          tenantSelect("v_credentialing_case_summary"),
+          tenantSelect("v_provider_enrollment_matrix"),
+          tenantSelect("v_credentialing_expirations"),
+          tenantSelect("workqueue_items"),
+          tenantSelect("credentialing_requirements"),
+          tenantSelect("credentialing_followups"),
+          tenantSelect("status_history"),
+          tenantSelect("provider_payer_enrollments"),
+          tenantSelect("documents"),
+          tenantSelect("credentialing_document_links"),
+          tenantSelect("participation_verifications"),
+          tenantSelect("provider_network_participation"),
+          tenantSelect("roster_actions"),
+        ]);
+
+        if (!active) return;
+        setCases(caseRows);
+        setParticipation(matrixRows);
+        setExpirations(expirationRows);
+        setWorkItems(workRows);
+        setRequirements(requirementRows);
+        setFollowups(followupRows);
+        setStatusHistory(historyRows);
+        setEnrollments(enrollmentRows);
+        setDocuments(documentRows);
+        setDocumentLinks(documentLinkRows);
+        setVerificationRows(verificationHistoryRows);
+        setNetworkParticipationRows(networkParticipationHistoryRows);
+        setRosterActions(rosterActionRows);
+      } catch (err: unknown) {
         if (!active) return;
         setError(
           err instanceof Error
             ? err.message
             : "Unable to load credentialing workspace",
         );
-      })
-      .finally(() => {
+      } finally {
         if (active) setLoading(false);
-      });
+      }
+    })();
 
     return () => {
       active = false;
