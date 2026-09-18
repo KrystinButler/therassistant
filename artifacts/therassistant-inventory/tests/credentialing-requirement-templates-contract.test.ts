@@ -17,7 +17,7 @@ const templatePanel = readFileSync(
 
 const migration = readFileSync(
   new URL(
-    "../../../supabase/migrations/20260918000000_credentialing_requirement_templates.sql",
+    "../../../supabase/migrations/20260918044103_credentialing_requirement_templates.sql",
     import.meta.url,
   ),
   "utf8",
