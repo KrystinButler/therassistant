@@ -1,7 +1,5 @@
 import {
-  getMyPortalContext,
   portalRpc,
-  portalSelect,
   type PortalRow as DataValue,
 } from "./portal-client";
 import {
@@ -15,14 +13,16 @@ import {
 
 type DataRow = DataValue & { id: string };
 
-function requireActivePortalContext(
-  context: Awaited<ReturnType<typeof getMyPortalContext>>,
-) {
-  if (!context || context.status !== "active") {
-    throw new Error("Active patient portal access is required.");
-  }
-  return context;
-}
+type PatientPortalAggregate = {
+  patient: PortalRow | null;
+  appointments: PortalRow[];
+  insurancePolicies: PortalRow[];
+  documents: PortalRow[];
+  checkins: PortalRow[];
+  journalEntries: PortalRow[];
+  balance: PortalRow | null;
+  treatmentGoals: DataRow[];
+};
 
 export function recordCheckIn(
   appointmentId: string,
@@ -58,83 +58,28 @@ export function addPortalJournalEntry(input: JournalEntryInput) {
 }
 
 export async function getPatientPortalData() {
-  const context = requireActivePortalContext(await getMyPortalContext());
-  const patientId = context.client_id;
-
-  const [
-    patients,
-    appointments,
-    policies,
-    documents,
-    checkins,
-    journalEntries,
-    balances,
-    treatmentPlans,
-  ] = await Promise.all([
-    portalSelect<DataRow>("clients", {
-      id: `eq.${patientId}`,
-      limit: "1",
-    }),
-    portalSelect<DataRow>("appointments", {
-      client_id: `eq.${patientId}`,
-      order: "starts_at.asc",
-    }),
-    portalSelect<DataRow>("client_insurance_policies", {
-      client_id: `eq.${patientId}`,
-      order: "created_at.asc",
-    }),
-    portalSelect<DataRow>("documents", {
-      client_id: `eq.${patientId}`,
-      order: "created_at.desc",
-    }),
-    portalSelect<DataRow>("client_checkins", {
-      client_id: `eq.${patientId}`,
-      order: "created_at.desc",
-    }),
-    portalSelect<DataRow>("patient_journal_entries", {
-      client_id: `eq.${patientId}`,
-      order: "entry_date.desc,created_at.desc",
-    }),
-    portalSelect<DataRow>("client_balance_summaries", {
-      client_id: `eq.${patientId}`,
-      limit: "1",
-    }),
-    portalSelect<DataRow>("treatment_plans", {
-      client_id: `eq.${patientId}`,
-      order: "effective_date.desc",
-    }),
-  ]);
-
-  const patient = patients[0];
-  if (!patient) throw new Error("Patient portal profile is unavailable.");
-
-  const portalData = buildPatientPortalData({
-    patient: patient as PortalRow,
-    appointments: appointments as PortalRow[],
-    policies: policies as PortalRow[],
-    documents: documents as PortalRow[],
-    checkins: checkins as PortalRow[],
-    journalEntries: journalEntries as PortalRow[],
-    balance: (balances[0] as PortalRow | undefined) ?? null,
-  });
-
-  const activePlan =
-    treatmentPlans.find((row) => String(row.status ?? "") === "active")
-    ?? treatmentPlans[0];
-
-  const [treatmentGoals, provider] = await Promise.all([
-    activePlan
-      ? portalSelect<DataRow>("treatment_plan_goals", {
-          treatment_plan_id: `eq.${activePlan.id}`,
-          order: "created_at.asc",
-        })
-      : Promise.resolve([] as DataRow[]),
+  const [payload, provider] = await Promise.all([
+    portalRpc<PatientPortalAggregate>("get_my_patient_portal_data"),
     portalRpc<DataRow | null>("get_my_portal_provider_summary"),
   ]);
 
+  if (!payload.patient) {
+    throw new Error("Patient portal profile is unavailable.");
+  }
+
+  const portalData = buildPatientPortalData({
+    patient: payload.patient,
+    appointments: payload.appointments,
+    policies: payload.insurancePolicies,
+    documents: payload.documents,
+    checkins: payload.checkins,
+    journalEntries: payload.journalEntries,
+    balance: payload.balance,
+  });
+
   return {
     ...portalData,
-    treatmentGoals,
+    treatmentGoals: payload.treatmentGoals,
     provider,
   };
 }
