@@ -14,6 +14,7 @@ type InviteContext = {
   access_id?: string | null;
   access_status?: ExistingAccessStatus;
   access_user_id?: string | null;
+  access_invited_email?: string | null;
   access_invited_at?: string | null;
 };
 
@@ -137,16 +138,27 @@ Deno.serve(async (req: Request) => {
   const context = contextData as InviteContext;
   const accessStatus = (context.access_status ?? null) as ExistingAccessStatus;
   const email = String(context.email ?? "").trim().toLowerCase();
+  const inviteAction = decideInviteAction(accessStatus);
 
-  if (decideInviteAction(accessStatus) === "return-existing") {
+  if (inviteAction === "return-existing") {
     return json(
       {
         client_id: clientId,
         status: accessStatus,
-        invited_email: email || null,
+        invited_email: context.access_invited_email ?? null,
         invited_at: context.access_invited_at ?? null,
       },
       200,
+    );
+  }
+
+  if (inviteAction === "block-revoked") {
+    return json(
+      {
+        error:
+          "Patient portal access was revoked. Automatic re-enrollment is not supported in this release.",
+      },
+      409,
     );
   }
 
@@ -175,6 +187,25 @@ Deno.serve(async (req: Request) => {
   if (inviteError || !invited.user) {
     const duplicate = isExistingUserError(inviteError?.message);
 
+    if (duplicate) {
+      const { data: latestContext } = await userClient.rpc(
+        "get_patient_portal_invite_context",
+        { p_client_id: clientId },
+      );
+      const latest = latestContext as InviteContext | null;
+      if (latest?.access_status === "active" || latest?.access_status === "invited") {
+        return json(
+          {
+            client_id: clientId,
+            status: latest.access_status,
+            invited_email: latest.access_invited_email ?? null,
+            invited_at: latest.access_invited_at ?? null,
+          },
+          200,
+        );
+      }
+    }
+
     return json(
       {
         error: duplicate
@@ -200,10 +231,22 @@ Deno.serve(async (req: Request) => {
     });
 
   if (mappingError) {
+    let cleanupError: unknown = null;
     try {
-      await admin.auth.admin.deleteUser(invited.user.id);
-    } catch {
-      // Compensating cleanup is best-effort. Never expose admin credentials or internals.
+      const cleanup = await admin.auth.admin.deleteUser(invited.user.id);
+      cleanupError = cleanup.error ?? null;
+    } catch (error) {
+      cleanupError = error;
+    }
+
+    if (cleanupError) {
+      return json(
+        {
+          error:
+            "Portal mapping failed and automatic Auth cleanup did not complete. Administrator action is required before retrying enrollment.",
+        },
+        500,
+      );
     }
 
     return json(
