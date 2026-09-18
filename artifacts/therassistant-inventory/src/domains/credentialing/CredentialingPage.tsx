@@ -81,7 +81,7 @@ const rosterTerminalStatuses = new Set(["confirmed", "cancelled"]);
 const rosterTransitionMap: Record<string, string[]> = {
   not_started: ["ready", "cancelled"],
   ready: ["submitted", "cancelled"],
-  submitted: ["pending", "confirmed", "rejected"],
+  submitted: ["pending", "confirmed", "rejected", "cancelled"],
   pending: ["confirmed", "rejected", "cancelled"],
   rejected: ["ready", "cancelled"],
   confirmed: [],

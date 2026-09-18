@@ -9,7 +9,7 @@ const credentialingPage = readFileSync(
 
 const rosterMigration = readFileSync(
   new URL(
-    "../../../supabase/migrations/20260918040319_normalize_credentialing_roster_rpcs.sql",
+    "../../../supabase/migrations/20260918040734_credentialing_roster_actionable_status_alignment.sql",
     import.meta.url,
   ),
   "utf8",
