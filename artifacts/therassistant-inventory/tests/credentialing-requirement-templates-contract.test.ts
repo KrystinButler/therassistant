@@ -29,8 +29,8 @@ test("credentialing exposes a payer requirement template library", () => {
   assert.match(templatePanel, /Credentialing Requirement Templates/);
   assert.match(templatePanel, /tenantSelect\("credentialing_requirement_templates"/);
   assert.match(templatePanel, /tenantSelect\("credentialing_requirement_template_items"/);
-  assert.match(templatePanel, /tenantSelect\("payers"/);
-  assert.match(templatePanel, /tenantSelect\("payer_plans"/);
+  assert.match(templatePanel, /referenceSelect\("payers"/);
+  assert.match(templatePanel, /referenceSelect\("payer_plans"/);
   assert.match(templatePanel, /tenantInsert\("credentialing_requirement_templates"/);
   assert.match(templatePanel, /tenantInsert\("credentialing_requirement_template_items"/);
 });
