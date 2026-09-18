@@ -175,7 +175,7 @@ test("patient portal repository derives the patient from authenticated context",
     fileURLToPath(new URL("../src/domains/portal/repository.ts", import.meta.url)),
     "utf8",
   );
-  assert.match(source, /getMyPortalContext/);
+  assert.match(source, /get_my_patient_portal_data/);
   assert.match(source, /record_client_checkin/);
   assert.match(source, /portal_save_previsit_checkin/);
   assert.match(source, /portal_add_journal_entry/);
