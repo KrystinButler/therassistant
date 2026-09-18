@@ -18,13 +18,14 @@ import {
 } from "./workflow";
 
 type Row = Record<string, any>;
-type WorkspaceTab = "work" | "applications" | "participation" | "expirations";
+type WorkspaceTab = "work" | "applications" | "participation" | "roster" | "expirations";
 type DrawerTab =
   | "overview"
   | "requirements"
   | "followup"
   | "documents"
   | "verification"
+  | "roster"
   | "history";
 
 type EnrollmentEdit = {
@@ -45,6 +46,51 @@ type VerificationForm = {
   notes: string;
   next_verification_due_date: string;
 };
+
+type RosterActionForm = {
+  action_type: string;
+  requested_change: string;
+  notes: string;
+  due_date: string;
+  priority: string;
+};
+
+type RosterTransitionForm = {
+  status: string;
+  reference_number: string;
+  notes: string;
+};
+
+const rosterActionTypes = [
+  "add_provider",
+  "remove_provider",
+  "update_demographics",
+  "add_location",
+  "remove_location",
+  "correct_name",
+  "correct_npi",
+  "correct_tin",
+  "correct_taxonomy",
+  "add_product",
+  "remove_product",
+  "other",
+] as const;
+
+const rosterTerminalStatuses = new Set(["confirmed", "cancelled"]);
+
+const rosterTransitionMap: Record<string, string[]> = {
+  not_started: ["ready", "cancelled"],
+  ready: ["submitted", "cancelled"],
+  submitted: ["pending", "confirmed", "rejected", "cancelled"],
+  pending: ["confirmed", "rejected", "cancelled"],
+  rejected: ["ready", "cancelled"],
+  confirmed: [],
+  cancelled: [],
+};
+
+function rosterTransitionOptions(status: string): string[] {
+  return rosterTransitionMap[status] ?? [];
+}
 
 const credentialingDocumentTypes = [
   "provider_license",
@@ -106,6 +152,24 @@ function emptyVerificationForm(): VerificationForm {
   };
 }
 
+function emptyRosterActionForm(): RosterActionForm {
+  return {
+    action_type: "add_provider",
+    requested_change: "",
+    notes: "",
+    due_date: "",
+    priority: "normal",
+  };
+}
+
+function emptyRosterTransitionForm(): RosterTransitionForm {
+  return {
+    status: "ready",
+    reference_number: "",
+    notes: "",
+  };
+}
+
 export function CredentialingPage() {
   const [, navigate] = useLocation();
   const [version, setVersion] = useState(0);
@@ -127,6 +191,7 @@ export function CredentialingPage() {
   const [documentLinks, setDocumentLinks] = useState<Row[]>([]);
   const [verificationRows, setVerificationRows] = useState<Row[]>([]);
   const [networkParticipationRows, setNetworkParticipationRows] = useState<Row[]>([]);
+  const [rosterActions, setRosterActions] = useState<Row[]>([]);
 
   const [selectedCase, setSelectedCase] = useState<Row | null>(null);
   const [enrollmentEdit, setEnrollmentEdit] = useState<EnrollmentEdit>(emptyEnrollmentEdit);
@@ -137,6 +202,12 @@ export function CredentialingPage() {
   const [verificationForm, setVerificationForm] = useState<VerificationForm>(emptyVerificationForm);
   const [verificationEvidenceFile, setVerificationEvidenceFile] = useState<File | null>(null);
   const [recordingVerification, setRecordingVerification] = useState(false);
+  const [rosterForm, setRosterForm] = useState<RosterActionForm>(emptyRosterActionForm);
+  const [creatingRosterAction, setCreatingRosterAction] = useState(false);
+  const [selectedRosterActionId, setSelectedRosterActionId] = useState<string | null>(null);
+  const [rosterTransitionForm, setRosterTransitionForm] =
+    useState<RosterTransitionForm>(emptyRosterTransitionForm);
+  const [updatingRosterAction, setUpdatingRosterAction] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -164,6 +235,7 @@ export function CredentialingPage() {
       tenantSelect("credentialing_document_links"),
       tenantSelect("participation_verifications"),
       tenantSelect("provider_network_participation"),
+      tenantSelect("roster_actions"),
     ])
       .then(
         ([
@@ -179,6 +251,7 @@ export function CredentialingPage() {
           documentLinkRows,
           verificationHistoryRows,
           networkParticipationHistoryRows,
+          rosterActionRows,
         ]) => {
           if (!active) return;
           setCases(caseRows);
@@ -193,6 +266,7 @@ export function CredentialingPage() {
           setDocumentLinks(documentLinkRows);
           setVerificationRows(verificationHistoryRows);
           setNetworkParticipationRows(networkParticipationHistoryRows);
+          setRosterActions(rosterActionRows);
         },
       )
       .catch((err: unknown) => {
@@ -254,6 +328,29 @@ export function CredentialingPage() {
     ["not_listed", "inaccurate"].includes(String(row.directory_status || "")),
   ).length;
 
+  const activeRosterActions = rosterActions.filter(
+    (row) => !rosterTerminalStatuses.has(String(row.status || "")),
+  ).length;
+
+  const rosterRows = rosterActions
+    .map((action) => {
+      const caseRow =
+        participation.find((row) => row.enrollment_id === action.enrollment_id) ??
+        cases.find((row) => row.enrollment_id === action.enrollment_id) ??
+        null;
+      const work =
+        workItems.find(
+          (row) =>
+            row.workqueue_type === "roster_action" &&
+            row.source_object_type === "roster_action" &&
+            row.source_object_id === action.id,
+        ) ?? null;
+      return { action, caseRow, work };
+    })
+    .toSorted((a, b) =>
+      String(b.action.created_at || "").localeCompare(String(a.action.created_at || "")),
+    );
+
   const selectedEnrollment = selectedCase?.enrollment_id
     ? enrollments.find((row) => row.id === selectedCase.enrollment_id) ?? null
     : null;
@@ -311,6 +408,16 @@ export function CredentialingPage() {
         rows.findIndex((candidate) => candidate.document.id === entry.document.id) === index,
     );
 
+  const selectedRosterActions = selectedCase?.enrollment_id
+    ? rosterActions
+        .filter((row) => row.enrollment_id === selectedCase.enrollment_id)
+        .toSorted((a, b) => String(b.created_at || "").localeCompare(String(a.created_at || "")))
+    : [];
+
+  const selectedRosterAction = selectedRosterActionId
+    ? selectedRosterActions.find((row) => row.id === selectedRosterActionId) ?? null
+    : null;
+
   const selectedWork = selectedCase
     ? credentialingWork.filter((row) =>
         [
@@ -318,6 +425,7 @@ export function CredentialingPage() {
           selectedCase.enrollment_id,
           selectedCase.participation_id,
           selectedCase.provider_id,
+          ...selectedRosterActions.map((action) => action.id),
         ]
           .filter(Boolean)
           .includes(row.source_object_id),
@@ -360,6 +468,9 @@ export function CredentialingPage() {
     setDocumentFile(null);
     setVerificationForm(emptyVerificationForm());
     setVerificationEvidenceFile(null);
+    setRosterForm(emptyRosterActionForm());
+    setSelectedRosterActionId(null);
+    setRosterTransitionForm(emptyRosterTransitionForm());
   }
 
   function closeCase() {
@@ -370,6 +481,9 @@ export function CredentialingPage() {
     setDocumentFile(null);
     setVerificationForm(emptyVerificationForm());
     setVerificationEvidenceFile(null);
+    setRosterForm(emptyRosterActionForm());
+    setSelectedRosterActionId(null);
+    setRosterTransitionForm(emptyRosterTransitionForm());
   }
 
   function openCaseAt(index: number) {
@@ -579,7 +693,79 @@ export function CredentialingPage() {
     }
   }
 
+  async function createRosterAction() {
+    if (!selectedCase?.enrollment_id) return;
+    setCreatingRosterAction(true);
+    setError(null);
+    try {
+      const tenantId = await getCurrentTenantId();
+      await tenantRpc<Row[]>("create_roster_action_work", {
+        p_tenant_id: tenantId,
+        p_enrollment_id: selectedCase.enrollment_id,
+        p_action_type: rosterForm.action_type,
+        p_participation_id: selectedParticipationId,
+        p_requested_change: rosterForm.requested_change.trim()
+          ? { details: rosterForm.requested_change.trim() }
+          : {},
+        p_notes: rosterForm.notes.trim() || null,
+        p_due_date: rosterForm.due_date || null,
+        p_priority: rosterForm.priority,
+      });
+      setRosterForm(emptyRosterActionForm());
+      setVersion((value) => value + 1);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to create roster action");
+    } finally {
+      setCreatingRosterAction(false);
+    }
+  }
+
+  function manageRosterAction(action: Row) {
+    const currentStatus = String(action.status || "ready");
+    const nextStatuses = rosterTransitionOptions(currentStatus);
+    setSelectedRosterActionId(String(action.id));
+    setRosterTransitionForm({
+      status: nextStatuses[0] || currentStatus,
+      reference_number: String(action.reference_number || ""),
+      notes: String(action.notes || ""),
+    });
+  }
+
+  async function updateRosterAction() {
+    if (!selectedRosterAction) return;
+    setUpdatingRosterAction(true);
+    setError(null);
+    try {
+      const tenantId = await getCurrentTenantId();
+      await tenantRpc<unknown>("transition_roster_action", {
+        p_tenant_id: tenantId,
+        p_roster_action_id: selectedRosterAction.id,
+        p_status: rosterTransitionForm.status,
+        p_reference_number: rosterTransitionForm.reference_number.trim() || null,
+        p_notes: rosterTransitionForm.notes.trim() || null,
+      });
+      setSelectedRosterActionId(null);
+      setRosterTransitionForm(emptyRosterTransitionForm());
+      setVersion((value) => value + 1);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to update roster action");
+    } finally {
+      setUpdatingRosterAction(false);
+    }
+  }
+
   function caseForWorkItem(item: Row) {
+    if (item.source_object_type === "roster_action") {
+      const rosterAction = rosterActions.find((row) => row.id === item.source_object_id);
+      if (rosterAction) {
+        return (
+          cases.find((row) => row.enrollment_id === rosterAction.enrollment_id) ??
+          participation.find((row) => row.enrollment_id === rosterAction.enrollment_id) ??
+          null
+        );
+      }
+    }
+
     return (
       cases.find((row) =>
         [
@@ -648,6 +834,10 @@ export function CredentialingPage() {
           <div className="thera-metric-label">Network Issues</div>
           <div className="thera-metric-value">{networkIssues}</div>
         </div>
+        <div className="thera-metric-card">
+          <div className="thera-metric-label">Roster Actions</div>
+          <div className="thera-metric-value">{activeRosterActions}</div>
+        </div>
       </div>
 
       <div
@@ -660,6 +850,7 @@ export function CredentialingPage() {
           ["work", "Work Queue"],
           ["applications", "Applications"],
           ["participation", "Participation Matrix"],
+          ["roster", "Roster Management"],
           ["expirations", "Expirations"],
         ] as const).map(([id, label]) => (
           <button
@@ -847,6 +1038,75 @@ export function CredentialingPage() {
         </section>
       ) : null}
 
+      {!loading && workspaceTab === "roster" ? (
+        <section className="thera-card">
+          <div className="thera-card-header">
+            <div>
+              <h2>Roster Management</h2>
+              <p>
+                Add, remove and correct provider participation data with each payer.
+                Every active roster action is backed by the universal workqueue.
+              </p>
+            </div>
+          </div>
+          <div className="thera-table-wrap">
+            <table className="thera-table">
+              <thead>
+                <tr>
+                  <th>Provider</th>
+                  <th>Payer</th>
+                  <th>Product</th>
+                  <th>Roster Action</th>
+                  <th>Status</th>
+                  <th>Requested</th>
+                  <th>Submitted</th>
+                  <th>Confirmed</th>
+                  <th>Reference</th>
+                  <th>Due</th>
+                  <th>Priority</th>
+                  <th>Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rosterRows.length === 0 ? (
+                  <tr><td colSpan={12}>No roster actions recorded.</td></tr>
+                ) : null}
+                {rosterRows.map(({ action, caseRow, work }) => (
+                  <tr key={action.id}>
+                    <td>{caseRow?.provider_name || "Provider unavailable"}</td>
+                    <td>{caseRow?.payer_name || "Payer unavailable"}</td>
+                    <td>{caseRow?.payer_plan_name || "All products"}</td>
+                    <td>{String(action.action_type || "—").replaceAll("_", " ")}</td>
+                    <td><StatusBadge value={action.status} /></td>
+                    <td>{shortDate(action.requested_date)}</td>
+                    <td>{shortDate(action.submitted_date)}</td>
+                    <td>{shortDate(action.confirmed_date)}</td>
+                    <td>{action.reference_number || "—"}</td>
+                    <td>{shortDate(work?.due_date)}</td>
+                    <td><StatusBadge value={work?.priority || "normal"} /></td>
+                    <td>
+                      {caseRow ? (
+                        <button
+                          type="button"
+                          className="thera-action secondary"
+                          onClick={() => {
+                            openCase(caseRow);
+                            setDrawerTab("roster");
+                            manageRosterAction(action);
+                          }}
+                        >
+                          Manage
+                        </button>
+                      ) : "—"}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      ) : null}
+
       {!loading && workspaceTab === "expirations" ? (
         <section className="thera-card">
           <div className="thera-card-header">
@@ -953,6 +1213,7 @@ export function CredentialingPage() {
               ["followup", "Follow-Up"],
               ["documents", "Documents"],
               ["verification", "Network Verification"],
+              ["roster", "Roster"],
               ["history", "History"],
             ] as const).map(([id, label]) => (
               <button
@@ -1492,6 +1753,238 @@ export function CredentialingPage() {
                   </table>
                 </div>
               </section>
+            </div>
+          ) : null}
+
+          {drawerTab === "roster" ? (
+            <div className="thera-stack">
+              <section className="thera-card">
+                <h2>Roster Management</h2>
+                {!selectedCase.enrollment_id ? (
+                  <div className="thera-state">
+                    A payer enrollment is required before roster work can be created.
+                  </div>
+                ) : (
+                  <>
+                    <div className="thera-form-grid">
+                      <label>
+                        Roster Action
+                        <select
+                          className="thera-input"
+                          value={rosterForm.action_type}
+                          onChange={(event) =>
+                            setRosterForm({ ...rosterForm, action_type: event.target.value })
+                          }
+                        >
+                          {rosterActionTypes.map((type) => (
+                            <option key={type} value={type}>
+                              {type.replaceAll("_", " ")}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                      <label>
+                        Priority
+                        <select
+                          className="thera-input"
+                          value={rosterForm.priority}
+                          onChange={(event) =>
+                            setRosterForm({ ...rosterForm, priority: event.target.value })
+                          }
+                        >
+                          <option value="low">Low</option>
+                          <option value="normal">Normal</option>
+                          <option value="high">High</option>
+                          <option value="urgent">Urgent</option>
+                        </select>
+                      </label>
+                      <label>
+                        Due Date
+                        <input
+                          className="thera-input"
+                          type="date"
+                          value={rosterForm.due_date}
+                          onChange={(event) =>
+                            setRosterForm({ ...rosterForm, due_date: event.target.value })
+                          }
+                        />
+                      </label>
+                      <label style={{ gridColumn: "1 / -1" }}>
+                        Requested Change
+                        <textarea
+                          className="thera-input"
+                          rows={3}
+                          placeholder="Describe the exact payer roster change."
+                          value={rosterForm.requested_change}
+                          onChange={(event) =>
+                            setRosterForm({
+                              ...rosterForm,
+                              requested_change: event.target.value,
+                            })
+                          }
+                        />
+                      </label>
+                      <label style={{ gridColumn: "1 / -1" }}>
+                        Notes
+                        <textarea
+                          className="thera-input"
+                          rows={3}
+                          value={rosterForm.notes}
+                          onChange={(event) =>
+                            setRosterForm({ ...rosterForm, notes: event.target.value })
+                          }
+                        />
+                      </label>
+                    </div>
+                    <div className="thera-filter-row" style={{ marginTop: 16 }}>
+                      <button
+                        type="button"
+                        className="thera-action"
+                        disabled={creatingRosterAction}
+                        onClick={() => void createRosterAction()}
+                      >
+                        {creatingRosterAction ? "Creating..." : "Create Roster Action"}
+                      </button>
+                    </div>
+                  </>
+                )}
+              </section>
+
+              <section className="thera-card">
+                <h2>Roster Actions</h2>
+                <div className="thera-table-wrap">
+                  <table className="thera-table">
+                    <thead>
+                      <tr>
+                        <th>Action</th>
+                        <th>Status</th>
+                        <th>Requested</th>
+                        <th>Submitted</th>
+                        <th>Confirmed</th>
+                        <th>Reference</th>
+                        <th>Work Status</th>
+                        <th>Action</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {selectedRosterActions.length === 0 ? (
+                        <tr><td colSpan={8}>No roster actions for this enrollment.</td></tr>
+                      ) : null}
+                      {selectedRosterActions.map((action) => {
+                        const work = workItems.find(
+                          (row) =>
+                            row.workqueue_type === "roster_action" &&
+                            row.source_object_type === "roster_action" &&
+                            row.source_object_id === action.id,
+                        );
+                        return (
+                          <tr key={action.id}>
+                            <td>{String(action.action_type || "—").replaceAll("_", " ")}</td>
+                            <td><StatusBadge value={action.status} /></td>
+                            <td>{shortDate(action.requested_date)}</td>
+                            <td>{shortDate(action.submitted_date)}</td>
+                            <td>{shortDate(action.confirmed_date)}</td>
+                            <td>{action.reference_number || "—"}</td>
+                            <td><StatusBadge value={work?.workqueue_status || "open"} /></td>
+                            <td>
+                              <button
+                                type="button"
+                                className="thera-action secondary"
+                                onClick={() => manageRosterAction(action)}
+                              >
+                                Manage
+                              </button>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </section>
+
+              {selectedRosterAction ? (
+                <section className="thera-card">
+                  <h2>Update Roster Action</h2>
+                  <div className="thera-form-grid">
+                    <label>
+                      Status
+                      <select
+                        className="thera-input"
+                        value={rosterTransitionForm.status}
+                        disabled={rosterTransitionOptions(String(selectedRosterAction.status)).length === 0}
+                        onChange={(event) =>
+                          setRosterTransitionForm({
+                            ...rosterTransitionForm,
+                            status: event.target.value,
+                          })
+                        }
+                      >
+                        {rosterTransitionOptions(String(selectedRosterAction.status)).length === 0 ? (
+                          <option value={String(selectedRosterAction.status)}>
+                            {String(selectedRosterAction.status).replaceAll("_", " ")}
+                          </option>
+                        ) : null}
+                        {rosterTransitionOptions(String(selectedRosterAction.status)).map((status) => (
+                          <option key={status} value={status}>
+                            {status.replaceAll("_", " ")}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label>
+                      Payer Reference #
+                      <input
+                        className="thera-input"
+                        value={rosterTransitionForm.reference_number}
+                        onChange={(event) =>
+                          setRosterTransitionForm({
+                            ...rosterTransitionForm,
+                            reference_number: event.target.value,
+                          })
+                        }
+                      />
+                    </label>
+                    <label style={{ gridColumn: "1 / -1" }}>
+                      Status Note
+                      <textarea
+                        className="thera-input"
+                        rows={3}
+                        value={rosterTransitionForm.notes}
+                        onChange={(event) =>
+                          setRosterTransitionForm({
+                            ...rosterTransitionForm,
+                            notes: event.target.value,
+                          })
+                        }
+                      />
+                    </label>
+                  </div>
+                  <div className="thera-filter-row" style={{ marginTop: 16 }}>
+                    <button
+                      type="button"
+                      className="thera-action"
+                      disabled={
+                        updatingRosterAction ||
+                        rosterTransitionOptions(String(selectedRosterAction.status)).length === 0
+                      }
+                      onClick={() => void updateRosterAction()}
+                    >
+                      {updatingRosterAction ? "Updating..." : "Update Roster Action"}
+                    </button>
+                    <button
+                      type="button"
+                      className="thera-action secondary"
+                      onClick={() => {
+                        setSelectedRosterActionId(null);
+                        setRosterTransitionForm(emptyRosterTransitionForm());
+                      }}
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </section>
+              ) : null}
             </div>
           ) : null}
 
