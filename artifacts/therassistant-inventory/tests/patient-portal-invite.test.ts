@@ -24,7 +24,7 @@ test("invite request requires a UUID-like client id", () => {
 test("existing live portal access is idempotent", () => {
   assert.equal(decideInviteAction("active"), "return-existing");
   assert.equal(decideInviteAction("invited"), "return-existing");
-  assert.equal(decideInviteAction("revoked"), "invite");
+  assert.equal(decideInviteAction("revoked"), "block-revoked");
   assert.equal(decideInviteAction(null), "invite");
 });
 
@@ -55,4 +55,24 @@ test("edge function does not auto-link an unrelated existing Auth account", () =
   const source = readFileSync(indexPath, "utf8");
   assert.match(source, /It was not linked automatically/);
   assert.doesNotMatch(source, /listUsers\(/);
+});
+
+
+test("existing access response uses the stored invitation email", () => {
+  const source = readFileSync(indexPath, "utf8");
+  assert.match(source, /access_invited_email/);
+  assert.match(source, /invited_email:\s*context\.access_invited_email/i);
+});
+
+test("failed compensating Auth deletion is surfaced", () => {
+  const source = readFileSync(indexPath, "utf8");
+  assert.match(source, /cleanupError/);
+  assert.match(source, /administrator action is required/i);
+  assert.doesNotMatch(source, /deleteUser\([^)]*\)\.catch/i);
+});
+
+test("revoked portal access is blocked from automatic relinking", () => {
+  const source = readFileSync(indexPath, "utf8");
+  assert.match(source, /block-revoked/);
+  assert.match(source, /re-enrollment is not supported/i);
 });
