@@ -1406,7 +1406,7 @@ export function CredentialingPage() {
           <section className="thera-card">
             <div className="thera-card-header">
               <div>
-                <h2>Network &amp; Directory Exceptions</h2>
+                <h2>{"Network & Directory Exceptions"}</h2>
                 <p>
                   Participation and payer-directory discrepancies that require
                   verification or corrective action.
