@@ -21,6 +21,9 @@ export function decideInviteAction(status: ExistingAccessStatus) {
   if (status === "active" || status === "invited") {
     return "return-existing" as const;
   }
+  if (status === "revoked") {
+    return "block-revoked" as const;
+  }
   return "invite" as const;
 }
 
