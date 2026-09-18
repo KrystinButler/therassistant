@@ -40,6 +40,6 @@ test("Provider 360 consumes the normalized credentialing profile sources", () =>
   assert.match(providerDetail, /tenantSelect\("v_credentialing_case_summary"\)/);
   assert.match(providerDetail, /tenantSelect\("v_credentialing_expirations"\)/);
   assert.match(providerDetail, /CAQH/i);
-  assert.match(providerDetail, /Credentials & Licenses/i);
+  assert.match(providerDetail, /Credentials (?:&|&amp;) Licenses/i);
   assert.match(providerDetail, /Credentialing Applications/i);
 });
