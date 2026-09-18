@@ -108,3 +108,43 @@ test("patient journal uses one combined staff-or-patient read policy", () => {
     /private\.has_tenant_read_access\(tenant_id\)[\s\S]+private\.has_client_portal_access\(tenant_id, client_id\)/i,
   );
 });
+
+
+test("patient portal routes are authenticated and contain no patient id authority", () => {
+  const app = readFileSync(
+    fileURLToPath(new URL("../src/App.tsx", import.meta.url)),
+    "utf8",
+  );
+  assert.doesNotMatch(app, /patient-portal\/:clientId/i);
+  assert.match(app, /<AuthProvider>/);
+  assert.match(app, /PatientPortalGate/);
+  assert.match(app, /PatientPortalLoginPage/);
+  assert.match(app, /PatientPortalActivatePage/);
+  assert.match(app, /PatientPortalRecoveryPage/);
+});
+
+test("auth session preserves invite and recovery flow types", () => {
+  const source = readFileSync(
+    fileURLToPath(new URL("../src/lib/supabase-client.ts", import.meta.url)),
+    "utf8",
+  );
+  assert.match(source, /type AuthFlowType = "invite" \| "recovery" \| null/);
+  assert.match(source, /flowType\??:\s*AuthFlowType/);
+  assert.match(source, /rawType === "invite" \|\| rawType === "recovery"/);
+  assert.match(source, /updatePasswordForCurrentSession/);
+  assert.match(source, /allowedFlow/);
+  assert.match(source, /redirect_to/);
+});
+
+test("patient portal route builders never include client ids", () => {
+  const source = readFileSync(
+    fileURLToPath(new URL("../src/domains/portal/routes.ts", import.meta.url)),
+    "utf8",
+  );
+  assert.match(source, /PORTAL_HOME = "\/patient-portal"/);
+  assert.match(source, /PORTAL_LOGIN = "\/patient-portal\/login"/);
+  assert.match(source, /PORTAL_ACTIVATE = "\/patient-portal\/activate"/);
+  assert.match(source, /PORTAL_RECOVER = "\/patient-portal\/recover"/);
+  assert.match(source, /portalCheckInPath\(appointmentId/);
+  assert.doesNotMatch(source, /clientId/);
+});
