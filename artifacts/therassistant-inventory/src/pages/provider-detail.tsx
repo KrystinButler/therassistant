@@ -35,6 +35,9 @@ export function ProviderDetailPage() {
   const [credentialing, setCredentialing] = useState<CredentialingView | null>(null);
   const [credentialingError, setCredentialingError] = useState<string | null>(null);
   const [payers, setPayers] = useState<Row[]>([]);
+  const [providerCredentials, setProviderCredentials] = useState<Row[]>([]);
+  const [credentialingApplications, setCredentialingApplications] = useState<Row[]>([]);
+  const [credentialingExpirations, setCredentialingExpirations] = useState<Row[]>([]);
   const [credentialingVersion, setCredentialingVersion] = useState(0);
   const [showIdentifier, setShowIdentifier] = useState(false);
   const [identifierForm, setIdentifierForm] = useState({ ...blankIdentifier });
@@ -48,11 +51,17 @@ export function ProviderDetailPage() {
     Promise.all([
       tenantSelect("provider_identifiers"),
       tenantSelect("provider_payer_enrollments"),
+      tenantSelect("provider_credentials"),
+      tenantSelect("v_credentialing_case_summary"),
+      tenantSelect("v_credentialing_expirations"),
       referenceSelect("payers"),
     ])
-      .then(([identifiers, enrollments, payerRows]) => {
+      .then(([identifiers, enrollments, credentialRows, applicationRows, expirationRows, payerRows]) => {
         if (!active) return;
         setPayers(payerRows);
+        setProviderCredentials(credentialRows.filter((row) => row.provider_id === providerId));
+        setCredentialingApplications(applicationRows.filter((row) => row.provider_id === providerId));
+        setCredentialingExpirations(expirationRows.filter((row) => row.provider_id === providerId));
         setCredentialing(
           buildProviderCredentialingView({
             providerId,
@@ -113,6 +122,15 @@ export function ProviderDetailPage() {
   const revalidationCount = enrollments.filter(
     (row) => row.revalidationState === "due_soon" || row.revalidationState === "overdue",
   ).length;
+  const activeApplications = credentialingApplications.filter(
+    (row) => !["complete", "denied", "withdrawn", "terminated", "closed"].includes(String(row.application_status || "")),
+  ).length;
+  const expiringCredentials = credentialingExpirations.filter((row) => {
+    if (!row.due_date) return false;
+    const due = new Date(String(row.due_date));
+    const today = new Date();
+    return Math.ceil((due.getTime() - today.getTime()) / 86_400_000) <= 90;
+  }).length;
 
   return (
     <>
@@ -185,8 +203,47 @@ export function ProviderDetailPage() {
           <div className="thera-definition-grid">
             <Field name="Payer Enrollments" value={enrollments.length} />
             <Field name="Approved" value={approvedCount} />
+            <Field name="Active Applications" value={activeApplications} />
+            <Field name="Expiration Action" value={expiringCredentials} />
             <Field name="Revalidation Action" value={revalidationCount} />
             <Field name="Identifiers" value={identifiers.length} />
+          </div>
+        </section>
+
+        <section className="thera-card">
+          <h2>CAQH</h2>
+          <div className="thera-definition-grid">
+            <Field name="CAQH ID" value={provider.caqh_id || "—"} />
+            <Field name="Last Attestation" value={shortDate(provider.caqh_attestation_date)} />
+            <Field name="Next Attestation" value={shortDate(provider.caqh_next_attestation_date)} />
+          </div>
+        </section>
+
+        <section className="thera-card thera-span-2">
+          <div className="thera-card-header">
+            <div>
+              <h2>Credentials &amp; Licenses</h2>
+              <p>Licenses, registrations, certifications and malpractice credentials with verification and expiration dates.</p>
+            </div>
+          </div>
+          <div className="thera-table-wrap">
+            <table className="thera-table">
+              <thead><tr><th>Type</th><th>Credential</th><th>Number</th><th>State / Authority</th><th>Status</th><th>Expires</th><th>Verified</th></tr></thead>
+              <tbody>
+                {providerCredentials.length === 0 && <tr><td colSpan={7}>No provider credentials on file.</td></tr>}
+                {providerCredentials.map((row) => (
+                  <tr key={row.id}>
+                    <td>{String(row.credential_type || "—").replaceAll("_", " ")}</td>
+                    <td>{row.credential_name || "—"}</td>
+                    <td>{row.credential_number || "—"}</td>
+                    <td>{[row.issuing_state, row.issuing_authority].filter(Boolean).join(" · ") || "—"}</td>
+                    <td><StatusBadge value={row.status} /></td>
+                    <td>{shortDate(row.expiration_date)}</td>
+                    <td>{shortDate(row.verified_at)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         </section>
 
@@ -212,6 +269,65 @@ export function ProviderDetailPage() {
                     <td>{shortDate(row.termination_date)}</td>
                   </tr>
                 ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <section className="thera-card thera-span-2">
+          <div className="thera-card-header">
+            <div>
+              <h2>Credentialing Applications</h2>
+              <p>Application milestones, payer follow-up and network completion status for this provider.</p>
+            </div>
+            <Link href="/credentialing" className="thera-action secondary">Open Credentialing Workspace</Link>
+          </div>
+          <div className="thera-table-wrap">
+            <table className="thera-table">
+              <thead><tr><th>Payer</th><th>Product</th><th>Type</th><th>Application</th><th>Enrollment</th><th>Participation</th><th>Directory</th><th>Submitted</th><th>Next Follow-Up</th></tr></thead>
+              <tbody>
+                {credentialingApplications.length === 0 && <tr><td colSpan={9}>No credentialing applications on file.</td></tr>}
+                {credentialingApplications.map((row) => (
+                  <tr key={row.application_id}>
+                    <td>{row.payer_name || "—"}</td>
+                    <td>{row.payer_plan_name || "All products"}</td>
+                    <td>{String(row.application_type || "—").replaceAll("_", " ")}</td>
+                    <td><StatusBadge value={row.application_status} /></td>
+                    <td><StatusBadge value={row.enrollment_status} /></td>
+                    <td><StatusBadge value={row.participation_status || "unknown"} /></td>
+                    <td><StatusBadge value={row.directory_status || "unknown"} /></td>
+                    <td>{shortDate(row.submitted_date)}</td>
+                    <td>{shortDate(row.next_followup_date)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <section className="thera-card thera-span-2">
+          <div className="thera-card-header">
+            <div>
+              <h2>Credentialing Expirations</h2>
+              <p>Credentials, CAQH, payer revalidation and contract recredentialing dates tied to this provider.</p>
+            </div>
+          </div>
+          <div className="thera-table-wrap">
+            <table className="thera-table">
+              <thead><tr><th>Item</th><th>Type</th><th>Payer</th><th>Due</th><th>Status</th></tr></thead>
+              <tbody>
+                {credentialingExpirations.length === 0 && <tr><td colSpan={5}>No credentialing expiration dates on file.</td></tr>}
+                {credentialingExpirations
+                  .toSorted((a, b) => String(a.due_date || "").localeCompare(String(b.due_date || "")))
+                  .map((row) => (
+                    <tr key={`${row.source_type}-${row.source_id}`}>
+                      <td>{row.item_name || "—"}</td>
+                      <td>{String(row.source_type || "—").replaceAll("_", " ")}</td>
+                      <td>{row.payer_name || "—"}</td>
+                      <td>{shortDate(row.due_date)}</td>
+                      <td><StatusBadge value={row.current_status || "unknown"} /></td>
+                    </tr>
+                  ))}
               </tbody>
             </table>
           </div>
