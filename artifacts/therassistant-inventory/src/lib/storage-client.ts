@@ -76,6 +76,35 @@ export function createStorageClient(
     return { path };
   }
 
+  async function uploadCredentialingFile(input: {
+    tenantId: string;
+    recordType: string;
+    recordId: string;
+    file: Blob;
+    fileName: string;
+    contentType?: string;
+  }) {
+    const safeFileName = sanitizeStorageFileName(input.fileName);
+    const safeRecordType = input.recordType.replace(/[^A-Za-z0-9_-]+/g, "");
+    const safeRecordId = input.recordId.replace(/[^A-Za-z0-9_-]+/g, "");
+    if (!safeRecordType || !safeRecordId) {
+      throw new Error("Credentialing document scope is invalid.");
+    }
+    const path = `${input.tenantId}/credentialing/${safeRecordType}/${safeRecordId}/${safeFileName}`;
+    const url = `${SUPABASE_URL}/storage/v1/object/${MAILROOM_BUCKET}/${encodeStoragePath(path)}`;
+    const response = await authFetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": input.contentType || input.file.type || "application/octet-stream",
+        "x-upsert": "false",
+      },
+      body: input.file,
+    });
+    const body = await responseBody(response);
+    if (!response.ok) throw new Error(errorMessage(body, `Storage upload failed (${response.status}).`));
+    return { path };
+  }
+
   async function createSignedDocumentUrl(path: string, expiresIn = 300) {
     const url = `${SUPABASE_URL}/storage/v1/object/sign/${MAILROOM_BUCKET}/${encodeStoragePath(path)}`;
     const response = await authFetch(url, {
@@ -101,7 +130,7 @@ export function createStorageClient(
     if (!response.ok) throw new Error(errorMessage(body, `Storage cleanup failed (${response.status}).`));
   }
 
-  return { uploadMailroomFile, createSignedDocumentUrl, deleteObject };
+  return { uploadMailroomFile, uploadCredentialingFile, createSignedDocumentUrl, deleteObject };
 }
 
 export const storageClient = createStorageClient();
