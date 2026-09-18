@@ -76,7 +76,21 @@ const rosterActionTypes = [
   "other",
 ] as const;
 
-const rosterTerminalStatuses = new Set(["confirmed", "rejected", "cancelled"]);
+const rosterTerminalStatuses = new Set(["confirmed", "cancelled"]);
+
+const rosterTransitionMap: Record<string, string[]> = {
+  not_started: ["ready", "cancelled"],
+  ready: ["submitted", "cancelled"],
+  submitted: ["pending", "confirmed", "rejected"],
+  pending: ["confirmed", "rejected", "cancelled"],
+  rejected: ["ready", "cancelled"],
+  confirmed: [],
+  cancelled: [],
+};
+
+function rosterTransitionOptions(status: string): string[] {
+  return rosterTransitionMap[status] ?? [];
+}
 
 const credentialingDocumentTypes = [
   "provider_license",
@@ -707,9 +721,11 @@ export function CredentialingPage() {
   }
 
   function manageRosterAction(action: Row) {
+    const currentStatus = String(action.status || "ready");
+    const nextStatuses = rosterTransitionOptions(currentStatus);
     setSelectedRosterActionId(String(action.id));
     setRosterTransitionForm({
-      status: String(action.status || "ready"),
+      status: nextStatuses[0] || currentStatus,
       reference_number: String(action.reference_number || ""),
       notes: String(action.notes || ""),
     });
@@ -1896,6 +1912,7 @@ export function CredentialingPage() {
                       <select
                         className="thera-input"
                         value={rosterTransitionForm.status}
+                        disabled={rosterTransitionOptions(String(selectedRosterAction.status)).length === 0}
                         onChange={(event) =>
                           setRosterTransitionForm({
                             ...rosterTransitionForm,
@@ -1903,13 +1920,16 @@ export function CredentialingPage() {
                           })
                         }
                       >
-                        <option value="not_started">Not Started</option>
-                        <option value="ready">Ready</option>
-                        <option value="submitted">Submitted</option>
-                        <option value="pending">Pending</option>
-                        <option value="confirmed">Confirmed</option>
-                        <option value="rejected">Rejected</option>
-                        <option value="cancelled">Cancelled</option>
+                        {rosterTransitionOptions(String(selectedRosterAction.status)).length === 0 ? (
+                          <option value={String(selectedRosterAction.status)}>
+                            {String(selectedRosterAction.status).replaceAll("_", " ")}
+                          </option>
+                        ) : null}
+                        {rosterTransitionOptions(String(selectedRosterAction.status)).map((status) => (
+                          <option key={status} value={status}>
+                            {status.replaceAll("_", " ")}
+                          </option>
+                        ))}
                       </select>
                     </label>
                     <label>
@@ -1944,7 +1964,10 @@ export function CredentialingPage() {
                     <button
                       type="button"
                       className="thera-action"
-                      disabled={updatingRosterAction}
+                      disabled={
+                        updatingRosterAction ||
+                        rosterTransitionOptions(String(selectedRosterAction.status)).length === 0
+                      }
                       onClick={() => void updateRosterAction()}
                     >
                       {updatingRosterAction ? "Updating..." : "Update Roster Action"}
