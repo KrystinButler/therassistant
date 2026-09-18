@@ -2,7 +2,9 @@ import { useEffect, useMemo, useState } from "react";
 import { Link, useLocation } from "wouter";
 import { StatusBadge } from "../components/status-badge";
 import { WorkDrawer } from "../components/work-drawer";
+import { createPatientWithOptionalPortal } from "../domains/patients/create-patient-with-portal";
 import { validatePatientIntakeEmergencyContact } from "../domains/patients/workflow";
+import { invitePatientPortal } from "../domains/portal/staff-portal-access";
 import { dateTime, money, shortDate } from "../lib/format";
 import { getCurrentTenantId, referenceSelect, tenantRpc, tenantUpdate, type Row } from "../lib/tenant-data-client";
 import { useApi } from "../lib/therassistant-api";
@@ -188,6 +190,11 @@ export function ClientsPage() {
   const [baseline, setBaseline] = useState<FormState | null>(null);
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
+  const [pageNotice, setPageNotice] = useState<{
+    kind: "success" | "error";
+    message: string;
+    patientId: string;
+  } | null>(null);
   const [payers, setPayers] = useState<PayerRow[]>([]);
   const [plans, setPlans] = useState<PayerPlanRow[]>([]);
   const [payerLookupError, setPayerLookupError] = useState<string | null>(null);
@@ -284,29 +291,52 @@ export function ClientsPage() {
     setSaving(true);
     try {
       const tenantId = await getCurrentTenantId();
-      const created = await tenantRpc<CreatedRow>("create_patient_intake", {
-        p_tenant_id: tenantId,
-        p_patient: {
-          first_name: form.first_name.trim(),
-          last_name: form.last_name.trim(),
-          preferred_name: form.preferred_name.trim() || null,
-          date_of_birth: form.date_of_birth,
-          sex: form.sex,
-          email: form.email.trim(),
-          phone: form.phone.trim(),
-          address_line1: form.address_line1.trim(),
-          client_status: form.client_status,
-          registration_status: form.registration_status,
-        },
-        p_emergency_contact: emergencyContact,
-        p_primary_insurance: coveragePayload(plans, form.primary, form),
-        p_secondary_insurance: hasSecondaryData(form.secondary) ? coveragePayload(plans, form.secondary, form) : null,
-        p_portal_enrolled: enrollPortal,
+      const result = await createPatientWithOptionalPortal({
+        enrollPortal,
+        createPatient: () => tenantRpc<CreatedRow>("create_patient_intake", {
+          p_tenant_id: tenantId,
+          p_patient: {
+            first_name: form.first_name.trim(),
+            last_name: form.last_name.trim(),
+            preferred_name: form.preferred_name.trim() || null,
+            date_of_birth: form.date_of_birth,
+            sex: form.sex,
+            email: form.email.trim(),
+            phone: form.phone.trim(),
+            address_line1: form.address_line1.trim(),
+            client_status: form.client_status,
+            registration_status: form.registration_status,
+          },
+          p_emergency_contact: emergencyContact,
+          p_primary_insurance: coveragePayload(plans, form.primary, form),
+          p_secondary_insurance: hasSecondaryData(form.secondary) ? coveragePayload(plans, form.secondary, form) : null,
+          p_portal_enrolled: false,
+        }),
+        invitePortal: invitePatientPortal,
       });
 
       closeForm();
       setVersion((v) => v + 1);
-      if (enrollPortal) navigate(`/patient-portal/${created.id}`);
+
+      if (result.portalError) {
+        setPageNotice({
+          kind: "error",
+          message: `Patient saved, but portal invitation failed: ${result.portalError}`,
+          patientId: result.patient.id,
+        });
+      } else if (enrollPortal) {
+        setPageNotice({
+          kind: "success",
+          message: "Patient saved and secure portal invitation sent.",
+          patientId: result.patient.id,
+        });
+      } else {
+        setPageNotice({
+          kind: "success",
+          message: "Patient saved.",
+          patientId: result.patient.id,
+        });
+      }
     } catch (err) {
       setFormError(err instanceof Error ? err.message : "Unable to create patient.");
     } finally {
@@ -342,6 +372,11 @@ export function ClientsPage() {
       </div>
     </div>
 
+    {pageNotice && <div className={`thera-state${pageNotice.kind === "error" ? " error" : ""}`} style={{ marginBottom: 16 }}>
+      {pageNotice.message} <Link href={`/clients/${pageNotice.patientId}`}>Open Patient 360</Link>
+      <button type="button" className="thera-action secondary" style={{ marginLeft: 12 }} onClick={() => setPageNotice(null)}>Dismiss</button>
+    </div>}
+
     <section className="thera-card">
       {loading && <div className="thera-state">Loading patients...</div>}
       {error && <div className="thera-state error">{error}</div>}
@@ -359,7 +394,7 @@ export function ClientsPage() {
       footer={<div className="thera-filter-row" style={{ justifyContent: "space-between", width: "100%" }}>
         <button type="button" className="thera-action secondary" onClick={closeForm}>Cancel</button>
         <div className="thera-filter-row">
-          {!form.id && <button type="button" className="thera-action secondary" disabled={saving || !addRequiredComplete} onClick={() => void save(true)}>Enroll in Patient Portal</button>}
+          {!form.id && <button type="button" className="thera-action secondary" disabled={saving || !addRequiredComplete} onClick={() => void save(true)}>Save + Send Portal Invite</button>}
           <button type="button" className="thera-action" disabled={saving || (form.id ? !form.first_name.trim() || !form.last_name.trim() : !addRequiredComplete)} onClick={() => void save(false)}>{saving ? "Saving..." : "Save Patient"}</button>
         </div>
       </div>}
@@ -434,7 +469,7 @@ export function ClientsPage() {
           </div>
         </section>
 
-        <div className="thera-muted">Use “Enroll in Patient Portal” to save the patient and open their portal immediately.</div>
+        <div className="thera-muted">Use “Save + Send Portal Invite” to save the patient once and send their secure portal invitation.</div>
       </div>}
     </WorkDrawer>}
   </>;
