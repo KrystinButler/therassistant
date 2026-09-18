@@ -302,14 +302,13 @@ export function CredentialingPage() {
     : [];
 
   const selectedCredentialingDocuments = selectedDocumentLinks
-    .map((link) => ({
-      link,
-      document: documents.find((row) => row.id === link.document_id) ?? null,
-    }))
+    .flatMap((link) => {
+      const document = documents.find((row) => row.id === link.document_id);
+      return document ? [{ link, document }] : [];
+    })
     .filter(
       (entry, index, rows) =>
-        entry.document &&
-        rows.findIndex((candidate) => candidate.document?.id === entry.document?.id) === index,
+        rows.findIndex((candidate) => candidate.document.id === entry.document.id) === index,
     );
 
   const selectedWork = selectedCase
