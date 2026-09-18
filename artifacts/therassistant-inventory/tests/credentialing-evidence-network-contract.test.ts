@@ -18,7 +18,8 @@ test("credentialing case drawer exposes document evidence and network verificati
   assert.match(credentialingPage, /tenantSelect\("documents"/);
   assert.match(credentialingPage, /tenantSelect\("credentialing_document_links"/);
   assert.match(credentialingPage, /tenantSelect\("participation_verifications"/);
-  assert.match(credentialingPage, /tenantSelect\("provider_network_participation"/);\n  assert.match(credentialingPage, /record_network_participation_verification/);
+  assert.match(credentialingPage, /tenantSelect\("provider_network_participation"/);
+  assert.match(credentialingPage, /record_network_participation_verification/);
 });
 
 test("credentialing evidence reuses the existing private document store", () => {
