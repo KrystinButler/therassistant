@@ -9,7 +9,7 @@ const credentialingPage = readFileSync(
 
 const rosterMigration = readFileSync(
   new URL(
-    "../../../supabase/migrations/20260918035820_credentialing_roster_management_rpcs.sql",
+    "../../../supabase/migrations/20260918040000_normalize_credentialing_roster_rpcs.sql",
     import.meta.url,
   ),
   "utf8",
@@ -51,6 +51,8 @@ test("roster creation and transition keep workqueue and status history synchroni
   assert.match(rosterMigration, /insert into public\.status_history/i);
   assert.match(rosterMigration, /private\.has_tenant_write_access/i);
   assert.match(rosterMigration, /security invoker/i);
+  assert.match(rosterMigration, /drop function if exists public\.create_roster_action_work/i);
+  assert.match(rosterMigration, /drop function if exists public\.transition_roster_action/i);
 });
 
 
