@@ -89,3 +89,31 @@ test("cleanup deletes only the exact uploaded object path", async () => {
   assert.equal(calls[0].init?.method, "DELETE");
   assert.deepEqual(JSON.parse(String(calls[0].init?.body)), { prefixes: [path] });
 });
+
+
+test("Credentialing upload uses the tenant credentialing root and sanitized file name", async () => {
+  const calls: Call[] = [];
+  const storage = createStorageClient(async (input, init) => {
+    calls.push({ url: String(input), init });
+    return response({ Key: "tenant-1/credentialing/enrollment/enroll-1/Network-Proof.pdf" });
+  }, token);
+
+  const file = new Blob(["proof"], { type: "application/pdf" });
+  const result = await storage.uploadCredentialingFile({
+    tenantId: "tenant-1",
+    recordType: "enrollment",
+    recordId: "enroll-1",
+    file,
+    fileName: "../Network Proof?.pdf",
+    contentType: "application/pdf",
+  });
+
+  assert.equal(result.path, "tenant-1/credentialing/enrollment/enroll-1/Network-Proof.pdf");
+  assert.match(
+    calls[0].url,
+    /\/storage\/v1\/object\/therassistant-documents\/tenant-1\/credentialing\/enrollment\/enroll-1\/Network-Proof\.pdf$/,
+  );
+  const headers = new Headers(calls[0].init?.headers);
+  assert.equal(headers.get("Authorization"), "Bearer staff-access-token");
+  assert.equal(headers.get("x-upsert"), "false");
+});

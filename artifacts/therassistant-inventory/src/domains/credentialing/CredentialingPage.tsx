@@ -4,8 +4,10 @@ import { useLocation } from "wouter";
 import { StatusBadge } from "../../components/status-badge";
 import { WorkDrawer } from "../../components/work-drawer";
 import { shortDate } from "../../lib/format";
+import { storageClient } from "../../lib/storage-client";
 import {
   getCurrentTenantId,
+  tenantInsert,
   tenantRpc,
   tenantSelect,
   tenantUpdate,
@@ -17,7 +19,13 @@ import {
 
 type Row = Record<string, any>;
 type WorkspaceTab = "work" | "applications" | "participation" | "expirations";
-type DrawerTab = "overview" | "requirements" | "followup" | "history";
+type DrawerTab =
+  | "overview"
+  | "requirements"
+  | "followup"
+  | "documents"
+  | "verification"
+  | "history";
 
 type EnrollmentEdit = {
   effective_date: string;
@@ -26,6 +34,33 @@ type EnrollmentEdit = {
   payer_provider_id: string;
   notes: string;
 };
+
+type VerificationForm = {
+  verification_method: string;
+  result: string;
+  directory_status: string;
+  reference_number: string;
+  representative_name: string;
+  source_url: string;
+  notes: string;
+  next_verification_due_date: string;
+};
+
+const credentialingDocumentTypes = [
+  "provider_license",
+  "dea_registration",
+  "malpractice_insurance",
+  "w9",
+  "caqh_profile",
+  "curriculum_vitae",
+  "credentialing_application",
+  "credentialing_approval",
+  "network_verification",
+  "roster_document",
+  "payer_contract",
+  "provider_certification",
+  "other",
+] as const;
 
 const credentialingWorkTypes = new Set([
   "credentialing_issue",
@@ -58,6 +93,19 @@ function emptyEnrollmentEdit(): EnrollmentEdit {
   };
 }
 
+function emptyVerificationForm(): VerificationForm {
+  return {
+    verification_method: "payer_portal",
+    result: "participating",
+    directory_status: "listed",
+    reference_number: "",
+    representative_name: "",
+    source_url: "",
+    notes: "",
+    next_verification_due_date: "",
+  };
+}
+
 export function CredentialingPage() {
   const [, navigate] = useLocation();
   const [version, setVersion] = useState(0);
@@ -75,10 +123,20 @@ export function CredentialingPage() {
   const [followups, setFollowups] = useState<Row[]>([]);
   const [statusHistory, setStatusHistory] = useState<Row[]>([]);
   const [enrollments, setEnrollments] = useState<Row[]>([]);
+  const [documents, setDocuments] = useState<Row[]>([]);
+  const [documentLinks, setDocumentLinks] = useState<Row[]>([]);
+  const [verificationRows, setVerificationRows] = useState<Row[]>([]);
+  const [networkParticipationRows, setNetworkParticipationRows] = useState<Row[]>([]);
 
   const [selectedCase, setSelectedCase] = useState<Row | null>(null);
   const [enrollmentEdit, setEnrollmentEdit] = useState<EnrollmentEdit>(emptyEnrollmentEdit);
   const [enrollmentBaseline, setEnrollmentBaseline] = useState<EnrollmentEdit>(emptyEnrollmentEdit);
+  const [documentType, setDocumentType] = useState<string>("credentialing_application");
+  const [documentFile, setDocumentFile] = useState<File | null>(null);
+  const [uploadingDocument, setUploadingDocument] = useState(false);
+  const [verificationForm, setVerificationForm] = useState<VerificationForm>(emptyVerificationForm);
+  const [verificationEvidenceFile, setVerificationEvidenceFile] = useState<File | null>(null);
+  const [recordingVerification, setRecordingVerification] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -102,6 +160,10 @@ export function CredentialingPage() {
       tenantSelect("credentialing_followups"),
       tenantSelect("status_history"),
       tenantSelect("provider_payer_enrollments"),
+      tenantSelect("documents"),
+      tenantSelect("credentialing_document_links"),
+      tenantSelect("participation_verifications"),
+      tenantSelect("provider_network_participation"),
     ])
       .then(
         ([
@@ -113,6 +175,10 @@ export function CredentialingPage() {
           followupRows,
           historyRows,
           enrollmentRows,
+          documentRows,
+          documentLinkRows,
+          verificationHistoryRows,
+          networkParticipationHistoryRows,
         ]) => {
           if (!active) return;
           setCases(caseRows);
@@ -123,6 +189,10 @@ export function CredentialingPage() {
           setFollowups(followupRows);
           setStatusHistory(historyRows);
           setEnrollments(enrollmentRows);
+          setDocuments(documentRows);
+          setDocumentLinks(documentLinkRows);
+          setVerificationRows(verificationHistoryRows);
+          setNetworkParticipationRows(networkParticipationHistoryRows);
         },
       )
       .catch((err: unknown) => {
@@ -188,6 +258,14 @@ export function CredentialingPage() {
     ? enrollments.find((row) => row.id === selectedCase.enrollment_id) ?? null
     : null;
 
+  const selectedNetworkParticipation = selectedCase?.enrollment_id
+    ? networkParticipationRows.find(
+        (row) => row.enrollment_id === selectedCase.enrollment_id,
+      ) ?? null
+    : null;
+  const selectedParticipationId =
+    selectedNetworkParticipation?.id || selectedCase?.participation_id || null;
+
   const selectedRequirements = selectedCase?.application_id
     ? requirements.filter((row) => row.application_id === selectedCase.application_id)
     : [];
@@ -205,6 +283,33 @@ export function CredentialingPage() {
         )
         .toSorted((a, b) => String(b.created_at).localeCompare(String(a.created_at)))
     : [];
+
+  const selectedVerificationRows = selectedParticipationId
+    ? verificationRows
+        .filter((row) => row.participation_id === selectedParticipationId)
+        .toSorted((a, b) => String(b.verified_at).localeCompare(String(a.verified_at)))
+    : [];
+
+  const selectedDocumentLinks = selectedCase
+    ? documentLinks.filter((row) =>
+        Boolean(
+          (selectedCase.application_id && row.application_id === selectedCase.application_id) ||
+          (selectedCase.enrollment_id && row.enrollment_id === selectedCase.enrollment_id) ||
+          (selectedParticipationId && row.participation_id === selectedParticipationId) ||
+          (selectedCase.provider_id && row.provider_id === selectedCase.provider_id),
+        ),
+      )
+    : [];
+
+  const selectedCredentialingDocuments = selectedDocumentLinks
+    .flatMap((link) => {
+      const document = documents.find((row) => row.id === link.document_id);
+      return document ? [{ link, document }] : [];
+    })
+    .filter(
+      (entry, index, rows) =>
+        rows.findIndex((candidate) => candidate.document.id === entry.document.id) === index,
+    );
 
   const selectedWork = selectedCase
     ? credentialingWork.filter((row) =>
@@ -251,6 +356,10 @@ export function CredentialingPage() {
     setDrawerTab("overview");
     setEnrollmentEdit(nextEdit);
     setEnrollmentBaseline({ ...nextEdit });
+    setDocumentType("credentialing_application");
+    setDocumentFile(null);
+    setVerificationForm(emptyVerificationForm());
+    setVerificationEvidenceFile(null);
   }
 
   function closeCase() {
@@ -258,6 +367,9 @@ export function CredentialingPage() {
     setDrawerTab("overview");
     setEnrollmentEdit(emptyEnrollmentEdit());
     setEnrollmentBaseline(emptyEnrollmentEdit());
+    setDocumentFile(null);
+    setVerificationForm(emptyVerificationForm());
+    setVerificationEvidenceFile(null);
   }
 
   function openCaseAt(index: number) {
@@ -305,6 +417,165 @@ export function CredentialingPage() {
       );
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function saveCredentialingDocument(
+    file: File,
+    type: string,
+    linkOverrides: Row = {},
+  ) {
+    if (!selectedCase?.enrollment_id && !selectedCase?.application_id) {
+      throw new Error("Credentialing case scope is required.");
+    }
+
+    const tenantId = await getCurrentTenantId();
+    const recordType = linkOverrides.verification_id
+      ? "verification"
+      : selectedCase.application_id
+        ? "application"
+        : "enrollment";
+    const recordId =
+      String(
+        linkOverrides.verification_id ||
+          selectedCase.application_id ||
+          selectedCase.enrollment_id,
+      );
+
+    const uploaded = await storageClient.uploadCredentialingFile({
+      tenantId,
+      recordType,
+      recordId,
+      file,
+      fileName: file.name,
+      contentType: file.type || undefined,
+    });
+
+    let document: Row;
+    try {
+      document = await tenantInsert("documents", {
+        document_type: type,
+        document_status: "uploaded",
+        file_name: file.name,
+        storage_path: uploaded.path,
+        mime_type: file.type || null,
+        file_size_bytes: file.size,
+      });
+    } catch (documentError) {
+      try {
+        await storageClient.deleteObject(uploaded.path);
+      } catch (cleanupError) {
+        throw new Error(
+          `${documentError instanceof Error ? documentError.message : String(documentError)} Storage cleanup also failed: ${cleanupError instanceof Error ? cleanupError.message : String(cleanupError)}`,
+        );
+      }
+      throw documentError;
+    }
+
+    try {
+      await tenantInsert("credentialing_document_links", {
+        document_id: document.id,
+        provider_id: selectedCase.provider_id || null,
+        enrollment_id: selectedCase.enrollment_id || null,
+        application_id: selectedCase.application_id || null,
+        participation_id:
+          linkOverrides.participation_id || selectedParticipationId || null,
+        verification_id: linkOverrides.verification_id || null,
+        payer_contract_id: selectedCase.payer_contract_id || null,
+        link_type:
+          linkOverrides.verification_id
+            ? "network_verification_evidence"
+            : "credentialing_document",
+      });
+    } catch (linkError) {
+      throw new Error(
+        `The document was saved but could not be linked to this credentialing case. ${linkError instanceof Error ? linkError.message : String(linkError)}`,
+      );
+    }
+
+    return document;
+  }
+
+  async function uploadDocument() {
+    if (!documentFile) return;
+    setUploadingDocument(true);
+    setError(null);
+    try {
+      await saveCredentialingDocument(documentFile, documentType);
+      setDocumentFile(null);
+      setVersion((value) => value + 1);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to upload credentialing document");
+    } finally {
+      setUploadingDocument(false);
+    }
+  }
+
+  async function openDocument(storagePath: string) {
+    setError(null);
+    try {
+      const url = await storageClient.createSignedDocumentUrl(storagePath, 300);
+      window.open(url, "_blank", "noopener,noreferrer");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to open credentialing document");
+    }
+  }
+
+  async function recordNetworkVerification() {
+    if (!selectedCase?.enrollment_id || !verificationForm.verification_method.trim()) return;
+    setRecordingVerification(true);
+    setError(null);
+    try {
+      const tenantId = await getCurrentTenantId();
+      const result = await tenantRpc<Row[]>("record_network_participation_verification", {
+        p_tenant_id: tenantId,
+        p_enrollment_id: selectedCase.enrollment_id,
+        p_verification_method: verificationForm.verification_method,
+        p_result: verificationForm.result,
+        p_directory_status: verificationForm.directory_status,
+        p_reference_number: verificationForm.reference_number || null,
+        p_representative_name: verificationForm.representative_name || null,
+        p_source_url: verificationForm.source_url || null,
+        p_notes: verificationForm.notes || null,
+        p_next_verification_due_date:
+          verificationForm.next_verification_due_date || null,
+        p_verified_at: new Date().toISOString(),
+      });
+
+      const verification = result[0];
+      if (!verification?.participation_id || !verification?.verification_id) {
+        throw new Error("Verification was saved but returned no record identifiers.");
+      }
+
+      if (verificationEvidenceFile) {
+        await saveCredentialingDocument(
+          verificationEvidenceFile,
+          "network_verification",
+          {
+            participation_id: verification.participation_id,
+            verification_id: verification.verification_id,
+          },
+        );
+      }
+
+      setSelectedCase((current) =>
+        current
+          ? {
+              ...current,
+              participation_id: verification.participation_id,
+              participation_status: verificationForm.result,
+              directory_status: verificationForm.directory_status,
+              participation_last_verified_at: new Date().toISOString(),
+            }
+          : current,
+      );
+      setVerificationForm(emptyVerificationForm());
+      setVerificationEvidenceFile(null);
+      setVersion((value) => value + 1);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to record network verification");
+    } finally {
+      setRecordingVerification(false);
     }
   }
 
@@ -680,6 +951,8 @@ export function CredentialingPage() {
               ["overview", "Overview"],
               ["requirements", "Requirements"],
               ["followup", "Follow-Up"],
+              ["documents", "Documents"],
+              ["verification", "Network Verification"],
               ["history", "History"],
             ] as const).map(([id, label]) => (
               <button
@@ -878,6 +1151,348 @@ export function CredentialingPage() {
                 </table>
               </div>
             </section>
+          ) : null}
+
+          {drawerTab === "documents" ? (
+            <div className="thera-stack">
+              <section className="thera-card">
+                <div className="thera-card-header">
+                  <div>
+                    <h2>Documents</h2>
+                    <p>
+                      Credentialing documents and evidence remain in the existing
+                      private document vault and are linked to this case.
+                    </p>
+                  </div>
+                </div>
+                <div className="thera-form-grid">
+                  <label>
+                    Document Type
+                    <select
+                      className="thera-input"
+                      value={documentType}
+                      onChange={(event) => setDocumentType(event.target.value)}
+                    >
+                      {credentialingDocumentTypes.map((type) => (
+                        <option key={type} value={type}>
+                          {type.replaceAll("_", " ")}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label>
+                    File
+                    <input
+                      className="thera-input"
+                      type="file"
+                      onChange={(event) =>
+                        setDocumentFile(event.target.files?.[0] ?? null)
+                      }
+                    />
+                  </label>
+                </div>
+                <div className="thera-filter-row" style={{ marginTop: 16 }}>
+                  <button
+                    type="button"
+                    className="thera-action"
+                    disabled={!documentFile || uploadingDocument}
+                    onClick={() => void uploadDocument()}
+                  >
+                    {uploadingDocument ? "Uploading..." : "Upload Document"}
+                  </button>
+                </div>
+              </section>
+
+              <section className="thera-card">
+                <div className="thera-table-wrap">
+                  <table className="thera-table">
+                    <thead>
+                      <tr>
+                        <th>File</th>
+                        <th>Type</th>
+                        <th>Status</th>
+                        <th>Added</th>
+                        <th>Evidence For</th>
+                        <th>Action</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {selectedCredentialingDocuments.length === 0 ? (
+                        <tr><td colSpan={6}>No credentialing documents linked to this case.</td></tr>
+                      ) : null}
+                      {selectedCredentialingDocuments.map(({ link, document }) => (
+                        <tr key={document.id}>
+                          <td>{document.file_name || "Document"}</td>
+                          <td>{String(document.document_type || "other").replaceAll("_", " ")}</td>
+                          <td><StatusBadge value={document.document_status || "uploaded"} /></td>
+                          <td>{shortDate(document.created_at)}</td>
+                          <td>
+                            {link.verification_id
+                              ? "Network verification"
+                              : link.application_id
+                                ? "Application"
+                                : link.enrollment_id
+                                  ? "Enrollment"
+                                  : "Provider"}
+                          </td>
+                          <td>
+                            {document.storage_path ? (
+                              <button
+                                type="button"
+                                className="thera-action secondary"
+                                onClick={() => void openDocument(String(document.storage_path))}
+                              >
+                                Open
+                              </button>
+                            ) : "—"}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </section>
+            </div>
+          ) : null}
+
+          {drawerTab === "verification" ? (
+            <div className="thera-stack">
+              <section className="thera-card">
+                <h2>Network Verification</h2>
+                <div className="thera-definition-grid">
+                  <Field
+                    name="Current Participation"
+                    value={<StatusBadge value={selectedCase.participation_status || "unknown"} />}
+                  />
+                  <Field
+                    name="Directory Status"
+                    value={<StatusBadge value={selectedCase.directory_status || "unknown"} />}
+                  />
+                  <Field
+                    name="Last Verified"
+                    value={shortDate(selectedCase.participation_last_verified_at)}
+                  />
+                  <Field
+                    name="Next Verification Due"
+                    value={shortDate(selectedNetworkParticipation?.next_verification_due_date)}
+                  />
+                </div>
+              </section>
+
+              <section className="thera-card">
+                <h2>Record Verification</h2>
+                {!selectedCase.enrollment_id ? (
+                  <div className="thera-state">An enrollment is required before network verification can be recorded.</div>
+                ) : (
+                  <>
+                    <div className="thera-form-grid">
+                      <label>
+                        Verification Method
+                        <select
+                          className="thera-input"
+                          value={verificationForm.verification_method}
+                          onChange={(event) =>
+                            setVerificationForm({
+                              ...verificationForm,
+                              verification_method: event.target.value,
+                            })
+                          }
+                        >
+                          <option value="payer_portal">Payer Portal</option>
+                          <option value="payer_phone">Payer Phone</option>
+                          <option value="provider_directory">Provider Directory</option>
+                          <option value="roster">Roster</option>
+                          <option value="email">Email</option>
+                          <option value="other">Other</option>
+                        </select>
+                      </label>
+                      <label>
+                        Participation Result
+                        <select
+                          className="thera-input"
+                          value={verificationForm.result}
+                          onChange={(event) =>
+                            setVerificationForm({
+                              ...verificationForm,
+                              result: event.target.value,
+                            })
+                          }
+                        >
+                          <option value="participating">Participating</option>
+                          <option value="pending">Pending</option>
+                          <option value="non_participating">Non-participating</option>
+                          <option value="suspended">Suspended</option>
+                          <option value="terminated">Terminated</option>
+                          <option value="unknown">Unknown</option>
+                        </select>
+                      </label>
+                      <label>
+                        Directory Status
+                        <select
+                          className="thera-input"
+                          value={verificationForm.directory_status}
+                          onChange={(event) =>
+                            setVerificationForm({
+                              ...verificationForm,
+                              directory_status: event.target.value,
+                            })
+                          }
+                        >
+                          <option value="listed">Listed</option>
+                          <option value="not_listed">Not Listed</option>
+                          <option value="inaccurate">Inaccurate</option>
+                          <option value="not_applicable">Not Applicable</option>
+                          <option value="unknown">Unknown</option>
+                        </select>
+                      </label>
+                      <label>
+                        Reference #
+                        <input
+                          className="thera-input"
+                          value={verificationForm.reference_number}
+                          onChange={(event) =>
+                            setVerificationForm({
+                              ...verificationForm,
+                              reference_number: event.target.value,
+                            })
+                          }
+                        />
+                      </label>
+                      <label>
+                        Representative
+                        <input
+                          className="thera-input"
+                          value={verificationForm.representative_name}
+                          onChange={(event) =>
+                            setVerificationForm({
+                              ...verificationForm,
+                              representative_name: event.target.value,
+                            })
+                          }
+                        />
+                      </label>
+                      <label>
+                        Source URL
+                        <input
+                          className="thera-input"
+                          type="url"
+                          value={verificationForm.source_url}
+                          onChange={(event) =>
+                            setVerificationForm({
+                              ...verificationForm,
+                              source_url: event.target.value,
+                            })
+                          }
+                        />
+                      </label>
+                      <label>
+                        Next Verification Due
+                        <input
+                          className="thera-input"
+                          type="date"
+                          value={verificationForm.next_verification_due_date}
+                          onChange={(event) =>
+                            setVerificationForm({
+                              ...verificationForm,
+                              next_verification_due_date: event.target.value,
+                            })
+                          }
+                        />
+                      </label>
+                      <label>
+                        Evidence File
+                        <input
+                          className="thera-input"
+                          type="file"
+                          onChange={(event) =>
+                            setVerificationEvidenceFile(event.target.files?.[0] ?? null)
+                          }
+                        />
+                      </label>
+                      <label style={{ gridColumn: "1 / -1" }}>
+                        Notes
+                        <textarea
+                          className="thera-input"
+                          rows={3}
+                          value={verificationForm.notes}
+                          onChange={(event) =>
+                            setVerificationForm({
+                              ...verificationForm,
+                              notes: event.target.value,
+                            })
+                          }
+                        />
+                      </label>
+                    </div>
+                    <div className="thera-filter-row" style={{ marginTop: 16 }}>
+                      <button
+                        type="button"
+                        className="thera-action"
+                        disabled={recordingVerification || !verificationForm.verification_method.trim()}
+                        onClick={() => void recordNetworkVerification()}
+                      >
+                        {recordingVerification ? "Recording..." : "Record Verification"}
+                      </button>
+                    </div>
+                  </>
+                )}
+              </section>
+
+              <section className="thera-card">
+                <h2>Verification History</h2>
+                <div className="thera-table-wrap">
+                  <table className="thera-table">
+                    <thead>
+                      <tr>
+                        <th>Date</th>
+                        <th>Method</th>
+                        <th>Result</th>
+                        <th>Reference</th>
+                        <th>Representative</th>
+                        <th>Source</th>
+                        <th>Evidence</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {selectedVerificationRows.length === 0 ? (
+                        <tr><td colSpan={7}>No network verification history recorded.</td></tr>
+                      ) : null}
+                      {selectedVerificationRows.map((row) => {
+                        const evidence = selectedCredentialingDocuments.filter(
+                          (entry) => entry.link.verification_id === row.id,
+                        );
+                        return (
+                          <tr key={row.id}>
+                            <td>{shortDate(row.verified_at)}</td>
+                            <td>{String(row.verification_method || "—").replaceAll("_", " ")}</td>
+                            <td><StatusBadge value={row.result} /></td>
+                            <td>{row.reference_number || "—"}</td>
+                            <td>{row.representative_name || "—"}</td>
+                            <td>
+                              {row.source_url ? (
+                                <a
+                                  className="thera-link"
+                                  href={row.source_url}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                >
+                                  Open source
+                                </a>
+                              ) : "—"}
+                            </td>
+                            <td>
+                              {evidence.length
+                                ? evidence.map((entry) => entry.document?.file_name || "Evidence").join(", ")
+                                : "—"}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </section>
+            </div>
           ) : null}
 
           {drawerTab === "history" ? (
