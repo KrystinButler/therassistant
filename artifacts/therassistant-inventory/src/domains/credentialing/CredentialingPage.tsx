@@ -13,12 +13,25 @@ import {
   tenantUpdate,
 } from "../../lib/tenant-data-client";
 import {
+  buildApplicationAgingSummary,
+  buildExpirationSummary,
+  buildParticipationSummary,
+  buildRosterSummary,
+  downloadCsv,
+} from "./reports";
+import {
   availableEnrollmentActions,
   type EnrollmentStatus,
 } from "./workflow";
 
 type Row = Record<string, any>;
-type WorkspaceTab = "work" | "applications" | "participation" | "roster" | "expirations";
+type WorkspaceTab =
+  | "work"
+  | "applications"
+  | "participation"
+  | "roster"
+  | "expirations"
+  | "reports";
 type DrawerTab =
   | "overview"
   | "requirements"
@@ -350,6 +363,18 @@ export function CredentialingPage() {
     .toSorted((a, b) =>
       String(b.action.created_at || "").localeCompare(String(a.action.created_at || "")),
     );
+
+  const applicationAgingSummary = buildApplicationAgingSummary(cases);
+  const participationSummary = buildParticipationSummary(participation);
+  const expirationSummary = buildExpirationSummary(expirations);
+  const rosterSummary = buildRosterSummary(rosterActions);
+  const networkDirectoryExceptions = participation.filter(
+    (row) =>
+      ["non_participating", "suspended"].includes(
+        String(row.participation_status || ""),
+      ) ||
+      ["not_listed", "inaccurate"].includes(String(row.directory_status || "")),
+  );
 
   const selectedEnrollment = selectedCase?.enrollment_id
     ? enrollments.find((row) => row.id === selectedCase.enrollment_id) ?? null
@@ -754,6 +779,111 @@ export function CredentialingPage() {
     }
   }
 
+  function exportApplicationAgingCsv() {
+    downloadCsv(
+      "credentialing-application-aging.csv",
+      [
+        "Provider",
+        "Payer",
+        "Product",
+        "Application Type",
+        "Status",
+        "Submitted",
+        "Age Days",
+        "Next Follow-Up",
+        "Priority",
+      ],
+      cases.map((row) => [
+        row.provider_name || "",
+        row.payer_name || "",
+        row.payer_plan_name || "All products",
+        row.application_type || "",
+        row.application_status || "",
+        row.submitted_date || "",
+        row.application_age_days ?? "",
+        row.next_followup_date || "",
+        row.priority || "",
+      ]),
+    );
+  }
+
+  function exportParticipationCsv() {
+    downloadCsv(
+      "credentialing-participation.csv",
+      [
+        "Provider",
+        "Payer",
+        "Product",
+        "Entity",
+        "Location",
+        "Enrollment Status",
+        "Participation Status",
+        "Directory Status",
+        "Effective Date",
+        "Last Verified",
+      ],
+      participation.map((row) => [
+        row.provider_name || "",
+        row.payer_name || "",
+        row.payer_plan_name || "All products",
+        row.practice_entity_name || "",
+        row.practice_location_name || "",
+        row.enrollment_status || "",
+        row.participation_status || "unknown",
+        row.directory_status || "unknown",
+        row.effective_date || "",
+        row.participation_last_verified_at || "",
+      ]),
+    );
+  }
+
+  function exportExpirationCsv() {
+    downloadCsv(
+      "credentialing-expirations.csv",
+      ["Provider", "Item", "Type", "Payer", "Due Date", "Status"],
+      expirations.map((row) => [
+        row.provider_name || "",
+        row.item_name || "",
+        row.source_type || "",
+        row.payer_name || "",
+        row.due_date || "",
+        row.current_status || "",
+      ]),
+    );
+  }
+
+  function exportRosterCsv() {
+    downloadCsv(
+      "credentialing-roster-actions.csv",
+      [
+        "Provider",
+        "Payer",
+        "Product",
+        "Action",
+        "Status",
+        "Requested",
+        "Submitted",
+        "Confirmed",
+        "Reference",
+        "Due",
+        "Priority",
+      ],
+      rosterRows.map(({ action, caseRow, work }) => [
+        caseRow?.provider_name || "",
+        caseRow?.payer_name || "",
+        caseRow?.payer_plan_name || "All products",
+        action.action_type || "",
+        action.status || "",
+        action.requested_date || "",
+        action.submitted_date || "",
+        action.confirmed_date || "",
+        action.reference_number || "",
+        work?.due_date || "",
+        work?.priority || "",
+      ]),
+    );
+  }
+
   function caseForWorkItem(item: Row) {
     if (item.source_object_type === "roster_action") {
       const rosterAction = rosterActions.find((row) => row.id === item.source_object_id);
@@ -852,6 +982,7 @@ export function CredentialingPage() {
           ["participation", "Participation Matrix"],
           ["roster", "Roster Management"],
           ["expirations", "Expirations"],
+          ["reports", "Reports"],
         ] as const).map(([id, label]) => (
           <button
             type="button"
@@ -1150,6 +1281,184 @@ export function CredentialingPage() {
             </table>
           </div>
         </section>
+      ) : null}
+
+      {!loading && workspaceTab === "reports" ? (
+        <div className="thera-stack">
+          <section className="thera-card">
+            <div className="thera-card-header">
+              <div>
+                <h2>Credentialing Reports</h2>
+                <p>
+                  Operational reporting is calculated from the live credentialing
+                  records already used by Applications, Participation, Expirations
+                  and Roster Management.
+                </p>
+              </div>
+            </div>
+          </section>
+
+          <section className="thera-card">
+            <div className="thera-card-header">
+              <div>
+                <h2>Application Aging</h2>
+                <p>Open applications grouped into 30-day payer aging bands.</p>
+              </div>
+              <button
+                type="button"
+                className="thera-action secondary"
+                onClick={exportApplicationAgingCsv}
+              >
+                Export CSV
+              </button>
+            </div>
+            <div className="thera-metric-grid">
+              {applicationAgingSummary.map((row) => (
+                <div className="thera-metric-card" key={row.label}>
+                  <div className="thera-metric-label">{row.label} Days</div>
+                  <div className="thera-metric-value">{row.count}</div>
+                </div>
+              ))}
+            </div>
+          </section>
+
+          <section className="thera-card">
+            <div className="thera-card-header">
+              <div>
+                <h2>Participation Status</h2>
+                <p>Current network participation across provider-payer scopes.</p>
+              </div>
+              <button
+                type="button"
+                className="thera-action secondary"
+                onClick={exportParticipationCsv}
+              >
+                Export CSV
+              </button>
+            </div>
+            <div className="thera-metric-grid">
+              {participationSummary.length === 0 ? (
+                <div className="thera-state">No participation records to summarize.</div>
+              ) : null}
+              {participationSummary.map((row) => (
+                <div className="thera-metric-card" key={row.label}>
+                  <div className="thera-metric-label">{row.label}</div>
+                  <div className="thera-metric-value">{row.count}</div>
+                </div>
+              ))}
+            </div>
+          </section>
+
+          <section className="thera-card">
+            <div className="thera-card-header">
+              <div>
+                <h2>Expirations</h2>
+                <p>
+                  Credential, CAQH, enrollment revalidation and contract
+                  recredentialing deadlines.
+                </p>
+              </div>
+              <button
+                type="button"
+                className="thera-action secondary"
+                onClick={exportExpirationCsv}
+              >
+                Export CSV
+              </button>
+            </div>
+            <div className="thera-metric-grid">
+              {expirationSummary.map((row) => (
+                <div className="thera-metric-card" key={row.label}>
+                  <div className="thera-metric-label">{row.label}</div>
+                  <div className="thera-metric-value">{row.count}</div>
+                </div>
+              ))}
+            </div>
+          </section>
+
+          <section className="thera-card">
+            <div className="thera-card-header">
+              <div>
+                <h2>Roster Status</h2>
+                <p>Current payer roster maintenance workload by lifecycle status.</p>
+              </div>
+              <button
+                type="button"
+                className="thera-action secondary"
+                onClick={exportRosterCsv}
+              >
+                Export CSV
+              </button>
+            </div>
+            <div className="thera-metric-grid">
+              {rosterSummary.length === 0 ? (
+                <div className="thera-state">No roster actions to summarize.</div>
+              ) : null}
+              {rosterSummary.map((row) => (
+                <div className="thera-metric-card" key={row.label}>
+                  <div className="thera-metric-label">{row.label}</div>
+                  <div className="thera-metric-value">{row.count}</div>
+                </div>
+              ))}
+            </div>
+          </section>
+
+          <section className="thera-card">
+            <div className="thera-card-header">
+              <div>
+                <h2>Network &amp; Directory Exceptions</h2>
+                <p>
+                  Participation and payer-directory discrepancies that require
+                  verification or corrective action.
+                </p>
+              </div>
+            </div>
+            <div className="thera-table-wrap">
+              <table className="thera-table">
+                <thead>
+                  <tr>
+                    <th>Provider</th>
+                    <th>Payer</th>
+                    <th>Product</th>
+                    <th>Location</th>
+                    <th>Participation</th>
+                    <th>Directory</th>
+                    <th>Last Verified</th>
+                    <th>Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {networkDirectoryExceptions.length === 0 ? (
+                    <tr><td colSpan={8}>No network or directory exceptions.</td></tr>
+                  ) : null}
+                  {networkDirectoryExceptions.map((row) => (
+                    <tr key={row.enrollment_id}>
+                      <td>{row.provider_name || "—"}</td>
+                      <td>{row.payer_name || "—"}</td>
+                      <td>{row.payer_plan_name || "All products"}</td>
+                      <td>{row.practice_location_name || "—"}</td>
+                      <td><StatusBadge value={row.participation_status || "unknown"} /></td>
+                      <td><StatusBadge value={row.directory_status || "unknown"} /></td>
+                      <td>{shortDate(row.participation_last_verified_at)}</td>
+                      <td>
+                        <button
+                          type="button"
+                          className="thera-action secondary"
+                          onClick={() => {
+                            openCase(row);
+                            setDrawerTab("verification");
+                          }}
+                        >
+                          Verify
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </section>
+        </div>
       ) : null}
 
       {selectedCase ? (
