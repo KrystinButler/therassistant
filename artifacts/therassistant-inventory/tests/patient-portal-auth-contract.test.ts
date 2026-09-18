@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync, readdirSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -147,4 +147,38 @@ test("patient portal route builders never include client ids", () => {
   assert.match(source, /PORTAL_RECOVER = "\/patient-portal\/recover"/);
   assert.match(source, /portalCheckInPath\(appointmentId/);
   assert.doesNotMatch(source, /clientId/);
+});
+
+
+test("patient portal pages do not use client ids or the retired public client", () => {
+  for (const file of [
+    "PatientPortalPage.tsx",
+    "PatientCheckInPage.tsx",
+    "PatientJournalPage.tsx",
+  ]) {
+    const source = readFileSync(
+      fileURLToPath(new URL(`../src/domains/portal/${file}`, import.meta.url)),
+      "utf8",
+    );
+    assert.doesNotMatch(source, /clientId/);
+    assert.doesNotMatch(source, /\/patient-portal\/\$\{clientId\}/);
+  }
+
+  const publicClient = fileURLToPath(
+    new URL("../src/lib/portal-public-client.ts", import.meta.url),
+  );
+  assert.equal(existsSync(publicClient), false);
+});
+
+test("patient portal repository derives the patient from authenticated context", () => {
+  const source = readFileSync(
+    fileURLToPath(new URL("../src/domains/portal/repository.ts", import.meta.url)),
+    "utf8",
+  );
+  assert.match(source, /getMyPortalContext/);
+  assert.match(source, /record_client_checkin/);
+  assert.match(source, /portal_save_previsit_checkin/);
+  assert.match(source, /portal_add_journal_entry/);
+  assert.doesNotMatch(source, /portal-public-client/);
+  assert.doesNotMatch(source, /getPatientPortalData\(patientId/);
 });
