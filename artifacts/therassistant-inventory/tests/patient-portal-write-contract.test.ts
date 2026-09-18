@@ -85,3 +85,28 @@ test("journal write derives client identity and validates goal ownership", () =>
   assert.match(impl, /Treatment goal is unavailable/i);
   assert.doesNotMatch(impl, /p_client_id\s+uuid/i);
 });
+
+
+test("check-in hardening prevents backward status transitions", () => {
+  const sql = migration("secure_patient_portal_write_hardening");
+  const impl = functionStatement(sql, "private.record_client_checkin_impl");
+
+  assert.match(impl, /checked_in_at\s+is\s+not\s+null/i);
+  assert.match(impl, /arrived_at\s+is\s+not\s+null/i);
+  assert.match(impl, /on_my_way_at\s+is\s+not\s+null/i);
+  assert.match(impl, /'in_session'::public\.appointment_status_enum/i);
+  assert.match(impl, /'completed'::public\.appointment_status_enum/i);
+  assert.match(impl, /'rescheduled'::public\.appointment_status_enum/i);
+});
+
+test("previsit hardening merges against the current conflicting row", () => {
+  const sql = migration("secure_patient_portal_write_hardening");
+  const impl = functionStatement(sql, "private.portal_save_previsit_checkin_impl");
+
+  assert.match(impl, /on conflict\s*\(appointment_id\)/i);
+  assert.match(impl, /public\.client_checkins\.responses/i);
+  assert.match(impl, /visit_questions/i);
+  assert.match(impl, /consents/i);
+  assert.match(impl, /jsonb_build_object\('pre_visit'/i);
+  assert.doesNotMatch(impl, /responses\s*=\s*excluded\.responses/i);
+});
