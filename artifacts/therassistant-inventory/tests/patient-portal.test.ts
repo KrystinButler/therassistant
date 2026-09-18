@@ -36,3 +36,21 @@ test("journal entries remain separate from clinical notes", () => {
   assert.equal(values.author_type, "patient");
   assert.equal("note_text" in values, false);
 });
+
+
+test("default other documents are not patient-facing without explicit classification", () => {
+  const result = buildPatientPortalData({
+    patient: { id: "patient-1" },
+    appointments: [],
+    policies: [],
+    documents: [
+      { id: "doc-consent", client_id: "patient-1", document_type: "consent_form", document_status: "approved" },
+      { id: "doc-other", client_id: "patient-1", document_type: "other", document_status: "approved" },
+    ],
+    checkins: [],
+    journalEntries: [],
+    now: new Date("2026-09-17T12:00:00Z"),
+  });
+
+  assert.deepEqual(result.documents.map((row) => row.id), ["doc-consent"]);
+});
