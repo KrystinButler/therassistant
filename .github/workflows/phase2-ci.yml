@@ -65,7 +65,9 @@ jobs:
             "/authorizations"
             "/schedule"
             "/schedule/55000000-0000-4000-8000-000000000006"
-            "/patient-portal/ff648f71-9c94-433c-9aab-f80b039a80fd"
+            "/patient-portal/login"
+            "/patient-portal/activate"
+            "/patient-portal"
             "/encounters/56000000-0000-4000-8000-000000000001"
           )
           for route in "${routes[@]}"; do
