@@ -1,3 +1,4 @@
+
 create or replace function public.record_network_participation_verification(
   p_tenant_id uuid,
   p_enrollment_id uuid,
@@ -108,3 +109,4 @@ grant execute on function public.record_network_participation_verification(
   uuid, uuid, text, public.network_participation_status_enum,
   public.directory_status_enum, text, text, text, text, date, timestamptz
 ) to authenticated, service_role;
+
