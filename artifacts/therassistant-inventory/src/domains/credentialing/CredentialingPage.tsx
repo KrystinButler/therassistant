@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useLocation } from "wouter";
 
 import { StatusBadge } from "../../components/status-badge";
+import { NewCredentialingCaseDrawer } from "./NewCredentialingCaseDrawer";
 import { WorkDrawer } from "../../components/work-drawer";
 import { shortDate } from "../../lib/format";
 import { storageClient } from "../../lib/storage-client";
@@ -74,6 +75,25 @@ type RosterTransitionForm = {
   notes: string;
 };
 
+type RequirementForm = {
+  requirement_name: string;
+  category: string;
+  status: string;
+  due_date: string;
+  notes: string;
+};
+
+type FollowupForm = {
+  followup_date: string;
+  channel: string;
+  contact_name: string;
+  contact_details: string;
+  reference_number: string;
+  outcome: string;
+  next_followup_date: string;
+  notes: string;
+};
+
 const rosterActionTypes = [
   "add_provider",
   "remove_provider",
@@ -103,6 +123,30 @@ const rosterTransitionMap: Record<string, string[]> = {
 
 function rosterTransitionOptions(status: string): string[] {
   return rosterTransitionMap[status] ?? [];
+}
+
+const applicationTransitionMap: Record<string, string[]> = {
+  not_started: ["intake", "closed"],
+  intake: ["missing_information", "ready_to_submit", "withdrawn", "closed"],
+  missing_information: ["intake", "ready_to_submit", "withdrawn", "closed"],
+  ready_to_submit: ["submitted", "missing_information", "withdrawn", "closed"],
+  submitted: ["payer_review", "additional_information_requested", "approved", "denied", "withdrawn", "closed"],
+  payer_review: ["additional_information_requested", "approved", "denied", "withdrawn", "closed"],
+  additional_information_requested: ["submitted", "payer_review", "approved", "denied", "withdrawn", "closed"],
+  approved: ["effective", "denied", "closed"],
+  effective: ["roster_verified", "terminated", "closed"],
+  roster_verified: ["directory_verified", "terminated", "closed"],
+  directory_verified: ["complete", "terminated", "closed"],
+  complete: ["recredentialing_due", "terminated"],
+  denied: ["ready_to_submit", "closed"],
+  withdrawn: ["closed"],
+  terminated: ["closed"],
+  closed: [],
+  recredentialing_due: ["intake", "closed", "terminated"],
+};
+
+function applicationTransitionOptions(status: string): string[] {
+  return applicationTransitionMap[status] ?? [];
 }
 
 const credentialingDocumentTypes = [
@@ -183,6 +227,29 @@ function emptyRosterTransitionForm(): RosterTransitionForm {
   };
 }
 
+function emptyRequirementForm(): RequirementForm {
+  return {
+    requirement_name: "",
+    category: "",
+    status: "missing",
+    due_date: "",
+    notes: "",
+  };
+}
+
+function emptyFollowupForm(): FollowupForm {
+  return {
+    followup_date: new Date().toISOString().slice(0, 10),
+    channel: "payer_portal",
+    contact_name: "",
+    contact_details: "",
+    reference_number: "",
+    outcome: "",
+    next_followup_date: "",
+    notes: "",
+  };
+}
+
 export function CredentialingPage() {
   const [, navigate] = useLocation();
   const [version, setVersion] = useState(0);
@@ -221,6 +288,13 @@ export function CredentialingPage() {
   const [rosterTransitionForm, setRosterTransitionForm] =
     useState<RosterTransitionForm>(emptyRosterTransitionForm);
   const [updatingRosterAction, setUpdatingRosterAction] = useState(false);
+  const [newCaseOpen, setNewCaseOpen] = useState(false);
+  const [applicationTransitionReason, setApplicationTransitionReason] = useState("");
+  const [transitioningApplication, setTransitioningApplication] = useState(false);
+  const [requirementForm, setRequirementForm] = useState<RequirementForm>(emptyRequirementForm);
+  const [addingRequirement, setAddingRequirement] = useState(false);
+  const [followupForm, setFollowupForm] = useState<FollowupForm>(emptyFollowupForm);
+  const [addingFollowup, setAddingFollowup] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -228,11 +302,16 @@ export function CredentialingPage() {
     setError(null);
 
     void getCurrentTenantId()
-      .then((tenantId) =>
-        tenantRpc<number>("sync_provider_revalidation_work", {
-          p_tenant_id: tenantId,
-        }),
-      )
+      .then(async (tenantId) => {
+        await Promise.allSettled([
+          tenantRpc<number>("sync_provider_revalidation_work", {
+            p_tenant_id: tenantId,
+          }),
+          tenantRpc<number>("sync_credentialing_operational_work", {
+            p_tenant_id: tenantId,
+          }),
+        ]);
+      })
       .catch(() => null);
 
     Promise.all([
@@ -496,6 +575,9 @@ export function CredentialingPage() {
     setRosterForm(emptyRosterActionForm());
     setSelectedRosterActionId(null);
     setRosterTransitionForm(emptyRosterTransitionForm());
+    setApplicationTransitionReason("");
+    setRequirementForm(emptyRequirementForm());
+    setFollowupForm(emptyFollowupForm());
   }
 
   function closeCase() {
@@ -509,6 +591,9 @@ export function CredentialingPage() {
     setRosterForm(emptyRosterActionForm());
     setSelectedRosterActionId(null);
     setRosterTransitionForm(emptyRosterTransitionForm());
+    setApplicationTransitionReason("");
+    setRequirementForm(emptyRequirementForm());
+    setFollowupForm(emptyFollowupForm());
   }
 
   function openCaseAt(index: number) {
@@ -556,6 +641,101 @@ export function CredentialingPage() {
       );
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function transitionApplication(nextStatus: string) {
+    if (!selectedCase?.application_id) return;
+    setTransitioningApplication(true);
+    setError(null);
+    try {
+      const tenantId = await getCurrentTenantId();
+      await tenantRpc<string>("transition_credentialing_application", {
+        p_tenant_id: tenantId,
+        p_application_id: selectedCase.application_id,
+        p_status: nextStatus,
+        p_reason: applicationTransitionReason.trim() || null,
+      });
+      await tenantRpc<number>("sync_credentialing_operational_work", {
+        p_tenant_id: tenantId,
+      }).catch(() => null);
+      setSelectedCase((current) =>
+        current ? { ...current, application_status: nextStatus } : current,
+      );
+      setApplicationTransitionReason("");
+      setVersion((value) => value + 1);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to move application status");
+    } finally {
+      setTransitioningApplication(false);
+    }
+  }
+
+  async function addRequirement() {
+    if (!selectedCase?.application_id || !requirementForm.requirement_name.trim()) return;
+    setAddingRequirement(true);
+    setError(null);
+    try {
+      await tenantInsert("credentialing_requirements", {
+        application_id: selectedCase.application_id,
+        requirement_name: requirementForm.requirement_name.trim(),
+        category: requirementForm.category.trim() || null,
+        status: requirementForm.status,
+        due_date: requirementForm.due_date || null,
+        notes: requirementForm.notes.trim() || null,
+      });
+      setRequirementForm(emptyRequirementForm());
+      setVersion((value) => value + 1);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to add credentialing requirement");
+    } finally {
+      setAddingRequirement(false);
+    }
+  }
+
+  async function updateRequirementStatus(requirement: Row, status: string) {
+    setError(null);
+    try {
+      const values: Row = { status };
+      if (status === "received" && !requirement.received_date) {
+        values.received_date = new Date().toISOString().slice(0, 10);
+      }
+      if (status === "verified" && !requirement.verified_at) {
+        values.received_date =
+          requirement.received_date || new Date().toISOString().slice(0, 10);
+        values.verified_at = new Date().toISOString();
+      }
+      await tenantUpdate("credentialing_requirements", requirement.id, values);
+      setVersion((value) => value + 1);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to update requirement");
+    }
+  }
+
+  async function addFollowup() {
+    if (!selectedCase?.application_id) return;
+    setAddingFollowup(true);
+    setError(null);
+    try {
+      const tenantId = await getCurrentTenantId();
+      await tenantRpc<Row[]>("record_credentialing_followup", {
+        p_tenant_id: tenantId,
+        p_application_id: selectedCase.application_id,
+        p_followup_date: followupForm.followup_date || null,
+        p_channel: followupForm.channel || null,
+        p_contact_name: followupForm.contact_name.trim() || null,
+        p_contact_details: followupForm.contact_details.trim() || null,
+        p_reference_number: followupForm.reference_number.trim() || null,
+        p_outcome: followupForm.outcome.trim() || null,
+        p_next_followup_date: followupForm.next_followup_date || null,
+        p_notes: followupForm.notes.trim() || null,
+      });
+      setFollowupForm(emptyFollowupForm());
+      setVersion((value) => value + 1);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to record payer follow-up");
+    } finally {
+      setAddingFollowup(false);
     }
   }
 
@@ -922,6 +1102,13 @@ export function CredentialingPage() {
           </p>
         </div>
         <div className="thera-filter-row">
+          <button
+            type="button"
+            className="thera-action"
+            onClick={() => setNewCaseOpen(true)}
+          >
+            + New Credentialing Case
+          </button>
           <button
             type="button"
             className="thera-action secondary"
@@ -1461,6 +1648,15 @@ export function CredentialingPage() {
         </div>
       ) : null}
 
+      <NewCredentialingCaseDrawer
+        open={newCaseOpen}
+        onOpenChange={setNewCaseOpen}
+        onCreated={() => {
+          setWorkspaceTab("applications");
+          setVersion((value) => value + 1);
+        }}
+      />
+
       {selectedCase ? (
         <WorkDrawer
           open={Boolean(selectedCase)}
@@ -1572,6 +1768,56 @@ export function CredentialingPage() {
                 </div>
               </section>
 
+              {selectedCase.application_id ? (
+                <section className="thera-card">
+                  <h2>Application Workflow</h2>
+                  <div className="thera-definition-grid">
+                    <Field
+                      name="Current Status"
+                      value={<StatusBadge value={selectedCase.application_status || "intake"} />}
+                    />
+                    <Field
+                      name="Next Actions"
+                      value={
+                        applicationTransitionOptions(
+                          String(selectedCase.application_status || "intake"),
+                        ).length
+                      }
+                    />
+                  </div>
+                  <label style={{ display: "block", marginTop: 16 }}>
+                    Status Note
+                    <textarea
+                      className="thera-input"
+                      rows={3}
+                      placeholder="Optional note explaining this status change"
+                      value={applicationTransitionReason}
+                      onChange={(event) => setApplicationTransitionReason(event.target.value)}
+                    />
+                  </label>
+                  <div className="thera-filter-row" style={{ marginTop: 16 }}>
+                    {applicationTransitionOptions(
+                      String(selectedCase.application_status || "intake"),
+                    ).map((status) => (
+                      <button
+                        type="button"
+                        className="thera-action secondary"
+                        key={status}
+                        disabled={transitioningApplication}
+                        onClick={() => void transitionApplication(status)}
+                      >
+                        {status.replaceAll("_", " ")}
+                      </button>
+                    ))}
+                    {applicationTransitionOptions(
+                      String(selectedCase.application_status || "intake"),
+                    ).length === 0 ? (
+                      <span>No further workflow transitions.</span>
+                    ) : null}
+                  </div>
+                </section>
+              ) : null}
+
               {selectedWork.length ? (
                 <section className="thera-card">
                   <h2>Open Work</h2>
@@ -1673,14 +1919,93 @@ export function CredentialingPage() {
           ) : null}
 
           {drawerTab === "requirements" ? (
-            <section className="thera-card">
-              <h2>Requirements</h2>
-              <div className="thera-table-wrap">
+            <div className="thera-stack">
+              <section className="thera-card">
+                <h2>Add Requirement</h2>
+                <div className="thera-form-grid">
+                  <label>
+                    Requirement *
+                    <input
+                      className="thera-input"
+                      value={requirementForm.requirement_name}
+                      onChange={(event) =>
+                        setRequirementForm({
+                          ...requirementForm,
+                          requirement_name: event.target.value,
+                        })
+                      }
+                    />
+                  </label>
+                  <label>
+                    Category
+                    <input
+                      className="thera-input"
+                      value={requirementForm.category}
+                      onChange={(event) =>
+                        setRequirementForm({ ...requirementForm, category: event.target.value })
+                      }
+                    />
+                  </label>
+                  <label>
+                    Status
+                    <select
+                      className="thera-input"
+                      value={requirementForm.status}
+                      onChange={(event) =>
+                        setRequirementForm({ ...requirementForm, status: event.target.value })
+                      }
+                    >
+                      <option value="missing">Missing</option>
+                      <option value="requested">Requested</option>
+                      <option value="received">Received</option>
+                      <option value="verified">Verified</option>
+                      <option value="waived">Waived</option>
+                      <option value="not_applicable">Not Applicable</option>
+                    </select>
+                  </label>
+                  <label>
+                    Due Date
+                    <input
+                      className="thera-input"
+                      type="date"
+                      value={requirementForm.due_date}
+                      onChange={(event) =>
+                        setRequirementForm({ ...requirementForm, due_date: event.target.value })
+                      }
+                    />
+                  </label>
+                  <label style={{ gridColumn: "1 / -1" }}>
+                    Notes
+                    <textarea
+                      className="thera-input"
+                      rows={3}
+                      value={requirementForm.notes}
+                      onChange={(event) =>
+                        setRequirementForm({ ...requirementForm, notes: event.target.value })
+                      }
+                    />
+                  </label>
+                </div>
+                <div className="thera-filter-row" style={{ marginTop: 16 }}>
+                  <button
+                    type="button"
+                    className="thera-action"
+                    disabled={addingRequirement || !requirementForm.requirement_name.trim()}
+                    onClick={() => void addRequirement()}
+                  >
+                    {addingRequirement ? "Adding..." : "Add Requirement"}
+                  </button>
+                </div>
+              </section>
+
+              <section className="thera-card">
+                <h2>Requirements</h2>
+                <div className="thera-table-wrap">
                 <table className="thera-table">
-                  <thead><tr><th>Requirement</th><th>Category</th><th>Status</th><th>Due</th><th>Received</th></tr></thead>
+                  <thead><tr><th>Requirement</th><th>Category</th><th>Status</th><th>Due</th><th>Received</th><th>Update</th></tr></thead>
                   <tbody>
                     {selectedRequirements.length === 0 ? (
-                      <tr><td colSpan={5}>No application requirements recorded.</td></tr>
+                      <tr><td colSpan={6}>No application requirements recorded.</td></tr>
                     ) : null}
                     {selectedRequirements.map((row) => (
                       <tr key={row.id}>
@@ -1689,18 +2014,152 @@ export function CredentialingPage() {
                         <td><StatusBadge value={row.status} /></td>
                         <td>{shortDate(row.due_date)}</td>
                         <td>{shortDate(row.received_date)}</td>
+                        <td>
+                          <select
+                            className="thera-input"
+                            value={row.status}
+                            onChange={(event) =>
+                              void updateRequirementStatus(row, event.target.value)
+                            }
+                          >
+                            <option value="missing">Missing</option>
+                            <option value="requested">Requested</option>
+                            <option value="received">Received</option>
+                            <option value="verified">Verified</option>
+                            <option value="waived">Waived</option>
+                            <option value="not_applicable">Not Applicable</option>
+                          </select>
+                        </td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
-              </div>
-            </section>
+                </div>
+              </section>
+            </div>
           ) : null}
 
           {drawerTab === "followup" ? (
-            <section className="thera-card">
-              <h2>Follow-Up</h2>
-              <div className="thera-table-wrap">
+            <div className="thera-stack">
+              <section className="thera-card">
+                <h2>Record Payer Follow-Up</h2>
+                <div className="thera-form-grid">
+                  <label>
+                    Contact Date
+                    <input
+                      className="thera-input"
+                      type="date"
+                      value={followupForm.followup_date}
+                      onChange={(event) =>
+                        setFollowupForm({ ...followupForm, followup_date: event.target.value })
+                      }
+                    />
+                  </label>
+                  <label>
+                    Channel
+                    <select
+                      className="thera-input"
+                      value={followupForm.channel}
+                      onChange={(event) =>
+                        setFollowupForm({ ...followupForm, channel: event.target.value })
+                      }
+                    >
+                      <option value="payer_portal">Payer Portal</option>
+                      <option value="phone">Phone</option>
+                      <option value="email">Email</option>
+                      <option value="fax">Fax</option>
+                      <option value="mail">Mail</option>
+                      <option value="other">Other</option>
+                    </select>
+                  </label>
+                  <label>
+                    Contact / Representative
+                    <input
+                      className="thera-input"
+                      value={followupForm.contact_name}
+                      onChange={(event) =>
+                        setFollowupForm({ ...followupForm, contact_name: event.target.value })
+                      }
+                    />
+                  </label>
+                  <label>
+                    Reference #
+                    <input
+                      className="thera-input"
+                      value={followupForm.reference_number}
+                      onChange={(event) =>
+                        setFollowupForm({
+                          ...followupForm,
+                          reference_number: event.target.value,
+                        })
+                      }
+                    />
+                  </label>
+                  <label>
+                    Next Follow-Up
+                    <input
+                      className="thera-input"
+                      type="date"
+                      value={followupForm.next_followup_date}
+                      onChange={(event) =>
+                        setFollowupForm({
+                          ...followupForm,
+                          next_followup_date: event.target.value,
+                        })
+                      }
+                    />
+                  </label>
+                  <label>
+                    Contact Details
+                    <input
+                      className="thera-input"
+                      value={followupForm.contact_details}
+                      onChange={(event) =>
+                        setFollowupForm({
+                          ...followupForm,
+                          contact_details: event.target.value,
+                        })
+                      }
+                    />
+                  </label>
+                  <label style={{ gridColumn: "1 / -1" }}>
+                    Outcome
+                    <textarea
+                      className="thera-input"
+                      rows={3}
+                      value={followupForm.outcome}
+                      onChange={(event) =>
+                        setFollowupForm({ ...followupForm, outcome: event.target.value })
+                      }
+                    />
+                  </label>
+                  <label style={{ gridColumn: "1 / -1" }}>
+                    Notes
+                    <textarea
+                      className="thera-input"
+                      rows={3}
+                      value={followupForm.notes}
+                      onChange={(event) =>
+                        setFollowupForm({ ...followupForm, notes: event.target.value })
+                      }
+                    />
+                  </label>
+                </div>
+                <div className="thera-filter-row" style={{ marginTop: 16 }}>
+                  <button
+                    type="button"
+                    className="thera-action"
+                    disabled={addingFollowup}
+                    onClick={() => void addFollowup()}
+                  >
+                    {addingFollowup ? "Recording..." : "Record Follow-Up"}
+                  </button>
+                </div>
+              </section>
+
+              <section className="thera-card">
+                <h2>Follow-Up History</h2>
+                <div className="thera-table-wrap">
                 <table className="thera-table">
                   <thead><tr><th>Date</th><th>Channel</th><th>Contact</th><th>Outcome</th><th>Reference</th><th>Next</th></tr></thead>
                   <tbody>
@@ -1719,8 +2178,9 @@ export function CredentialingPage() {
                     ))}
                   </tbody>
                 </table>
-              </div>
-            </section>
+                </div>
+              </section>
+            </div>
           ) : null}
 
           {drawerTab === "documents" ? (
