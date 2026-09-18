@@ -77,11 +77,11 @@ export function buildExpirationSummary(
 ): ReportSummaryRow[] {
   const labels = ["Overdue", "Due 30 Days", "Due 60 Days", "Due 90 Days", "Later"];
   const counts = new Map(labels.map((label) => [label, 0]));
-  const todayStart = new Date(
+  const todayStart = Date.UTC(
     today.getUTCFullYear(),
     today.getUTCMonth(),
     today.getUTCDate(),
-  ).getTime();
+  );
 
   for (const row of rows) {
     if (!row.due_date) continue;
