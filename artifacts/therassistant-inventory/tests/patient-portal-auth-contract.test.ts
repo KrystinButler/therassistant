@@ -182,3 +182,60 @@ test("patient portal repository derives the patient from authenticated context",
   assert.doesNotMatch(source, /portal-public-client/);
   assert.doesNotMatch(source, /getPatientPortalData\(patientId/);
 });
+
+
+test("patient portal read hardening removes direct patient base-table reads", () => {
+  const sql = migration("secure_patient_portal_read_hardening");
+  assert.match(sql, /get_my_patient_portal_data/i);
+
+  for (const table of [
+    "clients",
+    "appointments",
+    "client_insurance_policies",
+    "documents",
+    "client_checkins",
+    "client_balance_summaries",
+    "treatment_plans",
+    "treatment_plan_goals",
+  ]) {
+    assert.match(sql, new RegExp(`drop policy if exists "${table} tenant select"`, "i"));
+    assert.match(
+      sql,
+      new RegExp(
+        `create policy "${table} tenant select"[\\s\\S]+private\\.has_tenant_read_access`,
+        "i",
+      ),
+    );
+  }
+
+  const impl = functionStatement(sql, "private.get_my_patient_portal_data_impl");
+  assert.match(impl, /jsonb_build_object/i);
+  assert.doesNotMatch(impl, /select\s+\*/i);
+  for (const forbidden of [
+    "appointments.notes",
+    "storage_path",
+    "plan_text",
+    "problem_statement",
+    "interventions",
+  ]) {
+    assert.doesNotMatch(impl, new RegExp(forbidden.replace(".", "\\."), "i"));
+  }
+  assert.match(impl, /'pre_visit'/i);
+});
+
+test("staff journal reads exclude entries the patient saved privately", () => {
+  const sql = migration("secure_patient_portal_read_hardening");
+  assert.match(sql, /drop policy if exists "patient_journal_entries tenant select"/i);
+  assert.match(sql, /create policy "patient_journal_entries tenant select"/i);
+  assert.match(sql, /private\.has_tenant_read_access\(tenant_id\)/i);
+  assert.match(sql, /visibility\s*=\s*'shared_with_provider'/i);
+});
+
+test("portal repository reads through the narrow aggregate RPC", () => {
+  const source = readFileSync(
+    fileURLToPath(new URL("../src/domains/portal/repository.ts", import.meta.url)),
+    "utf8",
+  );
+  assert.match(source, /get_my_patient_portal_data/);
+  assert.doesNotMatch(source, /portalSelect/);
+});
