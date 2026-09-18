@@ -49,19 +49,19 @@ export function ProviderDetailPage() {
     setCredentialingError(null);
 
     Promise.all([
-      tenantSelect("provider_identifiers"),
-      tenantSelect("provider_payer_enrollments"),
-      tenantSelect("provider_credentials"),
-      tenantSelect("v_credentialing_case_summary"),
-      tenantSelect("v_credentialing_expirations"),
+      tenantSelect("provider_identifiers", { provider_id: `eq.${providerId}` }),
+      tenantSelect("provider_payer_enrollments", { provider_id: `eq.${providerId}` }),
+      tenantSelect("provider_credentials", { provider_id: `eq.${providerId}` }),
+      tenantSelect("v_credentialing_case_summary", { provider_id: `eq.${providerId}` }),
+      tenantSelect("v_credentialing_expirations", { provider_id: `eq.${providerId}` }),
       referenceSelect("payers"),
     ])
       .then(([identifiers, enrollments, credentialRows, applicationRows, expirationRows, payerRows]) => {
         if (!active) return;
         setPayers(payerRows);
-        setProviderCredentials(credentialRows.filter((row) => row.provider_id === providerId));
-        setCredentialingApplications(applicationRows.filter((row) => row.provider_id === providerId));
-        setCredentialingExpirations(expirationRows.filter((row) => row.provider_id === providerId));
+        setProviderCredentials(credentialRows);
+        setCredentialingApplications(applicationRows);
+        setCredentialingExpirations(expirationRows);
         setCredentialing(
           buildProviderCredentialingView({
             providerId,
