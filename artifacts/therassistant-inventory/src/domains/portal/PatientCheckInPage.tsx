@@ -17,6 +17,7 @@ import {
 import { Link, useRoute } from "wouter";
 
 import { getPatientPortalData, savePreVisitCheckIn } from "./repository";
+import { PORTAL_HOME, PORTAL_JOURNAL, portalCheckInPath } from "./routes";
 import type { PreVisitCheckInUpdate } from "./workflow";
 import "./patient-journal.css";
 import "./patient-checkin.css";
@@ -102,8 +103,7 @@ function readConsents(value: unknown): Consents {
 }
 
 export function PatientCheckInPage() {
-  const [, params] = useRoute<{ clientId: string; appointmentId: string }>("/patient-portal/:clientId/check-in/:appointmentId");
-  const clientId = params?.clientId ?? "";
+  const [, params] = useRoute<{ appointmentId: string }>("/patient-portal/check-in/:appointmentId");
   const appointmentId = params?.appointmentId ?? "";
   const [data, setData] = useState<PortalData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -120,10 +120,10 @@ export function PatientCheckInPage() {
   useEffect(() => {
     let active = true;
     async function load() {
-      if (!clientId || !appointmentId) return;
+      if (!appointmentId) return;
       setLoading(true);
       try {
-        const result = await getPatientPortalData(clientId);
+        const result = await getPatientPortalData();
         if (!active) return;
         const appointment = result.upcomingAppointments.find((row) => row.id === appointmentId);
         if (!appointment) throw new Error("This appointment is not available for pre-visit check-in.");
@@ -151,7 +151,7 @@ export function PatientCheckInPage() {
     }
     void load();
     return () => { active = false; };
-  }, [appointmentId, clientId]);
+  }, [appointmentId]);
 
   const appointment = data?.upcomingAppointments.find((row) => row.id === appointmentId) ?? null;
   const policy = data?.insurancePolicies.find((row) => String(row.status ?? "") === "active") ?? data?.insurancePolicies[0] ?? null;
@@ -166,7 +166,7 @@ export function PatientCheckInPage() {
     setError(null);
     setNotice(null);
     try {
-      const saved = await savePreVisitCheckIn(appointmentId, clientId, update);
+      const saved = await savePreVisitCheckIn(appointmentId, update);
       const preVisit = recordOf(recordOf(saved.responses).pre_visit);
       if (preVisit.submitted_at) setSubmittedAt(String(preVisit.submitted_at));
       return true;
@@ -240,7 +240,7 @@ export function PatientCheckInPage() {
   return (
     <div className="pj-app">
       <header className="pj-topbar">
-        <Link href={`/patient-portal/${clientId}`} className="pj-brand" aria-label="Therassistant patient portal home">
+        <Link href={PORTAL_HOME} className="pj-brand" aria-label="Therassistant patient portal home">
           <span className="pj-logo-mark" aria-hidden="true"><span>▲</span><span>▲</span><span>▲</span></span>
           <span><strong>THERASSISTANT EHR</strong><small>BEHAVIORAL HEALTH. A BRIGHTER TOMORROW.</small></span>
         </Link>
@@ -257,13 +257,13 @@ export function PatientCheckInPage() {
           <div className="pj-mountains" aria-hidden="true">⌁⌁⌁</div>
           <p className="pj-progress-copy">Progress happens<br />between sessions, too.</p>
           <nav className="pj-nav" aria-label="Patient portal navigation">
-            <Link href={`/patient-portal/${clientId}`}><Home size={17} /> Home</Link>
-            <Link href={`/patient-portal/${clientId}`}><CalendarDays size={17} /> Appointments</Link>
-            <Link href={`/patient-portal/${clientId}/journal`}><ClipboardCheck size={17} /> Journal</Link>
-            <Link href={`/patient-portal/${clientId}/check-in/${appointmentId}`} className="active"><Heart size={17} /> Check-In</Link>
-            <Link href={`/patient-portal/${clientId}`}><CreditCard size={17} /> Billing</Link>
-            <Link href={`/patient-portal/${clientId}`}><MessageSquare size={17} /> Messages</Link>
-            <Link href={`/patient-portal/${clientId}`}><UserRound size={17} /> Profile</Link>
+            <Link href={PORTAL_HOME}><Home size={17} /> Home</Link>
+            <Link href={PORTAL_HOME}><CalendarDays size={17} /> Appointments</Link>
+            <Link href={PORTAL_JOURNAL}><ClipboardCheck size={17} /> Journal</Link>
+            <Link href={portalCheckInPath(appointmentId)} className="active"><Heart size={17} /> Check-In</Link>
+            <Link href={PORTAL_HOME}><CreditCard size={17} /> Billing</Link>
+            <Link href={PORTAL_HOME}><MessageSquare size={17} /> Messages</Link>
+            <Link href={PORTAL_HOME}><UserRound size={17} /> Profile</Link>
           </nav>
           <div className="pj-sidebar-quote"><div className="pj-tree-line">▲ ▲ ▲</div><em>Same people.<br />A Healthier You.</em></div>
         </aside>
