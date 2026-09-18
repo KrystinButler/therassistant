@@ -52,3 +52,14 @@ test("roster creation and transition keep workqueue and status history synchroni
   assert.match(rosterMigration, /private\.has_tenant_write_access/i);
   assert.match(rosterMigration, /security invoker/i);
 });
+
+
+test("rejected roster actions remain actionable and status choices follow the transition matrix", () => {
+  assert.match(credentialingPage, /const rosterTerminalStatuses = new Set\(\["confirmed", "cancelled"\]\)/);
+  assert.match(credentialingPage, /function rosterTransitionOptions/);
+  assert.match(credentialingPage, /rejected:[\s\S]*ready[\s\S]*cancelled/);
+  assert.doesNotMatch(
+    credentialingPage,
+    /<option value="not_started">Not Started<\/option>[\s\S]*<option value="cancelled">Cancelled<\/option>/,
+  );
+});
