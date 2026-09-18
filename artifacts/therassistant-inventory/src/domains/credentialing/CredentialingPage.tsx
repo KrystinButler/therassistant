@@ -61,7 +61,7 @@ function emptyEnrollmentEdit(): EnrollmentEdit {
 export function CredentialingPage() {
   const [, navigate] = useLocation();
   const [version, setVersion] = useState(0);
-  const [workspaceTab, setWorkspaceTab] = useState<WorkspaceTab>("work");
+  const [workspaceTab, setWorkspaceTab] = useState<WorkspaceTab>("participation");
   const [drawerTab, setDrawerTab] = useState<DrawerTab>("overview");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
