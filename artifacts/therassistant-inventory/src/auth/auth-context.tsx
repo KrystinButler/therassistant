@@ -28,7 +28,7 @@ type AuthContextValue = {
   passwordRecovery: boolean;
   signIn(email: string, password: string): Promise<void>;
   signOut(): Promise<void>;
-  requestPasswordReset(email: string): Promise<void>;
+  requestPasswordReset(email: string, redirectTo?: string): Promise<void>;
   completePasswordRecovery(password: string): Promise<void>;
 };
 
@@ -93,10 +93,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
-  const requestPasswordReset = useCallback(async (email: string) => {
+  const requestPasswordReset = useCallback(async (email: string, redirectTo?: string) => {
     setError(null);
     try {
-      await requestPasswordRecovery(email);
+      await requestPasswordRecovery(email, redirectTo);
     } catch (err) {
       const message = err instanceof Error ? err.message : "Unable to request a password reset.";
       setError(message);
@@ -123,7 +123,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       user: session?.user ?? null,
       loading,
       error,
-      passwordRecovery: Boolean(session?.recovery),
+      passwordRecovery: session?.flowType === "recovery",
       signIn,
       signOut,
       requestPasswordReset,
