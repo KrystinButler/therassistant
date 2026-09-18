@@ -9,7 +9,7 @@ const credentialingPage = readFileSync(
 
 const rosterMigration = readFileSync(
   new URL(
-    "../../../supabase/migrations/20260918040244_credentialing_roster_rpc_normalization.sql",
+    "../../../supabase/migrations/20260918040319_normalize_credentialing_roster_rpcs.sql",
     import.meta.url,
   ),
   "utf8",
@@ -63,5 +63,18 @@ test("rejected roster actions remain actionable and status choices follow the tr
   assert.doesNotMatch(
     credentialingPage,
     /<option value="not_started">Not Started<\/option>[\s\S]*<option value="cancelled">Cancelled<\/option>/,
+  );
+});
+
+
+test("roster cancellation and duplicate guards match the actionable status model", () => {
+  assert.match(credentialingPage, /submitted:\s*\["pending", "confirmed", "rejected", "cancelled"\]/);
+  assert.match(
+    rosterMigration,
+    /ra\.status\s+not\s+in\s*\(\s*'confirmed'[\s\S]*'cancelled'[\s\S]*\)/i,
+  );
+  assert.doesNotMatch(
+    rosterMigration,
+    /ra\.status\s+not\s+in\s*\(\s*'confirmed'[\s\S]*'rejected'[\s\S]*'cancelled'/i,
   );
 });
