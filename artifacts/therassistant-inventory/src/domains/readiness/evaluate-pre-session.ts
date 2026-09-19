@@ -78,9 +78,7 @@ function treatmentPlanCheck(input: PreSessionInput): ReadinessCheck {
   );
 }
 
-export function evaluatePreSession(
-  input: PreSessionInput,
-): PreSessionReadiness {
+function payerReadinessChecks(input: PreSessionInput): ReadinessCheck[] {
   const checks: ReadinessCheck[] = [];
 
   if (!input.policy) {
@@ -91,7 +89,7 @@ export function evaluatePreSession(
         "fail",
         true,
         "No insurance policy is on file for this patient.",
-        "Add or select an insurance policy.",
+        "Add or select an insurance policy, or mark the patient as self-pay.",
       ),
     );
   } else {
@@ -115,7 +113,7 @@ export function evaluatePreSession(
         "warn",
         true,
         "Eligibility has not been confirmed for this service.",
-        "Run eligibility before starting the encounter.",
+        "Run or manually verify eligibility before starting the encounter.",
       ),
     );
   } else if (blockingEligibility.has(eligibilityStatus)) {
@@ -206,9 +204,7 @@ export function evaluatePreSession(
         "Provider Participation",
         "fail",
         true,
-        `Provider enrollment is ${
-          (input.providerEnrollmentStatus ?? "not confirmed").replaceAll("_", " ")
-        } for this payer.`,
+        `Provider enrollment is ${(input.providerEnrollmentStatus ?? "not confirmed").replaceAll("_", " ")} for this payer.`,
         "Resolve provider enrollment or select an eligible provider.",
       ),
     );
@@ -222,6 +218,28 @@ export function evaluatePreSession(
         "Provider enrollment is approved for this payer.",
       ),
     );
+  }
+
+  return checks;
+}
+
+export function evaluatePreSession(
+  input: PreSessionInput,
+): PreSessionReadiness {
+  const checks: ReadinessCheck[] = [];
+
+  if (input.billingType === "self_pay") {
+    checks.push(
+      check(
+        "self_pay",
+        "Billing Type",
+        "pass",
+        false,
+        "Patient is self-pay. Insurance, eligibility, authorization, and payer enrollment checks do not apply.",
+      ),
+    );
+  } else {
+    checks.push(...payerReadinessChecks(input));
   }
 
   checks.push(treatmentPlanCheck(input));
