@@ -39,13 +39,17 @@ const forbidden = [
   ['SYNTHETIC DEMO DATA', /SYNTHETIC DEMO DATA/],
 ];
 
+const portalForbidden = [
+  ['legacy portal public client', /portal-public-client/],
+  ['patient id portal route', /patient-portal\/:clientId/],
+  ['patient id portal link', /\/patient-portal\/\$\{clientId\}/],
+];
+
 for (const file of walk(srcRoot)) {
   const rel = relative(root, file);
-  // Patient-facing portal identity/security is intentionally a separate phase.
-  if (rel.includes('/domains/portal/')) continue;
   const text = readFileSync(file, 'utf8');
-  for (const [label, pattern] of forbidden) {
-    if (pattern.test(text)) failures.push(`${rel}: forbidden production demo marker: ${label}`);
+  for (const [label, pattern] of [...forbidden, ...portalForbidden]) {
+    if (pattern.test(text)) failures.push(`${rel}: forbidden production auth marker: ${label}`);
   }
 }
 

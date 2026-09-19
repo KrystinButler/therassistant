@@ -5,9 +5,11 @@ import { existsSync, readFileSync } from "node:fs";
 const appUrl = new URL("../src/App.tsx", import.meta.url);
 const checkInPageUrl = new URL("../src/domains/portal/PatientCheckInPage.tsx", import.meta.url);
 
-test("patient portal exposes an appointment-specific pre-visit check-in route", () => {
+test("patient portal exposes an authenticated appointment-specific pre-visit check-in route", () => {
   const appSource = readFileSync(appUrl, "utf8");
-  assert.match(appSource, /patient-portal\/:clientId\/check-in\/:appointmentId/);
+  assert.match(appSource, /patient-portal\/check-in\/:appointmentId/);
+  assert.doesNotMatch(appSource, /patient-portal\/:clientId/i);
+  assert.match(appSource, /PatientPortalGate/);
 });
 
 test("pre-visit responses preserve unrelated check-in data and record submission", async () => {

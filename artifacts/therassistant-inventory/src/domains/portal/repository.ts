@@ -1,14 +1,10 @@
 import {
-  portalInsert,
-  portalSelect,
-  portalUpdate,
+  portalRpc,
   type PortalRow as DataValue,
-} from "../../lib/portal-public-client";
+} from "./portal-client";
 import {
   buildJournalEntryValues,
   buildPatientPortalData,
-  buildPreVisitResponses,
-  planCheckInUpdate,
   type CheckInStep,
   type JournalEntryInput,
   type PortalRow,
@@ -17,105 +13,73 @@ import {
 
 type DataRow = DataValue & { id: string };
 
-function recordOf(value: unknown): Record<string, unknown> {
-  return value && typeof value === "object" && !Array.isArray(value)
-    ? value as Record<string, unknown>
-    : {};
-}
+type PatientPortalAggregate = {
+  patient: PortalRow | null;
+  appointments: PortalRow[];
+  insurancePolicies: PortalRow[];
+  documents: PortalRow[];
+  checkins: PortalRow[];
+  journalEntries: PortalRow[];
+  balance: PortalRow | null;
+  treatmentGoals: DataRow[];
+};
 
-export async function recordCheckIn(
+export function recordCheckIn(
   appointmentId: string,
-  patientId: string,
   step: CheckInStep,
-  responses?: Record<string, unknown>,
 ) {
-  const existing = await portalSelect<DataRow>("client_checkins", patientId, {
-    appointment_id: `eq.${appointmentId}`,
-    client_id: `eq.${patientId}`,
-    limit: "1",
+  return portalRpc<string>("record_client_checkin", {
+    p_appointment_id: appointmentId,
+    p_status: step,
+    p_responses: {},
   });
-  const values: DataValue = {
-    ...planCheckInUpdate(step),
-    ...(responses ? { responses } : {}),
-  };
-  return existing[0]
-    ? portalUpdate<DataRow>("client_checkins", patientId, existing[0].id, values)
-    : portalInsert<DataRow>("client_checkins", patientId, {
-        appointment_id: appointmentId,
-        client_id: patientId,
-        responses: responses ?? {},
-        ...values,
-      });
 }
 
-export async function savePreVisitCheckIn(
+export function savePreVisitCheckIn(
   appointmentId: string,
-  patientId: string,
   update: PreVisitCheckInUpdate,
 ) {
-  const existing = await portalSelect<DataRow>("client_checkins", patientId, {
-    appointment_id: `eq.${appointmentId}`,
-    client_id: `eq.${patientId}`,
-    limit: "1",
-  });
-  const responses = buildPreVisitResponses(recordOf(existing[0]?.responses), update);
-
-  return existing[0]
-    ? portalUpdate<DataRow>("client_checkins", patientId, existing[0].id, { responses })
-    : portalInsert<DataRow>("client_checkins", patientId, {
-        appointment_id: appointmentId,
-        client_id: patientId,
-        responses,
-      });
-}
-
-export function addJournalEntry(patientId: string, input: JournalEntryInput) {
-  return portalInsert<DataRow>("patient_journal_entries", patientId, {
-    client_id: patientId,
-    ...buildJournalEntryValues(input),
+  return portalRpc<DataRow>("portal_save_previsit_checkin", {
+    p_appointment_id: appointmentId,
+    p_update: update,
   });
 }
 
-export async function getPatientPortalData(patientId: string) {
-  const [patients, appointments, policies, documents, checkins, journalEntries, balances, treatmentPlans] = await Promise.all([
-    portalSelect<DataRow>("clients", patientId, { id: `eq.${patientId}`, limit: "1" }),
-    portalSelect<DataRow>("appointments", patientId, { client_id: `eq.${patientId}`, order: "starts_at.asc" }),
-    portalSelect<DataRow>("client_insurance_policies", patientId, { client_id: `eq.${patientId}`, order: "created_at.asc" }),
-    portalSelect<DataRow>("documents", patientId, { client_id: `eq.${patientId}`, order: "created_at.desc" }),
-    portalSelect<DataRow>("client_checkins", patientId, { client_id: `eq.${patientId}`, order: "created_at.desc" }),
-    portalSelect<DataRow>("patient_journal_entries", patientId, { client_id: `eq.${patientId}`, order: "entry_date.desc,created_at.desc" }),
-    portalSelect<DataRow>("client_balance_summaries", patientId, { client_id: `eq.${patientId}`, limit: "1" }),
-    portalSelect<DataRow>("treatment_plans", patientId, { client_id: `eq.${patientId}`, order: "effective_date.desc" }),
+export function addPortalJournalEntry(input: JournalEntryInput) {
+  const values = buildJournalEntryValues(input);
+  return portalRpc<DataRow>("portal_add_journal_entry", {
+    p_entry_text: values.entry_text,
+    p_mood: values.mood,
+    p_visibility: values.visibility,
+    p_tags: values.tags,
+    p_related_treatment_goal_id: values.related_treatment_goal_id,
+    p_entry_status: values.entry_status,
+  });
+}
+
+export async function getPatientPortalData() {
+  const [payload, provider] = await Promise.all([
+    portalRpc<PatientPortalAggregate>("get_my_patient_portal_data"),
+    portalRpc<DataRow | null>("get_my_portal_provider_summary"),
   ]);
 
-  const patient = patients[0];
-  if (!patient) throw new Error("Patient not found.");
+  if (!payload.patient) {
+    throw new Error("Patient portal profile is unavailable.");
+  }
 
   const portalData = buildPatientPortalData({
-    patient: patient as PortalRow,
-    appointments: appointments as PortalRow[],
-    policies: policies as PortalRow[],
-    documents: documents as PortalRow[],
-    checkins: checkins as PortalRow[],
-    journalEntries: journalEntries as PortalRow[],
-    balance: (balances[0] as PortalRow | undefined) ?? null,
+    patient: payload.patient,
+    appointments: payload.appointments,
+    policies: payload.insurancePolicies,
+    documents: payload.documents,
+    checkins: payload.checkins,
+    journalEntries: payload.journalEntries,
+    balance: payload.balance,
   });
-
-  const activePlan = treatmentPlans.find((row) => String(row.status ?? "") === "active") ?? treatmentPlans[0];
-  const providerId = String(portalData.upcomingAppointments[0]?.provider_id ?? activePlan?.provider_id ?? "");
-
-  const [treatmentGoals, providers] = await Promise.all([
-    activePlan
-      ? portalSelect<DataRow>("treatment_plan_goals", patientId, { treatment_plan_id: `eq.${activePlan.id}`, order: "created_at.asc" })
-      : Promise.resolve([] as DataRow[]),
-    providerId
-      ? portalSelect<DataRow>("providers", patientId, { id: `eq.${providerId}`, limit: "1" })
-      : Promise.resolve([] as DataRow[]),
-  ]);
 
   return {
     ...portalData,
-    treatmentGoals,
-    provider: providers[0] ?? null,
+    treatmentGoals: payload.treatmentGoals,
+    provider,
   };
 }

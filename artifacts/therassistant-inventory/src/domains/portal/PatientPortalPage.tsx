@@ -1,9 +1,10 @@
 import { useEffect, useState } from "react";
-import { Link, useRoute } from "wouter";
+import { Link } from "wouter";
 
 import { StatusBadge } from "../../components/status-badge";
 import { dateTime, money } from "../../lib/format";
 import { getPatientPortalData, recordCheckIn } from "./repository";
+import { PORTAL_JOURNAL, portalCheckInPath } from "./routes";
 
 type PortalData = Awaited<ReturnType<typeof getPatientPortalData>>;
 
@@ -19,26 +20,23 @@ function recordOf(value: unknown): Record<string, unknown> {
 }
 
 export function PatientPortalPage() {
-  const [, params] = useRoute<{ clientId: string }>("/patient-portal/:clientId");
-  const clientId = params?.clientId ?? "";
   const [data, setData] = useState<PortalData | null>(null);
   const [loading, setLoading] = useState(true);
   const [working, setWorking] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   async function load() {
-    if (!clientId) return;
     setLoading(true); setError(null);
-    try { setData(await getPatientPortalData(clientId)); }
+    try { setData(await getPatientPortalData()); }
     catch (err) { setError(err instanceof Error ? err.message : "Unable to load patient portal."); }
     finally { setLoading(false); }
   }
 
-  useEffect(() => { void load(); }, [clientId]);
+  useEffect(() => { void load(); }, []);
 
   async function checkIn(appointmentId: string, step: "on_my_way" | "arrived" | "checked_in") {
     setWorking(`${appointmentId}-${step}`); setError(null);
-    try { await recordCheckIn(appointmentId, clientId, step); await load(); }
+    try { await recordCheckIn(appointmentId, step); await load(); }
     catch (err) { setError(err instanceof Error ? err.message : "Unable to update check-in."); }
     finally { setWorking(null); }
   }
@@ -67,7 +65,7 @@ export function PatientPortalPage() {
         const preVisit = recordOf(recordOf(checkin?.responses).pre_visit);
         const preVisitStarted = Object.keys(preVisit).length > 0;
         const preVisitSubmitted = Boolean(preVisit.submitted_at);
-        return <article className="thera-work-card" key={appointment.id}><div className="thera-work-card-top"><div><strong>{dateTime(String(appointment.starts_at ?? ""))}</strong><div className="thera-table-subtext">{String(appointment.service_type ?? "Appointment")} · {String(appointment.location_type ?? "").replaceAll("_", " ")}</div></div><StatusBadge value={String(appointment.appointment_status ?? "scheduled")} /></div><div className="thera-filter-row"><Link href={`/patient-portal/${clientId}/check-in/${appointment.id}`} className="thera-action">{preVisitSubmitted ? "Review Pre-Visit Check-In" : preVisitStarted ? "Continue Pre-Visit Check-In" : "Start Pre-Visit Check-In"}</Link><button type="button" className="thera-action secondary" disabled={Boolean(checkin?.on_my_way_at) || working !== null} onClick={() => void checkIn(appointment.id, "on_my_way")}>{checkin?.on_my_way_at ? "On My Way ✓" : "On My Way"}</button><button type="button" className="thera-action secondary" disabled={Boolean(checkin?.arrived_at) || working !== null} onClick={() => void checkIn(appointment.id, "arrived")}>{checkin?.arrived_at ? "Arrived ✓" : "I Arrived"}</button><button type="button" className="thera-action" disabled={Boolean(checkin?.checked_in_at) || working !== null} onClick={() => void checkIn(appointment.id, "checked_in")}>{checkin?.checked_in_at ? "Checked In ✓" : "Check In"}</button></div></article>;
+        return <article className="thera-work-card" key={appointment.id}><div className="thera-work-card-top"><div><strong>{dateTime(String(appointment.starts_at ?? ""))}</strong><div className="thera-table-subtext">{String(appointment.service_type ?? "Appointment")} · {String(appointment.location_type ?? "").replaceAll("_", " ")}</div></div><StatusBadge value={String(appointment.appointment_status ?? "scheduled")} /></div><div className="thera-filter-row"><Link href={portalCheckInPath(appointment.id)} className="thera-action">{preVisitSubmitted ? "Review Pre-Visit Check-In" : preVisitStarted ? "Continue Pre-Visit Check-In" : "Start Pre-Visit Check-In"}</Link><button type="button" className="thera-action secondary" disabled={Boolean(checkin?.on_my_way_at) || working !== null} onClick={() => void checkIn(appointment.id, "on_my_way")}>{checkin?.on_my_way_at ? "On My Way ✓" : "On My Way"}</button><button type="button" className="thera-action secondary" disabled={Boolean(checkin?.arrived_at) || working !== null} onClick={() => void checkIn(appointment.id, "arrived")}>{checkin?.arrived_at ? "Arrived ✓" : "I Arrived"}</button><button type="button" className="thera-action" disabled={Boolean(checkin?.checked_in_at) || working !== null} onClick={() => void checkIn(appointment.id, "checked_in")}>{checkin?.checked_in_at ? "Checked In ✓" : "Check In"}</button></div></article>;
       })}</div> : <div className="thera-empty">No upcoming appointments.</div>}</section>
 
       <section className="thera-card"><h2>Demographics</h2><div className="thera-definition-grid"><Field label="Name" value={patientName(data.patient)} /><Field label="DOB" value={String(data.patient.date_of_birth ?? "—")} /><Field label="Phone" value={String(data.patient.phone ?? "—")} /><Field label="Email" value={String(data.patient.email ?? "—")} /><Field label="Address" value={[data.patient.address_line1, data.patient.city, data.patient.state, data.patient.postal_code].filter(Boolean).join(", ") || "—"} /></div><p className="thera-muted" style={{ marginTop: 12 }}>Demographic changes are handled through the practice workflow; the portal does not expose administrative fields.</p></section>
@@ -77,7 +75,7 @@ export function PatientPortalPage() {
       <section className="thera-card thera-span-2"><div className="thera-card-header"><div><h2>Forms & Documents</h2><p>Only patient-facing document categories are shown here.</p></div></div>{data.documents.length ? <div className="thera-table-wrap"><table className="thera-table"><thead><tr><th>Date</th><th>Type</th><th>Name</th><th>Status</th></tr></thead><tbody>{data.documents.map((row) => <tr key={row.id}><td>{dateTime(String(row.created_at ?? ""))}</td><td>{String(row.document_type ?? "other").replaceAll("_", " ")}</td><td>{String(row.file_name ?? "—")}</td><td><StatusBadge value={String(row.document_status ?? "uploaded")} /></td></tr>)}</tbody></table></div> : <div className="thera-empty">No patient-facing documents.</div>}</section>
 
       <section className="thera-card thera-span-2">
-        <div className="thera-card-header"><div><h2>In-Between Session Journal</h2><p>Capture thoughts, symptoms, progress, and questions between visits. Entries stay patient-authored until a clinician deliberately incorporates relevant information into the clinical record.</p></div><Link href={`/patient-portal/${clientId}/journal`} className="thera-action">Open Journal</Link></div>
+        <div className="thera-card-header"><div><h2>In-Between Session Journal</h2><p>Capture thoughts, symptoms, progress, and questions between visits. Entries stay patient-authored until a clinician deliberately incorporates relevant information into the clinical record.</p></div><Link href={PORTAL_JOURNAL} className="thera-action">Open Journal</Link></div>
         {recentJournalEntries.length ? <div className="thera-stack">{recentJournalEntries.map((entry) => <article key={entry.id} className="thera-work-card"><div className="thera-work-card-top"><strong>{String(entry.mood ?? "Reflection").replaceAll("_", " ")}</strong><span className="thera-muted">{dateTime(String(entry.created_at ?? ""))}</span></div><p>{String(entry.entry_text ?? "")}</p></article>)}</div> : <div className="thera-empty">No journal entries yet. Open the journal to write your first reflection.</div>}
       </section>
     </div>
