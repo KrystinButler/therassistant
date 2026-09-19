@@ -18,6 +18,7 @@ import { ClinicalPage } from "./domains/clinical/ClinicalPage";
 import { PayersContractsPage } from "./domains/credentialing/PayersContractsPage";
 import { EncounterPage } from "./domains/encounters/EncounterPage";
 import { CorrespondencePage } from "./domains/mailroom/CorrespondencePage";
+import { ImportsPage } from "./domains/imports/ImportsPage";
 import { MailroomPage } from "./domains/mailroom/MailroomPage";
 import { PaymentsPage } from "./domains/payments/PaymentsPage";
 import { AuthorizationsPage } from "./domains/payer-readiness/AuthorizationsPage";
@@ -48,7 +49,6 @@ import { ProvidersPage } from "./pages/providers";
 import { ReportsPage } from "./pages/operational-workspaces";
 import {
   GoldenThreadPage,
-  ImportsPage,
   JournalPage,
   MedicaidPage,
 } from "./pages/restored-modules";
