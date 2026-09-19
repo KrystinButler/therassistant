@@ -82,7 +82,9 @@ function newest(rows: QueueRow[]) {
 export function buildEligibilityQueue(input: EligibilityQueueInput): EligibilityQueueRow[] {
   const payerMap = new Map(input.payers.map((row) => [row.id, row]));
 
-  return input.clients.map((client): EligibilityQueueRow => {
+  return input.clients
+    .filter((client) => String(metadata(client).billing_type ?? "insurance") !== "self_pay")
+    .map((client): EligibilityQueueRow => {
     const policy = primaryPolicy(input.policies, client.id);
     const latest = policy
       ? newest(
@@ -141,6 +143,8 @@ export function buildAuthorizationQueue(input: AuthorizationQueueInput): Authori
   const result: AuthorizationQueueRow[] = [];
 
   for (const client of input.clients) {
+    if (String(metadata(client).billing_type ?? "insurance") === "self_pay") continue;
+
     const policy = primaryPolicy(input.policies, client.id);
     const payerId = policy?.payer_id ? String(policy.payer_id) : null;
     const required = metadata(policy).authorization_required === true;
