@@ -47,3 +47,14 @@ test("Supabase recovery callback opens password update before tenant access", as
   await expect(page.getByLabel("Confirm new password", { exact: true })).toBeVisible();
   await expect(page.getByRole("navigation", { name: "Primary navigation" })).toHaveCount(0);
 });
+
+
+test("patient portal home requires a patient session", async ({ page }) => {
+  await page.goto("/patient-portal");
+
+  await expect(
+    page.getByRole("heading", { name: "Patient portal sign in" }),
+  ).toBeVisible();
+  await expect.poll(() => new URL(page.url()).pathname).toBe("/patient-portal/login");
+  await expect(page.getByRole("button", { name: /sign up|create account|register/i })).toHaveCount(0);
+});

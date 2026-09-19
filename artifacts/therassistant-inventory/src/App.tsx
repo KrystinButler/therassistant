@@ -24,7 +24,19 @@ import { EligibilityPage } from "./domains/payer-readiness/EligibilityPage";
 import { PatientChartPage } from "./domains/patients/PatientChartPage";
 import { PatientCheckInPage } from "./domains/portal/PatientCheckInPage";
 import { PatientJournalPage } from "./domains/portal/PatientJournalPage";
+import { PatientPortalActivatePage } from "./domains/portal/PatientPortalActivatePage";
+import { PatientPortalGate } from "./domains/portal/PatientPortalGate";
+import { PatientPortalLoginPage } from "./domains/portal/PatientPortalLoginPage";
 import { PatientPortalPage } from "./domains/portal/PatientPortalPage";
+import { PatientPortalRecoveryPage } from "./domains/portal/PatientPortalRecoveryPage";
+import {
+  isPatientPortalPath,
+  PORTAL_ACTIVATE,
+  PORTAL_HOME,
+  PORTAL_JOURNAL,
+  PORTAL_LOGIN,
+  PORTAL_RECOVER,
+} from "./domains/portal/routes";
 import { SchedulePage } from "./domains/scheduling/SchedulePage";
 import { AdministrationPage } from "./pages/administration";
 import { ClientsPage } from "./pages/clients";
@@ -116,23 +128,39 @@ function StaffGate() {
   );
 }
 
-export default function App() {
-  const [location] = useLocation();
-
-  if (location.startsWith("/patient-portal/")) {
-    return (
+function PatientAuthenticatedRoutes() {
+  return (
+    <PatientPortalGate>
       <Switch>
-        <Route path="/patient-portal/:clientId/check-in/:appointmentId"><PatientCheckInPage /></Route>
-        <Route path="/patient-portal/:clientId/journal"><PatientJournalPage /></Route>
-        <Route path="/patient-portal/:clientId"><PatientPortalPage /></Route>
+        <Route path="/patient-portal/check-in/:appointmentId"><PatientCheckInPage /></Route>
+        <Route path={PORTAL_JOURNAL}><PatientJournalPage /></Route>
+        <Route path={PORTAL_HOME}><PatientPortalPage /></Route>
         <Route><div className="thera-state">Patient portal page not found.</div></Route>
       </Switch>
-    );
-  }
+    </PatientPortalGate>
+  );
+}
 
+function PatientPortalRoutes() {
+  return (
+    <Switch>
+      <Route path={PORTAL_LOGIN}><PatientPortalLoginPage /></Route>
+      <Route path={PORTAL_ACTIVATE}><PatientPortalActivatePage /></Route>
+      <Route path={PORTAL_RECOVER}><PatientPortalRecoveryPage /></Route>
+      <Route><PatientAuthenticatedRoutes /></Route>
+    </Switch>
+  );
+}
+
+function ApplicationRoutes() {
+  const [location] = useLocation();
+  return isPatientPortalPath(location) ? <PatientPortalRoutes /> : <StaffGate />;
+}
+
+export default function App() {
   return (
     <AuthProvider>
-      <StaffGate />
+      <ApplicationRoutes />
     </AuthProvider>
   );
 }

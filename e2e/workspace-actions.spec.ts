@@ -9,9 +9,23 @@ async function expectWorkspace(page: Page, heading: string) {
 test("Patients opens an add-patient drawer and preserves the workspace on cancel", async ({
   page,
 }) => {
+  const inviteRequests: string[] = [];
+  page.on("request", (request) => {
+    const pathname = new URL(request.url()).pathname;
+    if (pathname.endsWith("/functions/v1/invite-patient-portal")) {
+      inviteRequests.push(pathname);
+    }
+  });
+
   await page.goto("/clients");
   await page.getByRole("button", { name: "+ Add Patient" }).click();
   await expect(page.getByRole("heading", { name: "Add Patient" })).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Save + Send Portal Invite" }),
+  ).toBeVisible();
+  await expect(
+    page.getByText(/save the patient once and send their secure portal invitation/i),
+  ).toBeVisible();
   await page.getByRole("textbox", { name: "Patient First Name *", exact: true }).fill("E2E");
   await page.getByRole("textbox", { name: "Patient Last Name *", exact: true }).fill("Patient");
   await expect(page.getByRole("button", { name: "Save Patient" })).toBeDisabled();
@@ -19,6 +33,7 @@ test("Patients opens an add-patient drawer and preserves the workspace on cancel
   await expect(page.getByRole("heading", { name: "Add Patient" })).toBeHidden();
   await expectWorkspace(page, "Patients");
   expect(new URL(page.url()).pathname).toBe("/clients");
+  expect(inviteRequests).toEqual([]);
 });
 
 test("Schedule opens a new-appointment drawer and returns to the schedule", async ({

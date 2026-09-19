@@ -23,7 +23,7 @@ export function buildPatientPortalData(input: PortalDataInput) {
     .sort((a, b) => String(a.starts_at ?? "").localeCompare(String(b.starts_at ?? "")));
 
   const visibleDocuments = input.documents.filter((row) =>
-    ["insurance_card", "intake_form", "consent_form", "client_correspondence", "statement", "other"].includes(String(row.document_type ?? "")) &&
+    ["insurance_card", "intake_form", "consent_form", "client_correspondence", "statement"].includes(String(row.document_type ?? "")) &&
     !["rejected", "voided"].includes(String(row.document_status ?? "")),
   );
 

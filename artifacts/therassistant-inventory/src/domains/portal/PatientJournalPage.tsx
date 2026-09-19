@@ -22,10 +22,10 @@ import {
   Target,
   UserRound,
 } from "lucide-react";
-import { Link, useRoute } from "wouter";
+import { Link } from "wouter";
 
-import { addJournalEntry } from "../journal/repository";
-import { getPatientPortalData } from "./repository";
+import { addPortalJournalEntry, getPatientPortalData } from "./repository";
+import { PORTAL_HOME, PORTAL_JOURNAL } from "./routes";
 import "./patient-journal.css";
 
 type PortalData = Awaited<ReturnType<typeof getPatientPortalData>>;
@@ -87,8 +87,6 @@ function entryTitle(text: unknown) {
 }
 
 export function PatientJournalPage() {
-  const [, params] = useRoute<{ clientId: string }>("/patient-portal/:clientId/journal");
-  const clientId = params?.clientId ?? "";
   const [data, setData] = useState<PortalData | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState<EntryStatus | null>(null);
@@ -102,10 +100,9 @@ export function PatientJournalPage() {
   const [notice, setNotice] = useState<string | null>(null);
 
   async function load() {
-    if (!clientId) return;
     setLoading(true);
     try {
-      setData(await getPatientPortalData(clientId));
+      setData(await getPatientPortalData());
       setError(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unable to load your journal.");
@@ -114,7 +111,7 @@ export function PatientJournalPage() {
     }
   }
 
-  useEffect(() => { void load(); }, [clientId]);
+  useEffect(() => { void load(); }, []);
 
   const activeGoals = useMemo(
     () => (data?.treatmentGoals ?? []).filter((goal) => String(goal.status ?? "") !== "completed"),
@@ -130,7 +127,7 @@ export function PatientJournalPage() {
     setError(null);
     setNotice(null);
     try {
-      await addJournalEntry(clientId, {
+      await addPortalJournalEntry({
         entryText,
         mood,
         visibility,
@@ -166,7 +163,7 @@ export function PatientJournalPage() {
   return (
     <div className="pj-app">
       <header className="pj-topbar">
-        <Link href={`/patient-portal/${clientId}`} className="pj-brand" aria-label="Therassistant patient portal home">
+        <Link href={PORTAL_HOME} className="pj-brand" aria-label="Therassistant patient portal home">
           <span className="pj-logo-mark" aria-hidden="true"><span>▲</span><span>▲</span><span>▲</span></span>
           <span><strong>THERASSISTANT EHR</strong><small>BEHAVIORAL HEALTH. A BRIGHTER TOMORROW.</small></span>
         </Link>
@@ -183,13 +180,13 @@ export function PatientJournalPage() {
           <div className="pj-mountains" aria-hidden="true">⌁⌁⌁</div>
           <p className="pj-progress-copy">Progress happens<br />between sessions, too.</p>
           <nav className="pj-nav" aria-label="Patient portal navigation">
-            <Link href={`/patient-portal/${clientId}`}><Home size={17} /> Home</Link>
-            <Link href={`/patient-portal/${clientId}`}><CalendarDays size={17} /> Appointments</Link>
-            <Link href={`/patient-portal/${clientId}/journal`} className="active"><BookOpenText size={17} /> Journal</Link>
-            <Link href={`/patient-portal/${clientId}`}><Heart size={17} /> Check-In</Link>
-            <Link href={`/patient-portal/${clientId}`}><CreditCard size={17} /> Billing</Link>
-            <Link href={`/patient-portal/${clientId}`}><MessageSquare size={17} /> Messages</Link>
-            <Link href={`/patient-portal/${clientId}`}><UserRound size={17} /> Profile</Link>
+            <Link href={PORTAL_HOME}><Home size={17} /> Home</Link>
+            <Link href={PORTAL_HOME}><CalendarDays size={17} /> Appointments</Link>
+            <Link href={PORTAL_JOURNAL} className="active"><BookOpenText size={17} /> Journal</Link>
+            <Link href={PORTAL_HOME}><Heart size={17} /> Check-In</Link>
+            <Link href={PORTAL_HOME}><CreditCard size={17} /> Billing</Link>
+            <Link href={PORTAL_HOME}><MessageSquare size={17} /> Messages</Link>
+            <Link href={PORTAL_HOME}><UserRound size={17} /> Profile</Link>
           </nav>
           <div className="pj-sidebar-quote"><div className="pj-tree-line">▲ ▲ ▲</div><em>Same people.<br />A Healthier You.</em></div>
         </aside>
@@ -294,7 +291,7 @@ export function PatientJournalPage() {
             {appointment ? <>
               <div className="pj-side-detail"><CalendarDays size={15} /><div><strong>{formatDate(appointment.starts_at, { weekday: "short", month: "short", day: "numeric" })}</strong><small>{formatTime(appointment.starts_at)}</small></div></div>
               <div className="pj-side-detail"><MapPin size={15} /><div><strong>{String(appointment.service_type ?? "Appointment")}</strong><small>{String(appointment.location_type ?? "Office").replaceAll("_", " ")}</small></div></div>
-              <Link href={`/patient-portal/${clientId}`} className="pj-outline-button">View Appointment <ChevronRight size={14} /></Link>
+              <Link href={PORTAL_HOME} className="pj-outline-button">View Appointment <ChevronRight size={14} /></Link>
             </> : <p className="pj-muted">No upcoming appointment is scheduled.</p>}
           </section>
 
@@ -302,7 +299,7 @@ export function PatientJournalPage() {
             <h2><UserRound size={17} /> Your Provider</h2>
             <div className="pj-provider"><div className="pj-provider-avatar">{String(provider?.first_name ?? "C").slice(0, 1)}{String(provider?.last_name ?? "T").slice(0, 1)}</div><div><strong>{providerName(provider)}</strong><small>{provider ? "Your behavioral health provider" : "Your care team"}</small></div></div>
             <p className="pj-provider-bio">Your provider can review entries you choose to share and use them to support your next session.</p>
-            <Link href={`/patient-portal/${clientId}`} className="pj-outline-button">View Full Profile <ChevronRight size={14} /></Link>
+            <Link href={PORTAL_HOME} className="pj-outline-button">View Full Profile <ChevronRight size={14} /></Link>
           </section>
 
           <section className="pj-side-card pj-prompts">

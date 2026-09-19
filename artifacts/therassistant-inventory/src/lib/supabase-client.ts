@@ -7,13 +7,15 @@ export type AuthUser = {
   user_metadata?: Record<string, unknown>;
 };
 
+export type AuthFlowType = "invite" | "recovery" | null;
+
 export type AuthSession = {
   access_token: string;
   refresh_token: string;
   expires_in?: number;
   expires_at?: number;
   token_type?: string;
-  recovery?: boolean;
+  flowType?: AuthFlowType;
   user: AuthUser;
 };
 
@@ -33,7 +35,9 @@ function readStoredSession(): AuthSession | null {
   const raw = window.localStorage.getItem(STORAGE_KEY);
   if (!raw) return null;
   try {
-    return JSON.parse(raw) as AuthSession;
+    const parsed = JSON.parse(raw) as AuthSession & { recovery?: boolean };
+    if (!parsed.flowType && parsed.recovery === true) parsed.flowType = "recovery";
+    return parsed;
   } catch {
     window.localStorage.removeItem(STORAGE_KEY);
     return null;
@@ -72,7 +76,10 @@ async function authRequest(path: string, body: Record<string, unknown>, accessTo
   return payload;
 }
 
-function normalizeSession(payload: Record<string, unknown>): AuthSession {
+function normalizeSession(
+  payload: Record<string, unknown>,
+  flowType: AuthFlowType = null,
+): AuthSession {
   const expiresIn = Number(payload.expires_in ?? 3600);
   const expiresAt = Number(payload.expires_at ?? Math.floor(Date.now() / 1000) + expiresIn);
   return {
@@ -81,18 +88,22 @@ function normalizeSession(payload: Record<string, unknown>): AuthSession {
     expires_in: expiresIn,
     expires_at: expiresAt,
     token_type: String(payload.token_type ?? "bearer"),
+    flowType,
     user: payload.user as AuthUser,
   };
 }
 
-async function refreshSession(refreshToken: string): Promise<AuthSession | null> {
+async function refreshSession(
+  refreshToken: string,
+  flowType: AuthFlowType = null,
+): Promise<AuthSession | null> {
   if (!refreshToken) return null;
   if (!refreshPromise) {
     refreshPromise = authRequest("/auth/v1/token?grant_type=refresh_token", {
       refresh_token: refreshToken,
     })
       .then((payload) => {
-        const session = normalizeSession(payload);
+        const session = normalizeSession(payload, flowType);
         validatedAccessToken = session.access_token;
         persistSession(session);
         return session;
@@ -115,13 +126,16 @@ function sessionFromUrl(): AuthSession | null {
   const refreshToken = params.get("refresh_token");
   if (!accessToken || !refreshToken) return null;
   const expiresIn = Number(params.get("expires_in") ?? 3600);
+  const rawType = params.get("type");
+  const flowType: AuthFlowType =
+    rawType === "invite" || rawType === "recovery" ? rawType : null;
   const session = {
     access_token: accessToken,
     refresh_token: refreshToken,
     expires_in: expiresIn,
     expires_at: Math.floor(Date.now() / 1000) + expiresIn,
     token_type: params.get("token_type") ?? "bearer",
-    recovery: params.get("type") === "recovery",
+    flowType,
     user: { id: "" },
   } satisfies AuthSession;
   window.history.replaceState(null, document.title, `${window.location.pathname}${window.location.search}`);
@@ -166,7 +180,7 @@ export async function getSession(): Promise<AuthSession | null> {
   if (!session) return null;
   const expiresAt = Number(session.expires_at ?? 0);
   if (expiresAt && expiresAt <= Math.floor(Date.now() / 1000) + 60) {
-    return refreshSession(session.refresh_token);
+    return refreshSession(session.refresh_token, session.flowType ?? null);
   }
   return validateSessionWithAuth(session);
 }
@@ -179,14 +193,23 @@ export async function signInWithPassword(email: string, password: string) {
   return session;
 }
 
-export async function requestPasswordRecovery(email: string) {
-  await authRequest("/auth/v1/recover", { email });
+export async function requestPasswordRecovery(
+  email: string,
+  redirectTo?: string,
+) {
+  const suffix = redirectTo
+    ? `?redirect_to=${encodeURIComponent(redirectTo)}`
+    : "";
+  await authRequest(`/auth/v1/recover${suffix}`, { email });
 }
 
-export async function updatePassword(password: string) {
+export async function updatePasswordForCurrentSession(
+  password: string,
+  allowedFlow: "invite" | "recovery",
+) {
   const session = await getSession();
-  if (!session?.access_token || !session.recovery) {
-    throw new Error("A valid password recovery session is required.");
+  if (!session?.access_token || session.flowType !== allowedFlow) {
+    throw new Error("A valid authentication flow is required.");
   }
 
   const response = await fetch(`${SUPABASE_URL}/auth/v1/user`, {
@@ -203,12 +226,27 @@ export async function updatePassword(password: string) {
     throw new Error(String(payload.msg ?? payload.message ?? payload.error_description ?? payload.error ?? `Unable to update password (${response.status}).`));
   }
 
+  const user = payload as unknown as AuthUser;
+  const nextSession = { ...session, user: user.id ? user : session.user };
+  persistSession(nextSession);
+  return nextSession;
+}
+
+export async function updatePassword(password: string) {
+  const session = await updatePasswordForCurrentSession(password, "recovery");
+
   try {
     await authRequest("/auth/v1/logout", {}, session.access_token);
   } catch {
     // The password update may already revoke the recovery session.
   }
   persistSession(null);
+}
+
+export function clearAuthFlowType() {
+  const session = readStoredSession();
+  if (!session) return;
+  persistSession({ ...session, flowType: null });
 }
 
 export async function signOutSession() {
