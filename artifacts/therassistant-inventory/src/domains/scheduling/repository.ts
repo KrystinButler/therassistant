@@ -42,6 +42,7 @@ export type ScheduleAppointment = {
   authorizationNumber: string | null;
   remainingUnits: number | null;
   providerEnrollmentStatus: string | null;
+  billingType: string;
   treatmentPlanStatus: string | null;
   treatmentPlanReviewDueDate: string | null;
   checkInStatus: ScheduleCheckInStatus;
@@ -205,26 +206,36 @@ export async function getScheduleData(): Promise<ScheduleData> {
   const enriched = appointments.map((appointment): ScheduleAppointment => {
     const clientId = String(appointment.client_id ?? "");
     const providerId = appointment.provider_id ? String(appointment.provider_id) : null;
-    const policy = primaryPolicy(policies, clientId);
+    const client = clientsById.get(clientId) ?? null;
+    const clientMetadata = metadata(client);
+    const billingType = String(clientMetadata.billing_type ?? "insurance");
+    const policy = billingType === "self_pay" ? null : primaryPolicy(policies, clientId);
     const payerId = policy?.payer_id ? String(policy.payer_id) : null;
-    const eligibilityRow = latestEligibility(
-      eligibility,
-      clientId,
-      policy?.id ?? null,
-    );
+    const eligibilityRow = billingType === "self_pay"
+      ? null
+      : latestEligibility(
+          eligibility,
+          clientId,
+          policy?.id ?? null,
+        );
     const policyMetadata = metadata(policy);
-    const authorizationRequired = policyMetadata.authorization_required === true;
-    const authorization = activeAuthorization(authorizations, clientId, payerId);
+    const authorizationRequired =
+      billingType === "self_pay" ? false : policyMetadata.authorization_required === true;
+    const authorization = billingType === "self_pay"
+      ? null
+      : activeAuthorization(authorizations, clientId, payerId);
     const remainingUnits = remainingUnitsFor(
       authorizationUnits,
       authorization?.id ?? null,
       String(appointment.cpt_code ?? ""),
     );
-    const enrollment = enrollments.find(
-      (row) =>
-        row.provider_id === providerId &&
-        row.payer_id === payerId,
-    );
+    const enrollment = billingType === "self_pay"
+      ? undefined
+      : enrollments.find(
+          (row) =>
+            row.provider_id === providerId &&
+            row.payer_id === payerId,
+        );
     const serviceDate = String(appointment.starts_at ?? "").slice(0, 10);
     const treatmentPlan = currentTreatmentPlan(treatmentPlans, clientId, serviceDate);
     const checkin = checkinsByAppointment.get(appointment.id) ?? null;
@@ -237,6 +248,7 @@ export async function getScheduleData(): Promise<ScheduleData> {
     );
 
     const readiness = evaluatePreSession({
+      billingType,
       policy: policy ? { status: String(policy.status ?? "unknown") } : null,
       eligibility: eligibilityRow
         ? { eligibility_status: String(eligibilityRow.eligibility_status ?? "") }
@@ -269,7 +281,11 @@ export async function getScheduleData(): Promise<ScheduleData> {
       providerId,
       providerName: name(providerId ? providersById.get(providerId) : null),
       payerId,
-      payerName: payerId ? String(payersById.get(payerId)?.name ?? "—") : "—",
+      payerName: billingType === "self_pay"
+        ? "Self Pay"
+        : payerId
+          ? String(payersById.get(payerId)?.name ?? "—")
+          : "—",
       planName: policy?.payer_plan_id
         ? String(plansById.get(String(policy.payer_plan_id))?.name ?? "—")
         : "—",
@@ -298,6 +314,7 @@ export async function getScheduleData(): Promise<ScheduleData> {
       providerEnrollmentStatus: enrollment
         ? String(enrollment.enrollment_status ?? "unknown")
         : null,
+      billingType,
       treatmentPlanStatus: treatmentPlan
         ? String(treatmentPlan.status ?? "draft")
         : null,
