@@ -58,13 +58,21 @@ export function parseEligibilityBenefits(raw: unknown) {
     ? (value.benefits as Record<string, unknown>)
     : null;
 
+  const numberOrNull = (key: string) => {
+    if (!benefits) return null;
+    const source = benefits[key];
+    if (source === null || source === undefined || source === "") return null;
+    const parsed = Number(source);
+    return Number.isFinite(parsed) ? parsed : null;
+  };
+
   return {
-    copayCents: benefits ? Number(benefits.copay_cents ?? 0) : null,
-    coinsurancePercent: benefits ? Number(benefits.coinsurance_percent ?? 0) : null,
-    deductibleCents: benefits ? Number(benefits.deductible_cents ?? 0) : null,
-    deductibleRemainingCents: benefits ? Number(benefits.deductible_remaining_cents ?? 0) : null,
-    outOfPocketCents: benefits ? Number(benefits.out_of_pocket_cents ?? 0) : null,
-    outOfPocketRemainingCents: benefits ? Number(benefits.out_of_pocket_remaining_cents ?? 0) : null,
+    copayCents: numberOrNull("copay_cents"),
+    coinsurancePercent: numberOrNull("coinsurance_percent"),
+    deductibleCents: numberOrNull("deductible_cents"),
+    deductibleRemainingCents: numberOrNull("deductible_remaining_cents"),
+    outOfPocketCents: numberOrNull("out_of_pocket_cents"),
+    outOfPocketRemainingCents: numberOrNull("out_of_pocket_remaining_cents"),
     networkStatus: benefits ? String(benefits.network_status ?? "unknown") : "unknown",
     authorizationRequired: benefits ? benefits.authorization_required === true : false,
   };
