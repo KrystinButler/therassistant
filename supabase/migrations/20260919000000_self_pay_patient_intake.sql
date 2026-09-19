@@ -274,6 +274,17 @@ begin
 end;
 $function$;
 
+do $
+declare
+  v_client record;
+begin
+  for v_client in select id from public.clients where deleted_at is null
+  loop
+    perform public.recalculate_client_balance_summary(v_client.id);
+  end loop;
+end;
+$;
+
 create or replace function public.post_patient_responsibility_charge_to_ledger()
 returns trigger
 language plpgsql
