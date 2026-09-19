@@ -207,6 +207,73 @@ begin
 end;
 $function$;
 
+create or replace function public.recalculate_client_balance_summary(p_client_id uuid)
+returns void
+language plpgsql
+set search_path to 'public', 'pg_temp'
+as $function$
+declare
+  v_tenant_id uuid;
+  v_ar_balance bigint := 0;
+  v_credit_liability bigint := 0;
+begin
+  select tenant_id
+    into v_tenant_id
+  from public.clients
+  where id = p_client_id;
+
+  if v_tenant_id is null then
+    return;
+  end if;
+
+  select coalesce(sum(
+    case
+      when le.side = 'debit'::public.ledger_side_enum then le.amount_cents
+      else -le.amount_cents
+    end
+  ), 0)
+    into v_ar_balance
+  from public.ledger_entries le
+  join public.ledger_accounts la
+    on la.id = le.ledger_account_id
+   and la.tenant_id = le.tenant_id
+  where le.client_id = p_client_id
+    and la.account_code = '1100';
+
+  select coalesce(sum(
+    case
+      when le.side = 'credit'::public.ledger_side_enum then le.amount_cents
+      else -le.amount_cents
+    end
+  ), 0)
+    into v_credit_liability
+  from public.ledger_entries le
+  join public.ledger_accounts la
+    on la.id = le.ledger_account_id
+   and la.tenant_id = le.tenant_id
+  where le.client_id = p_client_id
+    and la.account_code = '2100';
+
+  insert into public.client_balance_summaries (
+    client_id,
+    tenant_id,
+    open_balance_cents,
+    credit_balance_cents,
+    last_calculated_at
+  ) values (
+    p_client_id,
+    v_tenant_id,
+    greatest(v_ar_balance, 0),
+    greatest(v_credit_liability, 0) + greatest(-v_ar_balance, 0),
+    now()
+  )
+  on conflict (client_id) do update
+  set open_balance_cents = excluded.open_balance_cents,
+      credit_balance_cents = excluded.credit_balance_cents,
+      last_calculated_at = now();
+end;
+$function$;
+
 create or replace function public.post_patient_responsibility_charge_to_ledger()
 returns trigger
 language plpgsql
