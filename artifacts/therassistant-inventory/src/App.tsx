@@ -14,6 +14,7 @@ import { Claim360Page } from "./domains/claims/Claim360Page";
 import { ClaimsPage } from "./domains/claims/ClaimsPage";
 import { RejectionsPage } from "./domains/claims/RejectionsPage";
 import { CredentialingPage } from "./domains/credentialing/CredentialingPage";
+import { ClinicalPage } from "./domains/clinical/ClinicalPage";
 import { PayersContractsPage } from "./domains/credentialing/PayersContractsPage";
 import { EncounterPage } from "./domains/encounters/EncounterPage";
 import { CorrespondencePage } from "./domains/mailroom/CorrespondencePage";
@@ -33,7 +34,6 @@ import { ProviderDetailPage } from "./pages/provider-detail";
 import { ProvidersPage } from "./pages/providers";
 import { ReportsPage } from "./pages/operational-workspaces";
 import {
-  ClinicalPage,
   GoldenThreadPage,
   ImportsPage,
   JournalPage,
