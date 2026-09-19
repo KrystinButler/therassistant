@@ -18,7 +18,6 @@ import type {
 import { getAuthorizationQueueData } from "./repository";
 
 type AuthorizationRow = Awaited<ReturnType<typeof getAuthorizationQueueData>>[number];
-type WorkspaceRow = Awaited<ReturnType<typeof getAuthorizationWorkspace>>[number];
 type UnitRow = Record<string, unknown> & { id: string };
 
 type AuthorizationForm = AuthorizationDraft & {
