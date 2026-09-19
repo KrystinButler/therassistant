@@ -24,7 +24,7 @@ export type EncounterRepository = {
   updateAppointment(id: string, values: Record<string, unknown>): Promise<Record<string, unknown>>;
 };
 
-const notStartable = new Set(["cancelled", "no_show", "rescheduled", "late_cancel", "completed"]);
+const notStartable = new Set(["cancelled", "no_show", "rescheduled", "late_cancel"]);
 
 export async function startEncounterWorkflow(
   repo: EncounterRepository,
