@@ -228,17 +228,11 @@ export function ClinicalPage() {
     setError(null);
     setMessage(null);
     try {
-      const noteId = await saveDraft();
+      await saveDraft();
       setMessage("Clinical note saved and ready for signature.");
+      closeEditor();
       await load();
-      if (noteId) {
-        const refreshed = notes.find((row) => row.id === noteId);
-        setBaseline({ ...editor, noteId });
-        if (refreshed) setEditor(blankEditor(
-          appointments.find((row) => row.id === editor.appointmentId) ?? appointments[0],
-          refreshed,
-        ));
-      }
+      setFilter("drafts");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unable to save clinical note.");
     } finally {
