@@ -3,7 +3,6 @@ import assert from "node:assert/strict";
 import { existsSync } from "node:fs";
 
 const retiredPages = [
-  "../src/pages/work-center.tsx",
   "../src/domains/claims/ClaimSubmissionPage.tsx",
   "../src/domains/claims/ClaimsWorkspacePage.tsx",
   "../src/domains/ar/ArWorkspacePage.tsx",

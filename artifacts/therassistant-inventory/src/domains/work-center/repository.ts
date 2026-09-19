@@ -117,6 +117,18 @@ export function sourceRouteForWorkItem(type: string, id: string) {
     case "claim_batch": return "/claims/submission";
     case "payer_contract": return "/payers-contracts";
     case "mailroom_item": return `/mailroom/${id}`;
+    case "credentialing_application":
+    case "provider_credential":
+    case "network_participation":
+    case "roster_action":
+    case "credentialing_issue":
+    case "provider_enrollment":
+    case "provider_payer_enrollment":
+    case "provider_network_participation":
+      return "/credentialing";
+    case "historical_transaction":
+    case "ledger_entry":
+      return "/payments";
     default: return "/work-center";
   }
 }

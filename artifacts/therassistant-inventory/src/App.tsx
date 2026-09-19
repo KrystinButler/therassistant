@@ -39,6 +39,7 @@ import {
   PORTAL_RECOVER,
 } from "./domains/portal/routes";
 import { SchedulePage } from "./domains/scheduling/SchedulePage";
+import { WorkCenterPage } from "./pages/work-center";
 import { AdministrationPage } from "./pages/administration";
 import { ClientsPage } from "./pages/clients";
 import { PayerDetailPage } from "./pages/payer-detail";
@@ -71,7 +72,7 @@ function StaffRoutes() {
         <Route path="/claims/submission"><Redirect to="/billing/charges" /></Route>
         <Route path="/claims/follow-up"><Redirect to="/claims" /></Route>
         <Route path="/ar-denials"><Redirect to="/denials" /></Route>
-        <Route path="/work-center"><Redirect to="/claims" /></Route>
+        <Route path="/work-center"><WorkCenterPage /></Route>
         <Route path="/charges"><Redirect to="/billing/charges" /></Route>
         <Route path="/schedule/:id"><ScheduleAppointmentRedirect /></Route>
         <Route path="/encounters/:id"><EncounterPage /></Route>
