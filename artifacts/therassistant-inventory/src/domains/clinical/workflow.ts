@@ -63,14 +63,19 @@ export async function signNoteWorkflow(
       note_status: "signed",
       locked_at: signedAt,
     });
-
-    await repo.runBillingReadiness(encounterId);
-
-    return success({ noteId: String(state.note.id), signedAt });
   } catch (error) {
     return failure(
       "note_sign_failed",
       error instanceof Error ? error.message : "Unable to sign clinical note.",
     );
   }
+
+  try {
+    await repo.runBillingReadiness(encounterId);
+  } catch {
+    // The clinical signature is authoritative once saved. A downstream
+    // billing-readiness failure must never make the clinical signature fail.
+  }
+
+  return success({ noteId: String(state.note.id), signedAt });
 }
