@@ -36,7 +36,8 @@ async function getBillingContext(encounterId: string): Promise<BillingReadinessI
   );
   if (!encounter) throw new Error("Encounter not found.");
 
-  const [notes, diagnoses, serviceLines, policies, eligibilityRows, authorizationRows, enrollmentRows] = await Promise.all([
+  const [clients, notes, diagnoses, serviceLines, policies, eligibilityRows, authorizationRows, enrollmentRows] = await Promise.all([
+    tenantSelect<DataRow>("clients", { id: `eq.${String(encounter.client_id)}`, limit: "1" }),
     tenantSelect<DataRow>("clinical_notes", { encounter_id: `eq.${encounterId}`, order: "created_at.desc", limit: "1" }),
     tenantSelect<DataRow>("encounter_diagnoses", { encounter_id: `eq.${encounterId}`, order: "sequence_number.asc" }),
     tenantSelect<DataRow>("encounter_service_lines", { encounter_id: `eq.${encounterId}`, order: "created_at.asc" }),
@@ -64,9 +65,12 @@ async function getBillingContext(encounterId: string): Promise<BillingReadinessI
       : Promise.resolve([]),
   ]);
 
+  const client = first(clients);
+  const billingType = String(metadata(client).billing_type ?? "insurance");
   const policy = first(policies);
   const policyMetadata = metadata(policy);
-  const authorizationRequired = policyMetadata.authorization_required === true;
+  const authorizationRequired =
+    billingType === "self_pay" ? false : policyMetadata.authorization_required === true;
   const authorization =
     authorizationRows.find((row) => row.status === "approved") ?? authorizationRows[0] ?? null;
   const units = authorization
@@ -80,6 +84,7 @@ async function getBillingContext(encounterId: string): Promise<BillingReadinessI
 
   return {
     encounter,
+    billingType,
     note: first(notes),
     diagnoses,
     serviceLines,
@@ -188,15 +193,22 @@ export async function getBillingQueueData() {
   const displayName = (row?: Row) =>
     row ? [row.first_name, row.last_name].filter(Boolean).join(" ") || "—" : "—";
 
-  const encounterRows = encounters.map((encounter): BillingQueueEncounter => ({
-    ...encounter,
-    clientName: displayName(clientsById.get(String(encounter.client_id))),
-    providerName: displayName(providersById.get(String(encounter.provider_id))),
-    payerName: String(payersById.get(String(encounter.payer_id))?.name ?? "—"),
-    blockingChecks: readinessChecks.filter(
-      (check) => check.encounter_id === encounter.id && check.blocking === true,
-    ),
-  }));
+  const encounterRows = encounters.map((encounter): BillingQueueEncounter => {
+    const client = clientsById.get(String(encounter.client_id));
+    const billingType = String(metadata(client).billing_type ?? "insurance");
+    return {
+      ...encounter,
+      billingType,
+      clientName: displayName(client),
+      providerName: displayName(providersById.get(String(encounter.provider_id))),
+      payerName: billingType === "self_pay"
+        ? "Self Pay"
+        : String(payersById.get(String(encounter.payer_id))?.name ?? "—"),
+      blockingChecks: readinessChecks.filter(
+        (check) => check.encounter_id === encounter.id && check.blocking === true,
+      ),
+    };
+  });
 
   const chargesByEncounter = new Map<string, DataRow[]>();
   for (const charge of charges) {

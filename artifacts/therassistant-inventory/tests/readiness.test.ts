@@ -82,3 +82,18 @@ test("missing insurance policy blocks the appointment", () => {
     ),
   );
 });
+
+test("self-pay patient is ready without payer prerequisites", () => {
+  const result = evaluatePreSession({
+    billingType: "self_pay",
+    policy: null,
+    eligibility: null,
+    authorizationRequired: false,
+    authorization: null,
+    providerEnrollmentStatus: null,
+  });
+
+  assert.equal(result.ready, true);
+  assert.ok(result.checks.some((check) => check.code === "self_pay" && !check.blocking));
+  assert.equal(result.checks.some((check) => check.code === "insurance_missing"), false);
+});
