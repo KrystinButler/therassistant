@@ -274,7 +274,7 @@ begin
 end;
 $function$;
 
-do $
+do $recalc$
 declare
   v_client record;
 begin
@@ -283,7 +283,7 @@ begin
     perform public.recalculate_client_balance_summary(v_client.id);
   end loop;
 end;
-$;
+$recalc$;
 
 create or replace function public.post_patient_responsibility_charge_to_ledger()
 returns trigger
