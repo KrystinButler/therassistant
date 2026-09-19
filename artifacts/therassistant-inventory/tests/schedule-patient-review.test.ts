@@ -28,7 +28,7 @@ test("patient review drawer exposes the requested clinical review sections", () 
     "Active Goal",
     "Prior Session Plan",
     "Safety Review",
-    "Visit Readiness",
+    "Payer / Billing Readiness",
     "Open Chart",
     "Start Note",
   ]) assert.match(drawer, new RegExp(label));
