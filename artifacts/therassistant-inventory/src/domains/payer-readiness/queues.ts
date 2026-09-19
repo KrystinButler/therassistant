@@ -10,6 +10,7 @@ export type EligibilityQueueRow = {
   memberId: string;
   serviceDate: string | null;
   checkedAt: string | null;
+  responseSource: string | null;
   status: string;
   needsAttention: boolean;
   rawResponse: unknown;
@@ -105,6 +106,7 @@ export function buildEligibilityQueue(input: EligibilityQueueInput): Eligibility
       memberId: String(policy?.member_id ?? ""),
       serviceDate: latest?.service_date ? String(latest.service_date) : null,
       checkedAt: latest?.created_at ? String(latest.created_at) : null,
+      responseSource: latest?.response_source ? String(latest.response_source) : null,
       status,
       needsAttention: !["active", "eligible"].includes(status),
       rawResponse: latest?.raw_response ?? null,
