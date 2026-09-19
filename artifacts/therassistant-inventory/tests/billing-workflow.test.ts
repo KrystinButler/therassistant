@@ -45,7 +45,7 @@ test("signed complete encounter is billing ready", () => {
   assert.equal(result.checks.some((check) => check.blocking), false);
 });
 
-function fakeRepo(context = cleanContext) {
+function fakeRepo(context: any = cleanContext) {
   const readinessChecks: Array<Record<string, unknown>> = [];
   const work: Array<Record<string, unknown>> = [];
   const charges: Array<Record<string, any>> = [];
@@ -90,5 +90,37 @@ test("ready encounter creates traceable ready-for-claim charge", async () => {
   assert.equal(repo.charges.length, 1);
   assert.equal(repo.charges[0].encounter_id, "enc-1");
   assert.equal(repo.charges[0].charge_status, "ready_for_claim");
+  assert.equal(repo.encounterUpdate.billing_status, "charged");
+});
+
+test("self-pay encounter is billing ready without payer checks", () => {
+  const result = evaluateBillingReadiness({
+    ...cleanContext,
+    billingType: "self_pay",
+    eligibilityStatus: null,
+    providerEnrollmentStatus: null,
+    encounter: { ...cleanContext.encounter, payer_id: null },
+  });
+
+  assert.equal(result.ready, true);
+  assert.ok(result.checks.some((check) => check.code === "self_pay" && !check.blocking));
+  assert.equal(result.checks.some((check) => check.code === "eligibility_not_active"), false);
+  assert.equal(result.checks.some((check) => check.code === "provider_enrollment"), false);
+});
+
+test("self-pay encounter creates patient-responsibility charge instead of claim-ready charge", async () => {
+  const repo = fakeRepo({
+    ...cleanContext,
+    billingType: "self_pay",
+    eligibilityStatus: null,
+    providerEnrollmentStatus: null,
+    encounter: { ...cleanContext.encounter, payer_id: null },
+  });
+
+  const result = await createChargeFromEncounterWorkflow(repo, "enc-1");
+  assert.equal(result.ok, true);
+  assert.equal(repo.charges.length, 1);
+  assert.equal(repo.charges[0].charge_status, "patient_responsibility");
+  assert.equal(repo.charges[0].payer_id, null);
   assert.equal(repo.encounterUpdate.billing_status, "charged");
 });
