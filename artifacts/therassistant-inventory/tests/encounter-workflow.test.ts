@@ -57,24 +57,29 @@ test("starting the same appointment twice returns one encounter", async () => {
   assert.equal(repo.appointmentStatus, "in_session");
 });
 
-test("blocking pre-session readiness prevents encounter start", async () => {
+test("payer readiness issues do not prevent encounter start", async () => {
   const repo = encounterRepo({ ready: false });
   const result = await startEncounterWorkflow(repo, "appt-1");
 
-  assert.equal(result.ok, false);
-  if (!result.ok) {
-    assert.equal(result.blocked, true);
-    assert.equal(result.code, "pre_session_blocked");
-  }
-  assert.equal(repo.encounters.length, 0);
+  assert.equal(result.ok, true);
+  assert.equal(repo.encounters.length, 1);
+  assert.equal(repo.appointmentStatus, "in_session");
 });
 
-test("cancelled and no-show appointments cannot start encounters", async () => {
+test("cancelled, no-show, and rescheduled appointments cannot start encounters", async () => {
   for (const status of ["cancelled", "no_show", "rescheduled"]) {
     const result = await startEncounterWorkflow(encounterRepo({ appointmentStatus: status }), "appt-1");
     assert.equal(result.ok, false);
     if (!result.ok) assert.equal(result.code, "appointment_not_startable");
   }
+});
+
+test("completed appointments can still be documented when no encounter exists", async () => {
+  const repo = encounterRepo({ appointmentStatus: "completed" });
+  const result = await startEncounterWorkflow(repo, "appt-1");
+
+  assert.equal(result.ok, true);
+  assert.equal(repo.encounters.length, 1);
 });
 
 function clinicalRepo(overrides: Record<string, unknown> = {}) {
@@ -110,19 +115,24 @@ function clinicalRepo(overrides: Record<string, unknown> = {}) {
   };
 }
 
-test("signing requires note text, a diagnosis, and a service line", async () => {
-  const cases = [
-    { note: { id: "note-1", note_text: "", note_status: "ready_for_signature" } },
-    { diagnoses: [] },
-    { serviceLines: [] },
-  ];
+test("signing requires clinical note text", async () => {
+  const repo = clinicalRepo({
+    note: { id: "note-1", note_text: "", note_status: "ready_for_signature" },
+  });
+  const result = await signNoteWorkflow(repo, "encounter-1", "provider-1", "Jamie Parker, LCSW");
 
-  for (const state of cases) {
-    const repo = clinicalRepo(state);
-    const result = await signNoteWorkflow(repo, "encounter-1", "provider-1", "Jamie Parker, LCSW");
-    assert.equal(result.ok, false);
-    assert.equal(repo.signatures.length, 0);
-  }
+  assert.equal(result.ok, false);
+  assert.equal(repo.signatures.length, 0);
+});
+
+test("diagnosis and service-line gaps do not block the clinical signature", async () => {
+  const repo = clinicalRepo({ diagnoses: [], serviceLines: [] });
+  const result = await signNoteWorkflow(repo, "encounter-1", "provider-1", "Jamie Parker, LCSW");
+
+  assert.equal(result.ok, true);
+  assert.equal(repo.signatures.length, 1);
+  assert.equal(repo.noteStatus, "signed");
+  assert.equal(repo.readinessRuns, 1);
 });
 
 test("signing records provider identity, locks note, then runs billing readiness", async () => {
@@ -135,4 +145,17 @@ test("signing records provider identity, locks note, then runs billing readiness
   assert.equal(repo.signatures[0].signer_id, undefined);
   assert.equal(repo.noteStatus, "signed");
   assert.equal(repo.readinessRuns, 1);
+});
+
+test("billing-readiness failure does not undo a clinical signature", async () => {
+  const repo = clinicalRepo();
+  repo.runBillingReadiness = async () => {
+    throw new Error("Billing service unavailable");
+  };
+
+  const result = await signNoteWorkflow(repo, "encounter-1", "provider-1", "Jamie Parker, LCSW");
+
+  assert.equal(result.ok, true);
+  assert.equal(repo.signatures.length, 1);
+  assert.equal(repo.noteStatus, "signed");
 });
