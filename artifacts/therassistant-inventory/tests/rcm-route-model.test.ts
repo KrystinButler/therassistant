@@ -10,12 +10,13 @@ test("App exposes canonical Rejections and Denials routes", () => {
   assert.match(appSource, /path="\/denials"/);
 });
 
-test("legacy duplicate RCM routes render Redirect instead of old workflow pages", () => {
+test("legacy duplicate RCM routes redirect while Work Center is operational", () => {
   assert.match(appSource, /path="\/charges"[^\n]*<Redirect to="\/billing\/charges"/);
   assert.match(appSource, /path="\/claims\/submission"[^\n]*<Redirect to="\/billing\/charges"/);
   assert.match(appSource, /path="\/claims\/follow-up"[^\n]*<Redirect to="\/claims"/);
   assert.match(appSource, /path="\/ar-denials"[^\n]*<Redirect to="\/denials"/);
-  assert.match(appSource, /path="\/work-center"[^\n]*<Redirect to="\/claims"/);
+  assert.match(appSource, /import \{ WorkCenterPage \} from "\.\/pages\/work-center"/);
+  assert.match(appSource, /path="\/work-center"[^\n]*<WorkCenterPage/);
 });
 
 test("AppShell uses section navigation and no user-facing workspace label", () => {
