@@ -1,48 +1,77 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link, useLocation } from "wouter";
+import { useLocation } from "wouter";
 
 import { StatusBadge } from "../../components/status-badge";
 import { WorkDrawer } from "../../components/work-drawer";
 import { shortDate } from "../../lib/format";
-import { tenantSelect, type Row } from "../../lib/tenant-data-client";
 import {
   createAuthorization,
+  getAuthorizationWorkspace,
+  setAuthorizationUnits,
   updateAuthorization,
 } from "../authorizations/repository";
-import type { AuthorizationDraft } from "../authorizations/workflow";
+import type {
+  AuthorizationDraft,
+  AuthorizationUnitDraft,
+} from "../authorizations/workflow";
 import { getAuthorizationQueueData } from "./repository";
 
 type AuthorizationRow = Awaited<ReturnType<typeof getAuthorizationQueueData>>[number];
-type DataRow = Row & { id: string };
 
-type AuthorizationForm = AuthorizationDraft & {
-  authorizationId: string | null;
-  patientId: string;
+type UnitForm = {
+  key: string;
+  cptCode: string;
+  authorizedUnits: number;
+  usedUnits: number;
 };
 
-const statusOptions: AuthorizationDraft["status"][] = [
+type AuthorizationForm = {
+  authorizationId: string | null;
+  patientId: string;
+  patientName: string;
+  payerId: string;
+  payerName: string;
+  authorizationNumber: string;
+  status: AuthorizationDraft["status"];
+  startDate: string;
+  endDate: string;
+  notes: string;
+  units: UnitForm[];
+};
+
+const statuses: AuthorizationDraft["status"][] = [
+  "not_required",
   "pending",
   "approved",
   "denied",
-  "not_required",
   "expired",
   "exhausted",
   "cancelled",
   "unknown",
 ];
 
-function blankForm(row: AuthorizationRow): AuthorizationForm {
+function emptyUnit(index = 0): UnitForm {
   return {
-    authorizationId: row.authorizationId,
+    key: `new-${Date.now()}-${index}`,
+    cptCode: "",
+    authorizedUnits: 0,
+    usedUnits: 0,
+  };
+}
+
+function newForm(row: AuthorizationRow): AuthorizationForm {
+  return {
+    authorizationId: null,
     patientId: row.patientId,
+    patientName: row.patientName,
     payerId: row.payerId ?? "",
-    authorizationNumber: row.authorizationNumber ?? "",
-    status: row.authorizationId
-      ? (row.status as AuthorizationDraft["status"])
-      : "pending",
+    payerName: row.payerName,
+    authorizationNumber: "",
+    status: "pending",
     startDate: "",
-    endDate: row.endDate ?? "",
+    endDate: "",
     notes: "",
+    units: [emptyUnit()],
   };
 }
 
@@ -53,11 +82,10 @@ export function AuthorizationsPage() {
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [attentionOnly, setAttentionOnly] = useState(false);
-  const [activeRow, setActiveRow] = useState<AuthorizationRow | null>(null);
   const [form, setForm] = useState<AuthorizationForm | null>(null);
   const [baseline, setBaseline] = useState<AuthorizationForm | null>(null);
-  const [drawerLoading, setDrawerLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [openingId, setOpeningId] = useState<string | null>(null);
 
   async function load() {
     setLoading(true);
@@ -80,60 +108,90 @@ export function AuthorizationsPage() {
     [rows, attentionOnly],
   );
   const attentionCount = rows.filter((row) => row.needsAttention).length;
-  const activeIndex = activeRow ? visible.findIndex((row) => row.id === activeRow.id) : -1;
   const dirty = Boolean(form && baseline && JSON.stringify(form) !== JSON.stringify(baseline));
 
-  async function openRow(row: AuthorizationRow) {
-    setActiveRow(row);
-    setMessage(null);
+  function setOpenForm(next: AuthorizationForm) {
+    setForm(next);
+    setBaseline(JSON.parse(JSON.stringify(next)) as AuthorizationForm);
     setError(null);
-    setDrawerLoading(true);
+    setMessage(null);
+  }
 
+  async function openRow(row: AuthorizationRow) {
+    if (!row.authorizationId) {
+      setOpenForm(newForm(row));
+      return;
+    }
+
+    setOpeningId(row.id);
+    setError(null);
     try {
-      let next = blankForm(row);
-      if (row.authorizationId) {
-        const detail = (
-          await tenantSelect<DataRow>("authorizations", {
-            id: `eq.${row.authorizationId}`,
-            limit: "1",
-          })
-        )[0];
+      const workspace = await getAuthorizationWorkspace(row.patientId);
+      const authorization = workspace.find((item) => item.id === row.authorizationId);
+      if (!authorization) throw new Error("Authorization record was not found.");
 
-        if (detail) {
-          next = {
-            authorizationId: detail.id,
-            patientId: row.patientId,
-            payerId: String(detail.payer_id ?? row.payerId ?? ""),
-            authorizationNumber: String(detail.authorization_number ?? ""),
-            status: String(detail.status ?? "pending") as AuthorizationDraft["status"],
-            startDate: String(detail.start_date ?? ""),
-            endDate: String(detail.end_date ?? ""),
-            notes: String(detail.notes ?? ""),
-          };
-        }
-      }
-      setForm(next);
-      setBaseline({ ...next });
+      const units = Array.isArray(authorization.units)
+        ? authorization.units.map((unit, index) => ({
+            key: String(unit.id ?? `unit-${index}`),
+            cptCode: String(unit.cpt_code ?? ""),
+            authorizedUnits: Number(unit.authorized_units ?? 0),
+            usedUnits: Number(unit.used_units ?? 0),
+          }))
+        : [];
+
+      setOpenForm({
+        authorizationId: authorization.id,
+        patientId: row.patientId,
+        patientName: row.patientName,
+        payerId: String(authorization.payer_id ?? row.payerId ?? ""),
+        payerName: row.payerName,
+        authorizationNumber: String(authorization.authorization_number ?? ""),
+        status: String(authorization.status ?? "unknown") as AuthorizationDraft["status"],
+        startDate: String(authorization.start_date ?? ""),
+        endDate: String(authorization.end_date ?? ""),
+        notes: String(authorization.notes ?? ""),
+        units: units.length ? units : [emptyUnit()],
+      });
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Unable to load authorization.");
+      setError(err instanceof Error ? err.message : "Unable to open authorization.");
     } finally {
-      setDrawerLoading(false);
+      setOpeningId(null);
     }
   }
 
-  function closeDrawer() {
-    setActiveRow(null);
-    setForm(null);
-    setBaseline(null);
+  function updateUnit(key: string, values: Partial<UnitForm>) {
+    setForm((current) => current
+      ? {
+          ...current,
+          units: current.units.map((unit) => unit.key === key ? { ...unit, ...values } : unit),
+        }
+      : current);
   }
 
-  function openAt(index: number) {
-    const row = visible[index];
-    if (row) void openRow(row);
+  function addUnit() {
+    setForm((current) => current
+      ? { ...current, units: [...current.units, emptyUnit(current.units.length)] }
+      : current);
   }
 
-  async function saveAuthorization() {
-    if (!activeRow || !form) return;
+  function removeUnsavedUnit(key: string) {
+    setForm((current) => {
+      if (!current) return current;
+      const next = current.units.filter((unit) => unit.key !== key);
+      return { ...current, units: next.length ? next : [emptyUnit()] };
+    });
+  }
+
+  async function save() {
+    if (!form) return;
+    if (!form.payerId) {
+      setError("Select a payer before saving the authorization.");
+      return;
+    }
+    if (form.startDate && form.endDate && form.endDate < form.startDate) {
+      setError("Authorization end date cannot be before the start date.");
+      return;
+    }
 
     setSaving(true);
     setError(null);
@@ -148,15 +206,25 @@ export function AuthorizationsPage() {
         notes: form.notes,
       };
 
-      if (form.authorizationId) {
-        await updateAuthorization(form.authorizationId, draft);
-        setMessage("Authorization updated.");
-      } else {
-        await createAuthorization(form.patientId, draft);
-        setMessage("Authorization created.");
+      const authorization = form.authorizationId
+        ? await updateAuthorization(form.authorizationId, draft)
+        : await createAuthorization(form.patientId, draft);
+
+      if (form.status !== "not_required") {
+        const unitRows = form.units.filter((unit) => unit.cptCode.trim() || unit.authorizedUnits > 0 || unit.usedUnits > 0);
+        for (const unit of unitRows) {
+          const input: AuthorizationUnitDraft = {
+            cptCode: unit.cptCode.trim() || undefined,
+            authorizedUnits: unit.authorizedUnits,
+            usedUnits: unit.usedUnits,
+          };
+          await setAuthorizationUnits(authorization.id, input);
+        }
       }
 
-      closeDrawer();
+      setForm(null);
+      setBaseline(null);
+      setMessage("Authorization saved. Scheduling and billing readiness will use the updated status and units.");
       await load();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unable to save authorization.");
@@ -171,7 +239,7 @@ export function AuthorizationsPage() {
         <div>
           <div className="thera-eyebrow">UTILIZATION MANAGEMENT</div>
           <h1>Authorizations</h1>
-          <p>Create and update payer authorizations, monitor expiration and units, and route detailed unit work through Patient 360.</p>
+          <p>Resolve missing approvals, maintain authorization periods, and track CPT-level units used by scheduling and billing readiness.</p>
         </div>
         <button
           type="button"
@@ -206,7 +274,11 @@ export function AuthorizationsPage() {
               <tbody>
                 {visible.map((row) => (
                   <tr key={row.id}>
-                    <td><Link className="thera-table-link" href={`/clients/${row.patientId}`}>{row.patientName}</Link></td>
+                    <td>
+                      <button type="button" className="thera-table-link" onClick={() => navigate(`/clients/${row.patientId}`)}>
+                        {row.patientName}
+                      </button>
+                    </td>
                     <td>{row.payerName}</td>
                     <td>{row.authorizationNumber || "—"}</td>
                     <td><StatusBadge value={row.status} /></td>
@@ -214,14 +286,30 @@ export function AuthorizationsPage() {
                     <td>{row.remainingUnits ?? "—"}</td>
                     <td><StatusBadge value={row.alert} /></td>
                     <td>
-                      <button type="button" className="thera-action" onClick={() => void openRow(row)}>
-                        {row.authorizationId ? "Work Authorization" : "Create Authorization"}
-                      </button>
+                      <div className="thera-filter-row">
+                        <button
+                          type="button"
+                          className={row.needsAttention ? "thera-action" : "thera-action secondary"}
+                          disabled={openingId === row.id}
+                          onClick={() => void openRow(row)}
+                        >
+                          {openingId === row.id
+                            ? "Opening..."
+                            : row.authorizationId
+                              ? "Work Authorization"
+                              : "Add Authorization"}
+                        </button>
+                        <button type="button" className="thera-action secondary" onClick={() => navigate(`/clients/${row.patientId}`)}>
+                          Patient Chart
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}
                 {visible.length === 0 && (
-                  <tr><td colSpan={8}><div className="thera-empty">No authorization records match this view.</div></td></tr>
+                  <tr>
+                    <td colSpan={8}><div className="thera-empty">No authorization records match this view.</div></td>
+                  </tr>
                 )}
               </tbody>
             </table>
@@ -229,82 +317,126 @@ export function AuthorizationsPage() {
         </section>
       )}
 
-      {activeRow && form && (
+      {form && (
         <WorkDrawer
-          open={Boolean(activeRow)}
-          onOpenChange={(open) => { if (!open) closeDrawer(); }}
+          open={Boolean(form)}
+          onOpenChange={(open) => {
+            if (!open) {
+              setForm(null);
+              setBaseline(null);
+            }
+          }}
           dirty={dirty}
-          title={form.authorizationId ? "Authorization Work" : "Create Authorization"}
-          subtitle={`${activeRow.patientName} · ${activeRow.payerName}`}
-          badges={<><StatusBadge value={form.status} /><StatusBadge value={activeRow.alert} /></>}
-          queuePosition={activeIndex >= 0 ? `${activeIndex + 1} of ${visible.length}` : undefined}
-          onPrevious={() => openAt(activeIndex - 1)}
-          onNext={() => openAt(activeIndex + 1)}
-          previousDisabled={activeIndex <= 0}
-          nextDisabled={activeIndex < 0 || activeIndex >= visible.length - 1}
-          openFullRecord={() => navigate(`/clients/${activeRow.patientId}`)}
-          openFullRecordLabel="Open Patient 360"
+          title={form.authorizationId ? "Work Authorization" : "Add Authorization"}
+          subtitle={`${form.patientName} · ${form.payerName}`}
+          badges={<StatusBadge value={form.status} />}
+          openFullRecord={() => navigate(`/clients/${form.patientId}`)}
+          openFullRecordLabel="Open Patient Chart"
           footer={
             <div className="thera-filter-row" style={{ justifyContent: "space-between", width: "100%" }}>
-              <button type="button" className="thera-action secondary" onClick={closeDrawer}>Cancel</button>
-              <button type="button" className="thera-action" disabled={saving || drawerLoading || !form.payerId} onClick={() => void saveAuthorization()}>
-                {saving ? "Saving..." : form.authorizationId ? "Save Authorization" : "Create Authorization"}
+              <button
+                type="button"
+                className="thera-action secondary"
+                onClick={() => {
+                  setForm(null);
+                  setBaseline(null);
+                }}
+              >
+                Cancel
+              </button>
+              <button type="button" className="thera-action" disabled={saving || !form.payerId} onClick={() => void save()}>
+                {saving ? "Saving..." : "Save Authorization"}
               </button>
             </div>
           }
         >
-          {drawerLoading ? (
-            <div className="thera-state">Loading authorization...</div>
-          ) : (
-            <div className="thera-stack">
-              <section className="thera-card">
-                <div className="thera-card-header"><div><h2>Authorization Details</h2><p>These values feed scheduling and billing readiness.</p></div></div>
-                <div className="thera-form-grid">
-                  <Field label="Patient" value={activeRow.patientName} />
-                  <Field label="Payer" value={activeRow.payerName} />
-                  <label className="thera-field">
-                    <span className="thera-field-label">Authorization Number</span>
-                    <input className="thera-input" value={form.authorizationNumber ?? ""} onChange={(e) => setForm({ ...form, authorizationNumber: e.target.value })} />
-                  </label>
-                  <label className="thera-field">
-                    <span className="thera-field-label">Status</span>
-                    <select className="thera-input" value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value as AuthorizationDraft["status"] })}>
-                      {statusOptions.map((status) => <option key={status} value={status}>{status.replaceAll("_", " ")}</option>)}
-                    </select>
-                  </label>
-                  <label className="thera-field">
-                    <span className="thera-field-label">Start Date</span>
-                    <input className="thera-input" type="date" value={form.startDate ?? ""} onChange={(e) => setForm({ ...form, startDate: e.target.value })} />
-                  </label>
-                  <label className="thera-field">
-                    <span className="thera-field-label">End Date</span>
-                    <input className="thera-input" type="date" value={form.endDate ?? ""} onChange={(e) => setForm({ ...form, endDate: e.target.value })} />
-                  </label>
-                  <label className="thera-field thera-span-2">
-                    <span className="thera-field-label">Notes</span>
-                    <textarea className="thera-input" rows={5} value={form.notes ?? ""} onChange={(e) => setForm({ ...form, notes: e.target.value })} />
-                  </label>
-                </div>
-              </section>
+          <div className="thera-stack">
+            <section className="thera-card">
+              <div className="thera-card-header">
+                <div><h2>Authorization</h2><p>Approval number, status, and effective period.</p></div>
+              </div>
+              <div className="thera-form-grid">
+                <label className="thera-field">
+                  <span className="thera-field-label">Payer</span>
+                  <input className="thera-input" value={form.payerName} disabled />
+                </label>
+                <label className="thera-field">
+                  <span className="thera-field-label">Authorization Number</span>
+                  <input className="thera-input" value={form.authorizationNumber} onChange={(e) => setForm({ ...form, authorizationNumber: e.target.value })} />
+                </label>
+                <label className="thera-field">
+                  <span className="thera-field-label">Status</span>
+                  <select className="thera-input" value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value as AuthorizationDraft["status"] })}>
+                    {statuses.map((status) => <option key={status} value={status}>{status.replaceAll("_", " ")}</option>)}
+                  </select>
+                </label>
+                <label className="thera-field">
+                  <span className="thera-field-label">Start Date</span>
+                  <input className="thera-input" type="date" value={form.startDate} onChange={(e) => setForm({ ...form, startDate: e.target.value })} />
+                </label>
+                <label className="thera-field">
+                  <span className="thera-field-label">End Date</span>
+                  <input className="thera-input" type="date" value={form.endDate} onChange={(e) => setForm({ ...form, endDate: e.target.value })} />
+                </label>
+                <label className="thera-field thera-span-2">
+                  <span className="thera-field-label">Notes</span>
+                  <textarea className="thera-input" rows={4} value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} />
+                </label>
+              </div>
+            </section>
 
+            {form.status !== "not_required" && (
               <section className="thera-card">
-                <div className="thera-card-header"><div><h2>Unit Management</h2><p>CPT-level authorized, used, and remaining units are managed in Patient 360.</p></div></div>
-                <div className="thera-definition-grid">
-                  <Field label="Current Remaining Units" value={activeRow.remainingUnits === null ? "Not unit-based / not entered" : String(activeRow.remainingUnits)} />
-                  <Field label="Current Alert" value={activeRow.alert.replaceAll("_", " ")} />
+                <div className="thera-card-header split">
+                  <div><h2>Authorized Services</h2><p>Track units by CPT or HCPCS code.</p></div>
+                  <button type="button" className="thera-action secondary" onClick={addUnit}>+ Add Service</button>
                 </div>
-                <button type="button" className="thera-action secondary" style={{ marginTop: 14 }} onClick={() => navigate(`/clients/${activeRow.patientId}`)}>
-                  Open Patient 360 for CPT Units
-                </button>
+                <div className="thera-stack">
+                  {form.units.map((unit) => {
+                    const remaining = Math.max(0, Number(unit.authorizedUnits) - Number(unit.usedUnits));
+                    const persisted = !unit.key.startsWith("new-");
+                    return (
+                      <div className="thera-card" key={unit.key}>
+                        <div className="thera-form-grid">
+                          <label className="thera-field">
+                            <span className="thera-field-label">CPT / HCPCS</span>
+                            <input className="thera-input" value={unit.cptCode} onChange={(e) => updateUnit(unit.key, { cptCode: e.target.value })} placeholder="90837" />
+                          </label>
+                          <label className="thera-field">
+                            <span className="thera-field-label">Authorized Units</span>
+                            <input className="thera-input" type="number" min="0" step="1" value={unit.authorizedUnits} onChange={(e) => updateUnit(unit.key, { authorizedUnits: Number(e.target.value) })} />
+                          </label>
+                          <label className="thera-field">
+                            <span className="thera-field-label">Used Units</span>
+                            <input className="thera-input" type="number" min="0" step="1" value={unit.usedUnits} onChange={(e) => updateUnit(unit.key, { usedUnits: Number(e.target.value) })} />
+                          </label>
+                          <div className="thera-field">
+                            <span className="thera-field-label">Remaining Units</span>
+                            <div className="thera-input" style={{ display: "flex", alignItems: "center" }}>{remaining}</div>
+                          </div>
+                        </div>
+                        {!persisted && form.units.length > 1 && (
+                          <div style={{ marginTop: 10 }}>
+                            <button type="button" className="thera-action secondary" onClick={() => removeUnsavedUnit(unit.key)}>Remove Service</button>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
               </section>
-            </div>
-          )}
+            )}
+
+            <section className="thera-card">
+              <h2>Readiness Effect</h2>
+              <p>
+                Approved, unexpired authorizations with remaining units allow required services to pass pre-session and billing readiness.
+                Pending, denied, expired, exhausted, or missing authorizations remain blocking issues.
+              </p>
+            </section>
+          </div>
         </WorkDrawer>
       )}
     </>
   );
-}
-
-function Field({ label, value }: { label: string; value: string }) {
-  return <div className="thera-field"><span className="thera-field-label">{label}</span><div>{value}</div></div>;
 }
