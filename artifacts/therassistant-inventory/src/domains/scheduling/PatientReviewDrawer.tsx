@@ -152,7 +152,7 @@ export function PatientReviewDrawer({ appointment, open, onOpenChange, onEditApp
   const dob = text(patient, ["date_of_birth"]);
   const age = dob ? ageOn(dob) : null;
   const pronouns = text(patient, ["pronouns", "preferred_pronouns"]);
-  const blocking = appointment.readiness.checks.filter((check) => check.blocking);
+  const payerAttention = appointment.readiness.checks.filter((check) => check.blocking);
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -191,7 +191,7 @@ export function PatientReviewDrawer({ appointment, open, onOpenChange, onEditApp
             </ReviewSection>
 
             <ReviewSection icon={<Target size={15} />} title="Session Focus">
-              <div className="patient-review-highlight positive"><Target size={18} /><div><strong>{appointment.readiness.ready ? "WORK ON" : "RESOLVE"}</strong><p>{review.focus}</p></div></div>
+              <div className="patient-review-highlight positive"><Target size={18} /><div><strong>WORK ON</strong><p>{review.focus}</p></div></div>
             </ReviewSection>
 
             <ReviewSection icon={<Flag size={15} />} title="Active Goal" action={<button type="button" onClick={() => navigate(`/clients/${appointment.clientId}`)}>View Goals</button>}>
@@ -207,8 +207,8 @@ export function PatientReviewDrawer({ appointment, open, onOpenChange, onEditApp
               <div className={`patient-review-highlight ${review.safety === true ? "warning" : "positive"}`}><CheckCircle2 size={18} /><div><strong>{review.safety === true ? "Safety concern documented" : review.safety === false ? "No safety concerns" : "Safety review not submitted"}</strong><p>{review.safety === true ? "Review the documented risk information before the session." : review.safety === false ? "No risk factors reported in the latest check-in." : "Review available chart information before the session."}</p></div></div>
             </ReviewSection>
 
-            <ReviewSection icon={<CheckCircle2 size={15} />} title="Visit Readiness">
-              <div className={`patient-review-highlight ${appointment.readiness.ready ? "positive" : "warning"}`}><CheckCircle2 size={18} /><div><strong>{appointment.readiness.ready ? "Ready for Session" : "Needs Attention"}</strong><p>{appointment.readiness.ready ? "All required pre-visit checks are complete." : `${blocking.length} blocking item${blocking.length === 1 ? "" : "s"} must be resolved before starting care.`}</p></div></div>
+            <ReviewSection icon={<CheckCircle2 size={15} />} title="Payer / Billing Readiness">
+              <div className={`patient-review-highlight ${appointment.readiness.ready ? "positive" : "warning"}`}><CheckCircle2 size={18} /><div><strong>{appointment.readiness.ready ? "Payer checks complete" : "Clinical care can proceed"}</strong><p>{appointment.readiness.ready ? "Current payer-readiness checks are complete." : `${payerAttention.length} payer or billing item${payerAttention.length === 1 ? "" : "s"} need attention. They do not prevent starting the encounter or documenting care.`}</p></div></div>
             </ReviewSection>
           </div> : null}
         </div>

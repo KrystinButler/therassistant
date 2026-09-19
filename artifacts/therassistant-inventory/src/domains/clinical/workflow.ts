@@ -45,12 +45,9 @@ export async function signNoteWorkflow(
   if (!noteText) {
     return blocked("note_text_missing", "Clinical note text is required before signing.");
   }
-  if (!state.diagnoses.length) {
-    return blocked("diagnosis_missing", "At least one diagnosis is required before signing.");
-  }
-  if (!state.serviceLines.length) {
-    return blocked("service_line_missing", "At least one service line is required before signing.");
-  }
+  // Diagnosis, coding, charge, eligibility, authorization, and enrollment
+  // requirements belong to billing readiness. They must not block a provider
+  // from completing and signing the clinical record.
 
   const signedAt = new Date().toISOString();
 
@@ -66,14 +63,19 @@ export async function signNoteWorkflow(
       note_status: "signed",
       locked_at: signedAt,
     });
-
-    await repo.runBillingReadiness(encounterId);
-
-    return success({ noteId: String(state.note.id), signedAt });
   } catch (error) {
     return failure(
       "note_sign_failed",
       error instanceof Error ? error.message : "Unable to sign clinical note.",
     );
   }
+
+  try {
+    await repo.runBillingReadiness(encounterId);
+  } catch {
+    // The clinical signature is authoritative once saved. A downstream
+    // billing-readiness failure must never make the clinical signature fail.
+  }
+
+  return success({ noteId: String(state.note.id), signedAt });
 }
