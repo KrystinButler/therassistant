@@ -45,15 +45,17 @@ export async function startEncounterWorkflow(
     );
   }
 
-  const preSession = await repo.getPreSessionContext(appointmentId);
-  if (!preSession.readiness.ready) {
-    return blocked(
-      "pre_session_blocked",
-      "Resolve pre-session readiness issues before starting the encounter.",
-      preSession.readiness.checks
-        .filter((check) => check.blocking)
-        .map((check) => check.message || "Readiness requirement is not satisfied."),
-    );
+  let preSession: {
+    readiness: { ready: boolean; checks: Array<{ blocking?: boolean; message?: string }> };
+    policyId?: string | null;
+    payerId?: string | null;
+  } = { readiness: { ready: true, checks: [] } };
+
+  try {
+    preSession = await repo.getPreSessionContext(appointmentId);
+  } catch {
+    // Administrative payer-readiness data must never prevent clinical care.
+    // Missing insurance context is handled by downstream billing workqueues.
   }
 
   try {
