@@ -89,6 +89,7 @@ export async function createChargeFromEncounterWorkflow(
     if (existing.length) return success(existing);
 
     const context = await repo.getBillingContext(encounterId);
+    const selfPay = context.billingType === "self_pay";
     const primaryDiagnosis =
       context.diagnoses.find((diagnosis) => diagnosis.is_primary) ?? context.diagnoses[0];
 
@@ -108,11 +109,13 @@ export async function createChargeFromEncounterWorkflow(
         diagnosis_code: primaryDiagnosis?.diagnosis_code ?? null,
         place_of_service: line.place_of_service_code,
         charge_amount_cents: Number(line.charge_amount_cents ?? 0),
-        charge_status: "ready_for_claim",
+        charge_status: selfPay ? "patient_responsibility" : "ready_for_claim",
         block_reason: null,
       });
       charges.push(charge);
-      if (line.id) await repo.updateServiceLine(String(line.id), { ready_for_claim: true });
+      if (line.id) {
+        await repo.updateServiceLine(String(line.id), { ready_for_claim: !selfPay });
+      }
     }
 
     await repo.updateEncounter(encounterId, {
