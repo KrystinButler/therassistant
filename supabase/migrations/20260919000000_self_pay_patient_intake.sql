@@ -207,4 +207,56 @@ begin
 end;
 $function$;
 
+create or replace function public.post_patient_responsibility_charge_to_ledger()
+returns trigger
+language plpgsql
+set search_path to 'public', 'pg_temp'
+as $function$
+begin
+  if new.charge_status <> 'patient_responsibility'::public.charge_status_enum then
+    return new;
+  end if;
+
+  if coalesce(new.charge_amount_cents, 0) <= 0 then
+    return new;
+  end if;
+
+  perform public.create_ledger_transaction(
+    new.tenant_id,
+    'patient_responsibility_charge',
+    new.id,
+    'Self-pay / patient responsibility charge',
+    jsonb_build_array(
+      jsonb_build_object(
+        'account_code', '1100',
+        'side', 'debit',
+        'entry_type', 'charge',
+        'amount_cents', new.charge_amount_cents,
+        'client_id', new.client_id,
+        'description', 'Patient accounts receivable'
+      ),
+      jsonb_build_object(
+        'account_code', '4000',
+        'side', 'credit',
+        'entry_type', 'charge',
+        'amount_cents', new.charge_amount_cents,
+        'client_id', new.client_id,
+        'description', 'Service revenue'
+      )
+    ),
+    new.service_date
+  );
+
+  perform public.recalculate_client_balance_summary(new.client_id);
+  return new;
+end;
+$function$;
+
+drop trigger if exists trg_post_patient_responsibility_charge on public.charge_capture_items;
+create trigger trg_post_patient_responsibility_charge
+after insert on public.charge_capture_items
+for each row
+when (new.charge_status = 'patient_responsibility'::public.charge_status_enum)
+execute function public.post_patient_responsibility_charge_to_ledger();
+
 commit;
