@@ -39,7 +39,7 @@ import {
   PORTAL_RECOVER,
 } from "./domains/portal/routes";
 import { SchedulePage } from "./domains/scheduling/SchedulePage";
-import { WorkCenterPage } from "./domains/work-center/WorkCenterPage";
+import { WorkCenterPage } from "./pages/work-center";
 import { AdministrationPage } from "./pages/administration";
 import { ClientsPage } from "./pages/clients";
 import { PayerDetailPage } from "./pages/payer-detail";
