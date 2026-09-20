@@ -91,8 +91,21 @@ const RELATIONSHIPS = [
   ["self", "Self"],
   ["spouse", "Spouse"],
   ["child", "Child"],
-  ["parent", "Parent"],
-  ["other", "Other"],
+  ["step_child", "Step Child"],
+  ["foster_child", "Foster Child"],
+  ["ward", "Ward of the Court"],
+  ["employee", "Employee"],
+  ["handicapped_dependent", "Handicapped Dependent"],
+  ["grandchild", "Grandchild"],
+  ["niece_nephew", "Niece / Nephew"],
+  ["sponsored_dependent", "Sponsored Dependent"],
+  ["minor_dependent", "Minor Dependent of a Minor Dependent"],
+  ["grandparent", "Grandparent"],
+  ["life_partner", "Life Partner"],
+  ["significant_other", "Significant Other"],
+  ["unknown", "Unknown"],
+  ["parent", "Parent — choose a more specific payer-supported code before 837P export"],
+  ["other", "Other — choose a payer-supported HIPAA relationship before 837P export"],
 ] as const;
 
 function blankInsurance(primary = false): InsuranceForm {
@@ -182,7 +195,7 @@ function cloneForm(form: FormState): FormState {
 }
 
 function hasSecondaryData(coverage: InsuranceForm) {
-  return Object.values(coverage).some((value) => value.trim().length > 0);
+  return Object.values(coverage).some((value) => String(value ?? "").trim().length > 0);
 }
 
 function validPostalCode(value: string) {
