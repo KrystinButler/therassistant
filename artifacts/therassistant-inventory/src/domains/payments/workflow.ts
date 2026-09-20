@@ -252,8 +252,17 @@ export async function import835Workflow(
     contractualCents: number;
     patientResponsibilityCents: number;
   };
+  type PreparedDenial = {
+    parsedClaim: Era835Claim;
+    claim: PaymentRow;
+    eraClaim: PaymentRow;
+    carcCode: string | undefined;
+    rarcCode: string | undefined;
+    reason: string;
+  };
 
   const prepared: Prepared[] = [];
+  const preparedDenials: PreparedDenial[] = [];
   const matchedPayerIds = new Set<string>();
   const verifiedPayerIds = new Set<string>();
   const expectedEraIds = new Map<string, string | null>();
@@ -479,32 +488,17 @@ export async function import835Workflow(
         continue;
       }
       const adjustment = firstAdjustment(parsedClaim);
-      const denial = await createDenialFromAdjudicationWorkflow(repo, {
-        claimId: claim.id,
-        amountCents: parsedClaim.totalChargeCents,
+      preparedDenials.push({
+        parsedClaim,
+        claim,
+        eraClaim,
         carcCode: adjustment?.reasonCode,
         rarcCode: parsedClaim.remarkCodes[0],
-        category: "other",
         reason: [
           adjustment ? `${adjustment.groupCode}-${adjustment.reasonCode}` : "835 denial",
           ...parsedClaim.remarkCodes,
         ].join(" · "),
-        workability: "needs_review",
       });
-      if (!denial.ok) {
-        await routeEraIssue(
-          "Unable to post 835 denial",
-          denial.message,
-          "claim",
-          claim.id,
-        );
-        continue;
-      }
-      await repo.updateClaim(claim.id, {
-        payer_claim_number: parsedClaim.payerClaimNumber || claim.payer_claim_number || null,
-      });
-      await repo.updateEraClaim(eraClaim.id, { status: "posted" });
-      postedCount += 1;
       continue;
     }
 
@@ -548,6 +542,11 @@ export async function import835Workflow(
     );
   }
 
+  const financialPostingAllowed =
+    !payerIdentityBlocked &&
+    matchedPayerIds.size === 1 &&
+    verifiedPayerIds.size === 1;
+
   let paymentId: string | null = null;
   if (parsed.paymentAmountCents > 0) {
     if (payerIdentityBlocked) {
@@ -557,7 +556,7 @@ export async function import835Workflow(
         "era",
         eraFile.id,
       );
-    } else if (verifiedPayerIds.size !== 1 || matchedPayerIds.size !== 1) {
+    } else if (!financialPostingAllowed) {
       await routeEraIssue(
         "835 payment payer cannot be determined",
         "The ERA payment cannot be posted to the ledger until all matched claims resolve to one internal payer.",
@@ -597,6 +596,7 @@ export async function import835Workflow(
     }
   }
 
+  if (financialPostingAllowed) {
   for (const item of prepared) {
     if (item.contractualCents > 0) {
       await repo.postContractualAdjustment({
@@ -648,6 +648,34 @@ export async function import835Workflow(
     });
     await repo.updateEraClaim(item.eraClaim.id, { status: "posted" });
     postedCount += 1;
+  }
+
+  for (const item of preparedDenials) {
+    const denial = await createDenialFromAdjudicationWorkflow(repo, {
+      claimId: item.claim.id,
+      amountCents: item.parsedClaim.totalChargeCents,
+      carcCode: item.carcCode,
+      rarcCode: item.rarcCode,
+      category: "other",
+      reason: item.reason,
+      workability: "needs_review",
+    });
+    if (!denial.ok) {
+      await routeEraIssue(
+        "Unable to post 835 denial",
+        denial.message,
+        "claim",
+        item.claim.id,
+      );
+      continue;
+    }
+    await repo.updateClaim(item.claim.id, {
+      payer_claim_number:
+        item.parsedClaim.payerClaimNumber || item.claim.payer_claim_number || null,
+    });
+    await repo.updateEraClaim(item.eraClaim.id, { status: "posted" });
+    postedCount += 1;
+  }
   }
 
   const finalFileStatus = exceptionCount === 0 && postedCount === parsed.claims.length
