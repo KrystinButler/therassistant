@@ -26,6 +26,36 @@ type ClaimDiagnosisRow = Record<string, unknown> & {
 
 type ContextRow = Record<string, unknown> & { id?: string };
 
+export const CLAIM_FILING_INDICATORS = [
+  ["11", "Other Non-Federal Programs"],
+  ["12", "Preferred Provider Organization (PPO)"],
+  ["13", "Point of Service (POS)"],
+  ["14", "Exclusive Provider Organization (EPO)"],
+  ["15", "Indemnity Insurance"],
+  ["16", "HMO Medicare Risk"],
+  ["AM", "Automobile Medical"],
+  ["BL", "Blue Cross / Blue Shield"],
+  ["CH", "TRICARE / CHAMPUS"],
+  ["CI", "Commercial Insurance Company"],
+  ["DS", "Disability"],
+  ["FI", "Federal Employees Program"],
+  ["HM", "Health Maintenance Organization"],
+  ["LI", "Liability"],
+  ["LM", "Liability Medical"],
+  ["MA", "Medicare Part A"],
+  ["MB", "Medicare Part B"],
+  ["MC", "Medicaid"],
+  ["MH", "Managed Care Non-HMO"],
+  ["OF", "Other Federal Program"],
+  ["SA", "Self-Administered Group"],
+  ["TV", "Title V"],
+  ["VA", "Veterans Affairs Plan"],
+  ["WC", "Workers' Compensation Health Claim"],
+  ["ZZ", "Mutually Defined"],
+] as const;
+
+const CLAIM_FILING_CODES = new Set(CLAIM_FILING_INDICATORS.map(([code]) => code));
+
 export type Edi837PConfig = {
   submitterName: string;
   submitterId: string;
@@ -45,6 +75,7 @@ export type Edi837PConfig = {
   postalCode: string;
   usageIndicator: "P" | "T";
   payerIds: Record<string, string>;
+  claimFilingIndicators: Record<string, string>;
 };
 
 export type ClaimOutputItem = {
@@ -129,6 +160,11 @@ function payerEdiId(input: BatchOutputData, item: ClaimOutputItem) {
   return clean(input.edi.payerIds[payerId] || item.payer?.clearinghouse_payer_id || "");
 }
 
+function claimFilingIndicator(input: BatchOutputData, item: ClaimOutputItem) {
+  const payerId = String(item.payer?.id ?? item.claim.payer_id ?? "");
+  return clean(input.edi.claimFilingIndicators[payerId]).toUpperCase();
+}
+
 function numericControl(value: unknown) {
   const source = String(value ?? "therassistant");
   let hash = 0;
@@ -209,6 +245,13 @@ export function validate837PExport(input: BatchOutputData) {
     const ediPayerId = payerEdiId(input, item);
     requireValue(errors, ediPayerId, `${control}: clearinghouse payer ID is not configured.`);
     if (ediPayerId) batchPayers.add(ediPayerId);
+
+    const filingIndicator = claimFilingIndicator(input, item);
+    if (!filingIndicator) {
+      errors.push(`${control}: claim filing indicator is not configured for this payer.`);
+    } else if (!CLAIM_FILING_CODES.has(filingIndicator as typeof CLAIM_FILING_INDICATORS[number][0])) {
+      errors.push(`${control}: claim filing indicator "${filingIndicator}" is not supported.`);
+    }
 
     requireValue(errors, item.policy?.member_id, `${control}: subscriber/member ID is missing.`);
     const relationship = String(item.policy?.relationship_to_subscriber ?? "").toLowerCase();
@@ -292,6 +335,7 @@ export function build837PText(input: BatchOutputData, now = new Date()) {
     hl += 1;
     const clientMeta = metadata(item.client);
     const payerId = payerEdiId(input, item);
+    const filingIndicator = claimFilingIndicator(input, item);
     const pos = clean(item.lines[0]?.place_of_service);
     const controlNumber = clean(item.claim.patient_control_number ?? item.claim.id);
     const total = formatAmount(item.claim.total_charge_cents);
@@ -313,7 +357,7 @@ export function build837PText(input: BatchOutputData, now = new Date()) {
 
     tx.push(`HL*${subscriberHl}*1*22*${dependent ? "1" : "0"}~`);
     tx.push(
-      ["SBR", "P", relationshipCodeValue, clean(item.policy?.group_number), "", "", "", "", "", "CI"].join("*") + "~",
+      ["SBR", "P", relationshipCodeValue, clean(item.policy?.group_number), "", "", "", "", "", filingIndicator].join("*") + "~",
     );
     tx.push(
       `NM1*IL*1*${compact(subscriberLastName)}*${compact(subscriberFirstName)}****MI*${clean(item.policy?.member_id)}~`,
