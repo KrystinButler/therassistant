@@ -93,6 +93,17 @@ export function PracticeConfigurationPage() {
     });
   }
 
+  function updateEraPayerIdentifier(payerId: string, value: string) {
+    if (!form) return;
+    setForm({
+      ...form,
+      eraPayerIdentifiers: {
+        ...form.eraPayerIdentifiers,
+        [payerId]: value,
+      },
+    });
+  }
+
   async function save() {
     if (!form || !tenantId) return;
     setSaving(true);
@@ -114,6 +125,11 @@ export function PracticeConfigurationPage() {
         claimFilingIndicators: Object.fromEntries(
           Object.entries(form.claimFilingIndicators)
             .map(([key, value]) => [key, value.trim().toUpperCase()])
+            .filter(([, value]) => Boolean(value)),
+        ),
+        eraPayerIdentifiers: Object.fromEntries(
+          Object.entries(form.eraPayerIdentifiers)
+            .map(([key, value]) => [key, value.trim()])
             .filter(([, value]) => Boolean(value)),
         ),
       };
@@ -200,12 +216,12 @@ export function PracticeConfigurationPage() {
           <div className="thera-card-header">
             <div>
               <h2>Payer Claim Configuration</h2>
-              <p>Set both the clearinghouse payer ID and the HIPAA claim filing indicator used in SBR09. Filing indicators are not inferred from payer names.</p>
+              <p>Configure outbound 837P routing separately from the inbound ERA payer identifier. THERASSISTANT will not assume these identifiers are the same.</p>
             </div>
           </div>
           <div className="thera-table-wrap">
             <table className="thera-table">
-              <thead><tr><th>Payer</th><th>Type</th><th>837P Payer ID</th><th>Claim Filing Indicator</th></tr></thead>
+              <thead><tr><th>Payer</th><th>Type</th><th>837P Payer ID</th><th>Claim Filing Indicator</th><th>ERA Payer ID</th></tr></thead>
               <tbody>
                 {payers.map((payer) => (
                   <tr key={payer.id}>
@@ -231,6 +247,14 @@ export function PracticeConfigurationPage() {
                           <option key={code} value={code}>{code} — {label}</option>
                         ))}
                       </select>
+                    </td>
+                    <td>
+                      <input
+                        className="thera-input"
+                        value={form.eraPayerIdentifiers[payer.id] ?? ""}
+                        onChange={(event) => updateEraPayerIdentifier(payer.id, event.target.value)}
+                        aria-label={`${String(payer.name ?? "Payer")} ERA payer ID`}
+                      />
                     </td>
                   </tr>
                 ))}
