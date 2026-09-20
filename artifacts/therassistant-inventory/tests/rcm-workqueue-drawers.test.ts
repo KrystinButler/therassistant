@@ -40,7 +40,8 @@ test("Rejections prepare corrected claims without falsely recording transmission
   assert.match(rejectionDrawer, /Revalidate/);
   assert.match(rejectionDrawer, /Prepare Resubmission/);
   assert.match(rejectionDrawer, /createBatch/);
-  assert.doesNotMatch(rejectionDrawer, /submitBatch/);\n  assert.match(rejectionDrawer, /export and transmit the 837P/i);
+  assert.doesNotMatch(rejectionDrawer, /submitBatch/);
+  assert.match(rejectionDrawer, /export and transmit the 837P/i);
   assert.match(claimsQueueRepository, /responseIsCurrent/);
 });
 
