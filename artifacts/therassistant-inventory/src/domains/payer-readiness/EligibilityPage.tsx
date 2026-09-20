@@ -6,7 +6,6 @@ import { WorkDrawer } from "../../components/work-drawer";
 import { money, shortDate } from "../../lib/format";
 import {
   recordManualEligibility,
-  runPatientEligibility,
   type ManualEligibilityInput,
   type ManualEligibilityStatus,
 } from "../eligibility/repository";
@@ -84,7 +83,7 @@ function percent(value: string) {
 
 function sourceLabel(value: string | null) {
   if (!value) return "Not checked";
-  if (value === "synthetic_demo_270_271") return "Demo 270/271";
+  if (value === "synthetic_demo_270_271") return "Legacy demo · not verified";
   if (value.startsWith("manual_")) {
     return `Manual · ${value.replace("manual_", "").replaceAll("_", " ")}`;
   }
@@ -97,7 +96,6 @@ export function EligibilityPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
-  const [runningId, setRunningId] = useState<string | null>(null);
   const [attentionOnly, setAttentionOnly] = useState(false);
   const [activeRow, setActiveRow] = useState<EligibilityRow | null>(null);
   const [manualForm, setManualForm] = useState<ManualForm>(blankManualForm());
@@ -125,28 +123,6 @@ export function EligibilityPage() {
   );
   const attentionCount = rows.filter((row) => row.needsAttention).length;
   const activeIndex = activeRow ? visible.findIndex((row) => row.id === activeRow.id) : -1;
-
-  async function runDemo(row: EligibilityRow) {
-    if (!row.policyId || !row.payerId || !row.memberId) return;
-    setRunningId(row.id);
-    setError(null);
-    setMessage(null);
-    try {
-      await runPatientEligibility({
-        patientId: row.patientId,
-        policyId: row.policyId,
-        payerId: row.payerId,
-        memberId: row.memberId,
-        serviceDate: new Date().toISOString().slice(0, 10),
-      });
-      setMessage("Demo 270/271 response saved. This is synthetic test data.");
-      await load();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Unable to run demo eligibility.");
-    } finally {
-      setRunningId(null);
-    }
-  }
 
   function openManual(row: EligibilityRow) {
     if (!row.policyId || !row.payerId) {
@@ -212,7 +188,7 @@ export function EligibilityPage() {
         <div>
           <div className="thera-eyebrow">PAYER READINESS</div>
           <h1>Eligibility</h1>
-          <p>Verify coverage, record payer-confirmed benefits, and distinguish real manual checks from synthetic demo transactions.</p>
+          <p>Record payer-confirmed coverage and benefits from a portal, phone verification, or clearinghouse portal.</p>
         </div>
         <button
           type="button"
@@ -261,14 +237,6 @@ export function EligibilityPage() {
                           onClick={() => openManual(row)}
                         >
                           Manual Verify
-                        </button>
-                        <button
-                          type="button"
-                          className="thera-action secondary"
-                          disabled={!row.policyId || !row.payerId || !row.memberId || runningId === row.id}
-                          onClick={() => void runDemo(row)}
-                        >
-                          {runningId === row.id ? "Running..." : "Demo 270/271"}
                         </button>
                         <Link className="thera-link" href={`/clients/${row.patientId}`}>Patient Chart</Link>
                       </div>
