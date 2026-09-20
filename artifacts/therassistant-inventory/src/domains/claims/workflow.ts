@@ -175,7 +175,7 @@ function claimValidationIssues(
     if (Number(line.units ?? 0) <= 0) issues.push("Claim line units must be greater than zero.");
     if (Number(line.charge_amount_cents ?? 0) <= 0) issues.push("Claim line charge must be greater than zero.");
     if (!String(line.diagnosis_pointer ?? "").trim()) issues.push("Claim line diagnosis pointer is missing.");
-    if (!/^\\d{2}$/.test(String(line.place_of_service ?? ""))) issues.push("Claim line place of service must be a two-digit code.");
+    if (!/^\d{2}$/.test(String(line.place_of_service ?? ""))) issues.push("Claim line place of service must be a two-digit code.");
   }
 
   if (enrollmentStatus !== "approved") {
