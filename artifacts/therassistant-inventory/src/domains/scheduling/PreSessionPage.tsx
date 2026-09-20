@@ -6,7 +6,6 @@ import { dateTime } from "../../lib/format";
 import { startEncounter } from "../encounters/repository";
 import {
   getPreSessionData,
-  runEligibility,
   type ScheduleAppointment,
 } from "./repository";
 
@@ -16,7 +15,6 @@ export function PreSessionPage() {
   const appointmentId = params?.id ?? "";
   const [appointment, setAppointment] = useState<ScheduleAppointment | null>(null);
   const [loading, setLoading] = useState(true);
-  const [runningEligibility, setRunningEligibility] = useState(false);
   const [startingEncounter, setStartingEncounter] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -37,19 +35,6 @@ export function PreSessionPage() {
   useEffect(() => {
     void load();
   }, [appointmentId]);
-
-  async function checkEligibility() {
-    setRunningEligibility(true);
-    setError(null);
-    try {
-      await runEligibility(appointmentId);
-      await load();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Unable to run eligibility.");
-    } finally {
-      setRunningEligibility(false);
-    }
-  }
 
   async function beginEncounter() {
     setStartingEncounter(true);
@@ -72,14 +57,14 @@ export function PreSessionPage() {
   if (error && !appointment) return <div className="thera-state error">{error}</div>;
   if (!appointment) return <div className="thera-state error">Appointment not found.</div>;
 
-  const blocking = appointment.readiness.checks.filter((check) => check.blocking);
+  const attention = appointment.readiness.checks.filter((check) => check.status !== "pass");
 
   return (
     <>
       <div className="thera-breadcrumb"><Link href="/schedule" className="thera-link">Schedule</Link><span>/</span><span>Pre-Session</span></div>
       <div className="thera-page-header split">
         <div><div className="thera-eyebrow">PRE-SESSION DASHBOARD</div><h1>{appointment.clientName}</h1><p>{dateTime(appointment.startsAt)} · {appointment.providerName} · {appointment.serviceType}</p></div>
-        <div className="thera-header-badges"><StatusBadge value={appointment.appointmentStatus} /><StatusBadge value={appointment.readiness.ready ? "ready" : "blocked"} /></div>
+        <div className="thera-header-badges"><StatusBadge value={appointment.appointmentStatus} /><StatusBadge value={attention.length ? "administrative_attention" : "ready"} /></div>
       </div>
 
       {error && <div className="thera-state error" style={{ marginBottom: 12 }}>{error}</div>}
@@ -94,7 +79,7 @@ export function PreSessionPage() {
         <section className="thera-card">
           <div className="thera-card-header"><div><h2>Insurance & Eligibility</h2><p>Coverage context is derived from the patient chart.</p></div></div>
           <div className="thera-definition-grid"><Field label="Payer" value={appointment.payerName} /><Field label="Plan" value={appointment.planName} /><Field label="Member ID" value={appointment.memberId || "—"} /><Field label="Eligibility" value={<StatusBadge value={appointment.eligibilityStatus || "not checked"} />} /></div>
-          <div className="thera-filter-row" style={{ marginTop: 14 }}><button type="button" className="thera-action" disabled={runningEligibility} onClick={() => void checkEligibility()}>{runningEligibility ? "Checking..." : "Run Eligibility"}</button><Link className="thera-action secondary" href={`/clients/${appointment.clientId}`}>Manage Insurance</Link></div>
+          <div className="thera-filter-row" style={{ marginTop: 14 }}><Link className="thera-action" href="/eligibility">Verify Eligibility</Link><Link className="thera-action secondary" href={`/clients/${appointment.clientId}`}>Manage Insurance</Link></div>
         </section>
 
         <section className="thera-card">
@@ -110,11 +95,11 @@ export function PreSessionPage() {
         </section>
 
         <section className="thera-card thera-span-2">
-          <div className="thera-card-header"><div><h2>Readiness Audit</h2><p>{appointment.readiness.ready ? "All blocking prerequisites are satisfied." : `${blocking.length} blocking issue(s) must be resolved before the encounter starts.`}</p></div><StatusBadge value={appointment.readiness.ready ? "ready" : "blocked"} /></div>
+          <div className="thera-card-header"><div><h2>Administrative Readiness</h2><p>{attention.length ? `${attention.length} administrative item(s) need attention. These do not prevent clinical care.` : "No administrative issues are currently flagged."}</p></div><StatusBadge value={attention.length ? "attention" : "ready"} /></div>
           <div className="thera-stack">{appointment.readiness.checks.map((check) => <div className="thera-work-card" key={check.code}><div className="thera-work-card-top"><strong>{check.label}</strong><StatusBadge value={check.status} /></div><div>{check.message}</div>{check.action && <div className="thera-muted" style={{ marginTop: 4 }}>Next action: {check.action}</div>}</div>)}</div>
           <div className="thera-filter-row" style={{ marginTop: 16 }}>
-            <button type="button" className="thera-action" disabled={!appointment.readiness.ready || startingEncounter} onClick={() => void beginEncounter()}>{startingEncounter ? "Starting..." : "Start Encounter"}</button>
-            {!appointment.readiness.ready && <span className="thera-muted">Resolve the blocking items above before starting care.</span>}
+            <button type="button" className="thera-action" disabled={startingEncounter} onClick={() => void beginEncounter()}>{startingEncounter ? "Starting..." : "Start Encounter"}</button>
+            {attention.length > 0 && <span className="thera-muted">Administrative issues remain visible for follow-up but do not block the encounter.</span>}
           </div>
         </section>
       </div>
