@@ -49,16 +49,19 @@ function fakeRepo(context = cleanContext) {
   const readinessChecks: Array<Record<string, unknown>> = [];
   const work: Array<Record<string, unknown>> = [];
   const charges: Array<Record<string, any>> = [];
+  const resolvedWorkTypes: string[][] = [];
   let encounterUpdate: Record<string, unknown> = {};
 
   return {
     readinessChecks,
     work,
     charges,
+    resolvedWorkTypes,
     get encounterUpdate() { return encounterUpdate; },
     async getBillingContext() { return context; },
     async replaceReadinessChecks(_encounterId: string, checks: Array<Record<string, unknown>>) { readinessChecks.splice(0, readinessChecks.length, ...checks); },
     async upsertWorkItem(values: Record<string, unknown>) { work.push(values); return values; },
+    async resolveStaleWorkItems(_encounterId: string, activeTypes: string[]) { resolvedWorkTypes.push(activeTypes); return {}; },
     async updateEncounter(_id: string, values: Record<string, unknown>) { encounterUpdate = values; return values; },
     async getExistingCharges() { return charges; },
     async createCharge(values: Record<string, unknown>) { const row = { id: `charge-${charges.length + 1}`, ...values }; charges.push(row); return row; },
@@ -66,21 +69,35 @@ function fakeRepo(context = cleanContext) {
   };
 }
 
-test("blocked encounter is held and creates focused work", async () => {
-  const repo = fakeRepo({ ...cleanContext, providerEnrollmentStatus: "submitted" });
+test("blocked encounter keeps clinical status separate and creates work for every billing queue", async () => {
+  const repo = fakeRepo({
+    ...cleanContext,
+    eligibilityStatus: "inactive",
+    providerEnrollmentStatus: "submitted",
+    serviceLines: [],
+  });
   const result = await routeEncounterToBillingWorkflow(repo, "enc-1");
   assert.equal(result.ok, false);
   assert.equal(repo.encounterUpdate.billing_status, "held");
-  assert.equal(repo.work.length, 1);
-  assert.equal(repo.work[0].workqueue_type, "credentialing_issue");
+  assert.equal(repo.encounterUpdate.encounter_status, undefined);
+  assert.deepEqual(
+    repo.work.map((item) => item.workqueue_type).sort(),
+    ["charge_validation", "credentialing_issue", "eligibility_issue"],
+  );
+  assert.deepEqual(
+    [...repo.resolvedWorkTypes[0]].sort(),
+    ["charge_validation", "credentialing_issue", "eligibility_issue"],
+  );
 });
 
-test("ready encounter routes to billing without exception work", async () => {
+test("ready encounter routes to billing and resolves stale billing work", async () => {
   const repo = fakeRepo();
   const result = await routeEncounterToBillingWorkflow(repo, "enc-1");
   assert.equal(result.ok, true);
   assert.equal(repo.encounterUpdate.billing_status, "ready");
+  assert.equal(repo.encounterUpdate.encounter_status, undefined);
   assert.equal(repo.work.length, 0);
+  assert.deepEqual(repo.resolvedWorkTypes, [[]]);
 });
 
 test("ready encounter creates traceable ready-for-claim charge", async () => {
