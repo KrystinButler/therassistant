@@ -31,6 +31,7 @@ type PayerPlanRow = Row & { id: string; payer_id: string; name: string; plan_typ
 type CreatedRow = Row & { id: string };
 type Sex = "" | "M" | "F";
 type CoverageKey = "primary" | "secondary";
+type BillingType = "insurance" | "self_pay";
 
 type InsuranceForm = {
   payer_id: string;
@@ -62,6 +63,7 @@ type FormState = {
   emergency_contact_relationship: string;
   client_status: string;
   registration_status: string;
+  billing_type: BillingType;
   primary: InsuranceForm;
   secondary: InsuranceForm;
 };
@@ -106,6 +108,7 @@ function blankPatient(): FormState {
     emergency_contact_relationship: "",
     client_status: "active",
     registration_status: "complete",
+    billing_type: "insurance",
     primary: blankInsurance(true),
     secondary: blankInsurance(false),
   };
@@ -124,14 +127,18 @@ function hasSecondaryData(coverage: InsuranceForm) {
 }
 
 function requiredAddFieldsComplete(form: FormState) {
-  return Boolean(
+  const demographicsComplete = Boolean(
     form.first_name.trim() &&
     form.last_name.trim() &&
     form.date_of_birth &&
     form.sex &&
     form.address_line1.trim() &&
     form.phone.trim() &&
-    form.email.trim() &&
+    form.email.trim()
+  );
+  if (!demographicsComplete) return false;
+  if (form.billing_type === "self_pay") return true;
+  return Boolean(
     form.primary.payer_id &&
     form.primary.member_id.trim() &&
     form.primary.relationship_to_subscriber
@@ -268,10 +275,10 @@ export function ClientsPage() {
     }
 
     if (!requiredAddFieldsComplete(form)) {
-      setFormError("Complete all required patient and primary insurance fields.");
+      setFormError("Complete all required patient fields and primary insurance fields when billing insurance.");
       return;
     }
-    if (hasSecondaryData(form.secondary) && (!form.secondary.payer_id || !form.secondary.member_id.trim())) {
+    if (form.billing_type === "insurance" && hasSecondaryData(form.secondary) && (!form.secondary.payer_id || !form.secondary.member_id.trim())) {
       setFormError("Secondary insurance company and ID are required when secondary insurance is entered.");
       return;
     }
@@ -306,10 +313,11 @@ export function ClientsPage() {
             address_line1: form.address_line1.trim(),
             client_status: form.client_status,
             registration_status: form.registration_status,
+            billing_type: form.billing_type,
           },
           p_emergency_contact: emergencyContact,
-          p_primary_insurance: coveragePayload(plans, form.primary, form),
-          p_secondary_insurance: hasSecondaryData(form.secondary) ? coveragePayload(plans, form.secondary, form) : null,
+          p_primary_insurance: form.billing_type === "insurance" ? coveragePayload(plans, form.primary, form) : null,
+          p_secondary_insurance: form.billing_type === "insurance" && hasSecondaryData(form.secondary) ? coveragePayload(plans, form.secondary, form) : null,
           p_portal_enrolled: false,
         }),
         invitePortal: invitePatientPortal,
@@ -422,6 +430,7 @@ export function ClientsPage() {
             <Text label="Patient Address *" value={form.address_line1} onChange={(address_line1) => setForm({ ...form, address_line1 })} />
             <Text label="Patient Phone *" type="tel" value={form.phone} onChange={(phone) => setForm({ ...form, phone })} />
             <Text label="Patient Email *" type="email" value={form.email} onChange={(email) => setForm({ ...form, email })} />
+            <label className="thera-field"><span className="thera-field-label">Billing Type *</span><select className="thera-input" value={form.billing_type} onChange={(event) => setForm({ ...form, billing_type: event.target.value as BillingType })}><option value="insurance">Insurance</option><option value="self_pay">Self Pay</option></select></label>
           </div>
         </section>
 
@@ -434,7 +443,7 @@ export function ClientsPage() {
           </div>
         </section>
 
-        <section className="thera-card">
+        {form.billing_type === "insurance" && <section className="thera-card">
           <div className="thera-card-header"><div><h2>Insurance Case</h2><p>Primary coverage is required. Secondary coverage is optional.</p></div></div>
           <div className="thera-stack">
             <div><h3>Primary Insurance</h3><div className="thera-form-grid">
@@ -467,7 +476,12 @@ export function ClientsPage() {
               <RelationshipSelect label="Secondary Patient Relation to Subscriber" value={form.secondary.relationship_to_subscriber} onChange={(relationship_to_subscriber) => updateCoverage("secondary", { relationship_to_subscriber })} />
             </div></div>
           </div>
-        </section>
+        </section>}
+
+        {form.billing_type === "self_pay" && <section className="thera-card">
+          <div className="thera-card-header"><div><h2>Self-Pay Billing</h2><p>No insurance policy is required.</p></div></div>
+          <div className="thera-alert">Services will route to patient responsibility instead of payer claim creation.</div>
+        </section>}
 
         <div className="thera-muted">Use “Save + Send Portal Invite” to save the patient once and send their secure portal invitation.</div>
       </div>}
