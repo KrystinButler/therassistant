@@ -399,6 +399,8 @@ export function BillingQueuePage() {
           onPrint={(batchId, claimId) => void runPrintCms1500(batchId, claimId)}
           onAcknowledge={(submissionId: string, claimId: string, outcome: "accepted" | "rejected") =>
             void runRecordAcknowledgement(submissionId, claimId, outcome)}
+        />
+      )}
     </>
   );
 }
