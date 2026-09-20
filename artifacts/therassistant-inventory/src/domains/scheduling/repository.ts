@@ -22,6 +22,7 @@ export type ScheduleAppointment = {
   id: string;
   clientId: string;
   clientName: string;
+  billingType: string;
   providerId: string | null;
   providerName: string;
   payerId: string | null;
@@ -204,6 +205,8 @@ export async function getScheduleData(): Promise<ScheduleData> {
 
   const enriched = appointments.map((appointment): ScheduleAppointment => {
     const clientId = String(appointment.client_id ?? "");
+    const client = clientsById.get(clientId);
+    const billingType = String(metadata(client).billing_type ?? "insurance");
     const providerId = appointment.provider_id ? String(appointment.provider_id) : null;
     const policy = primaryPolicy(policies, clientId);
     const payerId = policy?.payer_id ? String(policy.payer_id) : null;
@@ -213,7 +216,7 @@ export async function getScheduleData(): Promise<ScheduleData> {
       policy?.id ?? null,
     );
     const policyMetadata = metadata(policy);
-    const authorizationRequired = policyMetadata.authorization_required === true;
+    const authorizationRequired = billingType === "self_pay" ? false : policyMetadata.authorization_required === true;
     const authorization = activeAuthorization(authorizations, clientId, payerId);
     const remainingUnits = remainingUnitsFor(
       authorizationUnits,
@@ -237,6 +240,7 @@ export async function getScheduleData(): Promise<ScheduleData> {
     );
 
     const readiness = evaluatePreSession({
+      billingType,
       policy: policy ? { status: String(policy.status ?? "unknown") } : null,
       eligibility: eligibilityRow
         ? { eligibility_status: String(eligibilityRow.eligibility_status ?? "") }
@@ -265,11 +269,12 @@ export async function getScheduleData(): Promise<ScheduleData> {
     return {
       id: appointment.id,
       clientId,
-      clientName: name(clientsById.get(clientId)),
+      clientName: name(client),
+      billingType,
       providerId,
       providerName: name(providerId ? providersById.get(providerId) : null),
       payerId,
-      payerName: payerId ? String(payersById.get(payerId)?.name ?? "—") : "—",
+      payerName: billingType === "self_pay" ? "Self Pay" : payerId ? String(payersById.get(payerId)?.name ?? "—") : "—",
       planName: policy?.payer_plan_id
         ? String(plansById.get(String(policy.payer_plan_id))?.name ?? "—")
         : "—",
