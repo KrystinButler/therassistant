@@ -124,6 +124,9 @@ function makeRepo() {
     async getEraFileByTrace(traceNumber) {
       return eraFiles.find((row) => row.check_or_trace_number === traceNumber) ?? null;
     },
+    async getExpectedEraPayerIdentifier(payerId) {
+      return payerId === "payer-1" ? "AETNA835" : null;
+    },
     async createPayment(values) { const row = { id: id("payment"), ...values }; payments.push(row); return row; },
     async updatePayment(paymentId, values) {
       const index = payments.findIndex((row) => row.id === paymentId);
@@ -216,7 +219,7 @@ function era835({
     "ST*835*0001",
     `BPR*I*${paid}*C*ACH*CCP************20260920`,
     `TRN*1*${trace}`,
-    "N1*PR*AETNA",
+    "N1*PR*AETNA*XV*AETNA835",
     "N1*PE*EXAMPLE BEHAVIORAL HEALTH",
     `CLP*${control}*${status}*${charge}*${paid}*${patient}**PAYER-1001*11*1`,
     "NM1*QC*1*PATIENT*DEMO",
@@ -272,6 +275,48 @@ test("real 835 import posts payment, contractual adjustment, and patient respons
   assert.equal(state.adjustments[0].amount_cents, 1500);
   assert.equal(state.claims.get("claim-1")?.claim_status, "patient_responsibility");
   assert.equal(state.claims.get("claim-1")?.metadata.patient_responsibility_cents, 1000);
+});
+
+test("835 payer identifier mismatch blocks all financial posting", async () => {
+  const state = makeRepo();
+  const rawText = era835({ trace: "PAYER-MISMATCH" }).replace(
+    "N1*PR*AETNA*XV*AETNA835",
+    "N1*PR*AETNA*XV*WRONGPAYER",
+  );
+  const result = await import835Workflow(state.repo, {
+    rawText,
+    fileName: "payer-mismatch.835",
+  });
+
+  assert.equal(result.ok, true);
+  if (!result.ok) return;
+  assert.equal(result.value.postedCount, 0);
+  assert.equal(result.value.paymentId, null);
+  assert.equal(state.payments.length, 0);
+  assert.equal(state.adjustments.length, 0);
+  assert.equal(state.claims.get("claim-1")?.claim_status, "accepted");
+  assert.equal(state.eraClaims[0].status, "matched");
+  assert.ok(state.workItems.some((row) => String(row.title).includes("payer identifier does not match")));
+});
+
+test("835 missing payer identifier blocks financial posting", async () => {
+  const state = makeRepo();
+  const rawText = era835({ trace: "PAYER-MISSING" }).replace(
+    "N1*PR*AETNA*XV*AETNA835",
+    "N1*PR*AETNA",
+  );
+  const result = await import835Workflow(state.repo, {
+    rawText,
+    fileName: "payer-missing.835",
+  });
+
+  assert.equal(result.ok, true);
+  if (!result.ok) return;
+  assert.equal(result.value.postedCount, 0);
+  assert.equal(state.payments.length, 0);
+  assert.equal(state.adjustments.length, 0);
+  assert.equal(state.claims.get("claim-1")?.claim_status, "accepted");
+  assert.ok(state.workItems.some((row) => String(row.title).includes("payer identifier is missing")));
 });
 
 test("duplicate 835 trace is blocked before financial posting", async () => {
