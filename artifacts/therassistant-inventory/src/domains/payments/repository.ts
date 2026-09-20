@@ -16,9 +16,9 @@ import {
 } from "./operations";
 import {
   createDenialFromAdjudicationWorkflow,
-  postDemoEraWorkflow,
+  import835Workflow,
   postInsurancePaymentWorkflow,
-  type PaymentRepository,
+  type EraImportRepository,
 } from "./workflow";
 
 type DataRow = Row & { id: string };
@@ -45,9 +45,28 @@ function total(rows: DataRow[], field: string) {
   return rows.reduce((sum, row) => sum + Number(row[field] ?? 0), 0);
 }
 
-const repository: PaymentRepository = {
+const repository: EraImportRepository = {
   async getClaim(claimId) {
     return first(await tenantSelect<DataRow>("professional_claims", { id: `eq.${claimId}`, limit: "1" }));
+  },
+  findClaimsByPatientControlNumber(patientControlNumber) {
+    return tenantSelect<DataRow>("professional_claims", {
+      patient_control_number: `eq.${patientControlNumber}`,
+      order: "created_at.desc",
+    });
+  },
+  getClaimLines(claimId) {
+    return tenantSelect<DataRow>("professional_claim_lines", {
+      claim_id: `eq.${claimId}`,
+      order: "service_date.asc,created_at.asc",
+    });
+  },
+  async getEraFileByTrace(traceNumber) {
+    return first(await tenantSelect<DataRow>("era_files", {
+      check_or_trace_number: `eq.${traceNumber}`,
+      order: "created_at.desc",
+      limit: "1",
+    }));
   },
   createPayment(values) { return tenantInsert<DataRow>("payments", values); },
   updatePayment(id, values) { return tenantUpdate<DataRow>("payments", id, values); },
@@ -57,7 +76,9 @@ const repository: PaymentRepository = {
   createEraFile(values) { return tenantInsert<DataRow>("era_files", values); },
   createEraClaim(values) { return tenantInsert<DataRow>("era_claims", values); },
   createEraMatch(values) { return tenantInsert<DataRow>("era_matches", values); },
+  createEraServiceLine(values) { return tenantInsert<DataRow>("era_service_lines", values); },
   updateEraFile(id, values) { return tenantUpdate<DataRow>("era_files", id, values); },
+  updateEraClaim(id, values) { return tenantUpdate<DataRow>("era_claims", id, values); },
   updateClaim(id, values) { return tenantUpdate<DataRow>("professional_claims", id, values); },
   createDenial(values) { return tenantInsert<DataRow>("denials", values); },
   async upsertWorkItem(values) {
@@ -76,7 +97,7 @@ const repository: PaymentRepository = {
 };
 
 export function postInsurancePayment(input: Parameters<typeof postInsurancePaymentWorkflow>[1]) { return postInsurancePaymentWorkflow(repository, input); }
-export function postDemoEra(input: Parameters<typeof postDemoEraWorkflow>[1]) { return postDemoEraWorkflow(repository, input); }
+export function import835(input: Parameters<typeof import835Workflow>[1]) { return import835Workflow(repository, input); }
 export function createDenialFromAdjudication(input: Parameters<typeof createDenialFromAdjudicationWorkflow>[1]) { return createDenialFromAdjudicationWorkflow(repository, input); }
 
 async function getClaimFinancialState(claim: DataRow) {
