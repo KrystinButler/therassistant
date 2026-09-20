@@ -14,15 +14,19 @@ export function normalizeInviteRequest(value: unknown) {
     throw new Error("A valid patient ID is required.");
   }
 
-  return { clientId };
+  const restoreRevoked = row.restore_revoked === true;
+  return { clientId, restoreRevoked };
 }
 
-export function decideInviteAction(status: ExistingAccessStatus) {
+export function decideInviteAction(
+  status: ExistingAccessStatus,
+  restoreRevoked = false,
+) {
   if (status === "active" || status === "invited") {
     return "return-existing" as const;
   }
   if (status === "revoked") {
-    return "block-revoked" as const;
+    return restoreRevoked ? "restore-revoked" as const : "block-revoked" as const;
   }
   return "invite" as const;
 }
