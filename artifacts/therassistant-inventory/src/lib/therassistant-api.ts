@@ -221,6 +221,8 @@ async function clientRows(search = "") {
         lastName: client.last_name,
         preferredName: client.preferred_name,
         dateOfBirth: client.date_of_birth,
+        sex: client.metadata?.sex ?? "",
+        billingType: client.metadata?.billing_type ?? "insurance",
         clientStatus: client.client_status,
         registrationStatus: client.registration_status,
         billingReadinessStatus:
