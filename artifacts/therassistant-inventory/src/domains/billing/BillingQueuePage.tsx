@@ -7,6 +7,7 @@ import {
   createBatch,
   createClaimFromCharges,
   getClaimSubmissionData,
+  recordExternalClaimAcknowledgement,
   recordExternalSubmission,
   validateClaim,
 } from "../claims/repository";
@@ -229,6 +230,57 @@ export function BillingQueuePage() {
     }
   }
 
+  async function runRecordAcknowledgement(
+    submissionId: string,
+    claimId: string,
+    outcome: "accepted" | "rejected",
+  ) {
+    const acknowledgementType = window.prompt(
+      "Acknowledgement source: 999, 277CA, clearinghouse_portal, or other.",
+      "277CA",
+    )?.trim();
+    if (!acknowledgementType || !["999", "277CA", "clearinghouse_portal", "other"].includes(acknowledgementType)) {
+      setError("Choose a valid acknowledgement source: 999, 277CA, clearinghouse_portal, or other.");
+      return;
+    }
+
+    const responseCode = window.prompt("Enter the external acknowledgement response/status code.")?.trim();
+    if (!responseCode) return;
+    const responseMessage = window.prompt("Enter the clearinghouse response message or rejection description.")?.trim();
+    if (!responseMessage) return;
+    const externalReference = window.prompt(
+      "Enter the acknowledgement file, clearinghouse receipt, or portal reference.",
+    )?.trim();
+    if (!externalReference) return;
+
+    setSavingId(`ack-${claimId}`);
+    setError(null);
+    setMessage(null);
+    try {
+      const result = await recordExternalClaimAcknowledgement({
+        submissionId,
+        claimId,
+        outcome,
+        acknowledgementType: acknowledgementType as "999" | "277CA" | "clearinghouse_portal" | "other",
+        responseCode,
+        responseMessage,
+        externalReference,
+      });
+      if (!result.ok) {
+        setError(result.details?.length ? `${result.message} ${result.details.join(" ")}` : result.message);
+        return;
+      }
+      setMessage(
+        `${acknowledgementType} ${outcome} acknowledgement recorded. Submission status: ${result.value.submissionStatus.replaceAll("_", " ")}.`,
+      );
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to record external acknowledgement.");
+    } finally {
+      setSavingId(null);
+    }
+  }
+
   async function runDownload837(batchId: string) {
     setSavingId(`download-${batchId}`);
     setError(null);
@@ -345,6 +397,8 @@ export function BillingQueuePage() {
           savingId={savingId}
           onDownload={(id) => void runDownload837(id)}
           onPrint={(batchId, claimId) => void runPrintCms1500(batchId, claimId)}
+          onAcknowledge={(submissionId: string, claimId: string, outcome: "accepted" | "rejected") =>
+            void runRecordAcknowledgement(submissionId, claimId, outcome)}
         />
       )}
     </>
@@ -490,6 +544,7 @@ function SubmittedBatches({
   savingId,
   onDownload,
   onPrint,
+  onAcknowledge,
 }: {
   rows: ClaimsData["batches"];
   claims: ClaimsData["claims"];
@@ -497,6 +552,11 @@ function SubmittedBatches({
   savingId: string | null;
   onDownload: (batchId: string) => void;
   onPrint: (batchId: string, claimId: string) => void;
+  onAcknowledge: (
+    submissionId: string,
+    claimId: string,
+    outcome: "accepted" | "rejected",
+  ) => void;
 }) {
   const claimsById = new Map(claims.map((claim) => [claim.id, claim]));
   if (!rows.length) return <section className="thera-card"><div className="thera-empty">No submitted payer batches.</div></section>;
@@ -505,7 +565,28 @@ function SubmittedBatches({
     const submission = submissions.find((row) => String(row.batch_id ?? "") === batch.id);
     return <section className="thera-card" key={batch.id}>
       <div className="thera-card-header split"><div><h2>{String(batch.batch_name || "Submitted Batch")}</h2><p>Submitted {dateTime(String(batch.submitted_at ?? submission?.submitted_at ?? ""))}</p></div><button type="button" className="thera-action secondary" disabled={savingId === `download-${batch.id}`} onClick={() => onDownload(batch.id)}>Download 837P</button></div>
-      <div className="thera-table-wrap"><table className="thera-table"><thead><tr><th>Claim</th><th>Patient</th><th>Status</th><th>CMS-1500</th></tr></thead><tbody>{batch.claimIds.map((claimId: string) => { const claim = claimsById.get(claimId); return <tr key={claimId}><td>{claim ? <Link className="thera-table-link" href={`/claims/${claim.id}`}>{String(claim.patient_control_number || "Open")}</Link> : claimId}</td><td>{claim?.clientName ?? "—"}</td><td>{claim ? <StatusBadge value={String(claim.claim_status)} /> : "—"}</td><td><button type="button" className="thera-action secondary" disabled={!claim || savingId === `print-${claimId}`} onClick={() => claim && onPrint(batch.id, claim.id)}>Print CMS-1500</button></td></tr>; })}</tbody></table></div>
+      <div className="thera-table-wrap"><table className="thera-table"><thead><tr><th>Claim</th><th>Patient</th><th>Status</th><th>Latest Acknowledgement</th><th>Actions</th></tr></thead><tbody>{batch.claimIds.map((claimId: string) => {
+        const claim = claimsById.get(claimId);
+        const response = submission?.responses
+          ?.filter((row: Record<string, unknown>) => String(row.claim_id ?? "") === claimId)
+          .sort((a: Record<string, unknown>, b: Record<string, unknown>) => String(b.created_at ?? "").localeCompare(String(a.created_at ?? "")))[0];
+        const canAcknowledge = Boolean(
+          claim &&
+          submission &&
+          ["submitted", "accepted", "rejected"].includes(String(claim.claim_status)),
+        );
+        return <tr key={claimId}>
+          <td>{claim ? <Link className="thera-table-link" href={`/claims/${claim.id}`}>{String(claim.patient_control_number || "Open")}</Link> : claimId}</td>
+          <td>{claim?.clientName ?? "—"}</td>
+          <td>{claim ? <StatusBadge value={String(claim.claim_status)} /> : "—"}</td>
+          <td>{response ? <><StatusBadge value={String(response.response_status)} /><div className="thera-table-subtext">{String(response.response_code ?? "")} {String(response.response_message ?? "")}</div></> : <span className="thera-muted">Awaiting external response</span>}</td>
+          <td><div className="thera-filter-row">
+            <button type="button" className="thera-action secondary" disabled={!claim || savingId === `print-${claimId}`} onClick={() => claim && onPrint(batch.id, claim.id)}>Print CMS-1500</button>
+            <button type="button" className="thera-action" disabled={!canAcknowledge || savingId === `ack-${claimId}`} onClick={() => submission && claim && onAcknowledge(submission.id, claim.id, "accepted")}>Record Accepted</button>
+            <button type="button" className="thera-action secondary" disabled={!canAcknowledge || savingId === `ack-${claimId}`} onClick={() => submission && claim && onAcknowledge(submission.id, claim.id, "rejected")}>Record Rejected</button>
+          </div></td>
+        </tr>;
+      })}</tbody></table></div>
     </section>;
   })}</div>;
 }

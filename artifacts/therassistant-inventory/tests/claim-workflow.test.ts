@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import {
-  applySyntheticClearinghouseResponseWorkflow,
+  recordExternalClaimAcknowledgementWorkflow,
   createBatchWorkflow,
   createClaimFromChargesWorkflow,
   recordExternalSubmissionWorkflow,
@@ -99,9 +99,12 @@ function makeRepo() {
       return submissions[index];
     },
     async createSubmissionResponse(values) {
-      const row = { id: id("response"), ...values };
+      const row = { id: id("response"), created_at: new Date().toISOString(), ...values };
       responses.push(row);
       return row;
+    },
+    async getSubmissionResponses(submissionId) {
+      return responses.filter((row) => row.submission_id === submissionId);
     },
     async upsertWorkItem(values) {
       const row = { id: id("work"), ...values };
@@ -162,7 +165,7 @@ test("external submission requires a clearinghouse or transmission reference", a
   assert.equal(state.claims.get("claim-1")?.claim_status, "batched");
 });
 
-test("clearinghouse rejection persists response and creates follow-up work", async () => {
+test("external clearinghouse rejection persists evidence and creates follow-up work", async () => {
   const state = makeRepo();
   await validateClaimWorkflow(state.repo, "claim-1");
   const batchResult = await createBatchWorkflow(state.repo, ["claim-1"]);
@@ -174,19 +177,140 @@ test("clearinghouse rejection persists response and creates follow-up work", asy
   );
   if (!submitResult.ok) throw new Error(submitResult.message);
 
-  const result = await applySyntheticClearinghouseResponseWorkflow(
-    state.repo,
-    submitResult.value.submissionId,
-    "rejected",
-    "A3",
-    "Demo clearinghouse rejected the claim for correction.",
-  );
+  const result = await recordExternalClaimAcknowledgementWorkflow(state.repo, {
+    submissionId: submitResult.value.submissionId,
+    claimId: "claim-1",
+    outcome: "rejected",
+    acknowledgementType: "277CA",
+    responseCode: "A3",
+    responseMessage: "Subscriber ID invalid.",
+    externalReference: "277CA-20260920-001",
+  });
 
   assert.equal(result.ok, true);
   assert.equal(state.responses.length, 1);
+  assert.equal(state.responses[0].raw_response.acknowledgement_type, "277CA");
+  assert.equal(state.responses[0].raw_response.external_reference, "277CA-20260920-001");
   assert.equal(state.claims.get("claim-1")?.claim_status, "rejected");
   assert.equal(state.workItems.length, 1);
   assert.equal(state.workItems[0].workqueue_type, "claim_rejection");
+  assert.equal(state.submissions[0].submission_status, "rejected");
+  assert.equal([...state.batches.values()][0]?.batch_status, "rejected");
+});
+
+test("partial batch acknowledgements keep submission pending without changing unacknowledged claims", async () => {
+  const state = makeRepo();
+  await validateClaimWorkflow(state.repo, "claim-1");
+  state.claims.set("claim-2", {
+    id: "claim-2",
+    claim_status: "ready_for_batch",
+    client_id: "client-2",
+    payer_id: "payer-1",
+    rendering_provider_id: "provider-1",
+    service_date_from: "2026-09-14",
+    total_charge_cents: 10000,
+  });
+  const batchResult = await createBatchWorkflow(state.repo, ["claim-1", "claim-2"]);
+  if (!batchResult.ok) throw new Error(batchResult.message);
+  const submitResult = await recordExternalSubmissionWorkflow(
+    state.repo,
+    batchResult.value.batchId,
+    "CLEARINGHOUSE-MIXED-TEST",
+  );
+  if (!submitResult.ok) throw new Error(submitResult.message);
+
+  const result = await recordExternalClaimAcknowledgementWorkflow(state.repo, {
+    submissionId: submitResult.value.submissionId,
+    claimId: "claim-1",
+    outcome: "accepted",
+    acknowledgementType: "277CA",
+    responseCode: "A1",
+    responseMessage: "Claim accepted for adjudication.",
+    externalReference: "277CA-20260920-002",
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.value.submissionStatus, "pending_response");
+  assert.equal(state.claims.get("claim-1")?.claim_status, "accepted");
+  assert.equal(state.claims.get("claim-2")?.claim_status, "submitted");
+  assert.equal(state.submissions[0].submission_status, "pending_response");
+  assert.equal([...state.batches.values()][0]?.batch_status, "submitted");
+});
+
+test("mixed completed acknowledgements mark batch partially accepted", async () => {
+  const state = makeRepo();
+  await validateClaimWorkflow(state.repo, "claim-1");
+  state.claims.set("claim-2", {
+    id: "claim-2",
+    claim_status: "ready_for_batch",
+    client_id: "client-2",
+    payer_id: "payer-1",
+    rendering_provider_id: "provider-1",
+    service_date_from: "2026-09-14",
+    total_charge_cents: 10000,
+  });
+  const batchResult = await createBatchWorkflow(state.repo, ["claim-1", "claim-2"]);
+  if (!batchResult.ok) throw new Error(batchResult.message);
+  const submitResult = await recordExternalSubmissionWorkflow(
+    state.repo,
+    batchResult.value.batchId,
+    "CLEARINGHOUSE-MIXED-COMPLETE",
+  );
+  if (!submitResult.ok) throw new Error(submitResult.message);
+
+  await recordExternalClaimAcknowledgementWorkflow(state.repo, {
+    submissionId: submitResult.value.submissionId,
+    claimId: "claim-1",
+    outcome: "accepted",
+    acknowledgementType: "277CA",
+    responseCode: "A1",
+    responseMessage: "Accepted.",
+    externalReference: "ACK-ACCEPT-1",
+  });
+  const rejected = await recordExternalClaimAcknowledgementWorkflow(state.repo, {
+    submissionId: submitResult.value.submissionId,
+    claimId: "claim-2",
+    outcome: "rejected",
+    acknowledgementType: "277CA",
+    responseCode: "A3",
+    responseMessage: "Rejected.",
+    externalReference: "ACK-REJECT-2",
+  });
+
+  assert.equal(rejected.ok, true);
+  assert.equal(state.submissions[0].submission_status, "rejected");
+  assert.equal([...state.batches.values()][0]?.batch_status, "partially_accepted");
+  assert.equal(state.claims.get("claim-1")?.claim_status, "accepted");
+  assert.equal(state.claims.get("claim-2")?.claim_status, "rejected");
+});
+
+test("external acknowledgement requires evidence and rejects duplicate records", async () => {
+  const state = makeRepo();
+  await validateClaimWorkflow(state.repo, "claim-1");
+  const batchResult = await createBatchWorkflow(state.repo, ["claim-1"]);
+  if (!batchResult.ok) throw new Error(batchResult.message);
+  const submitResult = await recordExternalSubmissionWorkflow(
+    state.repo,
+    batchResult.value.batchId,
+    "CLEARINGHOUSE-DUPE-TEST",
+  );
+  if (!submitResult.ok) throw new Error(submitResult.message);
+
+  const input = {
+    submissionId: submitResult.value.submissionId,
+    claimId: "claim-1",
+    outcome: "accepted" as const,
+    acknowledgementType: "999" as const,
+    responseCode: "A",
+    responseMessage: "Functional acknowledgement accepted.",
+    externalReference: "999-001",
+  };
+  const first = await recordExternalClaimAcknowledgementWorkflow(state.repo, input);
+  const second = await recordExternalClaimAcknowledgementWorkflow(state.repo, input);
+
+  assert.equal(first.ok, true);
+  assert.equal(second.ok, false);
+  assert.equal(state.responses.length, 1);
 });
 
 test("charges are marked claim-created only after claim lines and diagnoses persist", async () => {
