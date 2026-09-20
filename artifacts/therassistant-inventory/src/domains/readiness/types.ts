@@ -17,7 +17,7 @@ export type PreSessionReadiness = {
 export type PreSessionInput = {
   billingType?: string | null;
   policy: { status?: string | null } | null;
-  eligibility: { eligibility_status?: string | null } | null;
+  eligibility: { eligibility_status?: string | null; service_date?: string | null } | null;
   authorizationRequired: boolean;
   authorization: {
     status?: string | null;
