@@ -1,55 +1,7 @@
-export type EligibilityStatus = "active" | "inactive" | "unable_to_verify";
-
-export type Synthetic271 = {
-  demo: true;
-  transaction: "271";
-  member_id: string;
-  outcome: EligibilityStatus;
-  benefits?: {
-    copay_cents: number;
-    coinsurance_percent: number;
-    deductible_cents: number;
-    deductible_remaining_cents: number;
-    out_of_pocket_cents: number;
-    out_of_pocket_remaining_cents: number;
-    network_status: "in_network" | "out_of_network" | "unknown";
-    authorization_required: boolean;
-  };
-};
-
-export function syntheticEligibilityStatus(memberId: string): EligibilityStatus {
-  const normalized = memberId.trim();
-  if (normalized.endsWith("0")) return "inactive";
-  if (normalized.endsWith("9")) return "unable_to_verify";
-  return "active";
-}
-
-export function buildSyntheticEligibilityResponse(
-  memberId: string,
-  status: EligibilityStatus = syntheticEligibilityStatus(memberId),
-): Synthetic271 {
-  const base: Synthetic271 = {
-    demo: true,
-    transaction: "271",
-    member_id: memberId.trim(),
-    outcome: status,
-  };
-
-  if (status !== "active") return base;
-
-  return {
-    ...base,
-    benefits: {
-      copay_cents: 2000,
-      coinsurance_percent: 20,
-      deductible_cents: 150000,
-      deductible_remaining_cents: 75000,
-      out_of_pocket_cents: 500000,
-      out_of_pocket_remaining_cents: 325000,
-      network_status: "in_network",
-      authorization_required: false,
-    },
-  };
+export function isVerifiedEligibilitySource(source: unknown) {
+  const value = String(source ?? "").trim();
+  if (!value) return false;
+  return value !== "synthetic_demo_270_271";
 }
 
 export function parseEligibilityBenefits(raw: unknown) {
