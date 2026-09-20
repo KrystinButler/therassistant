@@ -65,3 +65,21 @@ test("staff patient chart never opens the patient portal as staff", () => {
   assert.doesNotMatch(chart, /Open Patient Portal/);
   assert.doesNotMatch(chart, /href=.*\/patient-portal\//);
 });
+
+test("staff portal panel can restore a revoked existing identity without creating a new account", () => {
+  const panel = readFileSync(
+    fileURLToPath(new URL("../src/domains/portal/PortalAccessPanel.tsx", import.meta.url)),
+    "utf8",
+  );
+  const staffAccess = readFileSync(
+    fileURLToPath(new URL("../src/domains/portal/staff-portal-access.ts", import.meta.url)),
+    "utf8",
+  );
+
+  assert.match(panel, /Restore Portal Access/);
+  assert.match(panel, /restorePatientPortalAccess/);
+  assert.match(panel, /existing linked portal identity/i);
+  assert.match(staffAccess, /restore_revoked:\s*true/);
+  assert.match(staffAccess, /invite-patient-portal/);
+});
+
