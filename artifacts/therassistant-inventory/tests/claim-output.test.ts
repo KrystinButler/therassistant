@@ -28,6 +28,7 @@ const sample = {
     postalCode: "80202",
     usageIndicator: "T" as const,
     payerIds: { "payer-1": "60054" },
+    claimFilingIndicators: { "payer-1": "CI" },
   },
   claims: [{
     claim: {
@@ -86,11 +87,38 @@ test("837P export uses configured trading-partner and claim data without demo pl
   assert.match(x12, /ST\*837\*0001\*005010X222A1~/);
   assert.match(x12, /NM1\*41\*2\*Therassistant Billing/);
   assert.match(x12, /NM1\*PR\*2\*Aetna\*{5}PI\*60054~/);
+  assert.match(x12, /SBR\*P\*18\*\*{6}CI~/);
   assert.match(x12, /CLM\*TH-1001\*150\.00\*{3}10:B:1/);
   assert.match(x12, /SV1\*HC:90837\*150\.00\*UN\*1/);
   assert.match(x12, /DTP\*472\*D8\*20260901~/);
   assert.doesNotMatch(x12, /DEMO_PAYER|\*DEMO~/);
   assert.match(x12, /IEA\*1\*/);
+});
+
+test("837P export requires a payer-specific claim filing indicator", () => {
+  const invalid = {
+    ...sample,
+    edi: {
+      ...sample.edi,
+      claimFilingIndicators: {},
+    },
+  };
+  const errors = validate837PExport(invalid);
+  assert.ok(errors.some((error) => error.includes("claim filing indicator is not configured")));
+  assert.throws(() => build837PText(invalid), /837P export is not ready/);
+});
+
+test("837P export uses the configured Medicaid filing indicator instead of hard-coded commercial insurance", () => {
+  const medicaid = {
+    ...sample,
+    edi: {
+      ...sample.edi,
+      claimFilingIndicators: { "payer-1": "MC" },
+    },
+  };
+  const x12 = build837PText(medicaid, new Date("2026-09-20T15:30:00.000Z"));
+  assert.match(x12, /SBR\*P\*18\*\*{6}MC~/);
+  assert.doesNotMatch(x12, /SBR\*P\*18\*\*{6}CI~/);
 });
 
 test("837P export refuses missing production data instead of inserting placeholders", () => {
