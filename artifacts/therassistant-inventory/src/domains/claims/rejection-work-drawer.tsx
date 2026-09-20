@@ -11,7 +11,7 @@ import {
   type ClaimIdentityValues,
 } from "./claim-work-identity";
 import type { ClaimWorkRecord } from "./claim-work-drawer";
-import { createBatch, submitBatch } from "./repository";
+import { createBatch } from "./repository";
 import {
   getClaimWorkData,
   saveClaimWorkFields,
@@ -126,10 +126,7 @@ export function RejectionWorkDrawer({
       if (resubmit) {
         const batch = await createBatch([activeClaim.id], `Corrected claim ${activeClaim.patientControlNumber || activeClaim.id}`);
         if (!batch.ok) throw new Error(batch.message || "Unable to create corrected-claim submission batch.");
-        const submission = await submitBatch(batch.value.batchId);
-        if (!submission.ok) throw new Error(submission.message || "Unable to resubmit corrected claim.");
-        setNotice("Corrected claim was revalidated and resubmitted.");
-        if (onNext && !nextDisabled) onNext();
+        setNotice("Corrected claim was revalidated and batched for resubmission. Export and transmit the 837P from Charges, then record the external submission reference.");
       } else if (revalidate) {
         setNotice("Claim was saved and revalidated.");
       } else {
@@ -154,7 +151,7 @@ export function RejectionWorkDrawer({
       <div className="thera-filter-row">
         <button type="button" className="thera-action secondary" disabled={saving || !dirty} onClick={() => void save(false, false)}>Save Draft</button>
         <button type="button" className="thera-action secondary" disabled={saving} onClick={() => void save(true, false)}>Revalidate</button>
-        <button type="button" className="thera-action" disabled={saving} onClick={() => void save(true, true)}>Resubmit Claim</button>
+        <button type="button" className="thera-action" disabled={saving} onClick={() => void save(true, true)}>Prepare Resubmission</button>
       </div>
     </div>
   );

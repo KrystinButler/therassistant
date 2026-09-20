@@ -30,7 +30,7 @@ test("active Claims workqueue opens a payer-follow-up drawer with queue navigati
   assert.match(claimDrawer, /openBalanceCents/);
 });
 
-test("Rejections use a correction-focused drawer and actually resubmit corrected claims", () => {
+test("Rejections prepare corrected claims without falsely recording transmission", () => {
   assert.match(rejectionsPage, /import \{ RejectionWorkDrawer/);
   assert.match(rejectionsPage, /<RejectionWorkDrawer/);
   assert.doesNotMatch(rejectionsPage, /<ClaimWorkDrawer/);
@@ -38,9 +38,10 @@ test("Rejections use a correction-focused drawer and actually resubmit corrected
   assert.match(rejectionDrawer, /Current value/);
   assert.match(rejectionDrawer, /Corrected value/);
   assert.match(rejectionDrawer, /Revalidate/);
-  assert.match(rejectionDrawer, /Resubmit Claim/);
+  assert.match(rejectionDrawer, /Prepare Resubmission/);
   assert.match(rejectionDrawer, /createBatch/);
-  assert.match(rejectionDrawer, /submitBatch/);
+  assert.doesNotMatch(rejectionDrawer, /submitBatch/);
+  assert.match(rejectionDrawer, /export and transmit the 837P/i);
   assert.match(claimsQueueRepository, /responseIsCurrent/);
 });
 

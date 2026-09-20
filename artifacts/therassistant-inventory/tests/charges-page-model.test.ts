@@ -8,7 +8,8 @@ test("Charges owns validation, batching, submission and claim outputs", () => {
   assert.match(source, /<h1>Charges<\/h1>/);
   assert.match(source, /validateClaim/);
   assert.match(source, /createBatch/);
-  assert.match(source, /submitBatch/);
+  assert.match(source, /recordExternalSubmission/);
+  assert.doesNotMatch(source, /Submit Electronically/);
   assert.match(source, /Download 837P/);
   assert.match(source, /Print CMS-1500/);
 });

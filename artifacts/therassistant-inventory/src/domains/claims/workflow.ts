@@ -98,7 +98,7 @@ export async function createClaimFromChargesWorkflow(
       total_charge_cents: totalChargeCents,
       patient_control_number: `TH-${Date.now().toString().slice(-10)}`,
       source_encounter_id: first.encounter_id || null,
-      metadata: { demo: true, source: "encounter_charge" },
+      metadata: { source: "encounter_charge" },
     });
 
     for (const charge of charges) {
@@ -111,6 +111,7 @@ export async function createClaimFromChargesWorkflow(
         modifier1: charge.modifier1 || null,
         modifier2: charge.modifier2 || null,
         diagnosis_pointer: String(pointer),
+        place_of_service: charge.place_of_service || null,
         units: Number(charge.units ?? 1),
         charge_amount_cents: Number(charge.charge_amount_cents ?? 0),
       });
@@ -174,6 +175,7 @@ function claimValidationIssues(
     if (Number(line.units ?? 0) <= 0) issues.push("Claim line units must be greater than zero.");
     if (Number(line.charge_amount_cents ?? 0) <= 0) issues.push("Claim line charge must be greater than zero.");
     if (!String(line.diagnosis_pointer ?? "").trim()) issues.push("Claim line diagnosis pointer is missing.");
+    if (!/^\d{2}$/.test(String(line.place_of_service ?? ""))) issues.push("Claim line place of service must be a two-digit code.");
   }
 
   if (enrollmentStatus !== "approved") {
@@ -257,7 +259,7 @@ export async function validateClaimWorkflow(
 export async function createBatchWorkflow(
   repo: ClaimsRepository,
   claimIds: string[],
-  batchName = `837P Demo ${new Date().toISOString().slice(0, 10)}`,
+  batchName = `837P ${new Date().toISOString().slice(0, 10)}`,
 ): Promise<WorkflowResult<{ batchId: string; claimCount: number }>> {
   if (!claimIds.length) return blocked("no_claims", "Select at least one claim for the batch.");
 
@@ -303,16 +305,26 @@ export async function createBatchWorkflow(
   }
 }
 
-export async function submitBatchWorkflow(
+export async function recordExternalSubmissionWorkflow(
   repo: ClaimsRepository,
   batchId: string,
+  externalReference: string,
+  submissionMethod = "external_837p",
 ): Promise<WorkflowResult<{ batchId: string; submissionId: string; claimCount: number }>> {
+  const reference = externalReference.trim();
+  if (!reference) {
+    return blocked(
+      "external_reference_required",
+      "Enter the clearinghouse or submission reference before recording submission.",
+    );
+  }
+
   const batch = await repo.getBatch(batchId);
   if (!batch) return failure("batch_not_found", "Claim batch not found.");
   if (!["ready", "created"].includes(String(batch.batch_status))) {
     return blocked(
       "batch_not_ready",
-      `Batch cannot be submitted from ${String(batch.batch_status)} status.`,
+      `Batch cannot be recorded as submitted from ${String(batch.batch_status)} status.`,
     );
   }
 
@@ -333,8 +345,12 @@ export async function submitBatchWorkflow(
     const submission = await repo.createSubmission({
       batch_id: batchId,
       submission_status: "submitted",
-      submission_method: "837P_demo",
+      submission_method: submissionMethod,
       submitted_at: submittedAt,
+      response_payload: {
+        external_reference: reference,
+        recorded_source: "user_confirmed_external_submission",
+      },
     });
 
     await repo.updateBatch(batchId, {
@@ -343,16 +359,20 @@ export async function submitBatchWorkflow(
     });
 
     for (const claim of claims) {
-      await recordStatus(repo, claim, "submitted", "837P demo batch submitted.", {
-        submitted_at: submittedAt,
-      });
+      await recordStatus(
+        repo,
+        claim,
+        "submitted",
+        `External 837P submission recorded. Reference: ${reference}.`,
+        { submitted_at: submittedAt },
+      );
     }
 
     return success({ batchId, submissionId: submission.id, claimCount: claims.length });
   } catch (error) {
     return failure(
-      "batch_submission_failed",
-      error instanceof Error ? error.message : "Unable to submit claim batch.",
+      "batch_submission_record_failed",
+      error instanceof Error ? error.message : "Unable to record external claim submission.",
     );
   }
 }
