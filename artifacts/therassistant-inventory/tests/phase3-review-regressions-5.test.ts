@@ -42,6 +42,50 @@ function makeEraRepo() {
   let nextId = 1;
   const id = (prefix: string) => `${prefix}-${nextId++}`;
   const repo: EraImportRepository = {
+    async postEraPaymentReceipt(input) {
+      const row = {
+        id: id("payment"),
+        payer_id: input.payerId,
+        payment_source: "insurance",
+        payment_method: input.method,
+        payment_status: "unapplied",
+        payment_date: input.paymentDate,
+        amount_cents: input.amountCents,
+        trace_number: input.traceNumber,
+      };
+      payments.push(row);
+      return row;
+    },
+    async allocatePayment(paymentId, claimId, amountCents) {
+      const payment = payments.find((row) => row.id === paymentId);
+      if (!payment) throw new Error("Payment not found");
+      payment.payment_status = "posted";
+      return {
+        payment_id: paymentId,
+        allocation_cents: amountCents,
+        unapplied_cents: 0,
+        payment_status: "posted",
+        claim_status: claims.get(claimId)?.claim_status ?? "accepted",
+      };
+    },
+    async postContractualAdjustment(input) {
+      const claim = claims.get(input.claimId);
+      if (!claim) throw new Error("Claim not found");
+      const row = {
+        id: id("adjustment"),
+        client_id: claim.client_id,
+        claim_id: claim.id,
+        payer_id: claim.payer_id,
+        adjustment_type: "contractual",
+        adjustment_status: "posted",
+        adjustment_date: input.adjustmentDate,
+        amount_cents: input.amountCents,
+        reason: input.reason,
+        carc_code: input.carcCode ?? null,
+      };
+      adjustments.push(row);
+      return row;
+    },
     async getClaim(claimId) { return claims.get(claimId) ?? null; },
     async findClaimsByPatientControlNumber(control) { return [...claims.values()].filter((row) => row.patient_control_number === control); },
     async getClaimLines(claimId) { return claimLines.get(claimId) ?? []; },
