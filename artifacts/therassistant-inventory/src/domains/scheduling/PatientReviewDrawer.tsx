@@ -17,6 +17,7 @@ import { shortDate } from "../../lib/format";
 import { startEncounter } from "../encounters/repository";
 import { getPatientChart } from "../patients/repository";
 import type { PatientChart, PatientChartRow } from "../patients/types";
+import { buildPatientReviewCheckIn } from "./patient-review-model";
 import type { ScheduleAppointment } from "./repository";
 import "./patient-review-drawer.css";
 
@@ -35,17 +36,6 @@ function text(row: AnyRow | null | undefined, keys: string[], fallback = "") {
     if (typeof value === "string" && value.trim()) return value.trim();
   }
   return fallback;
-}
-
-function list(row: AnyRow | null | undefined, keys: string[]) {
-  for (const key of keys) {
-    const value = row?.[key];
-    if (Array.isArray(value)) return value.map(String).filter(Boolean);
-    if (typeof value === "string" && value.trim()) {
-      return value.split(/\n|•|;/).map((item) => item.trim()).filter(Boolean);
-    }
-  }
-  return [];
 }
 
 function ageOn(dob: string) {
@@ -82,16 +72,6 @@ function rowDate(row?: AnyRow | null) {
   return value ? shortDate(value) : "—";
 }
 
-function explicitSafetyConcern(row?: AnyRow | null) {
-  const concern = row?.safety_concerns ?? row?.safety_concern ?? row?.risk_flag;
-  if (concern === true) return true;
-  if (concern === false) return false;
-  const risk = text(row, ["risk_level", "safety_status"]).toLowerCase();
-  if (["high", "elevated", "concern", "concerns", "unsafe"].includes(risk)) return true;
-  if (["none", "low", "no concerns", "safe"].includes(risk)) return false;
-  return null;
-}
-
 export function PatientReviewDrawer({ appointment, open, onOpenChange, onEditAppointment }: Props) {
   const [, navigate] = useLocation();
   const [chart, setChart] = useState<PatientChart | null>(null);
@@ -113,20 +93,35 @@ export function PatientReviewDrawer({ appointment, open, onOpenChange, onEditApp
 
   const review = useMemo(() => {
     if (!chart || !appointment) return null;
-    const checkin = chart.checkins[0] ?? null;
+    const checkin = chart.checkins.find((row) => String(row.appointment_id ?? "") === appointment.id) ?? chart.checkins[0] ?? null;
+    const patientUpdate = buildPatientReviewCheckIn(checkin);
     const journal = chart.journalEntries[0] ?? null;
     const plan = chart.treatmentPlans.find((row) => ["active", "signed"].includes(String(row.status ?? ""))) ?? chart.treatmentPlans[0] ?? null;
     const goal = plan?.goals?.[0] ?? null;
     const priorNote = chart.clinicalNotes.find((row) => ["signed", "locked"].includes(String(row.note_status ?? ""))) ?? chart.clinicalNotes[0] ?? null;
-    const focus = text(checkin, ["focus_today", "session_focus", "focus", "primary_focus"], text(goal, ["goal_text", "description", "goal", "title"], "Review current treatment priorities."));
-    const mood = text(checkin, ["mood", "mood_text", "current_mood", "response_summary"], "No mood update submitted.");
-    const changes = list(checkin, ["recent_changes", "changes", "updates"]);
-    const goalText = text(goal, ["goal_text", "description", "goal", "title"], "No active goal documented.");
+    const focus = patientUpdate.focus || text(goal, ["goal_text", "description", "goal", "title"], "Review current treatment priorities.");
+    const mood = patientUpdate.mood || "No mood update submitted.";
+    const goalText = patientUpdate.treatmentGoal || text(goal, ["goal_text", "description", "goal", "title"], "No active goal documented.");
     const targetDate = text(goal, ["target_date", "target_completion_date", "review_due_date"]);
-    const goalStatus = text(goal, ["goal_status", "status"], "Active").replaceAll("_", " ");
+    const goalStatus = patientUpdate.treatmentGoal
+      ? "Patient update"
+      : text(goal, ["goal_status", "status"], "Active").replaceAll("_", " ");
     const priorPlan = text(priorNote, ["plan", "plan_text", "assessment_plan", "next_steps", "follow_up_plan"], "No prior session plan documented.");
-    const safety = explicitSafetyConcern(checkin);
-    return { checkin, journal, focus, mood, changes, goalText, targetDate, goalStatus, priorPlan, safety };
+    return {
+      checkin,
+      journal,
+      focus,
+      mood,
+      changes: patientUpdate.changes,
+      additionalContext: patientUpdate.additionalContext,
+      goalText,
+      targetDate,
+      goalStatus,
+      priorPlan,
+      safety: patientUpdate.safetyConcern,
+      safetyText: patientUpdate.safetyText,
+      hasSubmittedPreVisit: patientUpdate.hasSubmittedPreVisit,
+    };
   }, [chart, appointment]);
 
   async function startNote() {
@@ -184,6 +179,7 @@ export function PatientReviewDrawer({ appointment, open, onOpenChange, onEditApp
               <Definition label="Focus Today" value={review.focus} />
               <Definition label="Patient's Mood" value={review.mood} />
               <div className="patient-review-definition"><span>Recent Changes</span>{review.changes.length ? <ul>{review.changes.map((item) => <li key={item}>{item}</li>)}</ul> : <p>No recent changes submitted.</p>}</div>
+              {review.additionalContext ? <Definition label="Additional Context" value={review.additionalContext} /> : null}
             </ReviewSection>
 
             <ReviewSection icon={<BookOpenText size={15} />} title="Journal Review" action={<button type="button" onClick={() => navigate(`/clients/${appointment.clientId}`)}>View All</button>}>
@@ -204,7 +200,7 @@ export function PatientReviewDrawer({ appointment, open, onOpenChange, onEditApp
             </ReviewSection>
 
             <ReviewSection icon={<ShieldCheck size={15} />} title="Safety Review">
-              <div className={`patient-review-highlight ${review.safety === true ? "warning" : "positive"}`}><CheckCircle2 size={18} /><div><strong>{review.safety === true ? "Safety concern documented" : review.safety === false ? "No safety concerns" : "Safety review not submitted"}</strong><p>{review.safety === true ? "Review the documented risk information before the session." : review.safety === false ? "No risk factors reported in the latest check-in." : "Review available chart information before the session."}</p></div></div>
+              <div className={`patient-review-highlight ${review.safety === true ? "warning" : "positive"}`}><CheckCircle2 size={18} /><div><strong>{review.safety === true ? "Safety concern documented" : review.safety === false ? "No safety concerns" : "Safety review not submitted"}</strong><p>{review.safetyText ? review.safetyText : review.safety === true ? "Review the documented risk information before the session." : review.safety === false ? "No risk factors reported in the latest check-in." : "Review available chart information before the session."}</p></div></div>
             </ReviewSection>
 
             <ReviewSection icon={<CheckCircle2 size={15} />} title="Payer / Billing Readiness">
