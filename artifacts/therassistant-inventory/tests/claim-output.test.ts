@@ -34,6 +34,7 @@ const sample = {
     usageIndicator: "T" as const,
     payerIds: { "payer-1": "60054" },
     claimFilingIndicators: { "payer-1": "CI" },
+    eraPayerIdentifiers: { "payer-1": "AETNA835" },
   },
   claims: [{
     claim: {
