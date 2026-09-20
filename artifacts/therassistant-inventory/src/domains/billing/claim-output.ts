@@ -114,6 +114,12 @@ function relationshipCode(value: unknown) {
     grandparent: "04",
     life_partner: "53",
     significant_other: "29",
+    mother: "32",
+    father: "33",
+    other_adult: "34",
+    emancipated_minor: "36",
+    child_no_financial_responsibility: "43",
+    other_relationship: "G8",
   };
   return codes[normalized] ?? (/^[A-Z0-9]{2}$/i.test(normalized) ? normalized.toUpperCase() : "");
 }
