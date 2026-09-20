@@ -17,30 +17,30 @@ test("active coverage with approved provider is ready", () => {
   assert.equal(result.checks.some((check) => check.blocking), false);
 });
 
-test("inactive coverage blocks the appointment", () => {
+test("inactive coverage is visible but does not block clinical care", () => {
   const result = evaluatePreSession({
     ...readyBase,
     eligibility: { eligibility_status: "inactive" },
   });
 
-  assert.equal(result.ready, false);
+  assert.equal(result.ready, true);
   assert.ok(
     result.checks.some(
-      (check) => check.code === "eligibility_inactive" && check.blocking,
+      (check) => check.code === "eligibility_inactive" && !check.blocking && check.status === "fail",
     ),
   );
 });
 
-test("missing required authorization blocks the appointment", () => {
+test("missing required authorization does not block clinical care", () => {
   const result = evaluatePreSession({
     ...readyBase,
     authorizationRequired: true,
   });
 
-  assert.equal(result.ready, false);
+  assert.equal(result.ready, true);
   assert.ok(
     result.checks.some(
-      (check) => check.code === "authorization_missing" && check.blocking,
+      (check) => check.code === "authorization_missing" && !check.blocking,
     ),
   );
 });
@@ -55,30 +55,30 @@ test("approved authorization with remaining units is ready", () => {
   assert.equal(result.ready, true);
 });
 
-test("provider enrollment must be approved", () => {
+test("provider enrollment issue is nonblocking clinical context", () => {
   const result = evaluatePreSession({
     ...readyBase,
     providerEnrollmentStatus: "submitted",
   });
 
-  assert.equal(result.ready, false);
+  assert.equal(result.ready, true);
   assert.ok(
     result.checks.some(
-      (check) => check.code === "provider_enrollment" && check.blocking,
+      (check) => check.code === "provider_enrollment" && !check.blocking,
     ),
   );
 });
 
-test("missing insurance policy blocks the appointment", () => {
+test("missing insurance is visible but does not block clinical care", () => {
   const result = evaluatePreSession({
     ...readyBase,
     policy: null,
   });
 
-  assert.equal(result.ready, false);
+  assert.equal(result.ready, true);
   assert.ok(
     result.checks.some(
-      (check) => check.code === "insurance_missing" && check.blocking,
+      (check) => check.code === "insurance_missing" && !check.blocking,
     ),
   );
 });
@@ -96,4 +96,36 @@ test("self-pay patient is ready without payer prerequisites", () => {
   assert.equal(result.ready, true);
   assert.ok(result.checks.some((check) => check.code === "self_pay" && !check.blocking));
   assert.equal(result.checks.some((check) => check.code === "insurance_missing"), false);
+});
+
+
+test("active eligibility for a different service date is a nonblocking warning", () => {
+  const result = evaluatePreSession({
+    ...readyBase,
+    serviceDate: "2026-09-20",
+    eligibility: {
+      eligibility_status: "active",
+      service_date: "2026-09-01",
+    },
+  });
+
+  const check = result.checks.find((item) => item.code === "eligibility_other_service_date");
+  assert.equal(result.ready, true);
+  assert.equal(check?.status, "warn");
+  assert.equal(check?.blocking, false);
+});
+
+test("active eligibility for the scheduled service date passes", () => {
+  const result = evaluatePreSession({
+    ...readyBase,
+    serviceDate: "2026-09-20",
+    eligibility: {
+      eligibility_status: "active",
+      service_date: "2026-09-20",
+    },
+  });
+
+  const check = result.checks.find((item) => item.code === "eligibility_active");
+  assert.equal(result.ready, true);
+  assert.equal(check?.status, "pass");
 });
