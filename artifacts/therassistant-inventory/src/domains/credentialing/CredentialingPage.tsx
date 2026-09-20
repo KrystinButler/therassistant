@@ -1341,6 +1341,7 @@ export function CredentialingPage() {
           ["participation", "Participation Matrix"],
           ["roster", "Roster Management"],
           ["expirations", "Expirations"],
+          ["templates", "Requirement Templates"],
           ["reports", "Reports"],
         ] as const).map(([id, label]) => (
           <button
@@ -1642,6 +1643,64 @@ export function CredentialingPage() {
         </section>
       ) : null}
 
+      {!loading && workspaceTab === "templates" ? (
+        <div className="thera-stack">
+          <section className="thera-card">
+            <div className="thera-card-header">
+              <div>
+                <h2>Requirement Templates</h2>
+                <p>Define reusable payer requirements once. New cases receive matching requirements automatically, and existing cases can apply them without duplicating existing requirement keys.</p>
+              </div>
+            </div>
+            {templateMessage ? <div className="thera-alert" style={{ marginBottom: 12 }}>{templateMessage}</div> : null}
+            <div className="thera-form-grid">
+              <label>Template Name *<input className="thera-input" value={templateForm.name} onChange={(event) => setTemplateForm({ ...templateForm, name: event.target.value })} /></label>
+              <label>Payer *<select className="thera-input" value={templateForm.payer_id} onChange={(event) => setTemplateForm({ ...templateForm, payer_id: event.target.value, payer_plan_id: "" })}><option value="">Select payer</option>{payers.map((payer) => <option key={payer.id} value={payer.id}>{payer.name}</option>)}</select></label>
+              <label>Plan / Product<select className="thera-input" value={templateForm.payer_plan_id} onChange={(event) => setTemplateForm({ ...templateForm, payer_plan_id: event.target.value })}><option value="">All products</option>{templatePayerPlans.map((plan) => <option key={plan.id} value={plan.id}>{plan.name}</option>)}</select></label>
+              <label>Application Type<input className="thera-input" placeholder="initial, recredentialing..." value={templateForm.application_type} onChange={(event) => setTemplateForm({ ...templateForm, application_type: event.target.value })} /></label>
+              <label>Provider Type / Credential<input className="thera-input" placeholder="LPC, LCSW, PMHNP..." value={templateForm.provider_type} onChange={(event) => setTemplateForm({ ...templateForm, provider_type: event.target.value })} /></label>
+              <label>State<input className="thera-input" maxLength={2} placeholder="CO" value={templateForm.state} onChange={(event) => setTemplateForm({ ...templateForm, state: event.target.value.toUpperCase().slice(0, 2) })} /></label>
+              <label style={{ gridColumn: "1 / -1" }}>Notes<textarea className="thera-input" rows={2} value={templateForm.notes} onChange={(event) => setTemplateForm({ ...templateForm, notes: event.target.value })} /></label>
+            </div>
+            <div className="thera-filter-row" style={{ marginTop: 16 }}><button type="button" className="thera-action" disabled={savingTemplate || !templateForm.name.trim() || !templateForm.payer_id} onClick={() => void createRequirementTemplate()}>{savingTemplate ? "Creating..." : "Create Template"}</button></div>
+          </section>
+
+          <section className="thera-card">
+            <div className="thera-card-header"><div><h2>Configured Templates</h2><p>Select a template to manage its reusable checklist.</p></div></div>
+            <div className="thera-table-wrap"><table className="thera-table"><thead><tr><th>Template</th><th>Payer</th><th>Product</th><th>Application</th><th>Provider</th><th>State</th><th>Items</th><th>Status</th><th>Action</th></tr></thead>
+              <tbody>
+                {requirementTemplates.length === 0 ? <tr><td colSpan={9}>No requirement templates configured.</td></tr> : null}
+                {requirementTemplates.map((template) => {
+                  const payer = payers.find((row) => row.id === template.payer_id);
+                  const plan = payerPlans.find((row) => row.id === template.payer_plan_id);
+                  const itemCount = requirementTemplateItems.filter((row) => row.template_id === template.id).length;
+                  return <tr key={template.id}>
+                    <td><button type="button" className="thera-table-link" onClick={() => setSelectedTemplateId(template.id)}>{template.name}</button></td>
+                    <td>{payer?.name || "—"}</td><td>{plan?.name || "All products"}</td><td>{template.application_type || "All"}</td><td>{template.provider_type || "All"}</td><td>{template.state || "All"}</td><td>{itemCount}</td><td><StatusBadge value={template.is_active ? "active" : "inactive"} /></td>
+                    <td><button type="button" className="thera-action secondary" onClick={() => void toggleRequirementTemplate(template)}>{template.is_active ? "Deactivate" : "Activate"}</button></td>
+                  </tr>;
+                })}
+              </tbody>
+            </table></div>
+          </section>
+
+          {selectedTemplate ? <section className="thera-card">
+            <div className="thera-card-header"><div><h2>{selectedTemplate.name}</h2><p>Add canonical requirement keys once. More-specific templates override broader templates when the same key matches.</p></div><button type="button" className="thera-action secondary" onClick={() => setSelectedTemplateId(null)}>Close</button></div>
+            <div className="thera-form-grid">
+              <label>Requirement *<input className="thera-input" value={templateItemForm.requirement_name} onChange={(event) => setTemplateItemForm({ ...templateItemForm, requirement_name: event.target.value })} /></label>
+              <label>Requirement Key<input className="thera-input" placeholder="auto-generated when blank" value={templateItemForm.requirement_key} onChange={(event) => setTemplateItemForm({ ...templateItemForm, requirement_key: event.target.value })} /></label>
+              <label>Category<input className="thera-input" value={templateItemForm.category} onChange={(event) => setTemplateItemForm({ ...templateItemForm, category: event.target.value })} /></label>
+              <label>Due Offset Days<input className="thera-input" type="number" min="0" max="365" value={templateItemForm.due_offset_days} onChange={(event) => setTemplateItemForm({ ...templateItemForm, due_offset_days: event.target.value })} /></label>
+              <label style={{ gridColumn: "1 / -1" }}>Notes<textarea className="thera-input" rows={2} value={templateItemForm.notes} onChange={(event) => setTemplateItemForm({ ...templateItemForm, notes: event.target.value })} /></label>
+            </div>
+            <div className="thera-filter-row" style={{ marginTop: 16 }}><button type="button" className="thera-action" disabled={savingTemplateItem || !templateItemForm.requirement_name.trim()} onClick={() => void addRequirementTemplateItem()}>{savingTemplateItem ? "Adding..." : "Add Requirement"}</button></div>
+            <div className="thera-table-wrap" style={{ marginTop: 16 }}><table className="thera-table"><thead><tr><th>Requirement</th><th>Key</th><th>Category</th><th>Due Offset</th><th>Notes</th></tr></thead><tbody>
+              {selectedTemplateItems.length === 0 ? <tr><td colSpan={5}>No requirements in this template.</td></tr> : null}
+              {selectedTemplateItems.map((item) => <tr key={item.id}><td>{item.requirement_name}</td><td><code>{item.requirement_key}</code></td><td>{item.category || "—"}</td><td>{item.due_offset_days != null ? String(item.due_offset_days) + " days" : "—"}</td><td>{item.notes || "—"}</td></tr>)}
+            </tbody></table></div>
+          </section> : null}
+        </div>
+      ) : null}
       {!loading && workspaceTab === "reports" ? (
         <div className="thera-stack">
           <section className="thera-card">
@@ -2093,7 +2152,18 @@ export function CredentialingPage() {
           {drawerTab === "requirements" ? (
             <div className="thera-stack">
               <section className="thera-card">
-                <h2>Add Requirement</h2>
+                <div className="thera-card-header split">
+                  <div><h2>Add Requirement</h2><p>Add a one-off requirement, or pull reusable payer requirements from configured templates.</p></div>
+                  <button
+                    type="button"
+                    className="thera-action secondary"
+                    disabled={applyingTemplates || !selectedCase?.application_id}
+                    onClick={() => void applyMatchingRequirementTemplates()}
+                  >
+                    {applyingTemplates ? "Applying..." : "Apply Matching Templates"}
+                  </button>
+                </div>
+                {templateMessage ? <div className="thera-alert" style={{ marginBottom: 12 }}>{templateMessage}</div> : null}
                 <div className="thera-form-grid">
                   <label>
                     Requirement *
