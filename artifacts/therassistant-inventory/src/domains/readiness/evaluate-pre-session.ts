@@ -78,9 +78,7 @@ function treatmentPlanCheck(input: PreSessionInput): ReadinessCheck {
   );
 }
 
-export function evaluatePreSession(
-  input: PreSessionInput,
-): PreSessionReadiness {
+function payerReadinessChecks(input: PreSessionInput): ReadinessCheck[] {
   const checks: ReadinessCheck[] = [];
 
   if (!input.policy) {
@@ -222,6 +220,28 @@ export function evaluatePreSession(
         "Provider enrollment is approved for this payer.",
       ),
     );
+  }
+
+  return checks;
+}
+
+export function evaluatePreSession(
+  input: PreSessionInput,
+): PreSessionReadiness {
+  const checks: ReadinessCheck[] = [];
+
+  if (input.billingType === "self_pay") {
+    checks.push(
+      check(
+        "self_pay",
+        "Billing Type",
+        "pass",
+        false,
+        "Patient is self-pay. Insurance, eligibility, authorization, and payer enrollment checks do not apply.",
+      ),
+    );
+  } else {
+    checks.push(...payerReadinessChecks(input));
   }
 
   checks.push(treatmentPlanCheck(input));
