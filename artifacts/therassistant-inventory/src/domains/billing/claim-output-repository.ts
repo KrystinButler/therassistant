@@ -53,6 +53,7 @@ export function read837PConfig(settings: unknown): Edi837PConfig {
     usageIndicator: config.usageIndicator === "P" ? "P" : "T",
     payerIds: stringMap(config.payerIds),
     claimFilingIndicators: stringMap(config.claimFilingIndicators),
+    eraPayerIdentifiers: stringMap(config.eraPayerIdentifiers),
   };
 }
 
