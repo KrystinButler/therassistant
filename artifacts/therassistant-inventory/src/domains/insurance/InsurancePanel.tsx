@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
+import { Link } from "wouter";
 
 import { StatusBadge } from "../../components/status-badge";
 import { money, shortDate } from "../../lib/format";
 import type { PatientChart } from "../patients/types";
-import { runPatientEligibility } from "../eligibility/repository";
 import { parseEligibilityBenefits } from "../eligibility/workflow";
 import { getInsuranceOptions } from "./repository";
 import {
@@ -37,7 +37,6 @@ export function InsurancePanel({ chart, onChanged }: { chart: PatientChart; onCh
   const [form, setForm] = useState<FormState>(emptyForm);
   const [showForm, setShowForm] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [runningId, setRunningId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => { void getInsuranceOptions().then(setOptions).catch(() => undefined); }, []);
@@ -91,24 +90,9 @@ export function InsurancePanel({ chart, onChanged }: { chart: PatientChart; onCh
     catch (err) { setError(err instanceof Error ? err.message : "Unable to terminate insurance."); }
   }
 
-  async function runEligibility(policy: Record<string, unknown> & { id: string }) {
-    setRunningId(policy.id); setError(null);
-    try {
-      await runPatientEligibility({
-        patientId: chart.patient.id,
-        policyId: policy.id,
-        payerId: String(policy.payer_id ?? ""),
-        memberId: String(policy.member_id ?? ""),
-        serviceDate: new Date().toISOString().slice(0, 10),
-      });
-      await onChanged();
-    } catch (err) { setError(err instanceof Error ? err.message : "Unable to run eligibility."); }
-    finally { setRunningId(null); }
-  }
-
   return <div className="thera-detail-grid">
     <section className="thera-card thera-span-2">
-      <div className="thera-card-header split"><div><h2>Insurance Policies</h2><p>Primary, secondary, and other coverage used by scheduling and billing readiness.</p></div><button type="button" className="thera-action" onClick={() => { setForm(emptyForm); setShowForm(true); }}>+ Add Policy</button></div>
+      <div className="thera-card-header split"><div><h2>Insurance Policies</h2><p>Primary, secondary, and other coverage used by scheduling and billing readiness.</p></div><div className="thera-filter-row"><Link className="thera-action secondary" href="/eligibility">Verify Eligibility</Link><button type="button" className="thera-action" onClick={() => { setForm(emptyForm); setShowForm(true); }}>+ Add Policy</button></div></div>
       {error && <div className="thera-state error" style={{ marginBottom: 12 }}>{error}</div>}
       {showForm && <div className="thera-form-grid" style={{ marginBottom: 18 }}>
         <label className="thera-field"><span className="thera-field-label">Payer</span><select className="thera-input" value={form.payerId} onChange={(e) => setForm({ ...form, payerId: e.target.value, payerPlanId: "" })}><option value="">Select payer</option>{options.payers.map((row) => <option key={row.id} value={row.id}>{String(row.name ?? "Unnamed payer")}</option>)}</select></label>
@@ -124,14 +108,14 @@ export function InsurancePanel({ chart, onChanged }: { chart: PatientChart; onCh
         <label><input type="checkbox" checked={form.authorizationRequired === true} onChange={(e) => setForm({ ...form, authorizationRequired: e.target.checked })} /> Authorization required</label>
         <div className="thera-span-2 thera-filter-row"><button type="button" className="thera-action" disabled={saving} onClick={() => void save()}>{saving ? "Saving..." : "Save Policy"}</button><button type="button" className="thera-action secondary" onClick={() => setShowForm(false)}>Cancel</button></div>
       </div>}
-      {chart.insurancePolicies.length ? <div className="thera-table-wrap"><table className="thera-table"><thead><tr><th>Order</th><th>Payer / Plan</th><th>Member</th><th>Effective</th><th>Status</th><th>Actions</th></tr></thead><tbody>{chart.insurancePolicies.map((row) => <tr key={row.id}><td>{String(row.insurance_order ?? "—")}</td><td><strong>{String(row.payerName ?? "—")}</strong><div className="thera-table-subtext">{String(row.planName ?? "—")}</div></td><td>{String(row.member_id ?? "—")}</td><td>{shortDate(String(row.effective_date ?? ""))} – {row.termination_date ? shortDate(String(row.termination_date)) : "Current"}</td><td><StatusBadge value={String(row.status ?? "unknown")} /></td><td><div className="thera-filter-row"><button className="thera-action secondary" type="button" onClick={() => edit(row)}>Edit</button>{row.insurance_order !== "primary" && row.status === "active" && <button className="thera-action secondary" type="button" onClick={() => void makePrimary(row.id)}>Make Primary</button>}<button className="thera-action secondary" type="button" disabled={runningId === row.id || row.status === "terminated"} onClick={() => void runEligibility(row)}>{runningId === row.id ? "Running..." : "Run Eligibility"}</button>{row.status !== "terminated" && <button className="thera-action secondary" type="button" onClick={() => void terminate(row.id)}>Terminate</button>}</div></td></tr>)}</tbody></table></div> : <div className="thera-empty">No insurance policies. Add coverage before scheduling payer-based services.</div>}
+      {chart.insurancePolicies.length ? <div className="thera-table-wrap"><table className="thera-table"><thead><tr><th>Order</th><th>Payer / Plan</th><th>Member</th><th>Effective</th><th>Status</th><th>Actions</th></tr></thead><tbody>{chart.insurancePolicies.map((row) => <tr key={row.id}><td>{String(row.insurance_order ?? "—")}</td><td><strong>{String(row.payerName ?? "—")}</strong><div className="thera-table-subtext">{String(row.planName ?? "—")}</div></td><td>{String(row.member_id ?? "—")}</td><td>{shortDate(String(row.effective_date ?? ""))} – {row.termination_date ? shortDate(String(row.termination_date)) : "Current"}</td><td><StatusBadge value={String(row.status ?? "unknown")} /></td><td><div className="thera-filter-row"><button className="thera-action secondary" type="button" onClick={() => edit(row)}>Edit</button>{row.insurance_order !== "primary" && row.status === "active" && <button className="thera-action secondary" type="button" onClick={() => void makePrimary(row.id)}>Make Primary</button>}{row.status !== "terminated" && <button className="thera-action secondary" type="button" onClick={() => void terminate(row.id)}>Terminate</button>}</div></td></tr>)}</tbody></table></div> : <div className="thera-empty">No insurance policies. Add coverage before scheduling payer-based services.</div>}
     </section>
     <EligibilityHistory rows={chart.eligibilityHistory} />
   </div>;
 }
 
 function EligibilityHistory({ rows }: { rows: PatientChart["eligibilityHistory"] }) {
-  return <section className="thera-card thera-span-2"><div className="thera-card-header"><div><h2>Eligibility History</h2><p>Saved synthetic 270/271 responses and benefit details.</p></div></div>{rows.length ? <div className="thera-table-wrap"><table className="thera-table"><thead><tr><th>Service Date</th><th>Payer</th><th>Status</th><th>Copay</th><th>Coinsurance</th><th>Deductible Remaining</th><th>OOP Remaining</th><th>Network</th><th>Source</th></tr></thead><tbody>{rows.map((row) => { const benefits = parseEligibilityBenefits(row.raw_response); return <tr key={row.id}><td>{shortDate(String(row.service_date ?? ""))}</td><td>{String(row.payerName ?? "—")}</td><td><StatusBadge value={String(row.eligibility_status ?? "unknown")} /></td><td>{benefits.copayCents === null ? "—" : money(benefits.copayCents)}</td><td>{benefits.coinsurancePercent === null ? "—" : `${benefits.coinsurancePercent}%`}</td><td>{benefits.deductibleRemainingCents === null ? "—" : money(benefits.deductibleRemainingCents)}</td><td>{benefits.outOfPocketRemainingCents === null ? "—" : money(benefits.outOfPocketRemainingCents)}</td><td>{benefits.networkStatus.replaceAll("_", " ")}</td><td>{String(row.response_source ?? "—")}</td></tr>; })}</tbody></table></div> : <div className="thera-empty">No eligibility history yet. Run eligibility from an active policy.</div>}</section>;
+  return <section className="thera-card thera-span-2"><div className="thera-card-header"><div><h2>Eligibility History</h2><p>Payer-confirmed eligibility results and benefit details. Legacy demo rows are retained only as historical test data.</p></div></div>{rows.length ? <div className="thera-table-wrap"><table className="thera-table"><thead><tr><th>Service Date</th><th>Payer</th><th>Status</th><th>Copay</th><th>Coinsurance</th><th>Deductible Remaining</th><th>OOP Remaining</th><th>Network</th><th>Source</th></tr></thead><tbody>{rows.map((row) => { const benefits = parseEligibilityBenefits(row.raw_response); return <tr key={row.id}><td>{shortDate(String(row.service_date ?? ""))}</td><td>{String(row.payerName ?? "—")}</td><td><StatusBadge value={String(row.eligibility_status ?? "unknown")} /></td><td>{benefits.copayCents === null ? "—" : money(benefits.copayCents)}</td><td>{benefits.coinsurancePercent === null ? "—" : `${benefits.coinsurancePercent}%`}</td><td>{benefits.deductibleRemainingCents === null ? "—" : money(benefits.deductibleRemainingCents)}</td><td>{benefits.outOfPocketRemainingCents === null ? "—" : money(benefits.outOfPocketRemainingCents)}</td><td>{benefits.networkStatus.replaceAll("_", " ")}</td><td>{String(row.response_source ?? "—")}</td></tr>; })}</tbody></table></div> : <div className="thera-empty">No eligibility history yet. Record verification from the Eligibility workspace.</div>}</section>;
 }
 
 function Text({ label, value, onChange, type = "text" }: { label: string; value: string; onChange: (value: string) => void; type?: string }) { return <label className="thera-field"><span className="thera-field-label">{label}</span><input className="thera-input" type={type} value={value} onChange={(e) => onChange(e.target.value)} /></label>; }
