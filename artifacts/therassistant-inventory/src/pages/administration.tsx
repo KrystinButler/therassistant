@@ -26,9 +26,9 @@ export function AdministrationPage() {
     {
       name: "Practice Configuration",
       description:
-        "Tenant, practice, billing-company, and workflow configuration.",
+        "Practice identity, billing provider, clearinghouse, and 837P payer configuration.",
       href: "/administration/practices",
-      available: false,
+      available: true,
     },
   ];
 
