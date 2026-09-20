@@ -9,7 +9,7 @@ import {
   applySyntheticClearinghouseResponseWorkflow,
   createBatchWorkflow,
   createClaimFromChargesWorkflow,
-  submitBatchWorkflow,
+  recordExternalSubmissionWorkflow,
   validateClaimWorkflow,
   type ClaimCreationRepository,
   type ClaimsRepository,
@@ -194,8 +194,17 @@ export function createBatch(claimIds: string[], batchName?: string) {
   return createBatchWorkflow(repository, claimIds, batchName);
 }
 
-export function submitBatch(batchId: string) {
-  return submitBatchWorkflow(repository, batchId);
+export function recordExternalSubmission(
+  batchId: string,
+  externalReference: string,
+  submissionMethod = "external_837p",
+) {
+  return recordExternalSubmissionWorkflow(
+    repository,
+    batchId,
+    externalReference,
+    submissionMethod,
+  );
 }
 
 export function applySyntheticClearinghouseResponse(
