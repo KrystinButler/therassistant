@@ -7,7 +7,7 @@ import {
   createBatch,
   createClaimFromCharges,
   getClaimSubmissionData,
-  submitBatch,
+  recordExternalSubmission,
   validateClaim,
 } from "../claims/repository";
 import { build837PText, buildCms1500Html } from "./claim-output";
@@ -199,21 +199,31 @@ export function BillingQueuePage() {
     }
   }
 
-  async function runSubmitBatch(batchId: string) {
+  async function runRecordExternalSubmission(batchId: string) {
+    const externalReference = window.prompt(
+      "Enter the clearinghouse confirmation, file receipt, or other external submission reference.",
+    )?.trim();
+    if (!externalReference) return;
+
+    const confirmed = window.confirm(
+      "Confirm that this 837P batch was actually transmitted outside THERASSISTANT. This will mark the batch and its claims as submitted.",
+    );
+    if (!confirmed) return;
+
     setSavingId(batchId);
     setError(null);
     setMessage(null);
     try {
-      const result = await submitBatch(batchId);
+      const result = await recordExternalSubmission(batchId, externalReference);
       if (!result.ok) {
         setError(result.details?.length ? `${result.message} ${result.details.join(" ")}` : result.message);
         return;
       }
-      setMessage(`Electronic 837P demo submission created for ${result.value.claimCount} claim(s).`);
+      setMessage(`External 837P submission recorded for ${result.value.claimCount} claim(s).`);
       setTab("submitted");
       await load();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Unable to submit batch.");
+      setError(err instanceof Error ? err.message : "Unable to record external submission.");
     } finally {
       setSavingId(null);
     }
@@ -234,7 +244,7 @@ export function BillingQueuePage() {
       anchor.click();
       anchor.remove();
       URL.revokeObjectURL(url);
-      setMessage("837P Demo Export downloaded.");
+      setMessage("837P export downloaded. The batch remains unsubmitted until an actual external transmission is recorded.");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unable to create 837P export.");
     } finally {
@@ -270,7 +280,7 @@ export function BillingQueuePage() {
         <div>
           <div className="thera-eyebrow">REVENUE CYCLE</div>
           <h1>Charges</h1>
-          <p>Signed notes become charges here, then claims are scrubbed, batched by payer, submitted electronically, downloaded as 837P, or printed to CMS-1500.</p>
+          <p>Signed notes become charges here, then claims are scrubbed, batched by payer, exported as 837P, externally submitted, or printed to CMS-1500.</p>
         </div>
       </div>
 
@@ -321,7 +331,7 @@ export function BillingQueuePage() {
           rows={groups.openBatches}
           claims={data.claims.claims}
           savingId={savingId}
-          onSubmit={(id) => void runSubmitBatch(id)}
+          onRecordSubmission={(id) => void runRecordExternalSubmission(id)}
           onDownload={(id) => void runDownload837(id)}
           onPrint={(batchId, claimId) => void runPrintCms1500(batchId, claimId)}
         />
@@ -453,14 +463,14 @@ function BatchCards({
   rows,
   claims,
   savingId,
-  onSubmit,
+  onRecordSubmission,
   onDownload,
   onPrint,
 }: {
   rows: ClaimsData["batches"];
   claims: ClaimsData["claims"];
   savingId: string | null;
-  onSubmit: (batchId: string) => void;
+  onRecordSubmission: (batchId: string) => void;
   onDownload: (batchId: string) => void;
   onPrint: (batchId: string, claimId: string) => void;
 }) {
@@ -468,7 +478,7 @@ function BatchCards({
   if (!rows.length) return <section className="thera-card"><div className="thera-empty">No payer batches are ready.</div></section>;
 
   return <div className="thera-stack">{rows.map((batch) => <section className="thera-card" key={batch.id}>
-    <div className="thera-card-header split"><div><h2>{String(batch.batch_name || "Payer Batch")}</h2><p>{batch.claimIds.length} claim(s) · {money(Number(batch.total_charge_cents ?? 0))}</p></div><div className="thera-filter-row"><button type="button" className="thera-action secondary" disabled={savingId === `download-${batch.id}`} onClick={() => onDownload(batch.id)}>Download 837P Demo Export</button>{batch.batch_status === "ready" && <button type="button" className="thera-action" disabled={savingId === batch.id} onClick={() => onSubmit(batch.id)}>Submit Electronically</button>}</div></div>
+    <div className="thera-card-header split"><div><h2>{String(batch.batch_name || "Payer Batch")}</h2><p>{batch.claimIds.length} claim(s) · {money(Number(batch.total_charge_cents ?? 0))}</p></div><div className="thera-filter-row"><Link className="thera-action secondary" href="/administration/practices">837P Configuration</Link><button type="button" className="thera-action secondary" disabled={savingId === `download-${batch.id}`} onClick={() => onDownload(batch.id)}>Download 837P</button>{batch.batch_status === "ready" && <button type="button" className="thera-action" disabled={savingId === batch.id} onClick={() => onRecordSubmission(batch.id)}>Record External Submission</button>}</div></div>
     <div className="thera-table-wrap"><table className="thera-table"><thead><tr><th>Claim</th><th>Patient</th><th>Payer</th><th>Charge</th><th>CMS-1500</th></tr></thead><tbody>{batch.claimIds.map((claimId: string) => { const claim = claimsById.get(claimId); return <tr key={claimId}><td>{claim ? <Link className="thera-table-link" href={`/claims/${claim.id}`}>{String(claim.patient_control_number || "Open")}</Link> : claimId}</td><td>{claim?.clientName ?? "—"}</td><td>{claim?.payerName ?? "—"}</td><td>{money(Number(claim?.total_charge_cents ?? 0))}</td><td><button type="button" className="thera-action secondary" disabled={!claim || savingId === `print-${claimId}`} onClick={() => claim && onPrint(batch.id, claim.id)}>Print CMS-1500</button></td></tr>; })}</tbody></table></div>
   </section>)}</div>;
 }
@@ -494,7 +504,7 @@ function SubmittedBatches({
   return <div className="thera-stack">{rows.map((batch) => {
     const submission = submissions.find((row) => String(row.batch_id ?? "") === batch.id);
     return <section className="thera-card" key={batch.id}>
-      <div className="thera-card-header split"><div><h2>{String(batch.batch_name || "Submitted Batch")}</h2><p>Submitted {dateTime(String(batch.submitted_at ?? submission?.submitted_at ?? ""))}</p></div><button type="button" className="thera-action secondary" disabled={savingId === `download-${batch.id}`} onClick={() => onDownload(batch.id)}>Download 837P Demo Export</button></div>
+      <div className="thera-card-header split"><div><h2>{String(batch.batch_name || "Submitted Batch")}</h2><p>Submitted {dateTime(String(batch.submitted_at ?? submission?.submitted_at ?? ""))}</p></div><button type="button" className="thera-action secondary" disabled={savingId === `download-${batch.id}`} onClick={() => onDownload(batch.id)}>Download 837P</button></div>
       <div className="thera-table-wrap"><table className="thera-table"><thead><tr><th>Claim</th><th>Patient</th><th>Status</th><th>CMS-1500</th></tr></thead><tbody>{batch.claimIds.map((claimId: string) => { const claim = claimsById.get(claimId); return <tr key={claimId}><td>{claim ? <Link className="thera-table-link" href={`/claims/${claim.id}`}>{String(claim.patient_control_number || "Open")}</Link> : claimId}</td><td>{claim?.clientName ?? "—"}</td><td>{claim ? <StatusBadge value={String(claim.claim_status)} /> : "—"}</td><td><button type="button" className="thera-action secondary" disabled={!claim || savingId === `print-${claimId}`} onClick={() => claim && onPrint(batch.id, claim.id)}>Print CMS-1500</button></td></tr>; })}</tbody></table></div>
     </section>;
   })}</div>;
