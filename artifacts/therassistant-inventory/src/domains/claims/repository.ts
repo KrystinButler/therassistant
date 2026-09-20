@@ -6,7 +6,7 @@ import {
   type Row,
 } from "../../lib/tenant-data-client";
 import {
-  applySyntheticClearinghouseResponseWorkflow,
+  recordExternalClaimAcknowledgementWorkflow,
   createBatchWorkflow,
   createClaimFromChargesWorkflow,
   recordExternalSubmissionWorkflow,
@@ -167,6 +167,13 @@ const repository: ClaimsRepository = {
     return tenantInsert<DataRow>("submission_responses", values);
   },
 
+  getSubmissionResponses(submissionId) {
+    return tenantSelect<DataRow>("submission_responses", {
+      submission_id: `eq.${submissionId}`,
+      order: "created_at.asc",
+    });
+  },
+
   async upsertWorkItem(values) {
     const sourceId = String(values.source_object_id ?? "");
     const type = String(values.workqueue_type ?? "general_task");
@@ -207,19 +214,16 @@ export function recordExternalSubmission(
   );
 }
 
-export function applySyntheticClearinghouseResponse(
-  submissionId: string,
-  outcome: "accepted" | "rejected",
-  responseCode?: string,
-  responseMessage?: string,
-) {
-  return applySyntheticClearinghouseResponseWorkflow(
-    repository,
-    submissionId,
-    outcome,
-    responseCode,
-    responseMessage,
-  );
+export function recordExternalClaimAcknowledgement(input: {
+  submissionId: string;
+  claimId: string;
+  outcome: "accepted" | "rejected";
+  acknowledgementType: "999" | "277CA" | "clearinghouse_portal" | "other";
+  responseCode: string;
+  responseMessage: string;
+  externalReference: string;
+}) {
+  return recordExternalClaimAcknowledgementWorkflow(repository, input);
 }
 
 function personName(row?: Row) {
