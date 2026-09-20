@@ -103,7 +103,43 @@ test("837P export refuses missing production data instead of inserting placehold
   assert.throws(() => build837PText(invalid), /837P export is not ready/);
 });
 
-test("837P export currently blocks dependent subscribers until structured subscriber data exists", () => {
+test("837P export emits a dependent patient loop when subscriber differs from patient", () => {
+  const dependent = {
+    ...sample,
+    claims: [{
+      ...sample.claims[0],
+      policy: {
+        ...sample.claims[0].policy,
+        group_number: "GRP100",
+        relationship_to_subscriber: "spouse",
+        subscriber_dob: "1988-05-04",
+        metadata: {
+          subscriber: {
+            first_name: "Alex",
+            last_name: "Subscriber",
+            dob: "1988-05-04",
+            sex: "M",
+            address_line1: "300 Subscriber Ave",
+            city: "Denver",
+            state: "CO",
+            postal_code: "80204",
+          },
+        },
+      },
+    }],
+  };
+
+  assert.deepEqual(validate837PExport(dependent), []);
+  const x12 = build837PText(dependent, new Date("2026-09-20T15:30:00.000Z"));
+  assert.match(x12, /HL\*2\*1\*22\*1~/);
+  assert.match(x12, /SBR\*P\*01\*GRP100/);
+  assert.match(x12, /NM1\*IL\*1\*Subscriber\*Alex\*{4}MI\*W123456789~/);
+  assert.match(x12, /HL\*3\*2\*23\*0~/);
+  assert.match(x12, /PAT\*01~/);
+  assert.match(x12, /NM1\*QC\*1\*Patient\*Demo~/);
+});
+
+test("837P export blocks dependent claims when subscriber demographics are incomplete", () => {
   const invalid = {
     ...sample,
     claims: [{
@@ -111,10 +147,27 @@ test("837P export currently blocks dependent subscribers until structured subscr
       policy: {
         ...sample.claims[0].policy,
         relationship_to_subscriber: "child",
+        metadata: { subscriber: { first_name: "Alex" } },
       },
     }],
   };
-  assert.ok(validate837PExport(invalid).some((error) => error.includes("patient to be the subscriber")));
+  const errors = validate837PExport(invalid);
+  assert.ok(errors.some((error) => error.includes("subscriber last name")));
+  assert.ok(errors.some((error) => error.includes("subscriber ZIP code")));
+});
+
+test("837P export does not guess an ambiguous legacy relationship", () => {
+  const invalid = {
+    ...sample,
+    claims: [{
+      ...sample.claims[0],
+      policy: {
+        ...sample.claims[0].policy,
+        relationship_to_subscriber: "parent",
+      },
+    }],
+  };
+  assert.ok(validate837PExport(invalid).some((error) => error.includes("supported HIPAA relationship code")));
 });
 
 test("CMS-1500 print output includes patient, payer, POS and service line context", () => {

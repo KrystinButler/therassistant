@@ -6,7 +6,7 @@ import { createPatientWithOptionalPortal } from "../domains/patients/create-pati
 import { validatePatientIntakeEmergencyContact } from "../domains/patients/workflow";
 import { invitePatientPortal } from "../domains/portal/staff-portal-access";
 import { dateTime, money, shortDate } from "../lib/format";
-import { getCurrentTenantId, referenceSelect, tenantRpc, tenantUpdate, type Row } from "../lib/tenant-data-client";
+import { getCurrentTenantId, referenceSelect, tenantInsert, tenantRpc, tenantSelect, tenantUpdate, type Row } from "../lib/tenant-data-client";
 import { useApi } from "../lib/therassistant-api";
 
 type ClientRow = {
@@ -17,6 +17,14 @@ type ClientRow = {
   dateOfBirth?: string | null;
   email?: string | null;
   phone?: string | null;
+  addressLine1?: string | null;
+  addressLine2?: string | null;
+  city?: string | null;
+  state?: string | null;
+  postalCode?: string | null;
+  sex?: Sex;
+  billingType?: BillingType;
+  metadata?: Row;
   clientStatus: string;
   registrationStatus: string;
   billingReadinessStatus: string;
@@ -34,6 +42,8 @@ type CoverageKey = "primary" | "secondary";
 type BillingType = "insurance" | "self_pay";
 
 type InsuranceForm = {
+  id?: string;
+  status?: string;
   payer_id: string;
   plan_name: string;
   product: string;
@@ -43,7 +53,11 @@ type InsuranceForm = {
   subscriber_last_name: string;
   subscriber_dob: string;
   subscriber_sex: Sex;
-  subscriber_address: string;
+  subscriber_address_line1: string;
+  subscriber_address_line2: string;
+  subscriber_city: string;
+  subscriber_state: string;
+  subscriber_postal_code: string;
   subscriber_phone: string;
   relationship_to_subscriber: string;
 };
@@ -56,6 +70,10 @@ type FormState = {
   date_of_birth: string;
   sex: Sex;
   address_line1: string;
+  address_line2: string;
+  city: string;
+  state: string;
+  postal_code: string;
   email: string;
   phone: string;
   emergency_contact_name: string;
@@ -64,6 +82,7 @@ type FormState = {
   client_status: string;
   registration_status: string;
   billing_type: BillingType;
+  metadata: Row;
   primary: InsuranceForm;
   secondary: InsuranceForm;
 };
@@ -72,8 +91,27 @@ const RELATIONSHIPS = [
   ["self", "Self"],
   ["spouse", "Spouse"],
   ["child", "Child"],
-  ["parent", "Parent"],
-  ["other", "Other"],
+  ["step_child", "Step Child"],
+  ["foster_child", "Foster Child"],
+  ["ward", "Ward of the Court"],
+  ["employee", "Employee"],
+  ["handicapped_dependent", "Handicapped Dependent"],
+  ["grandchild", "Grandchild"],
+  ["niece_nephew", "Niece / Nephew"],
+  ["sponsored_dependent", "Sponsored Dependent"],
+  ["minor_dependent", "Minor Dependent of a Minor Dependent"],
+  ["grandparent", "Grandparent"],
+  ["life_partner", "Life Partner"],
+  ["significant_other", "Significant Other"],
+  ["mother", "Mother"],
+  ["father", "Father"],
+  ["other_adult", "Other Adult"],
+  ["emancipated_minor", "Emancipated Minor"],
+  ["child_no_financial_responsibility", "Child — insured has no financial responsibility"],
+  ["other_relationship", "Other Relationship"],
+  ["unknown", "Unknown"],
+  ["parent", "Legacy Parent — change to Mother or Father before 837P export"],
+  ["other", "Legacy Other — change to Other Relationship before 837P export"],
 ] as const;
 
 function blankInsurance(primary = false): InsuranceForm {
@@ -87,9 +125,44 @@ function blankInsurance(primary = false): InsuranceForm {
     subscriber_last_name: "",
     subscriber_dob: "",
     subscriber_sex: "",
-    subscriber_address: "",
+    subscriber_address_line1: "",
+    subscriber_address_line2: "",
+    subscriber_city: "",
+    subscriber_state: "",
+    subscriber_postal_code: "",
     subscriber_phone: "",
     relationship_to_subscriber: primary ? "self" : "",
+  };
+}
+
+function objectRow(value: unknown): Row {
+  return value && typeof value === "object" && !Array.isArray(value) ? value as Row : {};
+}
+
+function coverageFromRow(row: Row | undefined, plans: PayerPlanRow[], primary: boolean): InsuranceForm {
+  if (!row) return blankInsurance(primary);
+  const meta = objectRow(row.metadata);
+  const subscriber = objectRow(meta.subscriber);
+  const plan = plans.find((item) => item.id === row.payer_plan_id);
+  return {
+    id: String(row.id ?? "") || undefined,
+    status: String(row.status ?? "pending_verification"),
+    payer_id: String(row.payer_id ?? ""),
+    plan_name: String(meta.plan_name ?? plan?.name ?? ""),
+    product: String(meta.product ?? ""),
+    member_id: String(row.member_id ?? ""),
+    group_number: String(row.group_number ?? ""),
+    subscriber_first_name: String(subscriber.first_name ?? ""),
+    subscriber_last_name: String(subscriber.last_name ?? ""),
+    subscriber_dob: String(subscriber.dob ?? row.subscriber_dob ?? "").slice(0, 10),
+    subscriber_sex: ["M", "F"].includes(String(subscriber.sex ?? "")) ? String(subscriber.sex) as Sex : "",
+    subscriber_address_line1: String(subscriber.address_line1 ?? ""),
+    subscriber_address_line2: String(subscriber.address_line2 ?? ""),
+    subscriber_city: String(subscriber.city ?? ""),
+    subscriber_state: String(subscriber.state ?? ""),
+    subscriber_postal_code: String(subscriber.postal_code ?? ""),
+    subscriber_phone: String(subscriber.phone ?? ""),
+    relationship_to_subscriber: String(row.relationship_to_subscriber ?? (primary ? "self" : "")),
   };
 }
 
@@ -101,6 +174,10 @@ function blankPatient(): FormState {
     date_of_birth: "",
     sex: "",
     address_line1: "",
+    address_line2: "",
+    city: "",
+    state: "",
+    postal_code: "",
     email: "",
     phone: "",
     emergency_contact_name: "",
@@ -109,6 +186,7 @@ function blankPatient(): FormState {
     client_status: "active",
     registration_status: "complete",
     billing_type: "insurance",
+    metadata: {},
     primary: blankInsurance(true),
     secondary: blankInsurance(false),
   };
@@ -123,7 +201,44 @@ function cloneForm(form: FormState): FormState {
 }
 
 function hasSecondaryData(coverage: InsuranceForm) {
-  return Object.values(coverage).some((value) => value.trim().length > 0);
+  return Object.values(coverage).some((value) => String(value ?? "").trim().length > 0);
+}
+
+function validPostalCode(value: string) {
+  return /^[0-9]{5}(-?[0-9]{4})?$/.test(value.trim());
+}
+
+function patientAddressComplete(form: FormState) {
+  return Boolean(
+    form.address_line1.trim() &&
+    form.city.trim() &&
+    form.state.trim().length === 2 &&
+    validPostalCode(form.postal_code)
+  );
+}
+
+function subscriberComplete(coverage: InsuranceForm) {
+  if (coverage.relationship_to_subscriber === "self") return true;
+  return Boolean(
+    coverage.relationship_to_subscriber &&
+    coverage.subscriber_first_name.trim() &&
+    coverage.subscriber_last_name.trim() &&
+    coverage.subscriber_dob &&
+    coverage.subscriber_sex &&
+    coverage.subscriber_address_line1.trim() &&
+    coverage.subscriber_city.trim() &&
+    coverage.subscriber_state.trim().length === 2 &&
+    validPostalCode(coverage.subscriber_postal_code)
+  );
+}
+
+function insuranceCoverageComplete(coverage: InsuranceForm) {
+  return Boolean(
+    coverage.payer_id &&
+    coverage.member_id.trim() &&
+    coverage.relationship_to_subscriber &&
+    subscriberComplete(coverage)
+  );
 }
 
 function requiredAddFieldsComplete(form: FormState) {
@@ -132,7 +247,7 @@ function requiredAddFieldsComplete(form: FormState) {
     form.last_name.trim() &&
     form.date_of_birth &&
     form.sex &&
-    form.address_line1.trim() &&
+    patientAddressComplete(form) &&
     form.phone.trim() &&
     form.email.trim()
   );
@@ -141,7 +256,8 @@ function requiredAddFieldsComplete(form: FormState) {
   return Boolean(
     form.primary.payer_id &&
     form.primary.member_id.trim() &&
-    form.primary.relationship_to_subscriber
+    form.primary.relationship_to_subscriber &&
+    subscriberComplete(form.primary)
   );
 }
 
@@ -160,7 +276,11 @@ function subscriberValues(form: FormState, coverage: InsuranceForm) {
     lastName,
     dob: coverage.subscriber_dob || (self ? form.date_of_birth : ""),
     sex: coverage.subscriber_sex || (self ? form.sex : ""),
-    address: coverage.subscriber_address.trim() || (self ? form.address_line1.trim() : ""),
+    addressLine1: coverage.subscriber_address_line1.trim() || (self ? form.address_line1.trim() : ""),
+    addressLine2: coverage.subscriber_address_line2.trim() || (self ? form.address_line2.trim() : ""),
+    city: coverage.subscriber_city.trim() || (self ? form.city.trim() : ""),
+    state: (coverage.subscriber_state.trim() || (self ? form.state.trim() : "")).toUpperCase(),
+    postalCode: coverage.subscriber_postal_code.trim() || (self ? form.postal_code.trim() : ""),
     phone: coverage.subscriber_phone.trim() || (self ? form.phone.trim() : ""),
   };
 }
@@ -182,7 +302,13 @@ function coveragePayload(plans: PayerPlanRow[], coverage: InsuranceForm, patient
         first_name: subscriber.firstName || null,
         last_name: subscriber.lastName || null,
         sex: subscriber.sex || null,
-        address: subscriber.address || null,
+        dob: subscriber.dob || null,
+        address_line1: subscriber.addressLine1 || null,
+        address_line2: subscriber.addressLine2 || null,
+        city: subscriber.city || null,
+        state: subscriber.state || null,
+        postal_code: subscriber.postalCode || null,
+        address: [subscriber.addressLine1, subscriber.addressLine2, subscriber.city, subscriber.state, subscriber.postalCode].filter(Boolean).join(", ") || null,
         phone: subscriber.phone || null,
       },
     },
@@ -248,10 +374,23 @@ export function ClientsPage() {
     setFormError(null);
 
     if (form.id) {
-      if (!form.first_name.trim() || !form.last_name.trim()) {
-        setFormError("First and last name are required.");
+      if (!form.first_name.trim() || !form.last_name.trim() || !form.date_of_birth || !form.sex || !patientAddressComplete(form)) {
+        setFormError("Complete the patient's required demographics and structured address.");
         return;
       }
+      if (form.billing_type === "insurance" && !insuranceCoverageComplete(form.primary)) {
+        setFormError("Complete the primary insurance and subscriber information before saving.");
+        return;
+      }
+      if (
+        form.billing_type === "insurance" &&
+        hasSecondaryData(form.secondary) &&
+        !insuranceCoverageComplete(form.secondary)
+      ) {
+        setFormError("Complete the secondary insurance and subscriber information before saving.");
+        return;
+      }
+
       setSaving(true);
       try {
         await tenantUpdate("clients", form.id, {
@@ -261,9 +400,48 @@ export function ClientsPage() {
           date_of_birth: form.date_of_birth || null,
           email: form.email || null,
           phone: form.phone || null,
+          address_line1: form.address_line1.trim(),
+          address_line2: form.address_line2.trim() || null,
+          city: form.city.trim(),
+          state: form.state.trim().toUpperCase(),
+          postal_code: form.postal_code.replace(/[^0-9]/g, ""),
+          metadata: {
+            ...form.metadata,
+            sex: form.sex,
+            billing_type: form.billing_type,
+          },
           client_status: form.client_status,
           registration_status: form.registration_status,
         });
+
+        if (form.billing_type === "insurance") {
+          const primaryPayload = coveragePayload(plans, form.primary, form);
+          if (form.primary.id) {
+            await tenantUpdate("client_insurance_policies", form.primary.id, primaryPayload);
+          } else {
+            await tenantInsert("client_insurance_policies", {
+              ...primaryPayload,
+              client_id: form.id,
+              insurance_order: "primary",
+              status: "pending_verification",
+            });
+          }
+
+          if (hasSecondaryData(form.secondary)) {
+            const secondaryPayload = coveragePayload(plans, form.secondary, form);
+            if (form.secondary.id) {
+              await tenantUpdate("client_insurance_policies", form.secondary.id, secondaryPayload);
+            } else {
+              await tenantInsert("client_insurance_policies", {
+                ...secondaryPayload,
+                client_id: form.id,
+                insurance_order: "secondary",
+                status: "pending_verification",
+              });
+            }
+          }
+        }
+
         closeForm();
         setVersion((v) => v + 1);
       } catch (err) {
@@ -278,8 +456,19 @@ export function ClientsPage() {
       setFormError("Complete all required patient fields and primary insurance fields when billing insurance.");
       return;
     }
-    if (form.billing_type === "insurance" && hasSecondaryData(form.secondary) && (!form.secondary.payer_id || !form.secondary.member_id.trim())) {
-      setFormError("Secondary insurance company and ID are required when secondary insurance is entered.");
+    if (form.billing_type === "insurance" && !subscriberComplete(form.primary)) {
+      setFormError("Complete all required primary subscriber fields when the patient is not the subscriber.");
+      return;
+    }
+    if (
+      form.billing_type === "insurance" &&
+      hasSecondaryData(form.secondary) &&
+      (!form.secondary.payer_id ||
+        !form.secondary.member_id.trim() ||
+        !form.secondary.relationship_to_subscriber ||
+        !subscriberComplete(form.secondary))
+    ) {
+      setFormError("Complete the secondary insurance and subscriber fields when secondary coverage is entered.");
       return;
     }
 
@@ -311,6 +500,10 @@ export function ClientsPage() {
             email: form.email.trim(),
             phone: form.phone.trim(),
             address_line1: form.address_line1.trim(),
+            address_line2: form.address_line2.trim() || null,
+            city: form.city.trim(),
+            state: form.state.trim().toUpperCase(),
+            postal_code: form.postal_code.trim(),
             client_status: form.client_status,
             registration_status: form.registration_status,
             billing_type: form.billing_type,
@@ -352,20 +545,45 @@ export function ClientsPage() {
     }
   }
 
-  function edit(client: ClientRow) {
-    const next = blankPatient();
-    openForm({
-      ...next,
-      id: client.id,
-      first_name: client.firstName,
-      last_name: client.lastName,
-      preferred_name: client.preferredName || "",
-      date_of_birth: client.dateOfBirth || "",
-      email: client.email || "",
-      phone: client.phone || "",
-      client_status: client.clientStatus,
-      registration_status: client.registrationStatus,
-    });
+  async function edit(client: ClientRow) {
+    setFormError(null);
+    try {
+      const policies = await tenantSelect<Row>("client_insurance_policies", {
+        client_id: `eq.${client.id}`,
+        order: "insurance_order.asc,created_at.desc",
+      });
+      const primary = policies.find((row) => String(row.insurance_order ?? "") === "primary");
+      const secondary = policies.find((row) => String(row.insurance_order ?? "") === "secondary");
+      const next = blankPatient();
+      openForm({
+        ...next,
+        id: client.id,
+        first_name: client.firstName,
+        last_name: client.lastName,
+        preferred_name: client.preferredName || "",
+        date_of_birth: client.dateOfBirth || "",
+        sex: client.sex || "",
+        address_line1: client.addressLine1 || "",
+        address_line2: client.addressLine2 || "",
+        city: client.city || "",
+        state: client.state || "",
+        postal_code: client.postalCode || "",
+        email: client.email || "",
+        phone: client.phone || "",
+        billing_type: client.billingType || "insurance",
+        metadata: client.metadata || {},
+        client_status: client.clientStatus,
+        registration_status: client.registrationStatus,
+        primary: coverageFromRow(primary, plans, true),
+        secondary: coverageFromRow(secondary, plans, false),
+      });
+    } catch (err) {
+      setPageNotice({
+        kind: "error",
+        message: err instanceof Error ? err.message : "Unable to load patient insurance for editing.",
+        patientId: client.id,
+      });
+    }
   }
 
   const primaryPlanNames = form ? plans.filter((plan) => plan.payer_id === form.primary.payer_id) : [];
@@ -388,7 +606,7 @@ export function ClientsPage() {
     <section className="thera-card">
       {loading && <div className="thera-state">Loading patients...</div>}
       {error && <div className="thera-state error">{error}</div>}
-      {!loading && !error && <div className="thera-table-wrap"><table className="thera-table"><thead><tr><th>Patient</th><th>DOB</th><th>Insurance</th><th>Registration</th><th>Billing Readiness</th><th>Next Appointment</th><th>Open Balance</th><th>Actions</th></tr></thead><tbody>{(data ?? []).map((client) => <tr key={client.id}><td><Link href={`/clients/${client.id}`} className="thera-table-link">{client.firstName} {client.lastName}</Link><div className="thera-table-subtext"><StatusBadge value={client.clientStatus} /></div></td><td>{shortDate(client.dateOfBirth)}</td><td><strong>{client.payerName || "—"}</strong><div className="thera-table-subtext">{client.planName || ""}</div></td><td><StatusBadge value={client.registrationStatus} /></td><td><StatusBadge value={client.billingReadinessStatus} /></td><td>{client.nextAppointment ? dateTime(client.nextAppointment) : "—"}</td><td>{money(client.openBalanceCents)}</td><td><button type="button" className="thera-action secondary" onClick={() => edit(client)}>Edit</button></td></tr>)}</tbody></table></div>}
+      {!loading && !error && <div className="thera-table-wrap"><table className="thera-table"><thead><tr><th>Patient</th><th>DOB</th><th>Insurance</th><th>Registration</th><th>Billing Readiness</th><th>Next Appointment</th><th>Open Balance</th><th>Actions</th></tr></thead><tbody>{(data ?? []).map((client) => <tr key={client.id}><td><Link href={`/clients/${client.id}`} className="thera-table-link">{client.firstName} {client.lastName}</Link><div className="thera-table-subtext"><StatusBadge value={client.clientStatus} /></div></td><td>{shortDate(client.dateOfBirth)}</td><td><strong>{client.payerName || "—"}</strong><div className="thera-table-subtext">{client.planName || ""}</div></td><td><StatusBadge value={client.registrationStatus} /></td><td><StatusBadge value={client.billingReadinessStatus} /></td><td>{client.nextAppointment ? dateTime(client.nextAppointment) : "—"}</td><td>{money(client.openBalanceCents)}</td><td><button type="button" className="thera-action secondary" onClick={() => void edit(client)}>Edit</button></td></tr>)}</tbody></table></div>}
     </section>
 
     {form && <WorkDrawer
@@ -403,22 +621,83 @@ export function ClientsPage() {
         <button type="button" className="thera-action secondary" onClick={closeForm}>Cancel</button>
         <div className="thera-filter-row">
           {!form.id && <button type="button" className="thera-action secondary" disabled={saving || !addRequiredComplete} onClick={() => void save(true)}>Save + Send Portal Invite</button>}
-          <button type="button" className="thera-action" disabled={saving || (form.id ? !form.first_name.trim() || !form.last_name.trim() : !addRequiredComplete)} onClick={() => void save(false)}>{saving ? "Saving..." : "Save Patient"}</button>
+          <button type="button" className="thera-action" disabled={saving || (form.id ? !form.first_name.trim() || !form.last_name.trim() || !form.date_of_birth || !form.sex || !patientAddressComplete(form) : !addRequiredComplete)} onClick={() => void save(false)}>{saving ? "Saving..." : "Save Patient"}</button>
         </div>
       </div>}
     >
       {formError && <div className="thera-state error" style={{ marginBottom: 16 }}>{formError}</div>}
       {!form.id && payerLookupError && <div className="thera-state error" style={{ marginBottom: 16 }}>{payerLookupError}</div>}
 
-      {form.id ? <div className="thera-form-grid">
-        <Text label="First Name" value={form.first_name} onChange={(first_name) => setForm({ ...form, first_name })} />
-        <Text label="Last Name" value={form.last_name} onChange={(last_name) => setForm({ ...form, last_name })} />
-        <Text label="Preferred Name" value={form.preferred_name} onChange={(preferred_name) => setForm({ ...form, preferred_name })} />
-        <Text label="DOB" type="date" value={form.date_of_birth} onChange={(date_of_birth) => setForm({ ...form, date_of_birth })} />
-        <Text label="Email" type="email" value={form.email} onChange={(email) => setForm({ ...form, email })} />
-        <Text label="Phone" value={form.phone} onChange={(phone) => setForm({ ...form, phone })} />
-        <label className="thera-field"><span className="thera-field-label">Patient Status</span><select className="thera-input" value={form.client_status} onChange={(e) => setForm({ ...form, client_status: e.target.value })}><option value="active">Active</option><option value="intake">Intake</option><option value="waitlist">Waitlist</option><option value="inactive">Inactive</option><option value="discharged">Discharged</option></select></label>
-        <label className="thera-field"><span className="thera-field-label">Registration</span><select className="thera-input" value={form.registration_status} onChange={(e) => setForm({ ...form, registration_status: e.target.value })}><option value="not_started">Not Started</option><option value="in_progress">In Progress</option><option value="pending_review">Pending Review</option><option value="complete">Complete</option><option value="needs_correction">Needs Correction</option></select></label>
+      {form.id ? <div className="thera-stack">
+        <section className="thera-card">
+          <div className="thera-card-header"><div><h2>Patient Demographics</h2><p>Structured address fields are required for professional claim export.</p></div></div>
+          <div className="thera-form-grid">
+            <Text label="First Name *" value={form.first_name} onChange={(first_name) => setForm({ ...form, first_name })} />
+            <Text label="Last Name *" value={form.last_name} onChange={(last_name) => setForm({ ...form, last_name })} />
+            <Text label="Preferred Name" value={form.preferred_name} onChange={(preferred_name) => setForm({ ...form, preferred_name })} />
+            <Text label="DOB *" type="date" value={form.date_of_birth} onChange={(date_of_birth) => setForm({ ...form, date_of_birth })} />
+            <SexSelect label="Sex *" value={form.sex} onChange={(sex) => setForm({ ...form, sex })} />
+            <Text label="Address Line 1 *" value={form.address_line1} onChange={(address_line1) => setForm({ ...form, address_line1 })} />
+            <Text label="Address Line 2" value={form.address_line2} onChange={(address_line2) => setForm({ ...form, address_line2 })} />
+            <Text label="City *" value={form.city} onChange={(city) => setForm({ ...form, city })} />
+            <Text label="State *" value={form.state} onChange={(state) => setForm({ ...form, state: state.toUpperCase().slice(0, 2) })} />
+            <Text label="ZIP Code *" value={form.postal_code} onChange={(postal_code) => setForm({ ...form, postal_code })} />
+            <Text label="Email" type="email" value={form.email} onChange={(email) => setForm({ ...form, email })} />
+            <Text label="Phone" value={form.phone} onChange={(phone) => setForm({ ...form, phone })} />
+            <label className="thera-field"><span className="thera-field-label">Billing Type *</span><select className="thera-input" value={form.billing_type} onChange={(event) => setForm({ ...form, billing_type: event.target.value as BillingType })}><option value="insurance">Insurance</option><option value="self_pay">Self Pay</option></select></label>
+            <label className="thera-field"><span className="thera-field-label">Patient Status</span><select className="thera-input" value={form.client_status} onChange={(e) => setForm({ ...form, client_status: e.target.value })}><option value="active">Active</option><option value="intake">Intake</option><option value="waitlist">Waitlist</option><option value="inactive">Inactive</option><option value="discharged">Discharged</option></select></label>
+            <label className="thera-field"><span className="thera-field-label">Registration</span><select className="thera-input" value={form.registration_status} onChange={(e) => setForm({ ...form, registration_status: e.target.value })}><option value="not_started">Not Started</option><option value="in_progress">In Progress</option><option value="pending_review">Pending Review</option><option value="complete">Complete</option><option value="needs_correction">Needs Correction</option></select></label>
+          </div>
+        </section>
+
+        {form.billing_type === "insurance" && <section className="thera-card">
+          <div className="thera-card-header"><div><h2>Insurance & Subscriber Correction</h2><p>Correct member and subscriber data used by the professional claim export.</p></div></div>
+          <div className="thera-stack">
+            <div><h3>Primary Insurance</h3><div className="thera-form-grid">
+              <PayerSelect label="Primary Insurance Company *" value={form.primary.payer_id} payers={payers} onChange={(payer_id) => updateCoverage("primary", { payer_id, plan_name: "" })} />
+              <PlanText label="Primary Insurance Plan" value={form.primary.plan_name} listId="edit-primary-plan-options" plans={primaryPlanNames} onChange={(plan_name) => updateCoverage("primary", { plan_name })} />
+              <Text label="Primary Insurance Product" value={form.primary.product} onChange={(product) => updateCoverage("primary", { product })} />
+              <Text label="Primary Insurance ID *" value={form.primary.member_id} onChange={(member_id) => updateCoverage("primary", { member_id })} />
+              <Text label="Primary Insurance Group #" value={form.primary.group_number} onChange={(group_number) => updateCoverage("primary", { group_number })} />
+              <RelationshipSelect label="Primary Patient Relation to Subscriber *" value={form.primary.relationship_to_subscriber} required onChange={(relationship_to_subscriber) => updateCoverage("primary", { relationship_to_subscriber })} />
+              {form.primary.relationship_to_subscriber !== "self" && <>
+                <Text label="Primary Subscriber First Name *" value={form.primary.subscriber_first_name} onChange={(subscriber_first_name) => updateCoverage("primary", { subscriber_first_name })} />
+                <Text label="Primary Subscriber Last Name *" value={form.primary.subscriber_last_name} onChange={(subscriber_last_name) => updateCoverage("primary", { subscriber_last_name })} />
+                <Text label="Primary Subscriber DOB *" type="date" value={form.primary.subscriber_dob} onChange={(subscriber_dob) => updateCoverage("primary", { subscriber_dob })} />
+                <SexSelect label="Primary Subscriber Sex *" value={form.primary.subscriber_sex} onChange={(subscriber_sex) => updateCoverage("primary", { subscriber_sex })} />
+                <Text label="Primary Subscriber Address Line 1 *" value={form.primary.subscriber_address_line1} onChange={(subscriber_address_line1) => updateCoverage("primary", { subscriber_address_line1 })} />
+                <Text label="Primary Subscriber Address Line 2" value={form.primary.subscriber_address_line2} onChange={(subscriber_address_line2) => updateCoverage("primary", { subscriber_address_line2 })} />
+                <Text label="Primary Subscriber City *" value={form.primary.subscriber_city} onChange={(subscriber_city) => updateCoverage("primary", { subscriber_city })} />
+                <Text label="Primary Subscriber State *" value={form.primary.subscriber_state} onChange={(subscriber_state) => updateCoverage("primary", { subscriber_state: subscriber_state.toUpperCase().slice(0, 2) })} />
+                <Text label="Primary Subscriber ZIP Code *" value={form.primary.subscriber_postal_code} onChange={(subscriber_postal_code) => updateCoverage("primary", { subscriber_postal_code })} />
+                <Text label="Primary Subscriber Phone" type="tel" value={form.primary.subscriber_phone} onChange={(subscriber_phone) => updateCoverage("primary", { subscriber_phone })} />
+              </>}
+            </div></div>
+
+            <div><h3>Secondary Insurance</h3><div className="thera-form-grid">
+              <PayerSelect label="Secondary Insurance Company" value={form.secondary.payer_id} payers={payers} onChange={(payer_id) => updateCoverage("secondary", { payer_id, plan_name: "" })} />
+              <PlanText label="Secondary Insurance Plan" value={form.secondary.plan_name} listId="edit-secondary-plan-options" plans={secondaryPlanNames} onChange={(plan_name) => updateCoverage("secondary", { plan_name })} />
+              <Text label="Secondary Insurance Product" value={form.secondary.product} onChange={(product) => updateCoverage("secondary", { product })} />
+              <Text label="Secondary Insurance ID" value={form.secondary.member_id} onChange={(member_id) => updateCoverage("secondary", { member_id })} />
+              <Text label="Secondary Insurance Group #" value={form.secondary.group_number} onChange={(group_number) => updateCoverage("secondary", { group_number })} />
+              <RelationshipSelect label="Secondary Patient Relation to Subscriber" value={form.secondary.relationship_to_subscriber} onChange={(relationship_to_subscriber) => updateCoverage("secondary", { relationship_to_subscriber })} />
+              {form.secondary.relationship_to_subscriber && form.secondary.relationship_to_subscriber !== "self" && <>
+                <Text label="Secondary Subscriber First Name *" value={form.secondary.subscriber_first_name} onChange={(subscriber_first_name) => updateCoverage("secondary", { subscriber_first_name })} />
+                <Text label="Secondary Subscriber Last Name *" value={form.secondary.subscriber_last_name} onChange={(subscriber_last_name) => updateCoverage("secondary", { subscriber_last_name })} />
+                <Text label="Secondary Subscriber DOB *" type="date" value={form.secondary.subscriber_dob} onChange={(subscriber_dob) => updateCoverage("secondary", { subscriber_dob })} />
+                <SexSelect label="Secondary Subscriber Sex *" value={form.secondary.subscriber_sex} onChange={(subscriber_sex) => updateCoverage("secondary", { subscriber_sex })} />
+                <Text label="Secondary Subscriber Address Line 1 *" value={form.secondary.subscriber_address_line1} onChange={(subscriber_address_line1) => updateCoverage("secondary", { subscriber_address_line1 })} />
+                <Text label="Secondary Subscriber Address Line 2" value={form.secondary.subscriber_address_line2} onChange={(subscriber_address_line2) => updateCoverage("secondary", { subscriber_address_line2 })} />
+                <Text label="Secondary Subscriber City *" value={form.secondary.subscriber_city} onChange={(subscriber_city) => updateCoverage("secondary", { subscriber_city })} />
+                <Text label="Secondary Subscriber State *" value={form.secondary.subscriber_state} onChange={(subscriber_state) => updateCoverage("secondary", { subscriber_state: subscriber_state.toUpperCase().slice(0, 2) })} />
+                <Text label="Secondary Subscriber ZIP Code *" value={form.secondary.subscriber_postal_code} onChange={(subscriber_postal_code) => updateCoverage("secondary", { subscriber_postal_code })} />
+                <Text label="Secondary Subscriber Phone" type="tel" value={form.secondary.subscriber_phone} onChange={(subscriber_phone) => updateCoverage("secondary", { subscriber_phone })} />
+              </>}
+            </div></div>
+          </div>
+        </section>}
+
+        {form.billing_type === "self_pay" && <div className="thera-alert">This patient is configured for self-pay; existing insurance policies remain on file but are not used for new payer claim creation.</div>}
       </div> : <div className="thera-stack">
         <section className="thera-card">
           <div className="thera-card-header"><div><h2>Patient Information</h2><p>Required fields are marked *.</p></div></div>
@@ -427,7 +706,11 @@ export function ClientsPage() {
             <Text label="Patient Last Name *" value={form.last_name} onChange={(last_name) => setForm({ ...form, last_name })} />
             <Text label="Patient DOB *" type="date" value={form.date_of_birth} onChange={(date_of_birth) => setForm({ ...form, date_of_birth })} />
             <SexSelect label="Patient Sex *" value={form.sex} onChange={(sex) => setForm({ ...form, sex })} />
-            <Text label="Patient Address *" value={form.address_line1} onChange={(address_line1) => setForm({ ...form, address_line1 })} />
+            <Text label="Patient Address Line 1 *" value={form.address_line1} onChange={(address_line1) => setForm({ ...form, address_line1 })} />
+            <Text label="Patient Address Line 2" value={form.address_line2} onChange={(address_line2) => setForm({ ...form, address_line2 })} />
+            <Text label="Patient City *" value={form.city} onChange={(city) => setForm({ ...form, city })} />
+            <Text label="Patient State *" value={form.state} onChange={(state) => setForm({ ...form, state: state.toUpperCase().slice(0, 2) })} />
+            <Text label="Patient ZIP Code *" value={form.postal_code} onChange={(postal_code) => setForm({ ...form, postal_code })} />
             <Text label="Patient Phone *" type="tel" value={form.phone} onChange={(phone) => setForm({ ...form, phone })} />
             <Text label="Patient Email *" type="email" value={form.email} onChange={(email) => setForm({ ...form, email })} />
             <label className="thera-field"><span className="thera-field-label">Billing Type *</span><select className="thera-input" value={form.billing_type} onChange={(event) => setForm({ ...form, billing_type: event.target.value as BillingType })}><option value="insurance">Insurance</option><option value="self_pay">Self Pay</option></select></label>
@@ -452,13 +735,19 @@ export function ClientsPage() {
               <Text label="Primary Insurance Product" value={form.primary.product} onChange={(product) => updateCoverage("primary", { product })} />
               <Text label="Primary Insurance ID *" value={form.primary.member_id} onChange={(member_id) => updateCoverage("primary", { member_id })} />
               <Text label="Primary Insurance Group #" value={form.primary.group_number} onChange={(group_number) => updateCoverage("primary", { group_number })} />
-              <Text label="Primary Subscriber First Name" value={form.primary.subscriber_first_name} onChange={(subscriber_first_name) => updateCoverage("primary", { subscriber_first_name })} />
-              <Text label="Primary Subscriber Last Name" value={form.primary.subscriber_last_name} onChange={(subscriber_last_name) => updateCoverage("primary", { subscriber_last_name })} />
-              <Text label="Primary Subscriber DOB" type="date" value={form.primary.subscriber_dob} onChange={(subscriber_dob) => updateCoverage("primary", { subscriber_dob })} />
-              <SexSelect label="Primary Subscriber Sex" value={form.primary.subscriber_sex} onChange={(subscriber_sex) => updateCoverage("primary", { subscriber_sex })} />
-              <Text label="Primary Subscriber Address" value={form.primary.subscriber_address} onChange={(subscriber_address) => updateCoverage("primary", { subscriber_address })} />
-              <Text label="Primary Subscriber Phone" type="tel" value={form.primary.subscriber_phone} onChange={(subscriber_phone) => updateCoverage("primary", { subscriber_phone })} />
               <RelationshipSelect label="Primary Patient Relation to Subscriber *" value={form.primary.relationship_to_subscriber} required onChange={(relationship_to_subscriber) => updateCoverage("primary", { relationship_to_subscriber })} />
+              {form.primary.relationship_to_subscriber !== "self" && <>
+                <Text label="Primary Subscriber First Name *" value={form.primary.subscriber_first_name} onChange={(subscriber_first_name) => updateCoverage("primary", { subscriber_first_name })} />
+                <Text label="Primary Subscriber Last Name *" value={form.primary.subscriber_last_name} onChange={(subscriber_last_name) => updateCoverage("primary", { subscriber_last_name })} />
+                <Text label="Primary Subscriber DOB *" type="date" value={form.primary.subscriber_dob} onChange={(subscriber_dob) => updateCoverage("primary", { subscriber_dob })} />
+                <SexSelect label="Primary Subscriber Sex *" value={form.primary.subscriber_sex} onChange={(subscriber_sex) => updateCoverage("primary", { subscriber_sex })} />
+                <Text label="Primary Subscriber Address Line 1 *" value={form.primary.subscriber_address_line1} onChange={(subscriber_address_line1) => updateCoverage("primary", { subscriber_address_line1 })} />
+                <Text label="Primary Subscriber Address Line 2" value={form.primary.subscriber_address_line2} onChange={(subscriber_address_line2) => updateCoverage("primary", { subscriber_address_line2 })} />
+                <Text label="Primary Subscriber City *" value={form.primary.subscriber_city} onChange={(subscriber_city) => updateCoverage("primary", { subscriber_city })} />
+                <Text label="Primary Subscriber State *" value={form.primary.subscriber_state} onChange={(subscriber_state) => updateCoverage("primary", { subscriber_state: subscriber_state.toUpperCase().slice(0, 2) })} />
+                <Text label="Primary Subscriber ZIP Code *" value={form.primary.subscriber_postal_code} onChange={(subscriber_postal_code) => updateCoverage("primary", { subscriber_postal_code })} />
+                <Text label="Primary Subscriber Phone" type="tel" value={form.primary.subscriber_phone} onChange={(subscriber_phone) => updateCoverage("primary", { subscriber_phone })} />
+              </>}
             </div></div>
 
             <div><h3>Secondary Insurance</h3><div className="thera-form-grid">
@@ -467,13 +756,19 @@ export function ClientsPage() {
               <Text label="Secondary Insurance Product" value={form.secondary.product} onChange={(product) => updateCoverage("secondary", { product })} />
               <Text label="Secondary Insurance ID" value={form.secondary.member_id} onChange={(member_id) => updateCoverage("secondary", { member_id })} />
               <Text label="Secondary Insurance Group #" value={form.secondary.group_number} onChange={(group_number) => updateCoverage("secondary", { group_number })} />
-              <Text label="Secondary Subscriber First Name" value={form.secondary.subscriber_first_name} onChange={(subscriber_first_name) => updateCoverage("secondary", { subscriber_first_name })} />
-              <Text label="Secondary Subscriber Last Name" value={form.secondary.subscriber_last_name} onChange={(subscriber_last_name) => updateCoverage("secondary", { subscriber_last_name })} />
-              <Text label="Secondary Subscriber DOB" type="date" value={form.secondary.subscriber_dob} onChange={(subscriber_dob) => updateCoverage("secondary", { subscriber_dob })} />
-              <SexSelect label="Secondary Subscriber Sex" value={form.secondary.subscriber_sex} onChange={(subscriber_sex) => updateCoverage("secondary", { subscriber_sex })} />
-              <Text label="Secondary Subscriber Address" value={form.secondary.subscriber_address} onChange={(subscriber_address) => updateCoverage("secondary", { subscriber_address })} />
-              <Text label="Secondary Subscriber Phone" type="tel" value={form.secondary.subscriber_phone} onChange={(subscriber_phone) => updateCoverage("secondary", { subscriber_phone })} />
               <RelationshipSelect label="Secondary Patient Relation to Subscriber" value={form.secondary.relationship_to_subscriber} onChange={(relationship_to_subscriber) => updateCoverage("secondary", { relationship_to_subscriber })} />
+              {form.secondary.relationship_to_subscriber && form.secondary.relationship_to_subscriber !== "self" && <>
+                <Text label="Secondary Subscriber First Name *" value={form.secondary.subscriber_first_name} onChange={(subscriber_first_name) => updateCoverage("secondary", { subscriber_first_name })} />
+                <Text label="Secondary Subscriber Last Name *" value={form.secondary.subscriber_last_name} onChange={(subscriber_last_name) => updateCoverage("secondary", { subscriber_last_name })} />
+                <Text label="Secondary Subscriber DOB *" type="date" value={form.secondary.subscriber_dob} onChange={(subscriber_dob) => updateCoverage("secondary", { subscriber_dob })} />
+                <SexSelect label="Secondary Subscriber Sex *" value={form.secondary.subscriber_sex} onChange={(subscriber_sex) => updateCoverage("secondary", { subscriber_sex })} />
+                <Text label="Secondary Subscriber Address Line 1 *" value={form.secondary.subscriber_address_line1} onChange={(subscriber_address_line1) => updateCoverage("secondary", { subscriber_address_line1 })} />
+                <Text label="Secondary Subscriber Address Line 2" value={form.secondary.subscriber_address_line2} onChange={(subscriber_address_line2) => updateCoverage("secondary", { subscriber_address_line2 })} />
+                <Text label="Secondary Subscriber City *" value={form.secondary.subscriber_city} onChange={(subscriber_city) => updateCoverage("secondary", { subscriber_city })} />
+                <Text label="Secondary Subscriber State *" value={form.secondary.subscriber_state} onChange={(subscriber_state) => updateCoverage("secondary", { subscriber_state: subscriber_state.toUpperCase().slice(0, 2) })} />
+                <Text label="Secondary Subscriber ZIP Code *" value={form.secondary.subscriber_postal_code} onChange={(subscriber_postal_code) => updateCoverage("secondary", { subscriber_postal_code })} />
+                <Text label="Secondary Subscriber Phone" type="tel" value={form.secondary.subscriber_phone} onChange={(subscriber_phone) => updateCoverage("secondary", { subscriber_phone })} />
+              </>}
             </div></div>
           </div>
         </section>}

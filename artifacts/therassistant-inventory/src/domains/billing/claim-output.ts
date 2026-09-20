@@ -85,6 +85,45 @@ function metadata(row?: ContextRow | null) {
     : {};
 }
 
+function objectValue(value: unknown) {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : {};
+}
+
+function policySubscriber(row?: ContextRow | null) {
+  return objectValue(metadata(row).subscriber);
+}
+
+function relationshipCode(value: unknown) {
+  const normalized = String(value ?? "").trim().toLowerCase();
+  const codes: Record<string, string> = {
+    self: "18",
+    spouse: "01",
+    child: "19",
+    step_child: "17",
+    foster_child: "10",
+    ward: "15",
+    employee: "20",
+    unknown: "21",
+    handicapped_dependent: "22",
+    grandchild: "05",
+    niece_nephew: "07",
+    sponsored_dependent: "23",
+    minor_dependent: "24",
+    grandparent: "04",
+    life_partner: "53",
+    significant_other: "29",
+    mother: "32",
+    father: "33",
+    other_adult: "34",
+    emancipated_minor: "36",
+    child_no_financial_responsibility: "43",
+    other_relationship: "G8",
+  };
+  return codes[normalized] ?? (/^[A-Z0-9]{2}$/i.test(normalized) ? normalized.toUpperCase() : "");
+}
+
 function payerEdiId(input: BatchOutputData, item: ClaimOutputItem) {
   const payerId = String(item.payer?.id ?? item.claim.payer_id ?? "");
   return clean(input.edi.payerIds[payerId] || item.payer?.clearinghouse_payer_id || "");
@@ -173,8 +212,21 @@ export function validate837PExport(input: BatchOutputData) {
 
     requireValue(errors, item.policy?.member_id, `${control}: subscriber/member ID is missing.`);
     const relationship = String(item.policy?.relationship_to_subscriber ?? "").toLowerCase();
-    if (relationship !== "self") {
-      errors.push(`${control}: 837P export currently requires the patient to be the subscriber; dependent subscriber data needs structured address fields before export.`);
+    const relationshipCodeValue = relationshipCode(relationship);
+    if (!relationshipCodeValue) {
+      errors.push(`${control}: subscriber relationship "${relationship || "blank"}" does not have a supported HIPAA relationship code.`);
+    } else if (relationshipCodeValue !== "18") {
+      const subscriber = policySubscriber(item.policy);
+      requireValue(errors, subscriber.first_name, `${control}: subscriber first name is missing.`);
+      requireValue(errors, subscriber.last_name, `${control}: subscriber last name is missing.`);
+      requireValue(errors, subscriber.dob ?? item.policy?.subscriber_dob, `${control}: subscriber date of birth is missing.`);
+      requireValue(errors, subscriber.address_line1, `${control}: subscriber street address is missing.`);
+      requireValue(errors, subscriber.city, `${control}: subscriber city is missing.`);
+      requireValue(errors, subscriber.state, `${control}: subscriber state is missing.`);
+      requireValue(errors, subscriber.postal_code, `${control}: subscriber ZIP code is missing.`);
+      if (!["M", "F"].includes(String(subscriber.sex ?? ""))) {
+        errors.push(`${control}: subscriber sex must be M or F for dependent 837P export.`);
+      }
     }
 
     if (!item.lines.length) errors.push(`${control}: claim has no service lines.`);
@@ -244,15 +296,43 @@ export function build837PText(input: BatchOutputData, now = new Date()) {
     const controlNumber = clean(item.claim.patient_control_number ?? item.claim.id);
     const total = formatAmount(item.claim.total_charge_cents);
 
-    tx.push(`HL*${hl}*1*22*0~`);
-    tx.push("SBR*P*18*******CI~");
+    const relationship = String(item.policy?.relationship_to_subscriber ?? "").toLowerCase();
+    const relationshipCodeValue = relationshipCode(relationship);
+    const dependent = relationshipCodeValue !== "18";
+    const subscriberMeta = dependent ? policySubscriber(item.policy) : clientMeta;
+    const subscriberFirstName = dependent ? subscriberMeta.first_name : item.client?.first_name;
+    const subscriberLastName = dependent ? subscriberMeta.last_name : item.client?.last_name;
+    const subscriberDob = dependent ? (subscriberMeta.dob ?? item.policy?.subscriber_dob) : item.client?.date_of_birth;
+    const subscriberSex = dependent ? subscriberMeta.sex : clientMeta.sex;
+    const subscriberAddress1 = dependent ? subscriberMeta.address_line1 : item.client?.address_line1;
+    const subscriberAddress2 = dependent ? subscriberMeta.address_line2 : item.client?.address_line2;
+    const subscriberCity = dependent ? subscriberMeta.city : item.client?.city;
+    const subscriberState = dependent ? subscriberMeta.state : item.client?.state;
+    const subscriberPostal = dependent ? subscriberMeta.postal_code : item.client?.postal_code;
+    const subscriberHl = hl;
+
+    tx.push(`HL*${subscriberHl}*1*22*${dependent ? "1" : "0"}~`);
     tx.push(
-      `NM1*IL*1*${compact(item.client?.last_name)}*${compact(item.client?.first_name)}****MI*${clean(item.policy?.member_id)}~`,
+      ["SBR", "P", relationshipCodeValue, clean(item.policy?.group_number), "", "", "", "", "", "CI"].join("*") + "~",
     );
-    tx.push(`N3*${compact(item.client?.address_line1)}${item.client?.address_line2 ? `*${compact(item.client.address_line2)}` : ""}~`);
-    tx.push(`N4*${compact(item.client?.city)}*${clean(item.client?.state).toUpperCase()}*${digits(item.client?.postal_code)}~`);
-    tx.push(`DMG*D8*${date8(item.client?.date_of_birth)}*${clean(clientMeta.sex)}~`);
+    tx.push(
+      `NM1*IL*1*${compact(subscriberLastName)}*${compact(subscriberFirstName)}****MI*${clean(item.policy?.member_id)}~`,
+    );
+    tx.push(`N3*${compact(subscriberAddress1)}${subscriberAddress2 ? `*${compact(subscriberAddress2)}` : ""}~`);
+    tx.push(`N4*${compact(subscriberCity)}*${clean(subscriberState).toUpperCase()}*${digits(subscriberPostal)}~`);
+    tx.push(`DMG*D8*${date8(subscriberDob)}*${clean(subscriberSex)}~`);
     tx.push(`NM1*PR*2*${compact(item.payer?.name)}*****PI*${payerId}~`);
+
+    if (dependent) {
+      hl += 1;
+      tx.push(`HL*${hl}*${subscriberHl}*23*0~`);
+      tx.push(`PAT*${relationshipCodeValue}~`);
+      tx.push(`NM1*QC*1*${compact(item.client?.last_name)}*${compact(item.client?.first_name)}~`);
+      tx.push(`N3*${compact(item.client?.address_line1)}${item.client?.address_line2 ? `*${compact(item.client.address_line2)}` : ""}~`);
+      tx.push(`N4*${compact(item.client?.city)}*${clean(item.client?.state).toUpperCase()}*${digits(item.client?.postal_code)}~`);
+      tx.push(`DMG*D8*${date8(item.client?.date_of_birth)}*${clean(clientMeta.sex)}~`);
+    }
+
     tx.push(`CLM*${controlNumber}*${total}***${pos}:B:1*Y*A*Y*Y~`);
 
     const sortedDx = [...item.diagnoses].sort(
