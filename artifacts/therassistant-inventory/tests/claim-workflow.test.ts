@@ -5,7 +5,7 @@ import {
   applySyntheticClearinghouseResponseWorkflow,
   createBatchWorkflow,
   createClaimFromChargesWorkflow,
-  submitBatchWorkflow,
+  recordExternalSubmissionWorkflow,
   validateClaimWorkflow,
   type ClaimsRepository,
 } from "../src/domains/claims/workflow.ts";
@@ -124,25 +124,42 @@ test("valid claim moves from validation to ready for batch", async () => {
 test("batching only accepts claims ready for batch", async () => {
   const state = makeRepo();
   await validateClaimWorkflow(state.repo, "claim-1");
-  const result = await createBatchWorkflow(state.repo, ["claim-1"], "Demo 837P Batch");
+  const result = await createBatchWorkflow(state.repo, ["claim-1"], "Aetna 837P Batch");
   assert.equal(result.ok, true);
   assert.equal(state.claims.get("claim-1")?.claim_status, "batched");
   assert.equal([...state.batches.values()][0]?.claim_count, 1);
 });
 
-test("submission record is created before claim becomes submitted", async () => {
+test("external submission record is required before claim becomes submitted", async () => {
   const state = makeRepo();
   await validateClaimWorkflow(state.repo, "claim-1");
-  const batchResult = await createBatchWorkflow(state.repo, ["claim-1"], "Demo 837P Batch");
+  const batchResult = await createBatchWorkflow(state.repo, ["claim-1"], "Aetna 837P Batch");
   assert.equal(batchResult.ok, true);
   if (!batchResult.ok) return;
 
-  const result = await submitBatchWorkflow(state.repo, batchResult.value.batchId);
+  const result = await recordExternalSubmissionWorkflow(
+    state.repo,
+    batchResult.value.batchId,
+    "CLEARINGHOUSE-12345",
+  );
   assert.equal(result.ok, true);
   assert.equal(state.submissions.length, 1);
-  assert.equal(state.submissions[0].submission_method, "837P_demo");
+  assert.equal(state.submissions[0].submission_method, "external_837p");
+  assert.equal(state.submissions[0].response_payload.external_reference, "CLEARINGHOUSE-12345");
   assert.equal(state.claims.get("claim-1")?.claim_status, "submitted");
   assert.ok(state.callOrder.indexOf("submission:create") < state.callOrder.indexOf("claim:submitted"));
+});
+
+test("external submission requires a clearinghouse or transmission reference", async () => {
+  const state = makeRepo();
+  await validateClaimWorkflow(state.repo, "claim-1");
+  const batchResult = await createBatchWorkflow(state.repo, ["claim-1"]);
+  if (!batchResult.ok) throw new Error(batchResult.message);
+
+  const result = await recordExternalSubmissionWorkflow(state.repo, batchResult.value.batchId, "   ");
+  assert.equal(result.ok, false);
+  assert.equal(state.submissions.length, 0);
+  assert.equal(state.claims.get("claim-1")?.claim_status, "batched");
 });
 
 test("clearinghouse rejection persists response and creates follow-up work", async () => {
@@ -150,7 +167,11 @@ test("clearinghouse rejection persists response and creates follow-up work", asy
   await validateClaimWorkflow(state.repo, "claim-1");
   const batchResult = await createBatchWorkflow(state.repo, ["claim-1"]);
   if (!batchResult.ok) throw new Error(batchResult.message);
-  const submitResult = await submitBatchWorkflow(state.repo, batchResult.value.batchId);
+  const submitResult = await recordExternalSubmissionWorkflow(
+    state.repo,
+    batchResult.value.batchId,
+    "CLEARINGHOUSE-REJECTION-TEST",
+  );
   if (!submitResult.ok) throw new Error(submitResult.message);
 
   const result = await applySyntheticClearinghouseResponseWorkflow(
@@ -244,6 +265,7 @@ test("charges are marked claim-created only after claim lines and diagnoses pers
   assert.equal(result.value.claim.source_encounter_id, "encounter-1");
   assert.equal(createdLines.length, 2);
   assert.equal(createdLines[0].units, 2);
+  assert.equal(createdLines[0].place_of_service, "10");
   assert.equal(createdLines[1].units, 1);
   assert.equal(createdDiagnoses.length, 1);
   assert.equal(updatedCharges.length, 2);
