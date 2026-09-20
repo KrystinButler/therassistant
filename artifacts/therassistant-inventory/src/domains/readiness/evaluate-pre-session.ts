@@ -86,8 +86,8 @@ function payerReadinessChecks(input: PreSessionInput): ReadinessCheck[] {
       check(
         "insurance_missing",
         "Insurance",
-        "fail",
-        true,
+        "warn",
+        false,
         "No insurance policy is on file for this patient.",
         "Add or select an insurance policy.",
       ),
@@ -111,7 +111,7 @@ function payerReadinessChecks(input: PreSessionInput): ReadinessCheck[] {
         "eligibility_pending",
         "Eligibility",
         "warn",
-        true,
+        false,
         "Eligibility has not been confirmed for this service.",
         "Run eligibility before starting the encounter.",
       ),
@@ -122,9 +122,24 @@ function payerReadinessChecks(input: PreSessionInput): ReadinessCheck[] {
         `eligibility_${eligibilityStatus}`,
         "Eligibility",
         "fail",
-        true,
+        false,
         `Coverage status is ${eligibilityStatus.replaceAll("_", " ")}.`,
         "Resolve coverage before starting the encounter.",
+      ),
+    );
+  } else if (
+    input.serviceDate &&
+    input.eligibility?.service_date &&
+    input.eligibility.service_date !== input.serviceDate
+  ) {
+    checks.push(
+      check(
+        "eligibility_other_service_date",
+        "Eligibility",
+        "warn",
+        false,
+        `Coverage is active, but the latest verified eligibility applies to ${input.eligibility.service_date}, not the scheduled service date ${input.serviceDate}.`,
+        "Reverify eligibility for the scheduled date of service before claim submission.",
       ),
     );
   } else {
@@ -134,7 +149,9 @@ function payerReadinessChecks(input: PreSessionInput): ReadinessCheck[] {
         "Eligibility",
         "pass",
         false,
-        "Coverage is active for the service date.",
+        input.serviceDate
+          ? `Coverage is verified for ${input.serviceDate}.`
+          : "Coverage is active.",
       ),
     );
   }
@@ -155,7 +172,7 @@ function payerReadinessChecks(input: PreSessionInput): ReadinessCheck[] {
         "authorization_missing",
         "Authorization",
         "fail",
-        true,
+        false,
         "This service requires authorization, but no authorization is on file.",
         "Add or obtain authorization before the encounter.",
       ),
@@ -166,7 +183,7 @@ function payerReadinessChecks(input: PreSessionInput): ReadinessCheck[] {
         `authorization_${input.authorization.status ?? "unknown"}`,
         "Authorization",
         "fail",
-        true,
+        false,
         `Authorization status is ${(input.authorization.status ?? "unknown").replaceAll("_", " ")}.`,
         "Resolve the authorization status before the encounter.",
       ),
@@ -179,7 +196,7 @@ function payerReadinessChecks(input: PreSessionInput): ReadinessCheck[] {
           "authorization_exhausted",
           "Authorization",
           "fail",
-          true,
+          false,
           "The authorization has no remaining units.",
           "Obtain additional authorized units before the encounter.",
         ),
@@ -203,7 +220,7 @@ function payerReadinessChecks(input: PreSessionInput): ReadinessCheck[] {
         "provider_enrollment",
         "Provider Participation",
         "fail",
-        true,
+        false,
         `Provider enrollment is ${
           (input.providerEnrollmentStatus ?? "not confirmed").replaceAll("_", " ")
         } for this payer.`,
