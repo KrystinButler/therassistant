@@ -183,6 +183,10 @@ const repository: BillingRepository = {
     return tenantInsert<DataRow>("charge_capture_items", values);
   },
 
+  updateCharge(id, values) {
+    return tenantUpdate<DataRow>("charge_capture_items", id, values);
+  },
+
   updateServiceLine(id, values) {
     return tenantUpdate<DataRow>("encounter_service_lines", id, values);
   },
