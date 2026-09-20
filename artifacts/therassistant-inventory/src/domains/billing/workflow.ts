@@ -126,10 +126,15 @@ export async function createChargeFromEncounterWorkflow(
     }
 
     const readiness = evaluateBillingReadiness(context);
+    const selfPay = context.billingType === "self_pay";
     const blockingMessages = readiness.checks
       .filter((check) => check.blocking)
       .map((check) => check.message);
-    const chargeStatus = readiness.ready ? "ready_for_claim" : "blocked";
+    const chargeStatus = selfPay
+      ? "patient_responsibility"
+      : readiness.ready
+        ? "ready_for_claim"
+        : "blocked";
     const blockReason = readiness.ready ? null : blockingMessages.join(" ");
 
     const primaryDiagnosis =
@@ -167,7 +172,7 @@ export async function createChargeFromEncounterWorkflow(
         appointment_id: context.encounter.appointment_id ?? null,
         clinical_note_id: context.note?.id ?? null,
         provider_id: context.encounter.provider_id ?? null,
-        payer_id: context.encounter.payer_id ?? null,
+        payer_id: selfPay ? null : context.encounter.payer_id ?? null,
         service_date:
           context.note?.service_date ??
           String(context.encounter.started_at ?? "").slice(0, 10),
@@ -186,7 +191,7 @@ export async function createChargeFromEncounterWorkflow(
         ? await repo.updateCharge(String(current.id), values)
         : await repo.createCharge(values);
       charges.push(charge);
-      await repo.updateServiceLine(serviceLineId, { ready_for_claim: readiness.ready });
+      await repo.updateServiceLine(serviceLineId, { ready_for_claim: readiness.ready && !selfPay });
     }
 
     if (!charges.length) {
