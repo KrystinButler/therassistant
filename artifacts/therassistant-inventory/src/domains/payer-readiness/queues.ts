@@ -1,3 +1,5 @@
+import { isVerifiedEligibilitySource } from "../eligibility/workflow";
+
 export type QueueRow = Record<string, unknown> & { id: string };
 
 export type EligibilityQueueRow = {
@@ -91,7 +93,8 @@ export function buildEligibilityQueue(input: EligibilityQueueInput): Eligibility
           input.eligibility.filter(
             (row) =>
               row.client_id === client.id &&
-              row.insurance_policy_id === policy.id,
+              row.insurance_policy_id === policy.id &&
+              isVerifiedEligibilitySource(row.response_source),
           ),
         )
       : null;
