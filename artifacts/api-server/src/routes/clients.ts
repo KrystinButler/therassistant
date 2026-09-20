@@ -36,6 +36,7 @@ router.get("/clients", async (req, res, next) => {
         c.city,
         c.state,
         c.postal_code AS "postalCode",
+        c.metadata,
         c.metadata ->> 'sex' AS "sex",
         c.metadata ->> 'billing_type' AS "billingType",
 
