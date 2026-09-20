@@ -9,7 +9,14 @@ import {
   saveClinicalNote,
   signEncounterNote,
 } from "../clinical/repository";
+import { buildPatientReviewCheckIn } from "../scheduling/patient-review-model";
 import { treatmentPlanAlert } from "../treatment-plans/workflow";
+import {
+  appendClinicalSource,
+  buildJournalNoteInsert,
+  buildPreVisitNoteInsert,
+  latestSharedJournalEntry,
+} from "./clinical-source-context";
 import { getEncounterDetail } from "./repository";
 
 type EncounterDetail = Awaited<ReturnType<typeof getEncounterDetail>>;
@@ -168,6 +175,29 @@ export function EncounterPage() {
       )
     : null;
 
+  const currentCheckin = data.checkins.find(
+    (row) => String(row.appointment_id ?? "") === String(encounter.appointment_id ?? ""),
+  ) ?? null;
+  const preVisit = buildPatientReviewCheckIn(currentCheckin);
+  const preVisitInsert = buildPreVisitNoteInsert(preVisit);
+  const sharedJournal = latestSharedJournalEntry(data.journalEntries);
+  const journalInsert = buildJournalNoteInsert(sharedJournal);
+
+  function importPreVisit() {
+    if (signed || !preVisitInsert) return;
+    setNoteText((current) => appendClinicalSource(current, preVisitInsert));
+    if (!goalAddressed.trim() && preVisit.treatmentGoal) {
+      setGoalAddressed(preVisit.treatmentGoal);
+    }
+    setMessage("Patient-reported pre-visit information inserted into the editable note for provider review.");
+  }
+
+  function importJournal() {
+    if (signed || !journalInsert) return;
+    setNoteText((current) => appendClinicalSource(current, journalInsert));
+    setMessage("Patient-shared journal entry inserted into the editable note for provider review.");
+  }
+
   return (
     <>
       <div className="thera-breadcrumb">
@@ -222,6 +252,36 @@ export function EncounterPage() {
               ))}
             </div>
           )}
+        </section>
+
+        <section className="thera-card thera-span-2">
+          <div className="thera-card-header">
+            <div><h2>Patient-Provided Context</h2><p>Review patient-submitted information before deciding whether to incorporate it into the clinical note.</p></div>
+          </div>
+          <div className="thera-detail-grid" style={{ gridTemplateColumns: "repeat(2,minmax(0,1fr))" }}>
+            <div className="thera-stack-item">
+              <div className="thera-row-between"><strong>Pre-Visit Check-In</strong>{preVisit.hasSubmittedPreVisit ? <StatusBadge value="submitted" /> : <StatusBadge value="not_submitted" />}</div>
+              {preVisit.hasSubmittedPreVisit ? <div className="thera-stack" style={{ marginTop: 8 }}>
+                {preVisit.focus && <Field label="Focus" value={preVisit.focus} />}
+                {preVisit.mood && <Field label="Since Last Visit" value={preVisit.mood} />}
+                {preVisit.changes.length > 0 && <Field label="Important Changes" value={preVisit.changes.join("; ")} />}
+                {preVisit.safetyText && <Field label="Safety Response" value={preVisit.safetyText} />}
+                {preVisit.treatmentGoal && <Field label="Patient Goal" value={preVisit.treatmentGoal} />}
+                {preVisit.additionalContext && <Field label="Additional Context" value={preVisit.additionalContext} />}
+                {!signed && preVisitInsert && <button type="button" className="thera-action secondary" onClick={importPreVisit}>Insert Check-In into Note</button>}
+              </div> : <div className="thera-muted" style={{ marginTop: 8 }}>No submitted pre-visit check-in is available for this appointment.</div>}
+            </div>
+
+            <div className="thera-stack-item">
+              <div className="thera-row-between"><strong>Shared Journal</strong>{sharedJournal ? <StatusBadge value="shared_with_provider" /> : <StatusBadge value="none_shared" />}</div>
+              {sharedJournal ? <div className="thera-stack" style={{ marginTop: 8 }}>
+                <Field label="Entry Date" value={shortDate(String(sharedJournal.entry_date ?? sharedJournal.created_at ?? ""))} />
+                <div><div className="thera-field-label">Patient Text</div><div className="thera-field-value" style={{ whiteSpace: "pre-wrap" }}>{String(sharedJournal.entry_text ?? "")}</div></div>
+                {!signed && journalInsert && <button type="button" className="thera-action secondary" onClick={importJournal}>Insert Journal into Note</button>}
+              </div> : <div className="thera-muted" style={{ marginTop: 8 }}>No submitted journal entry has been shared with the provider.</div>}
+            </div>
+          </div>
+          <div className="thera-muted" style={{ marginTop: 10 }}>Patient-authored content remains separate unless the provider explicitly inserts and reviews it before signature.</div>
         </section>
 
         <section className="thera-card thera-span-2">
