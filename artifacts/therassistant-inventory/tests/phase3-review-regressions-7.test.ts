@@ -21,7 +21,7 @@ test("manual payment posting uses one tenant-scoped database transaction", () =>
 
   const sql = readFileSync(atomicPostingMigrationUrl, "utf8");
   assert.match(sql, /create\s+or\s+replace\s+function\s+public\.post_manual_payment/i);
-  assert.match(sql, /security\s+invoker/i);
+  assert.doesNotMatch(sql, /security\s+definer/i);
   assert.match(sql, /assert_tenant_access\(p_tenant_id\)/i);
   assert.match(sql, /insert\s+into\s+public\.payments/i);
   assert.match(sql, /insert\s+into\s+public\.payment_allocations/i);
