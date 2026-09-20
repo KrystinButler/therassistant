@@ -609,21 +609,76 @@ export function ClientsPage() {
       {formError && <div className="thera-state error" style={{ marginBottom: 16 }}>{formError}</div>}
       {!form.id && payerLookupError && <div className="thera-state error" style={{ marginBottom: 16 }}>{payerLookupError}</div>}
 
-      {form.id ? <div className="thera-form-grid">
-        <Text label="First Name" value={form.first_name} onChange={(first_name) => setForm({ ...form, first_name })} />
-        <Text label="Last Name" value={form.last_name} onChange={(last_name) => setForm({ ...form, last_name })} />
-        <Text label="Preferred Name" value={form.preferred_name} onChange={(preferred_name) => setForm({ ...form, preferred_name })} />
-        <Text label="DOB" type="date" value={form.date_of_birth} onChange={(date_of_birth) => setForm({ ...form, date_of_birth })} />
-        <SexSelect label="Sex" value={form.sex} onChange={(sex) => setForm({ ...form, sex })} />
-        <Text label="Address Line 1" value={form.address_line1} onChange={(address_line1) => setForm({ ...form, address_line1 })} />
-        <Text label="Address Line 2" value={form.address_line2} onChange={(address_line2) => setForm({ ...form, address_line2 })} />
-        <Text label="City" value={form.city} onChange={(city) => setForm({ ...form, city })} />
-        <Text label="State" value={form.state} onChange={(state) => setForm({ ...form, state: state.toUpperCase().slice(0, 2) })} />
-        <Text label="ZIP Code" value={form.postal_code} onChange={(postal_code) => setForm({ ...form, postal_code })} />
-        <Text label="Email" type="email" value={form.email} onChange={(email) => setForm({ ...form, email })} />
-        <Text label="Phone" value={form.phone} onChange={(phone) => setForm({ ...form, phone })} />
-        <label className="thera-field"><span className="thera-field-label">Patient Status</span><select className="thera-input" value={form.client_status} onChange={(e) => setForm({ ...form, client_status: e.target.value })}><option value="active">Active</option><option value="intake">Intake</option><option value="waitlist">Waitlist</option><option value="inactive">Inactive</option><option value="discharged">Discharged</option></select></label>
-        <label className="thera-field"><span className="thera-field-label">Registration</span><select className="thera-input" value={form.registration_status} onChange={(e) => setForm({ ...form, registration_status: e.target.value })}><option value="not_started">Not Started</option><option value="in_progress">In Progress</option><option value="pending_review">Pending Review</option><option value="complete">Complete</option><option value="needs_correction">Needs Correction</option></select></label>
+      {form.id ? <div className="thera-stack">
+        <section className="thera-card">
+          <div className="thera-card-header"><div><h2>Patient Demographics</h2><p>Structured address fields are required for professional claim export.</p></div></div>
+          <div className="thera-form-grid">
+            <Text label="First Name *" value={form.first_name} onChange={(first_name) => setForm({ ...form, first_name })} />
+            <Text label="Last Name *" value={form.last_name} onChange={(last_name) => setForm({ ...form, last_name })} />
+            <Text label="Preferred Name" value={form.preferred_name} onChange={(preferred_name) => setForm({ ...form, preferred_name })} />
+            <Text label="DOB *" type="date" value={form.date_of_birth} onChange={(date_of_birth) => setForm({ ...form, date_of_birth })} />
+            <SexSelect label="Sex *" value={form.sex} onChange={(sex) => setForm({ ...form, sex })} />
+            <Text label="Address Line 1 *" value={form.address_line1} onChange={(address_line1) => setForm({ ...form, address_line1 })} />
+            <Text label="Address Line 2" value={form.address_line2} onChange={(address_line2) => setForm({ ...form, address_line2 })} />
+            <Text label="City *" value={form.city} onChange={(city) => setForm({ ...form, city })} />
+            <Text label="State *" value={form.state} onChange={(state) => setForm({ ...form, state: state.toUpperCase().slice(0, 2) })} />
+            <Text label="ZIP Code *" value={form.postal_code} onChange={(postal_code) => setForm({ ...form, postal_code })} />
+            <Text label="Email" type="email" value={form.email} onChange={(email) => setForm({ ...form, email })} />
+            <Text label="Phone" value={form.phone} onChange={(phone) => setForm({ ...form, phone })} />
+            <label className="thera-field"><span className="thera-field-label">Billing Type *</span><select className="thera-input" value={form.billing_type} onChange={(event) => setForm({ ...form, billing_type: event.target.value as BillingType })}><option value="insurance">Insurance</option><option value="self_pay">Self Pay</option></select></label>
+            <label className="thera-field"><span className="thera-field-label">Patient Status</span><select className="thera-input" value={form.client_status} onChange={(e) => setForm({ ...form, client_status: e.target.value })}><option value="active">Active</option><option value="intake">Intake</option><option value="waitlist">Waitlist</option><option value="inactive">Inactive</option><option value="discharged">Discharged</option></select></label>
+            <label className="thera-field"><span className="thera-field-label">Registration</span><select className="thera-input" value={form.registration_status} onChange={(e) => setForm({ ...form, registration_status: e.target.value })}><option value="not_started">Not Started</option><option value="in_progress">In Progress</option><option value="pending_review">Pending Review</option><option value="complete">Complete</option><option value="needs_correction">Needs Correction</option></select></label>
+          </div>
+        </section>
+
+        {form.billing_type === "insurance" && <section className="thera-card">
+          <div className="thera-card-header"><div><h2>Insurance & Subscriber Correction</h2><p>Correct member and subscriber data used by the professional claim export.</p></div></div>
+          <div className="thera-stack">
+            <div><h3>Primary Insurance</h3><div className="thera-form-grid">
+              <PayerSelect label="Primary Insurance Company *" value={form.primary.payer_id} payers={payers} onChange={(payer_id) => updateCoverage("primary", { payer_id, plan_name: "" })} />
+              <PlanText label="Primary Insurance Plan" value={form.primary.plan_name} listId="edit-primary-plan-options" plans={primaryPlanNames} onChange={(plan_name) => updateCoverage("primary", { plan_name })} />
+              <Text label="Primary Insurance Product" value={form.primary.product} onChange={(product) => updateCoverage("primary", { product })} />
+              <Text label="Primary Insurance ID *" value={form.primary.member_id} onChange={(member_id) => updateCoverage("primary", { member_id })} />
+              <Text label="Primary Insurance Group #" value={form.primary.group_number} onChange={(group_number) => updateCoverage("primary", { group_number })} />
+              <RelationshipSelect label="Primary Patient Relation to Subscriber *" value={form.primary.relationship_to_subscriber} required onChange={(relationship_to_subscriber) => updateCoverage("primary", { relationship_to_subscriber })} />
+              {form.primary.relationship_to_subscriber !== "self" && <>
+                <Text label="Primary Subscriber First Name *" value={form.primary.subscriber_first_name} onChange={(subscriber_first_name) => updateCoverage("primary", { subscriber_first_name })} />
+                <Text label="Primary Subscriber Last Name *" value={form.primary.subscriber_last_name} onChange={(subscriber_last_name) => updateCoverage("primary", { subscriber_last_name })} />
+                <Text label="Primary Subscriber DOB *" type="date" value={form.primary.subscriber_dob} onChange={(subscriber_dob) => updateCoverage("primary", { subscriber_dob })} />
+                <SexSelect label="Primary Subscriber Sex *" value={form.primary.subscriber_sex} onChange={(subscriber_sex) => updateCoverage("primary", { subscriber_sex })} />
+                <Text label="Primary Subscriber Address Line 1 *" value={form.primary.subscriber_address_line1} onChange={(subscriber_address_line1) => updateCoverage("primary", { subscriber_address_line1 })} />
+                <Text label="Primary Subscriber Address Line 2" value={form.primary.subscriber_address_line2} onChange={(subscriber_address_line2) => updateCoverage("primary", { subscriber_address_line2 })} />
+                <Text label="Primary Subscriber City *" value={form.primary.subscriber_city} onChange={(subscriber_city) => updateCoverage("primary", { subscriber_city })} />
+                <Text label="Primary Subscriber State *" value={form.primary.subscriber_state} onChange={(subscriber_state) => updateCoverage("primary", { subscriber_state: subscriber_state.toUpperCase().slice(0, 2) })} />
+                <Text label="Primary Subscriber ZIP Code *" value={form.primary.subscriber_postal_code} onChange={(subscriber_postal_code) => updateCoverage("primary", { subscriber_postal_code })} />
+                <Text label="Primary Subscriber Phone" type="tel" value={form.primary.subscriber_phone} onChange={(subscriber_phone) => updateCoverage("primary", { subscriber_phone })} />
+              </>}
+            </div></div>
+
+            <div><h3>Secondary Insurance</h3><div className="thera-form-grid">
+              <PayerSelect label="Secondary Insurance Company" value={form.secondary.payer_id} payers={payers} onChange={(payer_id) => updateCoverage("secondary", { payer_id, plan_name: "" })} />
+              <PlanText label="Secondary Insurance Plan" value={form.secondary.plan_name} listId="edit-secondary-plan-options" plans={secondaryPlanNames} onChange={(plan_name) => updateCoverage("secondary", { plan_name })} />
+              <Text label="Secondary Insurance Product" value={form.secondary.product} onChange={(product) => updateCoverage("secondary", { product })} />
+              <Text label="Secondary Insurance ID" value={form.secondary.member_id} onChange={(member_id) => updateCoverage("secondary", { member_id })} />
+              <Text label="Secondary Insurance Group #" value={form.secondary.group_number} onChange={(group_number) => updateCoverage("secondary", { group_number })} />
+              <RelationshipSelect label="Secondary Patient Relation to Subscriber" value={form.secondary.relationship_to_subscriber} onChange={(relationship_to_subscriber) => updateCoverage("secondary", { relationship_to_subscriber })} />
+              {form.secondary.relationship_to_subscriber && form.secondary.relationship_to_subscriber !== "self" && <>
+                <Text label="Secondary Subscriber First Name *" value={form.secondary.subscriber_first_name} onChange={(subscriber_first_name) => updateCoverage("secondary", { subscriber_first_name })} />
+                <Text label="Secondary Subscriber Last Name *" value={form.secondary.subscriber_last_name} onChange={(subscriber_last_name) => updateCoverage("secondary", { subscriber_last_name })} />
+                <Text label="Secondary Subscriber DOB *" type="date" value={form.secondary.subscriber_dob} onChange={(subscriber_dob) => updateCoverage("secondary", { subscriber_dob })} />
+                <SexSelect label="Secondary Subscriber Sex *" value={form.secondary.subscriber_sex} onChange={(subscriber_sex) => updateCoverage("secondary", { subscriber_sex })} />
+                <Text label="Secondary Subscriber Address Line 1 *" value={form.secondary.subscriber_address_line1} onChange={(subscriber_address_line1) => updateCoverage("secondary", { subscriber_address_line1 })} />
+                <Text label="Secondary Subscriber Address Line 2" value={form.secondary.subscriber_address_line2} onChange={(subscriber_address_line2) => updateCoverage("secondary", { subscriber_address_line2 })} />
+                <Text label="Secondary Subscriber City *" value={form.secondary.subscriber_city} onChange={(subscriber_city) => updateCoverage("secondary", { subscriber_city })} />
+                <Text label="Secondary Subscriber State *" value={form.secondary.subscriber_state} onChange={(subscriber_state) => updateCoverage("secondary", { subscriber_state: subscriber_state.toUpperCase().slice(0, 2) })} />
+                <Text label="Secondary Subscriber ZIP Code *" value={form.secondary.subscriber_postal_code} onChange={(subscriber_postal_code) => updateCoverage("secondary", { subscriber_postal_code })} />
+                <Text label="Secondary Subscriber Phone" type="tel" value={form.secondary.subscriber_phone} onChange={(subscriber_phone) => updateCoverage("secondary", { subscriber_phone })} />
+              </>}
+            </div></div>
+          </div>
+        </section>}
+
+        {form.billing_type === "self_pay" && <div className="thera-alert">This patient is configured for self-pay; existing insurance policies remain on file but are not used for new payer claim creation.</div>}
       </div> : <div className="thera-stack">
         <section className="thera-card">
           <div className="thera-card-header"><div><h2>Patient Information</h2><p>Required fields are marked *.</p></div></div>
