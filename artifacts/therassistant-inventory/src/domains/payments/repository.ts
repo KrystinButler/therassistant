@@ -47,6 +47,38 @@ function total(rows: DataRow[], field: string) {
 }
 
 const repository: EraImportRepository = {
+  async postEraPaymentReceipt(input) {
+    const tenantId = await getCurrentTenantId();
+    return tenantRpc<DataRow>("post_era_payment_receipt", {
+      p_tenant_id: tenantId,
+      p_payer_id: input.payerId,
+      p_amount_cents: input.amountCents,
+      p_method: input.method,
+      p_payment_date: input.paymentDate,
+      p_trace_number: input.traceNumber,
+      p_notes: input.notes,
+    });
+  },
+  async allocatePayment(paymentId, claimId, amountCents) {
+    const tenantId = await getCurrentTenantId();
+    return tenantRpc<Record<string, unknown>>("allocate_payment", {
+      p_tenant_id: tenantId,
+      p_payment_id: paymentId,
+      p_claim_id: claimId,
+      p_amount_cents: amountCents,
+    });
+  },
+  async postContractualAdjustment(input) {
+    const tenantId = await getCurrentTenantId();
+    return tenantRpc<DataRow>("post_contractual_adjustment", {
+      p_tenant_id: tenantId,
+      p_claim_id: input.claimId,
+      p_amount_cents: input.amountCents,
+      p_adjustment_date: input.adjustmentDate,
+      p_reason: input.reason,
+      p_carc_code: input.carcCode ?? null,
+    });
+  },
   async getClaim(claimId) {
     return first(await tenantSelect<DataRow>("professional_claims", { id: `eq.${claimId}`, limit: "1" }));
   },
