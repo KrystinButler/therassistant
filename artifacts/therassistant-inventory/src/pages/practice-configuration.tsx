@@ -9,10 +9,17 @@ import {
 import {
   read837PConfig,
 } from "../domains/billing/claim-output-repository";
-import type { Edi837PConfig } from "../domains/billing/claim-output";
+import {
+  CLAIM_FILING_INDICATORS,
+  type Edi837PConfig,
+} from "../domains/billing/claim-output";
 
 type DataRow = Row & { id: string };
-type PayerRow = DataRow & { name?: string; clearinghouse_payer_id?: string | null };
+type PayerRow = DataRow & {
+  name?: string;
+  payer_type?: string | null;
+  clearinghouse_payer_id?: string | null;
+};
 
 export function PracticeConfigurationPage() {
   const [tenantId, setTenantId] = useState("");
@@ -75,6 +82,17 @@ export function PracticeConfigurationPage() {
     });
   }
 
+  function updateClaimFilingIndicator(payerId: string, value: string) {
+    if (!form) return;
+    setForm({
+      ...form,
+      claimFilingIndicators: {
+        ...form.claimFilingIndicators,
+        [payerId]: value,
+      },
+    });
+  }
+
   async function save() {
     if (!form || !tenantId) return;
     setSaving(true);
@@ -91,6 +109,11 @@ export function PracticeConfigurationPage() {
         payerIds: Object.fromEntries(
           Object.entries(form.payerIds)
             .map(([key, value]) => [key, value.trim()])
+            .filter(([, value]) => Boolean(value)),
+        ),
+        claimFilingIndicators: Object.fromEntries(
+          Object.entries(form.claimFilingIndicators)
+            .map(([key, value]) => [key, value.trim().toUpperCase()])
             .filter(([, value]) => Boolean(value)),
         ),
       };
@@ -176,17 +199,18 @@ export function PracticeConfigurationPage() {
         <section className="thera-card">
           <div className="thera-card-header">
             <div>
-              <h2>Payer EDI IDs</h2>
-              <p>Override or add the payer ID required by your clearinghouse. Existing reference IDs are prefilled when available.</p>
+              <h2>Payer Claim Configuration</h2>
+              <p>Set both the clearinghouse payer ID and the HIPAA claim filing indicator used in SBR09. Filing indicators are not inferred from payer names.</p>
             </div>
           </div>
           <div className="thera-table-wrap">
             <table className="thera-table">
-              <thead><tr><th>Payer</th><th>837P Payer ID</th></tr></thead>
+              <thead><tr><th>Payer</th><th>Type</th><th>837P Payer ID</th><th>Claim Filing Indicator</th></tr></thead>
               <tbody>
                 {payers.map((payer) => (
                   <tr key={payer.id}>
                     <td>{String(payer.name ?? payer.id)}</td>
+                    <td>{String(payer.payer_type ?? "—").replaceAll("_", " ")}</td>
                     <td>
                       <input
                         className="thera-input"
@@ -194,6 +218,19 @@ export function PracticeConfigurationPage() {
                         onChange={(event) => updatePayerId(payer.id, event.target.value)}
                         aria-label={`${String(payer.name ?? "Payer")} EDI payer ID`}
                       />
+                    </td>
+                    <td>
+                      <select
+                        className="thera-input"
+                        value={form.claimFilingIndicators[payer.id] ?? ""}
+                        onChange={(event) => updateClaimFilingIndicator(payer.id, event.target.value)}
+                        aria-label={`${String(payer.name ?? "Payer")} claim filing indicator`}
+                      >
+                        <option value="">Select</option>
+                        {CLAIM_FILING_INDICATORS.map(([code, label]) => (
+                          <option key={code} value={code}>{code} — {label}</option>
+                        ))}
+                      </select>
                     </td>
                   </tr>
                 ))}
