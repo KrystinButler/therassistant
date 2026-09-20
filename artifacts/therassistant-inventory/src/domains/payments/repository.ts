@@ -1,4 +1,5 @@
 import {
+  getCurrentTenantId,
   tenantInsert,
   tenantRpc,
   tenantSelect,
@@ -30,14 +31,14 @@ type DenialRow = DataRow & { patientName: string; payerName: string; claimContro
 type ReversalRow = DataRow & { traceNumber: string; patientName: string; amountCents: number };
 type AdjustmentRow = DataRow & { patientName: string; payerName: string; claimControlNumber: string };
 
-type DemoPaymentReversalResult = {
+type PaymentReversalResult = {
   payment_id: string;
   payment_status: "reversed";
   reversed_at: string;
   allocation_count: number;
 };
 
-type DemoManualPaymentResult = DataRow;
+type ManualPaymentResult = DataRow;
 
 function first<T>(rows: T[]) { return rows[0] ?? null; }
 
