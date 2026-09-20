@@ -51,6 +51,7 @@ export type EraImportRepository = PaymentRepository & {
   findClaimsByPatientControlNumber(patientControlNumber: string): Promise<PaymentRow[]>;
   getClaimLines(claimId: string): Promise<PaymentRow[]>;
   getEraFileByTrace(traceNumber: string): Promise<PaymentRow | null>;
+  getExpectedEraPayerIdentifier(payerId: string): Promise<string | null>;
   createEraServiceLine(values: Record<string, unknown>): Promise<PaymentRow>;
   updateEraClaim(eraClaimId: string, values: Record<string, unknown>): Promise<PaymentRow>;
 };
@@ -227,6 +228,8 @@ export async function import835Workflow(
         source: "835_import",
         transaction_control_number: parsed.transactionControlNumber,
         payer_name: parsed.payerName,
+        payer_identifier_qualifier: parsed.payerIdentifierQualifier,
+        payer_identifier: parsed.payerIdentifier,
         payee_name: parsed.payeeName,
         payment_method_code: parsed.paymentMethodCode,
         payment_date: parsed.paymentDate,
@@ -252,6 +255,9 @@ export async function import835Workflow(
 
   const prepared: Prepared[] = [];
   const matchedPayerIds = new Set<string>();
+  const verifiedPayerIds = new Set<string>();
+  const expectedEraIds = new Map<string, string | null>();
+  let payerIdentityBlocked = false;
   let matchedCount = 0;
   let exceptionCount = 0;
   let postedCount = 0;
@@ -273,6 +279,65 @@ export async function import835Workflow(
       priority: "high",
       workqueue_status: "open",
     });
+  }
+
+  async function verifyEraPayerIdentity(claim: PaymentRow, controlNumber: string) {
+    const payerId = String(claim.payer_id ?? "");
+    if (!payerId) {
+      payerIdentityBlocked = true;
+      await routeEraIssue(
+        "835 matched claim has no payer",
+        `${controlNumber}: the matched internal claim has no payer, so the remittance source cannot be verified.`,
+        "claim",
+        claim.id,
+      );
+      return false;
+    }
+
+    let expected = expectedEraIds.get(payerId);
+    if (expected === undefined) {
+      expected = await repo.getExpectedEraPayerIdentifier(payerId);
+      expectedEraIds.set(payerId, expected);
+    }
+
+    const inbound = parsed.payerIdentifier.trim().toUpperCase();
+    const configured = String(expected ?? "").trim().toUpperCase();
+
+    if (!configured) {
+      payerIdentityBlocked = true;
+      await routeEraIssue(
+        "ERA payer identifier is not configured",
+        `${controlNumber}: configure the inbound ERA payer ID for this payer before auto-posting remittances.`,
+        "claim",
+        claim.id,
+      );
+      return false;
+    }
+
+    if (!inbound) {
+      payerIdentityBlocked = true;
+      await routeEraIssue(
+        "835 payer identifier is missing",
+        `${controlNumber}: the 835 N1*PR segment does not contain N104, so THERASSISTANT cannot verify the remittance payer.`,
+        "claim",
+        claim.id,
+      );
+      return false;
+    }
+
+    if (inbound !== configured) {
+      payerIdentityBlocked = true;
+      await routeEraIssue(
+        "835 payer identifier does not match",
+        `${controlNumber}: inbound ERA payer ID ${parsed.payerIdentifier} does not match the configured payer ID. Financial posting was blocked.`,
+        "claim",
+        claim.id,
+      );
+      return false;
+    }
+
+    verifiedPayerIds.add(payerId);
+    return true;
   }
 
   if (parsed.providerLevelAdjustments.length) {
@@ -335,6 +400,10 @@ export async function import835Workflow(
 
     matchedCount += 1;
     if (claim.payer_id) matchedPayerIds.add(String(claim.payer_id));
+
+    if (!(await verifyEraPayerIdentity(claim, parsedClaim.patientControlNumber))) {
+      continue;
+    }
 
     const claimLines = await repo.getClaimLines(claim.id);
     for (const service of parsedClaim.serviceLines) {
@@ -481,7 +550,14 @@ export async function import835Workflow(
 
   let paymentId: string | null = null;
   if (parsed.paymentAmountCents > 0) {
-    if (matchedPayerIds.size !== 1) {
+    if (payerIdentityBlocked) {
+      await routeEraIssue(
+        "835 payer identity verification failed",
+        "The ERA payment was not posted because one or more matched claims failed inbound payer identity verification.",
+        "era",
+        eraFile.id,
+      );
+    } else if (verifiedPayerIds.size !== 1 || matchedPayerIds.size !== 1) {
       await routeEraIssue(
         "835 payment payer cannot be determined",
         "The ERA payment cannot be posted to the ledger until all matched claims resolve to one internal payer.",
@@ -490,7 +566,7 @@ export async function import835Workflow(
       );
     } else {
       const payment = await repo.postEraPaymentReceipt({
-        payerId: [...matchedPayerIds][0],
+        payerId: [...verifiedPayerIds][0],
         amountCents: parsed.paymentAmountCents,
         method: paymentMethodFrom835(parsed.paymentMethodCode),
         paymentDate: parsed.paymentDate,
