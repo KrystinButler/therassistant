@@ -197,7 +197,7 @@ export async function import835Workflow(
   exceptionCount: number;
   paymentId: string | null;
 }>> {
-  let parsed;
+  let parsed: ReturnType<typeof parse835>;
   try {
     parsed = parse835(input.rawText);
   } catch (error) {
