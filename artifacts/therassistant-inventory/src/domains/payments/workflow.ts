@@ -112,7 +112,7 @@ export async function postInsurancePaymentWorkflow(
       payment_date: new Date().toISOString().slice(0, 10),
       amount_cents: input.amountCents,
       trace_number: input.traceNumber || null,
-      notes: "Synthetic Therassistant demo payment",
+      notes: "Insurance payment",
     });
 
     for (const allocation of input.allocations) {
@@ -590,125 +590,6 @@ export async function import835Workflow(
     exceptionCount,
     paymentId,
   });
-}
-
-export async function postDemoEraWorkflow(
-  repo: PaymentRepository,
-  input: {
-    claimId: string;
-    paidAmountCents: number;
-    adjustmentAmountCents: number;
-    patientResponsibilityCents?: number;
-    traceNumber?: string;
-    carcCode?: string;
-  },
-): Promise<WorkflowResult<{ eraFileId: string; paymentId: string | null; claimStatus: string }>> {
-  const claim = await repo.getClaim(input.claimId);
-  if (!claim) return failure("claim_not_found", "Claim not found.");
-
-  const totalChargeCents = Number(claim.total_charge_cents ?? 0);
-  const patientResponsibilityCents = Number(input.patientResponsibilityCents ?? 0);
-  if (input.paidAmountCents < 0 || input.adjustmentAmountCents < 0 || patientResponsibilityCents < 0) {
-    return blocked("negative_adjudication", "ERA payment, adjustment, and patient responsibility amounts cannot be negative.");
-  }
-  if (input.paidAmountCents + input.adjustmentAmountCents + patientResponsibilityCents > totalChargeCents) {
-    return blocked("era_overage", "ERA payment, adjustment, and patient responsibility exceed the claim charge.");
-  }
-
-  try {
-    const eraFile = await repo.createEraFile({
-      payer_id: claim.payer_id || null,
-      file_name: `demo-era-${String(claim.patient_control_number || claim.id)}.835`,
-      check_or_trace_number: input.traceNumber || `ERA-${Date.now()}`,
-      payment_amount_cents: input.paidAmountCents,
-      status: "uploaded",
-      raw_metadata: { demo: true, claimId: claim.id, patientResponsibilityCents },
-    });
-
-    const eraClaim = await repo.createEraClaim({
-      era_file_id: eraFile.id,
-      patient_control_number: claim.patient_control_number || null,
-      client_id: claim.client_id || null,
-      claim_id: claim.id,
-      charge_amount_cents: totalChargeCents,
-      paid_amount_cents: input.paidAmountCents,
-      status: "matched",
-      raw_data: { demo: true, patientResponsibilityCents },
-    });
-
-    await repo.createEraMatch({
-      era_claim_id: eraClaim.id,
-      claim_id: claim.id,
-      match_status: "matched",
-      confidence: 1,
-    });
-
-    let paymentId: string | null = null;
-    if (input.paidAmountCents > 0) {
-      const paymentResult = await postInsurancePaymentWorkflow(repo, {
-        claimId: claim.id,
-        amountCents: input.paidAmountCents,
-        allocations: [{ claimId: claim.id, amountCents: input.paidAmountCents }],
-        unappliedCents: 0,
-        traceNumber: input.traceNumber,
-        paymentMethod: "eft",
-      });
-      if (!paymentResult.ok) return paymentResult;
-      paymentId = paymentResult.value.payment.id;
-    }
-
-    if (input.adjustmentAmountCents > 0) {
-      const adjustment = await repo.createAdjustment({
-        client_id: claim.client_id || null,
-        claim_id: claim.id,
-        payer_id: claim.payer_id || null,
-        adjustment_type: "contractual",
-        adjustment_status: "posted",
-        adjustment_date: new Date().toISOString().slice(0, 10),
-        amount_cents: input.adjustmentAmountCents,
-        reason: "Contractual adjustment from synthetic ERA",
-        carc_code: input.carcCode || "45",
-        posted_at: new Date().toISOString(),
-      });
-
-      await repo.createAdjustmentAllocation({
-        adjustment_id: adjustment.id,
-        client_id: claim.client_id || null,
-        claim_id: claim.id,
-        amount_cents: input.adjustmentAmountCents,
-      });
-    }
-
-    const openBalance = totalChargeCents - input.paidAmountCents - input.adjustmentAmountCents;
-    const responsibility = partitionAdjudicatedBalance(openBalance, patientResponsibilityCents);
-    const insuranceRemainder = responsibility.insuranceResponsibilityCents;
-    const claimStatus = openBalance === 0
-      ? "paid"
-      : patientResponsibilityCents > 0 && insuranceRemainder === 0
-        ? "patient_responsibility"
-        : "partially_paid";
-    const currentMetadata = claim.metadata && typeof claim.metadata === "object" && !Array.isArray(claim.metadata)
-      ? claim.metadata
-      : {};
-    await repo.updateClaim(claim.id, {
-      claim_status: claimStatus,
-      metadata: {
-        ...currentMetadata,
-        patient_responsibility_cents: responsibility.patientResponsibilityCents,
-        insurance_responsibility_cents: responsibility.insuranceResponsibilityCents,
-      },
-      ...(claimStatus === "paid" ? { paid_at: new Date().toISOString() } : { paid_at: null }),
-    });
-
-    await repo.updateEraFile(eraFile.id, { status: "posted" });
-
-    return success({ eraFileId: eraFile.id, paymentId, claimStatus });
-  } catch (error) {
-    return failure(
-      "era_post_failed",
-      error instanceof Error ? error.message : "Unable to post synthetic ERA.",
-    );
-  }
 }
 
 export async function createDenialFromAdjudicationWorkflow(
