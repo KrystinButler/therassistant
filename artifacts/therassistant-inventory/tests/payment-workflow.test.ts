@@ -300,8 +300,9 @@ test("unmatched 835 claim is retained for review and payment remains unapplied",
   assert.ok(result.value.exceptionCount > 0);
   assert.equal(state.eraClaims[0].status, "unmatched");
   assert.equal(state.eraMatches[0].match_status, "unmatched");
-  assert.equal(state.payments[0].payment_status, "unapplied");
+  assert.equal(state.payments.length, 0);
   assert.ok(state.workItems.some((row) => row.workqueue_type === "unmatched_era"));
+  assert.ok(state.workItems.some((row) => String(row.title).includes("payer cannot be determined")));
 });
 
 test("unsupported 835 adjustment group does not auto-write off claim", async () => {
