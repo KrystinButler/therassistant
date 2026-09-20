@@ -6,7 +6,7 @@ import { createPatientWithOptionalPortal } from "../domains/patients/create-pati
 import { validatePatientIntakeEmergencyContact } from "../domains/patients/workflow";
 import { invitePatientPortal } from "../domains/portal/staff-portal-access";
 import { dateTime, money, shortDate } from "../lib/format";
-import { getCurrentTenantId, referenceSelect, tenantRpc, tenantUpdate, type Row } from "../lib/tenant-data-client";
+import { getCurrentTenantId, referenceSelect, tenantInsert, tenantRpc, tenantSelect, tenantUpdate, type Row } from "../lib/tenant-data-client";
 import { useApi } from "../lib/therassistant-api";
 
 type ClientRow = {
@@ -42,6 +42,8 @@ type CoverageKey = "primary" | "secondary";
 type BillingType = "insurance" | "self_pay";
 
 type InsuranceForm = {
+  id?: string;
+  status?: string;
   payer_id: string;
   plan_name: string;
   product: string;
@@ -111,6 +113,37 @@ function blankInsurance(primary = false): InsuranceForm {
     subscriber_postal_code: "",
     subscriber_phone: "",
     relationship_to_subscriber: primary ? "self" : "",
+  };
+}
+
+function objectRow(value: unknown): Row {
+  return value && typeof value === "object" && !Array.isArray(value) ? value as Row : {};
+}
+
+function coverageFromRow(row: Row | undefined, plans: PayerPlanRow[], primary: boolean): InsuranceForm {
+  if (!row) return blankInsurance(primary);
+  const meta = objectRow(row.metadata);
+  const subscriber = objectRow(meta.subscriber);
+  const plan = plans.find((item) => item.id === row.payer_plan_id);
+  return {
+    id: String(row.id ?? "") || undefined,
+    status: String(row.status ?? "pending_verification"),
+    payer_id: String(row.payer_id ?? ""),
+    plan_name: String(meta.plan_name ?? plan?.name ?? ""),
+    product: String(meta.product ?? ""),
+    member_id: String(row.member_id ?? ""),
+    group_number: String(row.group_number ?? ""),
+    subscriber_first_name: String(subscriber.first_name ?? ""),
+    subscriber_last_name: String(subscriber.last_name ?? ""),
+    subscriber_dob: String(subscriber.dob ?? row.subscriber_dob ?? "").slice(0, 10),
+    subscriber_sex: ["M", "F"].includes(String(subscriber.sex ?? "")) ? String(subscriber.sex) as Sex : "",
+    subscriber_address_line1: String(subscriber.address_line1 ?? ""),
+    subscriber_address_line2: String(subscriber.address_line2 ?? ""),
+    subscriber_city: String(subscriber.city ?? ""),
+    subscriber_state: String(subscriber.state ?? ""),
+    subscriber_postal_code: String(subscriber.postal_code ?? ""),
+    subscriber_phone: String(subscriber.phone ?? ""),
+    relationship_to_subscriber: String(row.relationship_to_subscriber ?? (primary ? "self" : "")),
   };
 }
 
