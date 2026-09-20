@@ -143,6 +143,31 @@ const repository: BillingRepository = {
     return tenantInsert<DataRow>("workqueue_items", values);
   },
 
+  async resolveStaleWorkItems(encounterId, activeTypes) {
+    const billingTypes = new Set([
+      "eligibility_issue",
+      "authorization_issue",
+      "credentialing_issue",
+      "missing_documentation",
+      "charge_validation",
+    ]);
+    const active = new Set(activeTypes);
+    const existing = await tenantSelect<DataRow>("workqueue_items", {
+      source_object_type: "eq.encounter",
+      source_object_id: `eq.${encounterId}`,
+      workqueue_status: "in.(open,in_progress,pending,snoozed,reopened)",
+    });
+
+    for (const item of existing) {
+      const type = String(item.workqueue_type ?? "");
+      if (!billingTypes.has(type) || active.has(type)) continue;
+      await tenantUpdate<DataRow>("workqueue_items", item.id, {
+        workqueue_status: "completed",
+        completed_at: new Date().toISOString(),
+      });
+    }
+  },
+
   updateEncounter(id, values) {
     return tenantUpdate<DataRow>("encounters", id, values);
   },
