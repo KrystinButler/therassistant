@@ -26,7 +26,7 @@ function makeRepo() {
     }],
   ]);
   const lines = new Map<string, Row[]>([
-    ["claim-1", [{ id: "line-1", claim_id: "claim-1", service_date: "2026-09-13", cpt_code: "90837", units: 1, charge_amount_cents: 12500, diagnosis_pointer: "1" }]],
+    ["claim-1", [{ id: "line-1", claim_id: "claim-1", service_date: "2026-09-13", cpt_code: "90837", units: 1, charge_amount_cents: 12500, diagnosis_pointer: "1", place_of_service: "10" }]],
   ]);
   const diagnoses = new Map<string, Row[]>([
     ["claim-1", [{ id: "dx-1", claim_id: "claim-1", diagnosis_code: "F41.1", pointer_order: 1 }]],
