@@ -5,7 +5,6 @@ const redirects = [
   ["/claims/submission", "/billing/charges"],
   ["/claims/follow-up", "/claims"],
   ["/ar-denials", "/denials"],
-  ["/work-center", "/claims"],
 ] as const;
 
 for (const [legacy, target] of redirects) {
@@ -14,6 +13,11 @@ for (const [legacy, target] of redirects) {
     await expect.poll(() => new URL(page.url()).pathname).toBe(target);
   });
 }
+
+test("Work Center remains an operational exception workspace", async ({ page }) => {
+  await page.goto("/work-center");
+  await expect(page.getByRole("heading", { level: 1, name: "Work Center" })).toBeVisible();
+});
 
 test("Revenue Cycle navigation has the five canonical links", async ({ page }) => {
   await page.goto("/claims");
