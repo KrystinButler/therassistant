@@ -532,6 +532,15 @@ export function CredentialingPage() {
   const selectedRequirements = selectedCase?.application_id
     ? requirements.filter((row) => row.application_id === selectedCase.application_id)
     : [];
+  const selectedTemplate = selectedTemplateId
+    ? requirementTemplates.find((row) => row.id === selectedTemplateId) ?? null
+    : null;
+  const selectedTemplateItems = selectedTemplateId
+    ? requirementTemplateItems.filter((row) => row.template_id === selectedTemplateId)
+    : [];
+  const templatePayerPlans = templateForm.payer_id
+    ? payerPlans.filter((row) => row.payer_id === templateForm.payer_id)
+    : [];
   const selectedFollowups = selectedCase?.application_id
     ? followups
         .filter((row) => row.application_id === selectedCase.application_id)
@@ -733,6 +742,107 @@ export function CredentialingPage() {
     }
   }
 
+  async function createRequirementTemplate() {
+    if (!templateForm.name.trim() || !templateForm.payer_id) {
+      setError("Template name and payer are required.");
+      return;
+    }
+    setSavingTemplate(true);
+    setError(null);
+    setTemplateMessage(null);
+    try {
+      const template = await tenantInsert<Row>("credentialing_requirement_templates", {
+        name: templateForm.name.trim(),
+        payer_id: templateForm.payer_id,
+        payer_plan_id: templateForm.payer_plan_id || null,
+        application_type: templateForm.application_type.trim() || null,
+        provider_type: templateForm.provider_type.trim() || null,
+        state: templateForm.state.trim().toUpperCase() || null,
+        notes: templateForm.notes.trim() || null,
+        is_active: true,
+      });
+      setSelectedTemplateId(template.id);
+      setTemplateForm(emptyRequirementTemplateForm());
+      setTemplateMessage("Requirement template created.");
+      setVersion((value) => value + 1);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to create requirement template.");
+    } finally {
+      setSavingTemplate(false);
+    }
+  }
+
+  async function addRequirementTemplateItem() {
+    if (!selectedTemplateId || !templateItemForm.requirement_name.trim()) return;
+    setSavingTemplateItem(true);
+    setError(null);
+    setTemplateMessage(null);
+    try {
+      const requirementKey =
+        templateItemForm.requirement_key.trim() ||
+        templateItemForm.requirement_name
+          .trim()
+          .toLowerCase()
+          .replace(/[^a-z0-9]+/g, "_")
+          .replace(/^_+|_+$/g, "");
+      await tenantInsert("credentialing_requirement_template_items", {
+        template_id: selectedTemplateId,
+        requirement_key: requirementKey,
+        requirement_name: templateItemForm.requirement_name.trim(),
+        category: templateItemForm.category.trim() || null,
+        due_offset_days: templateItemForm.due_offset_days
+          ? Number(templateItemForm.due_offset_days)
+          : null,
+        notes: templateItemForm.notes.trim() || null,
+        sort_order: selectedTemplateItems.length,
+      });
+      setTemplateItemForm(emptyRequirementTemplateItemForm());
+      setTemplateMessage("Requirement added to template.");
+      setVersion((value) => value + 1);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to add template requirement.");
+    } finally {
+      setSavingTemplateItem(false);
+    }
+  }
+
+  async function toggleRequirementTemplate(template: Row) {
+    setError(null);
+    setTemplateMessage(null);
+    try {
+      await tenantUpdate("credentialing_requirement_templates", template.id, {
+        is_active: !Boolean(template.is_active),
+      });
+      setTemplateMessage(Boolean(template.is_active) ? "Template deactivated." : "Template activated.");
+      setVersion((value) => value + 1);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to update requirement template.");
+    }
+  }
+
+  async function applyMatchingRequirementTemplates() {
+    if (!selectedCase?.application_id) return;
+    setApplyingTemplates(true);
+    setError(null);
+    setTemplateMessage(null);
+    try {
+      const tenantId = await getCurrentTenantId();
+      const inserted = await tenantRpc<number>("apply_matching_credentialing_requirement_templates", {
+        p_tenant_id: tenantId,
+        p_application_id: selectedCase.application_id,
+      });
+      setTemplateMessage(
+        inserted > 0
+          ? String(inserted) + " missing requirement" + (inserted === 1 ? "" : "s") + " added from matching templates."
+          : "No new matching template requirements were needed.",
+      );
+      setVersion((value) => value + 1);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to apply matching requirement templates.");
+    } finally {
+      setApplyingTemplates(false);
+    }
+  }
   async function addRequirement() {
     if (!selectedCase?.application_id || !requirementForm.requirement_name.trim()) return;
     setAddingRequirement(true);
