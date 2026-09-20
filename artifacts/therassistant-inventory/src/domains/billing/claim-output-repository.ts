@@ -52,6 +52,7 @@ export function read837PConfig(settings: unknown): Edi837PConfig {
     postalCode: String(config.postalCode ?? ""),
     usageIndicator: config.usageIndicator === "P" ? "P" : "T",
     payerIds: stringMap(config.payerIds),
+    claimFilingIndicators: stringMap(config.claimFilingIndicators),
   };
 }
 
