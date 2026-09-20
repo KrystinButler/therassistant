@@ -1,5 +1,3 @@
-export { syntheticEligibilityStatus } from "../eligibility/workflow";
-
 export type AppointmentDraft = {
   clientId: string;
   providerId?: string | null;
