@@ -103,9 +103,15 @@ const RELATIONSHIPS = [
   ["grandparent", "Grandparent"],
   ["life_partner", "Life Partner"],
   ["significant_other", "Significant Other"],
+  ["mother", "Mother"],
+  ["father", "Father"],
+  ["other_adult", "Other Adult"],
+  ["emancipated_minor", "Emancipated Minor"],
+  ["child_no_financial_responsibility", "Child — insured has no financial responsibility"],
+  ["other_relationship", "Other Relationship"],
   ["unknown", "Unknown"],
-  ["parent", "Parent — choose a more specific payer-supported code before 837P export"],
-  ["other", "Other — choose a payer-supported HIPAA relationship before 837P export"],
+  ["parent", "Legacy Parent — change to Mother or Father before 837P export"],
+  ["other", "Legacy Other — change to Other Relationship before 837P export"],
 ] as const;
 
 function blankInsurance(primary = false): InsuranceForm {
