@@ -111,7 +111,7 @@ export async function createClaimFromChargesWorkflow(
         modifier1: charge.modifier1 || null,
         modifier2: charge.modifier2 || null,
         diagnosis_pointer: String(pointer),
-        units: 1,
+        units: Number(charge.units ?? 1),
         charge_amount_cents: Number(charge.charge_amount_cents ?? 0),
       });
     }
