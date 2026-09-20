@@ -17,6 +17,14 @@ type ClientRow = {
   dateOfBirth?: string | null;
   email?: string | null;
   phone?: string | null;
+  addressLine1?: string | null;
+  addressLine2?: string | null;
+  city?: string | null;
+  state?: string | null;
+  postalCode?: string | null;
+  sex?: Sex;
+  billingType?: BillingType;
+  metadata?: Row;
   clientStatus: string;
   registrationStatus: string;
   billingReadinessStatus: string;
@@ -43,7 +51,11 @@ type InsuranceForm = {
   subscriber_last_name: string;
   subscriber_dob: string;
   subscriber_sex: Sex;
-  subscriber_address: string;
+  subscriber_address_line1: string;
+  subscriber_address_line2: string;
+  subscriber_city: string;
+  subscriber_state: string;
+  subscriber_postal_code: string;
   subscriber_phone: string;
   relationship_to_subscriber: string;
 };
@@ -56,6 +68,10 @@ type FormState = {
   date_of_birth: string;
   sex: Sex;
   address_line1: string;
+  address_line2: string;
+  city: string;
+  state: string;
+  postal_code: string;
   email: string;
   phone: string;
   emergency_contact_name: string;
@@ -64,6 +80,7 @@ type FormState = {
   client_status: string;
   registration_status: string;
   billing_type: BillingType;
+  metadata: Row;
   primary: InsuranceForm;
   secondary: InsuranceForm;
 };
@@ -87,7 +104,11 @@ function blankInsurance(primary = false): InsuranceForm {
     subscriber_last_name: "",
     subscriber_dob: "",
     subscriber_sex: "",
-    subscriber_address: "",
+    subscriber_address_line1: "",
+    subscriber_address_line2: "",
+    subscriber_city: "",
+    subscriber_state: "",
+    subscriber_postal_code: "",
     subscriber_phone: "",
     relationship_to_subscriber: primary ? "self" : "",
   };
@@ -101,6 +122,10 @@ function blankPatient(): FormState {
     date_of_birth: "",
     sex: "",
     address_line1: "",
+    address_line2: "",
+    city: "",
+    state: "",
+    postal_code: "",
     email: "",
     phone: "",
     emergency_contact_name: "",
@@ -109,6 +134,7 @@ function blankPatient(): FormState {
     client_status: "active",
     registration_status: "complete",
     billing_type: "insurance",
+    metadata: {},
     primary: blankInsurance(true),
     secondary: blankInsurance(false),
   };
@@ -126,13 +152,41 @@ function hasSecondaryData(coverage: InsuranceForm) {
   return Object.values(coverage).some((value) => value.trim().length > 0);
 }
 
+function validPostalCode(value: string) {
+  return /^[0-9]{5}(-?[0-9]{4})?$/.test(value.trim());
+}
+
+function patientAddressComplete(form: FormState) {
+  return Boolean(
+    form.address_line1.trim() &&
+    form.city.trim() &&
+    form.state.trim().length === 2 &&
+    validPostalCode(form.postal_code)
+  );
+}
+
+function subscriberComplete(coverage: InsuranceForm) {
+  if (coverage.relationship_to_subscriber === "self") return true;
+  return Boolean(
+    coverage.relationship_to_subscriber &&
+    coverage.subscriber_first_name.trim() &&
+    coverage.subscriber_last_name.trim() &&
+    coverage.subscriber_dob &&
+    coverage.subscriber_sex &&
+    coverage.subscriber_address_line1.trim() &&
+    coverage.subscriber_city.trim() &&
+    coverage.subscriber_state.trim().length === 2 &&
+    validPostalCode(coverage.subscriber_postal_code)
+  );
+}
+
 function requiredAddFieldsComplete(form: FormState) {
   const demographicsComplete = Boolean(
     form.first_name.trim() &&
     form.last_name.trim() &&
     form.date_of_birth &&
     form.sex &&
-    form.address_line1.trim() &&
+    patientAddressComplete(form) &&
     form.phone.trim() &&
     form.email.trim()
   );
@@ -141,7 +195,8 @@ function requiredAddFieldsComplete(form: FormState) {
   return Boolean(
     form.primary.payer_id &&
     form.primary.member_id.trim() &&
-    form.primary.relationship_to_subscriber
+    form.primary.relationship_to_subscriber &&
+    subscriberComplete(form.primary)
   );
 }
 
@@ -160,7 +215,11 @@ function subscriberValues(form: FormState, coverage: InsuranceForm) {
     lastName,
     dob: coverage.subscriber_dob || (self ? form.date_of_birth : ""),
     sex: coverage.subscriber_sex || (self ? form.sex : ""),
-    address: coverage.subscriber_address.trim() || (self ? form.address_line1.trim() : ""),
+    addressLine1: coverage.subscriber_address_line1.trim() || (self ? form.address_line1.trim() : ""),
+    addressLine2: coverage.subscriber_address_line2.trim() || (self ? form.address_line2.trim() : ""),
+    city: coverage.subscriber_city.trim() || (self ? form.city.trim() : ""),
+    state: (coverage.subscriber_state.trim() || (self ? form.state.trim() : "")).toUpperCase(),
+    postalCode: coverage.subscriber_postal_code.trim() || (self ? form.postal_code.trim() : ""),
     phone: coverage.subscriber_phone.trim() || (self ? form.phone.trim() : ""),
   };
 }
@@ -182,7 +241,13 @@ function coveragePayload(plans: PayerPlanRow[], coverage: InsuranceForm, patient
         first_name: subscriber.firstName || null,
         last_name: subscriber.lastName || null,
         sex: subscriber.sex || null,
-        address: subscriber.address || null,
+        dob: subscriber.dob || null,
+        address_line1: subscriber.addressLine1 || null,
+        address_line2: subscriber.addressLine2 || null,
+        city: subscriber.city || null,
+        state: subscriber.state || null,
+        postal_code: subscriber.postalCode || null,
+        address: [subscriber.addressLine1, subscriber.addressLine2, subscriber.city, subscriber.state, subscriber.postalCode].filter(Boolean).join(", ") || null,
         phone: subscriber.phone || null,
       },
     },
@@ -248,8 +313,8 @@ export function ClientsPage() {
     setFormError(null);
 
     if (form.id) {
-      if (!form.first_name.trim() || !form.last_name.trim()) {
-        setFormError("First and last name are required.");
+      if (!form.first_name.trim() || !form.last_name.trim() || !form.date_of_birth || !form.sex || !patientAddressComplete(form)) {
+        setFormError("Complete the patient's required demographics and structured address.");
         return;
       }
       setSaving(true);
@@ -261,6 +326,16 @@ export function ClientsPage() {
           date_of_birth: form.date_of_birth || null,
           email: form.email || null,
           phone: form.phone || null,
+          address_line1: form.address_line1.trim(),
+          address_line2: form.address_line2.trim() || null,
+          city: form.city.trim(),
+          state: form.state.trim().toUpperCase(),
+          postal_code: form.postal_code.replace(/[^0-9]/g, ""),
+          metadata: {
+            ...form.metadata,
+            sex: form.sex,
+            billing_type: form.billing_type,
+          },
           client_status: form.client_status,
           registration_status: form.registration_status,
         });
@@ -278,8 +353,19 @@ export function ClientsPage() {
       setFormError("Complete all required patient fields and primary insurance fields when billing insurance.");
       return;
     }
-    if (form.billing_type === "insurance" && hasSecondaryData(form.secondary) && (!form.secondary.payer_id || !form.secondary.member_id.trim())) {
-      setFormError("Secondary insurance company and ID are required when secondary insurance is entered.");
+    if (form.billing_type === "insurance" && !subscriberComplete(form.primary)) {
+      setFormError("Complete all required primary subscriber fields when the patient is not the subscriber.");
+      return;
+    }
+    if (
+      form.billing_type === "insurance" &&
+      hasSecondaryData(form.secondary) &&
+      (!form.secondary.payer_id ||
+        !form.secondary.member_id.trim() ||
+        !form.secondary.relationship_to_subscriber ||
+        !subscriberComplete(form.secondary))
+    ) {
+      setFormError("Complete the secondary insurance and subscriber fields when secondary coverage is entered.");
       return;
     }
 
@@ -311,6 +397,10 @@ export function ClientsPage() {
             email: form.email.trim(),
             phone: form.phone.trim(),
             address_line1: form.address_line1.trim(),
+            address_line2: form.address_line2.trim() || null,
+            city: form.city.trim(),
+            state: form.state.trim().toUpperCase(),
+            postal_code: form.postal_code.trim(),
             client_status: form.client_status,
             registration_status: form.registration_status,
             billing_type: form.billing_type,
@@ -361,8 +451,16 @@ export function ClientsPage() {
       last_name: client.lastName,
       preferred_name: client.preferredName || "",
       date_of_birth: client.dateOfBirth || "",
+      sex: client.sex || "",
+      address_line1: client.addressLine1 || "",
+      address_line2: client.addressLine2 || "",
+      city: client.city || "",
+      state: client.state || "",
+      postal_code: client.postalCode || "",
       email: client.email || "",
       phone: client.phone || "",
+      billing_type: client.billingType || "insurance",
+      metadata: client.metadata || {},
       client_status: client.clientStatus,
       registration_status: client.registrationStatus,
     });
