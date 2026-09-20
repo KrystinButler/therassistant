@@ -202,22 +202,26 @@ function era835({
   status = "1",
   charge = "100.00",
   paid = "75.00",
+  bpr = paid,
   patient = "10.00",
   cas = ["CAS*CO*45*15.00", "CAS*PR*1*10.00"],
   remarks = [] as string[],
+  plb = [] as string[],
 }: Partial<{
   trace: string;
   control: string;
   status: string;
   charge: string;
   paid: string;
+  bpr: string;
   patient: string;
   cas: string[];
   remarks: string[];
+  plb: string[];
 }> = {}) {
   return [
     "ST*835*0001",
-    `BPR*I*${paid}*C*ACH*CCP************20260920`,
+    `BPR*I*${bpr}*C*ACH*CCP************20260920`,
     `TRN*1*${trace}`,
     "N1*PR*AETNA*XV*AETNA835",
     "N1*PE*EXAMPLE BEHAVIORAL HEALTH",
@@ -227,6 +231,7 @@ function era835({
     "DTM*472*20260901",
     ...cas,
     ...remarks,
+    ...plb,
     "SE*12*0001",
   ].join("~") + "~";
 }
@@ -317,6 +322,48 @@ test("835 missing payer identifier blocks financial posting", async () => {
   assert.equal(state.adjustments.length, 0);
   assert.equal(state.claims.get("claim-1")?.claim_status, "accepted");
   assert.ok(state.workItems.some((row) => String(row.title).includes("payer identifier is missing")));
+});
+
+test("BPR and CLP payment mismatch blocks the entire ERA from financial posting", async () => {
+  const state = makeRepo();
+  const result = await import835Workflow(state.repo, {
+    rawText: era835({ trace: "BPR-MISMATCH", bpr: "70.00", paid: "75.00" }),
+    fileName: "bpr-mismatch.835",
+  });
+
+  assert.equal(result.ok, true);
+  if (!result.ok) return;
+  assert.equal(result.value.postedCount, 0);
+  assert.equal(result.value.paymentId, null);
+  assert.equal(state.payments.length, 0);
+  assert.equal(state.allocations.length, 0);
+  assert.equal(state.adjustments.length, 0);
+  assert.equal(state.claims.get("claim-1")?.claim_status, "accepted");
+  assert.equal(state.eraClaims[0].status, "matched");
+  assert.ok(state.workItems.some((row) => String(row.title).includes("does not reconcile")));
+});
+
+test("PLB provider adjustment holds all ERA financial posting until PLB is handled", async () => {
+  const state = makeRepo();
+  const result = await import835Workflow(state.repo, {
+    rawText: era835({
+      trace: "PLB-HOLD",
+      bpr: "70.00",
+      paid: "75.00",
+      plb: ["PLB*1234567893*20260920*WO:ABC*-5.00"],
+    }),
+    fileName: "plb-hold.835",
+  });
+
+  assert.equal(result.ok, true);
+  if (!result.ok) return;
+  assert.equal(result.value.postedCount, 0);
+  assert.equal(result.value.paymentId, null);
+  assert.equal(state.payments.length, 0);
+  assert.equal(state.allocations.length, 0);
+  assert.equal(state.adjustments.length, 0);
+  assert.equal(state.claims.get("claim-1")?.claim_status, "accepted");
+  assert.ok(state.workItems.some((row) => String(row.title).includes("provider-level adjustment")));
 });
 
 test("duplicate 835 trace is blocked before financial posting", async () => {

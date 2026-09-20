@@ -522,10 +522,15 @@ export async function import835Workflow(
   }
 
   const parsedPaidTotal = parsed.claims.reduce((sum, claim) => sum + claim.paidAmountCents, 0);
-  if (!parsed.providerLevelAdjustments.length && parsedPaidTotal !== parsed.paymentAmountCents) {
+  const hasProviderLevelAdjustments = parsed.providerLevelAdjustments.length > 0;
+  const depositReconciled =
+    !hasProviderLevelAdjustments &&
+    parsedPaidTotal === parsed.paymentAmountCents;
+
+  if (!hasProviderLevelAdjustments && !depositReconciled) {
     await routeEraIssue(
       "835 payment does not reconcile to claim payments",
-      `BPR payment is ${parsed.paymentAmountCents} cents but CLP paid amounts total ${parsedPaidTotal} cents.`,
+      `BPR payment is ${parsed.paymentAmountCents} cents but CLP paid amounts total ${parsedPaidTotal} cents. No financial posting was performed.`,
       "era",
       eraFile.id,
     );
@@ -542,10 +547,13 @@ export async function import835Workflow(
     );
   }
 
-  const financialPostingAllowed =
-    !payerIdentityBlocked &&
+  const payerScopeVerified =
     matchedPayerIds.size === 1 &&
     verifiedPayerIds.size === 1;
+  const financialPostingAllowed =
+    !payerIdentityBlocked &&
+    payerScopeVerified &&
+    depositReconciled;
 
   let paymentId: string | null = null;
   if (parsed.paymentAmountCents > 0) {
@@ -556,13 +564,16 @@ export async function import835Workflow(
         "era",
         eraFile.id,
       );
-    } else if (!financialPostingAllowed) {
+    } else if (!payerScopeVerified) {
       await routeEraIssue(
         "835 payment payer cannot be determined",
-        "The ERA payment cannot be posted to the ledger until all matched claims resolve to one internal payer.",
+        "The ERA payment cannot be posted to the ledger until all matched claims resolve to one verified internal payer.",
         "era",
         eraFile.id,
       );
+    } else if (!depositReconciled) {
+      // A reconciliation or PLB work item already explains the hold.
+      // Do not create a payment receipt or alter claim financial state.
     } else {
       const payment = await repo.postEraPaymentReceipt({
         payerId: [...verifiedPayerIds][0],
