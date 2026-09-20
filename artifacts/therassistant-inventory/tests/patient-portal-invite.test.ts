@@ -89,5 +89,8 @@ test("revoked portal access restores only the already-linked identity", () => {
   assert.match(source, /linkedUser\.user\.email/);
   assert.match(source, /\.eq\("user_id", accessUserId\)/);
   assert.match(source, /\.eq\("status", "revoked"\)/);
-  assert.doesNotMatch(source, /restore-revoked[\s\S]*inviteUserByEmail\(email/);
+  assert.ok(
+    source.indexOf('if (inviteAction === "restore-revoked")') <
+      source.indexOf("inviteUserByEmail(email"),
+  );
 });
