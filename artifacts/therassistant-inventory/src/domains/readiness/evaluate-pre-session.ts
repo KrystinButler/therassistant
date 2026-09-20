@@ -113,7 +113,7 @@ function payerReadinessChecks(input: PreSessionInput): ReadinessCheck[] {
         "warn",
         false,
         "Eligibility has not been confirmed for this service.",
-        "Run eligibility before starting the encounter.",
+        "Verify eligibility before claim submission.",
       ),
     );
   } else if (blockingEligibility.has(eligibilityStatus)) {
@@ -124,7 +124,7 @@ function payerReadinessChecks(input: PreSessionInput): ReadinessCheck[] {
         "fail",
         false,
         `Coverage status is ${eligibilityStatus.replaceAll("_", " ")}.`,
-        "Resolve coverage before starting the encounter.",
+        "Resolve coverage before billing or claim submission.",
       ),
     );
   } else if (
@@ -174,7 +174,7 @@ function payerReadinessChecks(input: PreSessionInput): ReadinessCheck[] {
         "fail",
         false,
         "This service requires authorization, but no authorization is on file.",
-        "Add or obtain authorization before the encounter.",
+        "Add or obtain authorization for billing follow-up.",
       ),
     );
   } else if (input.authorization.status !== "approved") {
@@ -185,7 +185,7 @@ function payerReadinessChecks(input: PreSessionInput): ReadinessCheck[] {
         "fail",
         false,
         `Authorization status is ${(input.authorization.status ?? "unknown").replaceAll("_", " ")}.`,
-        "Resolve the authorization status before the encounter.",
+        "Resolve the authorization status before billing or claim submission.",
       ),
     );
   } else {
@@ -198,7 +198,7 @@ function payerReadinessChecks(input: PreSessionInput): ReadinessCheck[] {
           "fail",
           false,
           "The authorization has no remaining units.",
-          "Obtain additional authorized units before the encounter.",
+          "Obtain additional authorized units and route the item for billing follow-up.",
         ),
       );
     } else {
@@ -224,7 +224,7 @@ function payerReadinessChecks(input: PreSessionInput): ReadinessCheck[] {
         `Provider enrollment is ${
           (input.providerEnrollmentStatus ?? "not confirmed").replaceAll("_", " ")
         } for this payer.`,
-        "Resolve provider enrollment or select an eligible provider.",
+        "Route the payer participation issue for credentialing and billing follow-up.",
       ),
     );
   } else {
