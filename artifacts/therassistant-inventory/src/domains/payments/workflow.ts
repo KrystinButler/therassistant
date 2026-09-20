@@ -32,6 +32,22 @@ export type PaymentRepository = {
 };
 
 export type EraImportRepository = PaymentRepository & {
+  postEraPaymentReceipt(input: {
+    payerId: string;
+    amountCents: number;
+    method: string;
+    paymentDate: string | null;
+    traceNumber: string;
+    notes: string;
+  }): Promise<PaymentRow>;
+  allocatePayment(paymentId: string, claimId: string, amountCents: number): Promise<Record<string, unknown>>;
+  postContractualAdjustment(input: {
+    claimId: string;
+    amountCents: number;
+    adjustmentDate: string | null;
+    reason: string;
+    carcCode?: string | null;
+  }): Promise<PaymentRow>;
   findClaimsByPatientControlNumber(patientControlNumber: string): Promise<PaymentRow[]>;
   getClaimLines(claimId: string): Promise<PaymentRow[]>;
   getEraFileByTrace(traceNumber: string): Promise<PaymentRow | null>;
@@ -465,74 +481,57 @@ export async function import835Workflow(
 
   let paymentId: string | null = null;
   if (parsed.paymentAmountCents > 0) {
-    const payment = await repo.createPayment({
-      client_id: null,
-      payer_id: matchedPayerIds.size === 1 ? [...matchedPayerIds][0] : null,
-      payment_source: "insurance",
-      payment_method: paymentMethodFrom835(parsed.paymentMethodCode),
-      payment_status: "pending",
-      payment_date: parsed.paymentDate || new Date().toISOString().slice(0, 10),
-      amount_cents: parsed.paymentAmountCents,
-      trace_number: parsed.traceNumber,
-      notes: `Imported from 835 ${input.fileName.trim() || parsed.traceNumber}`,
-    });
-    paymentId = payment.id;
-
-    let allocatedCents = 0;
-    for (const item of prepared) {
-      if (item.parsedClaim.paidAmountCents <= 0) continue;
-      await repo.createPaymentAllocation({
-        payment_id: payment.id,
-        client_id: item.claim.client_id || null,
-        claim_id: item.claim.id,
-        claim_line_id: null,
-        amount_cents: item.parsedClaim.paidAmountCents,
-      });
-      allocatedCents += item.parsedClaim.paidAmountCents;
-    }
-
-    const paymentStatus = allocatedCents === 0
-      ? "unapplied"
-      : allocatedCents === parsed.paymentAmountCents
-        ? "posted"
-        : "partially_applied";
-    await repo.updatePayment(payment.id, {
-      payment_status: paymentStatus,
-      posted_at: allocatedCents > 0 ? new Date().toISOString() : null,
-    });
-    if (allocatedCents !== parsed.paymentAmountCents) {
+    if (matchedPayerIds.size !== 1) {
       await routeEraIssue(
-        "835 payment has unapplied balance",
-        `${parsed.paymentAmountCents - allocatedCents} cents from trace ${parsed.traceNumber} remains unapplied because one or more ERA claims require review.`,
+        "835 payment payer cannot be determined",
+        "The ERA payment cannot be posted to the ledger until all matched claims resolve to one internal payer.",
         "era",
         eraFile.id,
       );
+    } else {
+      const payment = await repo.postEraPaymentReceipt({
+        payerId: [...matchedPayerIds][0],
+        amountCents: parsed.paymentAmountCents,
+        method: paymentMethodFrom835(parsed.paymentMethodCode),
+        paymentDate: parsed.paymentDate,
+        traceNumber: parsed.traceNumber,
+        notes: `Imported from 835 ${input.fileName.trim() || parsed.traceNumber}`,
+      });
+      paymentId = payment.id;
+
+      let allocatedCents = 0;
+      for (const item of prepared) {
+        if (item.parsedClaim.paidAmountCents <= 0) continue;
+        const result = await repo.allocatePayment(
+          payment.id,
+          item.claim.id,
+          item.parsedClaim.paidAmountCents,
+        );
+        allocatedCents += Number(result.allocation_cents ?? item.parsedClaim.paidAmountCents);
+      }
+
+      if (allocatedCents !== parsed.paymentAmountCents) {
+        await routeEraIssue(
+          "835 payment has unapplied balance",
+          `${parsed.paymentAmountCents - allocatedCents} cents from trace ${parsed.traceNumber} remains unapplied because one or more ERA claims require review.`,
+          "era",
+          eraFile.id,
+        );
+      }
     }
   }
 
   for (const item of prepared) {
     if (item.contractualCents > 0) {
-      const adjustment = await repo.createAdjustment({
-        client_id: item.claim.client_id || null,
-        claim_id: item.claim.id,
-        payer_id: item.claim.payer_id || null,
-        adjustment_type: "contractual",
-        adjustment_status: "posted",
-        adjustment_date: parsed.paymentDate || new Date().toISOString().slice(0, 10),
-        amount_cents: item.contractualCents,
+      await repo.postContractualAdjustment({
+        claimId: item.claim.id,
+        amountCents: item.contractualCents,
+        adjustmentDate: parsed.paymentDate,
         reason: "Contractual adjustment from imported 835",
-        carc_code: [
+        carcCode: [
           ...item.parsedClaim.adjustments,
           ...item.parsedClaim.serviceLines.flatMap((line) => line.adjustments),
         ].find((row) => row.groupCode === "CO")?.reasonCode || null,
-        posted_at: new Date().toISOString(),
-      });
-      await repo.createAdjustmentAllocation({
-        adjustment_id: adjustment.id,
-        client_id: item.claim.client_id || null,
-        claim_id: item.claim.id,
-        claim_line_id: null,
-        amount_cents: item.contractualCents,
       });
     }
 

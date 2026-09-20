@@ -47,6 +47,75 @@ function makeRepo() {
   const id = (prefix: string) => `${prefix}-${nextId++}`;
 
   const repo: EraImportRepository = {
+    async postEraPaymentReceipt(input) {
+      const row = {
+        id: id("payment"),
+        client_id: null,
+        payer_id: input.payerId,
+        payment_source: "insurance",
+        payment_method: input.method,
+        payment_status: "unapplied",
+        payment_date: input.paymentDate,
+        amount_cents: input.amountCents,
+        trace_number: input.traceNumber,
+        notes: input.notes,
+      };
+      payments.push(row);
+      return row;
+    },
+    async allocatePayment(paymentId, claimId, amountCents) {
+      const payment = payments.find((row) => row.id === paymentId);
+      const claim = claims.get(claimId);
+      if (!payment || !claim) throw new Error("Payment or claim not found");
+      const allocatedBefore = allocations
+        .filter((row) => row.payment_id === paymentId && !row.reversed_at)
+        .reduce((sum, row) => sum + Number(row.amount_cents ?? 0), 0);
+      const available = Math.max(0, Number(payment.amount_cents ?? 0) - allocatedBefore);
+      const applied = Math.min(amountCents, available);
+      const row = {
+        id: id("alloc"),
+        payment_id: paymentId,
+        client_id: claim.client_id,
+        claim_id: claimId,
+        claim_line_id: null,
+        amount_cents: applied,
+      };
+      allocations.push(row);
+      const totalAllocated = allocatedBefore + applied;
+      payment.payment_status = totalAllocated === payment.amount_cents ? "posted" : "partially_applied";
+      return {
+        payment_id: paymentId,
+        allocation_cents: applied,
+        unapplied_cents: Number(payment.amount_cents) - totalAllocated,
+        payment_status: payment.payment_status,
+      };
+    },
+    async postContractualAdjustment(input) {
+      const claim = claims.get(input.claimId);
+      if (!claim) throw new Error("Claim not found");
+      const adjustment = {
+        id: id("adjustment"),
+        client_id: claim.client_id,
+        claim_id: claim.id,
+        payer_id: claim.payer_id,
+        adjustment_type: "contractual",
+        adjustment_status: "posted",
+        adjustment_date: input.adjustmentDate,
+        amount_cents: input.amountCents,
+        reason: input.reason,
+        carc_code: input.carcCode ?? null,
+      };
+      adjustments.push(adjustment);
+      adjustmentAllocations.push({
+        id: id("adj-alloc"),
+        adjustment_id: adjustment.id,
+        client_id: claim.client_id,
+        claim_id: claim.id,
+        claim_line_id: null,
+        amount_cents: input.amountCents,
+      });
+      return adjustment;
+    },
     async getClaim(claimId) { return claims.get(claimId) ?? null; },
     async findClaimsByPatientControlNumber(control) {
       return [...claims.values()].filter((row) => row.patient_control_number === control);
@@ -231,8 +300,9 @@ test("unmatched 835 claim is retained for review and payment remains unapplied",
   assert.ok(result.value.exceptionCount > 0);
   assert.equal(state.eraClaims[0].status, "unmatched");
   assert.equal(state.eraMatches[0].match_status, "unmatched");
-  assert.equal(state.payments[0].payment_status, "unapplied");
+  assert.equal(state.payments.length, 0);
   assert.ok(state.workItems.some((row) => row.workqueue_type === "unmatched_era"));
+  assert.ok(state.workItems.some((row) => String(row.title).includes("payer cannot be determined")));
 });
 
 test("unsupported 835 adjustment group does not auto-write off claim", async () => {
