@@ -33,6 +33,7 @@ export type ClaimsRepository = {
   getSubmission(submissionId: string): Promise<ClaimRow | null>;
   updateSubmission(submissionId: string, values: Record<string, unknown>): Promise<ClaimRow>;
   createSubmissionResponse(values: Record<string, unknown>): Promise<ClaimRow>;
+  getSubmissionResponses(submissionId: string): Promise<ClaimRow[]>;
   upsertWorkItem(values: Record<string, unknown>): Promise<ClaimRow>;
 };
 
@@ -377,90 +378,188 @@ export async function recordExternalSubmissionWorkflow(
   }
 }
 
-export async function applySyntheticClearinghouseResponseWorkflow(
+export type ExternalAcknowledgementInput = {
+  submissionId: string;
+  claimId: string;
+  outcome: "accepted" | "rejected";
+  acknowledgementType: "999" | "277CA" | "clearinghouse_portal" | "other";
+  responseCode: string;
+  responseMessage: string;
+  externalReference: string;
+};
+
+export async function recordExternalClaimAcknowledgementWorkflow(
   repo: ClaimsRepository,
-  submissionId: string,
-  outcome: "accepted" | "rejected",
-  responseCode?: string,
-  responseMessage?: string,
-): Promise<WorkflowResult<{ submissionId: string; outcome: string; claimCount: number }>> {
-  const submission = await repo.getSubmission(submissionId);
+  input: ExternalAcknowledgementInput,
+): Promise<WorkflowResult<{
+  submissionId: string;
+  claimId: string;
+  outcome: string;
+  submissionStatus: string;
+}>> {
+  const submission = await repo.getSubmission(input.submissionId);
   if (!submission) return failure("submission_not_found", "Claim submission not found.");
-  if (!submission.batch_id && !submission.claim_id) {
-    return failure("submission_unlinked", "Submission is not linked to a batch or claim.");
+
+  const claim = await repo.getClaim(input.claimId);
+  if (!claim) return failure("claim_not_found", "Claim not found.");
+
+  const reference = input.externalReference.trim();
+  const responseCode = input.responseCode.trim();
+  const responseMessage = input.responseMessage.trim();
+  if (!reference) {
+    return blocked("ack_reference_required", "Enter the acknowledgement or clearinghouse reference.");
+  }
+  if (!responseCode) {
+    return blocked("ack_code_required", "Enter the acknowledgement response code.");
+  }
+  if (!responseMessage) {
+    return blocked("ack_message_required", "Enter the acknowledgement response message.");
+  }
+  if (!["submitted", "accepted", "rejected"].includes(String(claim.claim_status))) {
+    return blocked(
+      "claim_not_awaiting_acknowledgement",
+      `Claim cannot receive a clearinghouse acknowledgement from ${String(claim.claim_status)} status.`,
+    );
   }
 
-  const claims = submission.batch_id
-    ? await repo.getBatchClaims(String(submission.batch_id))
-    : [await repo.getClaim(String(submission.claim_id))].filter(Boolean) as ClaimRow[];
+  let submissionClaims: ClaimRow[] = [];
+  if (submission.batch_id) {
+    submissionClaims = await repo.getBatchClaims(String(submission.batch_id));
+  } else if (submission.claim_id) {
+    const linked = await repo.getClaim(String(submission.claim_id));
+    if (linked) submissionClaims = [linked];
+  }
+  if (!submissionClaims.some((row) => row.id === claim.id)) {
+    return blocked(
+      "claim_not_in_submission",
+      "The selected claim does not belong to this submission.",
+    );
+  }
 
-  if (!claims.length) return failure("submission_claims_missing", "No claims were found for the submission.");
-
-  const responseStatus = outcome === "accepted" ? "accepted" : "rejected";
+  const responseStatus = input.outcome;
   const now = new Date().toISOString();
 
   try {
-    for (const claim of claims) {
-      await repo.createSubmissionResponse({
-        submission_id: submissionId,
+    const existingResponses = await repo.getSubmissionResponses(input.submissionId);
+    const existingForClaim = existingResponses
+      .filter((row) => String(row.claim_id ?? "") === claim.id)
+      .sort((a, b) => String(b.created_at ?? "").localeCompare(String(a.created_at ?? "")))[0];
+
+    if (
+      existingForClaim &&
+      String(existingForClaim.response_status ?? "") === responseStatus &&
+      String(existingForClaim.response_code ?? "") === responseCode &&
+      String(existingForClaim.raw_response?.external_reference ?? "") === reference
+    ) {
+      return blocked(
+        "duplicate_acknowledgement",
+        "This acknowledgement has already been recorded for the claim.",
+      );
+    }
+
+    await repo.createSubmissionResponse({
+      submission_id: input.submissionId,
+      claim_id: claim.id,
+      response_status: responseStatus,
+      response_code: responseCode,
+      response_message: responseMessage,
+      raw_response: {
+        source: "external_acknowledgement",
+        acknowledgement_type: input.acknowledgementType,
+        external_reference: reference,
+        recorded_at: now,
+      },
+    });
+
+    await recordStatus(
+      repo,
+      claim,
+      responseStatus,
+      `${input.acknowledgementType} acknowledgement recorded: ${responseCode} — ${responseMessage}`,
+      input.outcome === "accepted" ? { accepted_at: now } : {},
+    );
+
+    if (input.outcome === "rejected") {
+      await repo.upsertWorkItem({
+        workqueue_type: "claim_rejection",
+        source_object_type: "claim",
+        source_object_id: claim.id,
+        title: "Clearinghouse rejection requires correction",
+        description: `${input.acknowledgementType} ${responseCode}. ${responseMessage}`,
+        priority: "high",
+        workqueue_status: "open",
+      });
+    }
+
+    const responses = [
+      ...existingResponses,
+      {
+        id: "new-response",
         claim_id: claim.id,
         response_status: responseStatus,
-        response_code: responseCode || (outcome === "accepted" ? "A1" : "A3"),
-        response_message:
-          responseMessage ||
-          (outcome === "accepted"
-            ? "Demo clearinghouse accepted the claim."
-            : "Demo clearinghouse rejected the claim for correction."),
-        raw_response: {
-          demo: true,
-          outcome,
-          responseCode: responseCode || null,
-        },
-      });
-
-      await recordStatus(
-        repo,
-        claim,
-        responseStatus,
-        outcome === "accepted" ? "Clearinghouse accepted claim." : "Clearinghouse rejected claim.",
-        outcome === "accepted" ? { accepted_at: now } : {},
-      );
-
-      if (outcome === "rejected") {
-        await repo.upsertWorkItem({
-          workqueue_type: "claim_rejection",
-          source_object_type: "claim",
-          source_object_id: claim.id,
-          title: "Clearinghouse rejection requires correction",
-          description:
-            responseMessage || "Review the rejection, correct the claim, and resubmit it.",
-          priority: "high",
-          workqueue_status: "open",
-        });
+        response_code: responseCode,
+      },
+    ];
+    const latestByClaim = new Map<string, ClaimRow>();
+    for (const response of responses) {
+      const claimId = String(response.claim_id ?? "");
+      if (!claimId) continue;
+      const current = latestByClaim.get(claimId);
+      if (!current || String(response.created_at ?? now) >= String(current.created_at ?? "")) {
+        latestByClaim.set(claimId, response);
       }
     }
 
-    await repo.updateSubmission(submissionId, {
-      submission_status: responseStatus,
+    const allResponded = submissionClaims.every((row) => latestByClaim.has(row.id));
+    const anyRejected = [...latestByClaim.values()].some(
+      (row) => String(row.response_status ?? "") === "rejected",
+    );
+    const allAccepted =
+      allResponded &&
+      submissionClaims.every(
+        (row) => String(latestByClaim.get(row.id)?.response_status ?? "") === "accepted",
+      );
+    const submissionStatus = allAccepted
+      ? "accepted"
+      : allResponded && anyRejected
+        ? "rejected"
+        : "pending_response";
+
+    const originalPayload =
+      submission.response_payload &&
+      typeof submission.response_payload === "object" &&
+      !Array.isArray(submission.response_payload)
+        ? submission.response_payload
+        : {};
+
+    await repo.updateSubmission(input.submissionId, {
+      submission_status: submissionStatus,
       response_payload: {
-        demo: true,
-        outcome,
-        responseCode: responseCode || null,
-        claimCount: claims.length,
+        ...originalPayload,
+        latest_acknowledgement_type: input.acknowledgementType,
+        latest_external_reference: reference,
+        latest_response_code: responseCode,
+        responded_claim_count: latestByClaim.size,
+        total_claim_count: submissionClaims.length,
       },
     });
 
     if (submission.batch_id) {
       await repo.updateBatch(String(submission.batch_id), {
-        batch_status: outcome === "accepted" ? "accepted" : "rejected",
+        batch_status: submissionStatus,
       });
     }
 
-    return success({ submissionId, outcome, claimCount: claims.length });
+    return success({
+      submissionId: input.submissionId,
+      claimId: claim.id,
+      outcome: input.outcome,
+      submissionStatus,
+    });
   } catch (error) {
     return failure(
-      "clearinghouse_response_failed",
-      error instanceof Error ? error.message : "Unable to apply clearinghouse response.",
+      "external_acknowledgement_failed",
+      error instanceof Error ? error.message : "Unable to record external claim acknowledgement.",
     );
   }
 }
