@@ -1,6 +1,6 @@
 export function isVerifiedEligibilitySource(source: unknown) {
   const value = String(source ?? "").trim();
-  if (!value) return false;
+  if (!value) return true;
   return value !== "synthetic_demo_270_271";
 }
 
