@@ -5,6 +5,7 @@ export type BillingRepository = {
   getBillingContext(encounterId: string): Promise<BillingReadinessInput>;
   replaceReadinessChecks(encounterId: string, checks: Array<Record<string, unknown>>): Promise<unknown>;
   upsertWorkItem(values: Record<string, unknown>): Promise<unknown>;
+  resolveStaleWorkItems(encounterId: string, activeTypes: string[]): Promise<unknown>;
   updateEncounter(id: string, values: Record<string, unknown>): Promise<unknown>;
   getExistingCharges(encounterId: string): Promise<Array<Record<string, any>>>;
   createCharge(values: Record<string, unknown>): Promise<Record<string, any>>;
@@ -17,6 +18,24 @@ function queueForCode(code: string) {
   if (code === "provider_enrollment") return "credentialing_issue";
   if (code.startsWith("note_") || code.startsWith("diagnosis_")) return "missing_documentation";
   return "charge_validation";
+}
+
+type BlockingCheck = {
+  code: string;
+  label: string;
+  message: string;
+  blocking: boolean;
+};
+
+function groupBlockersByQueue(checks: BlockingCheck[]) {
+  const grouped = new Map<string, BlockingCheck[]>();
+  for (const check of checks.filter((item) => item.blocking)) {
+    const queueType = queueForCode(check.code);
+    const group = grouped.get(queueType) ?? [];
+    group.push(check);
+    grouped.set(queueType, group);
+  }
+  return grouped;
 }
 
 export async function routeEncounterToBillingWorkflow(
@@ -39,22 +58,27 @@ export async function routeEncounterToBillingWorkflow(
       })),
     );
 
+    const groupedBlockers = groupBlockersByQueue(readiness.checks);
+    const activeWorkTypes = [...groupedBlockers.keys()];
+    await repo.resolveStaleWorkItems(encounterId, activeWorkTypes);
+
     if (!readiness.ready) {
       await repo.updateEncounter(encounterId, {
-        encounter_status: "billing_hold",
         billing_status: "held",
       });
 
-      const blocker = readiness.checks.find((check) => check.blocking)!;
-      await repo.upsertWorkItem({
-        workqueue_type: queueForCode(blocker.code),
-        workqueue_status: "open",
-        priority: blocker.code === "provider_enrollment" ? "high" : "normal",
-        source_object_type: "encounter",
-        source_object_id: encounterId,
-        title: blocker.label,
-        description: blocker.message,
-      });
+      for (const [workqueueType, checks] of groupedBlockers) {
+        const highPriority = checks.some((check) => check.code === "provider_enrollment");
+        await repo.upsertWorkItem({
+          workqueue_type: workqueueType,
+          workqueue_status: "open",
+          priority: highPriority ? "high" : "normal",
+          source_object_type: "encounter",
+          source_object_id: encounterId,
+          title: checks.length === 1 ? checks[0].label : `${checks.length} billing readiness issues`,
+          description: checks.map((check) => `${check.label}: ${check.message}`).join("\n"),
+        });
+      }
 
       return blocked(
         "billing_readiness_blocked",
@@ -64,7 +88,6 @@ export async function routeEncounterToBillingWorkflow(
     }
 
     await repo.updateEncounter(encounterId, {
-      encounter_status: "ready_for_billing",
       billing_status: "ready",
     });
 
@@ -116,7 +139,6 @@ export async function createChargeFromEncounterWorkflow(
     }
 
     await repo.updateEncounter(encounterId, {
-      encounter_status: "ready_for_billing",
       billing_status: "charged",
     });
 
