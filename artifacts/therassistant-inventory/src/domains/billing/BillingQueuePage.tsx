@@ -386,8 +386,6 @@ export function BillingQueuePage() {
           onRecordSubmission={(id) => void runRecordExternalSubmission(id)}
           onDownload={(id) => void runDownload837(id)}
           onPrint={(batchId, claimId) => void runPrintCms1500(batchId, claimId)}
-          onAcknowledge={(submissionId: string, claimId: string, outcome: "accepted" | "rejected") =>
-            void runRecordAcknowledgement(submissionId, claimId, outcome)}
         />
       )}
 
@@ -399,8 +397,8 @@ export function BillingQueuePage() {
           savingId={savingId}
           onDownload={(id) => void runDownload837(id)}
           onPrint={(batchId, claimId) => void runPrintCms1500(batchId, claimId)}
-        />
-      )}
+          onAcknowledge={(submissionId: string, claimId: string, outcome: "accepted" | "rejected") =>
+            void runRecordAcknowledgement(submissionId, claimId, outcome)}
     </>
   );
 }
