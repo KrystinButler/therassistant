@@ -23,9 +23,8 @@ import {
   type PaymentRow,
 } from "./payment-work-drawers";
 import {
-  createDenialFromAdjudication,
   getPaymentsWorkspaceData,
-  postDemoEra,
+  import835,
   postManualPayment,
   reversePayment,
 } from "./repository";
@@ -50,6 +49,8 @@ export function PaymentsPage() {
   const [reversing, setReversing] = useState<PaymentRow | null>(null);
   const [varianceWork, setVarianceWork] = useState<VarianceWorkspaceRow | null>(null);
   const [recoveryWork, setRecoveryWork] = useState<RecoveryWorkspaceRow | null>(null);
+  const [eraText, setEraText] = useState("");
+  const [eraFileName, setEraFileName] = useState("");
 
   async function load() {
     setLoading(true);
@@ -108,57 +109,44 @@ export function PaymentsPage() {
     if (row) setPaymentDetail(row);
   }
 
-  async function runPaidEra(claimId: string, totalChargeCents: number) {
-    const paidAmountCents = Math.round(totalChargeCents * 0.8);
-    const adjustmentAmountCents = totalChargeCents - paidAmountCents;
-    setSavingId(claimId);
+  async function runImport835() {
+    if (!eraText.trim()) {
+      setError("Choose or paste an 835 file before importing.");
+      return;
+    }
+    setSavingId("import-835");
     setError(null);
     setMessage(null);
     try {
-      const result = await postDemoEra({
-        claimId,
-        paidAmountCents,
-        adjustmentAmountCents,
-        traceNumber: `DEMO-EFT-${Date.now().toString().slice(-8)}`,
-        carcCode: "45",
+      const result = await import835({
+        rawText: eraText,
+        fileName: eraFileName || "pasted-835.txt",
       });
       if (!result.ok) {
         setError(result.details?.length ? `${result.message} ${result.details.join(" ")}` : result.message);
         return;
       }
-      setMessage(`ERA posted. Claim status: ${result.value.claimStatus.replaceAll("_", " ")}.`);
+      setMessage(
+        `835 imported: ${result.value.matchedCount}/${result.value.claimCount} claim(s) matched, ${result.value.postedCount} posted, ${result.value.exceptionCount} exception(s).`,
+      );
+      setEraText("");
+      setEraFileName("");
       await load();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Unable to post demo ERA.");
+      setError(err instanceof Error ? err.message : "Unable to import 835.");
     } finally {
       setSavingId(null);
     }
   }
 
-  async function runDenied(claimId: string, totalChargeCents: number) {
-    setSavingId(claimId);
+  async function load835File(file: File | null) {
+    if (!file) return;
     setError(null);
-    setMessage(null);
     try {
-      const result = await createDenialFromAdjudication({
-        claimId,
-        amountCents: totalChargeCents,
-        carcCode: "197",
-        rarcCode: "N130",
-        category: "authorization",
-        reason: "Authorization required for service. Synthetic demo denial.",
-        workability: "workable",
-      });
-      if (!result.ok) {
-        setError(result.details?.length ? `${result.message} ${result.details.join(" ")}` : result.message);
-        return;
-      }
-      setMessage("Denial recorded and routed to Denials for follow-up.");
-      await load();
+      setEraText(await file.text());
+      setEraFileName(file.name);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Unable to create denial.");
-    } finally {
-      setSavingId(null);
+      setError(err instanceof Error ? err.message : "Unable to read 835 file.");
     }
   }
 
@@ -267,7 +255,16 @@ export function PaymentsPage() {
 
     {!loading && data && tab === "insurance" && <PaymentsTable rows={insurancePayments} onOpen={setPaymentDetail} />}
     {!loading && data && tab === "patient" && <PaymentsTable rows={patientPayments} onOpen={setPaymentDetail} />}
-    {!loading && data && tab === "era" && <EraTab data={data} acceptedClaims={acceptedClaims} savingId={savingId} onPaid={runPaidEra} onDenied={runDenied} />}
+    {!loading && data && tab === "era" && <EraTab
+      data={data}
+      acceptedClaims={acceptedClaims}
+      savingId={savingId}
+      eraText={eraText}
+      eraFileName={eraFileName}
+      onTextChange={setEraText}
+      onFileChange={(file) => void load835File(file)}
+      onImport={() => void runImport835()}
+    />}
     {!loading && data && tab === "unapplied" && <PaymentsTable rows={unappliedPayments} onOpen={setPaymentDetail} />}
     {!loading && data && tab === "adjustments" && <AdjustmentsTab data={data} />}
     {!loading && exceptionData && tab === "underpayments" && <UnderpaymentsTable rows={exceptionData.variances} onOpen={setVarianceWork} />}
@@ -314,15 +311,87 @@ function PaymentsTable({ rows, onOpen }: { rows: Data["payments"]; onOpen: (row:
   return <section className="thera-card">{rows.length ? <div className="thera-table-wrap"><table className="thera-table"><thead><tr><th>Date</th><th>Patient</th><th>Payer</th><th>Source</th><th>Method</th><th>Trace</th><th>Amount</th><th>Allocated</th><th>Unapplied</th><th>Status</th><th>Action</th></tr></thead><tbody>{rows.map((row) => <tr key={row.id} onClick={() => onOpen(row)} style={{ cursor: "pointer" }}><td>{shortDate(String(row.payment_date ?? ""))}</td><td>{row.clientName}</td><td>{row.payerName}</td><td>{String(row.payment_source || "—")}</td><td>{String(row.payment_method || "—")}</td><td>{String(row.trace_number || row.check_number || "—")}</td><td>{money(Number(row.amount_cents ?? 0))}</td><td>{money(row.allocatedCents)}</td><td>{money(row.unappliedCents)}</td><td><StatusBadge value={String(row.payment_status)} /></td><td><button type="button" className="thera-action secondary" onClick={(e) => { e.stopPropagation(); onOpen(row); }}>Open</button></td></tr>)}</tbody></table></div> : <div className="thera-empty">No payments in this section.</div>}</section>;
 }
 
-function EraTab({ data, acceptedClaims, savingId, onPaid, onDenied }: { data: Data; acceptedClaims: Data["claims"]; savingId: string | null; onPaid: (claimId: string, totalChargeCents: number) => Promise<void>; onDenied: (claimId: string, totalChargeCents: number) => Promise<void> }) {
+function EraTab({
+  data,
+  acceptedClaims,
+  savingId,
+  eraText,
+  eraFileName,
+  onTextChange,
+  onFileChange,
+  onImport,
+}: {
+  data: Data;
+  acceptedClaims: Data["claims"];
+  savingId: string | null;
+  eraText: string;
+  eraFileName: string;
+  onTextChange: (value: string) => void;
+  onFileChange: (file: File | null) => void;
+  onImport: () => void;
+}) {
   return <div className="thera-stack">
     <section className="thera-card">
-      <div className="thera-card-header"><div><h2>Accepted Claims Awaiting Adjudication</h2><p>Use synthetic payer outcomes to demonstrate ERA/payment or denial processing.</p></div></div>
-      {acceptedClaims.length ? <div className="thera-table-wrap"><table className="thera-table"><thead><tr><th>Claim</th><th>DOS</th><th>Patient</th><th>Payer</th><th>Charge</th><th>Status</th><th>Demo Adjudication</th></tr></thead><tbody>{acceptedClaims.map((claim) => <tr key={claim.id}><td><Link className="thera-table-link" href={`/claims/${claim.id}`}>{String(claim.patient_control_number || "Open")}</Link></td><td>{shortDate(String(claim.service_date_from ?? ""))}</td><td>{claim.clientName}</td><td>{claim.payerName}</td><td>{money(Number(claim.total_charge_cents ?? 0))}</td><td><StatusBadge value={String(claim.claim_status)} /></td><td><div className="thera-filter-row"><button type="button" className="thera-action" disabled={savingId === claim.id} onClick={() => void onPaid(claim.id, Number(claim.total_charge_cents ?? 0))}>Post Paid ERA</button><button type="button" className="thera-action secondary" disabled={savingId === claim.id} onClick={() => void onDenied(claim.id, Number(claim.total_charge_cents ?? 0))}>Demo Denied</button></div></td></tr>)}</tbody></table></div> : <div className="thera-empty">No accepted claims are awaiting adjudication.</div>}
+      <div className="thera-card-header split">
+        <div>
+          <h2>Import ERA / 835</h2>
+          <p>Upload or paste an X12 835. THERASSISTANT validates and reconciles the remittance before posting financial activity.</p>
+        </div>
+        <button type="button" className="thera-action" disabled={savingId === "import-835" || !eraText.trim()} onClick={onImport}>
+          {savingId === "import-835" ? "Importing..." : "Import 835"}
+        </button>
+      </div>
+      <div className="thera-form-grid">
+        <label className="thera-field">
+          <span className="thera-field-label">835 File</span>
+          <input
+            className="thera-input"
+            type="file"
+            accept=".835,.txt,text/plain,application/octet-stream"
+            onChange={(event) => onFileChange(event.target.files?.[0] ?? null)}
+          />
+          {eraFileName && <span className="thera-muted">{eraFileName}</span>}
+        </label>
+      </div>
+      <label className="thera-field" style={{ marginTop: 12 }}>
+        <span className="thera-field-label">835 X12 Content</span>
+        <textarea
+          className="thera-input"
+          rows={10}
+          value={eraText}
+          onChange={(event) => onTextChange(event.target.value)}
+          placeholder="Paste the X12 835 here, or choose a file above."
+          style={{ fontFamily: "monospace", whiteSpace: "pre-wrap" }}
+        />
+      </label>
+      <div className="thera-muted" style={{ marginTop: 10 }}>
+        Auto-posting is limited to uniquely matched, reconciled claims. Unmatched claims, unsupported CAS groups, negative adjustments, PLB activity, charge mismatches, and unreconciled deposits are routed to payment-posting work instead of being silently posted.
+      </div>
     </section>
+
+    <section className="thera-card">
+      <div className="thera-card-header">
+        <div>
+          <h2>Accepted Claims Awaiting Remittance</h2>
+          <p>These claims have clearinghouse acceptance but no final payer adjudication posted yet.</p>
+        </div>
+      </div>
+      {acceptedClaims.length ? <div className="thera-table-wrap"><table className="thera-table">
+        <thead><tr><th>Claim</th><th>DOS</th><th>Patient</th><th>Payer</th><th>Charge</th><th>Status</th></tr></thead>
+        <tbody>{acceptedClaims.map((claim) => <tr key={claim.id}>
+          <td><Link className="thera-table-link" href={`/claims/${claim.id}`}>{String(claim.patient_control_number || "Open")}</Link></td>
+          <td>{shortDate(String(claim.service_date_from ?? ""))}</td>
+          <td>{claim.clientName}</td>
+          <td>{claim.payerName}</td>
+          <td>{money(Number(claim.total_charge_cents ?? 0))}</td>
+          <td><StatusBadge value={String(claim.claim_status)} /></td>
+        </tr>)}</tbody>
+      </table></div> : <div className="thera-empty">No accepted claims are awaiting remittance.</div>}
+    </section>
+
     <section className="thera-card">
       <h2>ERA / 835 History</h2>
-      {data.eraFiles.length ? <div className="thera-table-wrap"><table className="thera-table"><thead><tr><th>Created</th><th>File</th><th>Trace</th><th>Payment</th><th>Status</th></tr></thead><tbody>{data.eraFiles.map((row) => <tr key={row.id}><td>{dateTime(String(row.created_at ?? ""))}</td><td>{String(row.file_name || "—")}</td><td>{String(row.check_or_trace_number || "—")}</td><td>{money(Number(row.payment_amount_cents ?? 0))}</td><td><StatusBadge value={String(row.status)} /></td></tr>)}</tbody></table></div> : <div className="thera-empty">No ERA files posted yet.</div>}
+      {data.eraFiles.length ? <div className="thera-table-wrap"><table className="thera-table"><thead><tr><th>Created</th><th>File</th><th>Trace</th><th>Payment</th><th>Status</th></tr></thead><tbody>{data.eraFiles.map((row) => <tr key={row.id}><td>{dateTime(String(row.created_at ?? ""))}</td><td>{String(row.file_name || "—")}</td><td>{String(row.check_or_trace_number || "—")}</td><td>{money(Number(row.payment_amount_cents ?? 0))}</td><td><StatusBadge value={String(row.status)} /></td></tr>)}</tbody></table></div> : <div className="thera-empty">No ERA files imported yet.</div>}
     </section>
   </div>;
 }

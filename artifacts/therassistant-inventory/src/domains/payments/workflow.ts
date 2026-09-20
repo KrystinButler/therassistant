@@ -4,6 +4,14 @@ import {
   success,
   type WorkflowResult,
 } from "../shared/workflow-result";
+import {
+  claimAdjustmentTotalCents,
+  claimContractualAdjustmentCents,
+  claimPatientResponsibilityCents,
+  parse835,
+  unsupportedAdjustmentGroups,
+  type Era835Claim,
+} from "./era-835";
 
 export type PaymentRow = Record<string, any> & { id: string };
 
@@ -21,6 +29,14 @@ export type PaymentRepository = {
   updateClaim(claimId: string, values: Record<string, unknown>): Promise<PaymentRow>;
   createDenial(values: Record<string, unknown>): Promise<PaymentRow>;
   upsertWorkItem(values: Record<string, unknown>): Promise<PaymentRow>;
+};
+
+export type EraImportRepository = PaymentRepository & {
+  findClaimsByPatientControlNumber(patientControlNumber: string): Promise<PaymentRow[]>;
+  getClaimLines(claimId: string): Promise<PaymentRow[]>;
+  getEraFileByTrace(traceNumber: string): Promise<PaymentRow | null>;
+  createEraServiceLine(values: Record<string, unknown>): Promise<PaymentRow>;
+  updateEraClaim(eraClaimId: string, values: Record<string, unknown>): Promise<PaymentRow>;
 };
 
 export function partitionAdjudicatedBalance(openBalanceCents: number, patientResponsibilityCents: number, patientPaidCents = 0) {
@@ -96,7 +112,7 @@ export async function postInsurancePaymentWorkflow(
       payment_date: new Date().toISOString().slice(0, 10),
       amount_cents: input.amountCents,
       trace_number: input.traceNumber || null,
-      notes: "Synthetic Therassistant demo payment",
+      notes: "Insurance payment",
     });
 
     for (const allocation of input.allocations) {
@@ -130,123 +146,450 @@ export async function postInsurancePaymentWorkflow(
   }
 }
 
-export async function postDemoEraWorkflow(
-  repo: PaymentRepository,
-  input: {
-    claimId: string;
-    paidAmountCents: number;
-    adjustmentAmountCents: number;
-    patientResponsibilityCents?: number;
-    traceNumber?: string;
-    carcCode?: string;
-  },
-): Promise<WorkflowResult<{ eraFileId: string; paymentId: string | null; claimStatus: string }>> {
-  const claim = await repo.getClaim(input.claimId);
-  if (!claim) return failure("claim_not_found", "Claim not found.");
+function paymentMethodFrom835(code: string) {
+  const normalized = code.trim().toUpperCase();
+  if (normalized === "ACH") return "ach";
+  if (normalized === "CHK") return "check";
+  return "other";
+}
 
-  const totalChargeCents = Number(claim.total_charge_cents ?? 0);
-  const patientResponsibilityCents = Number(input.patientResponsibilityCents ?? 0);
-  if (input.paidAmountCents < 0 || input.adjustmentAmountCents < 0 || patientResponsibilityCents < 0) {
-    return blocked("negative_adjudication", "ERA payment, adjustment, and patient responsibility amounts cannot be negative.");
-  }
-  if (input.paidAmountCents + input.adjustmentAmountCents + patientResponsibilityCents > totalChargeCents) {
-    return blocked("era_overage", "ERA payment, adjustment, and patient responsibility exceed the claim charge.");
-  }
+function firstAdjustment(claim: Era835Claim) {
+  return [
+    ...claim.adjustments,
+    ...claim.serviceLines.flatMap((line) => line.adjustments),
+  ][0] ?? null;
+}
 
+function hasNegativeAdjustment(claim: Era835Claim) {
+  return [
+    ...claim.adjustments,
+    ...claim.serviceLines.flatMap((line) => line.adjustments),
+  ].some((row) => row.amountCents < 0);
+}
+
+const AUTO_POST_CLAIM_STATUS_CODES = new Set(["1", "2", "3", "19", "20", "21"]);
+
+export async function import835Workflow(
+  repo: EraImportRepository,
+  input: { rawText: string; fileName: string },
+): Promise<WorkflowResult<{
+  eraFileId: string;
+  claimCount: number;
+  matchedCount: number;
+  postedCount: number;
+  exceptionCount: number;
+  paymentId: string | null;
+}>> {
+  let parsed;
   try {
-    const eraFile = await repo.createEraFile({
-      payer_id: claim.payer_id || null,
-      file_name: `demo-era-${String(claim.patient_control_number || claim.id)}.835`,
-      check_or_trace_number: input.traceNumber || `ERA-${Date.now()}`,
-      payment_amount_cents: input.paidAmountCents,
+    parsed = parse835(input.rawText);
+  } catch (error) {
+    return blocked(
+      "invalid_835",
+      error instanceof Error ? error.message : "Unable to parse the 835 file.",
+    );
+  }
+
+  const duplicate = await repo.getEraFileByTrace(parsed.traceNumber);
+  if (duplicate) {
+    return blocked(
+      "duplicate_835",
+      `An ERA with trace ${parsed.traceNumber} has already been imported.`,
+    );
+  }
+
+  const importedAt = new Date().toISOString();
+  let eraFile: PaymentRow;
+  try {
+    eraFile = await repo.createEraFile({
+      payer_id: null,
+      file_name: input.fileName.trim() || `835-${parsed.traceNumber}.txt`,
+      check_or_trace_number: parsed.traceNumber,
+      payment_amount_cents: parsed.paymentAmountCents,
       status: "uploaded",
-      raw_metadata: { demo: true, claimId: claim.id, patientResponsibilityCents },
+      raw_metadata: {
+        source: "835_import",
+        transaction_control_number: parsed.transactionControlNumber,
+        payer_name: parsed.payerName,
+        payee_name: parsed.payeeName,
+        payment_method_code: parsed.paymentMethodCode,
+        payment_date: parsed.paymentDate,
+        provider_level_adjustments: parsed.providerLevelAdjustments,
+        imported_at: importedAt,
+        raw_x12: input.rawText,
+      },
     });
+  } catch (error) {
+    return failure(
+      "era_file_create_failed",
+      error instanceof Error ? error.message : "Unable to create ERA import record.",
+    );
+  }
+
+  type Prepared = {
+    parsedClaim: Era835Claim;
+    claim: PaymentRow;
+    eraClaim: PaymentRow;
+    contractualCents: number;
+    patientResponsibilityCents: number;
+  };
+
+  const prepared: Prepared[] = [];
+  const matchedPayerIds = new Set<string>();
+  let matchedCount = 0;
+  let exceptionCount = 0;
+  let postedCount = 0;
+
+  async function routeEraIssue(
+    title: string,
+    description: string,
+    sourceObjectType: "era" | "claim",
+    sourceObjectId: string,
+    workqueueType: "unmatched_era" | "payment_posting_issue" = "payment_posting_issue",
+  ) {
+    exceptionCount += 1;
+    await repo.upsertWorkItem({
+      workqueue_type: workqueueType,
+      source_object_type: sourceObjectType,
+      source_object_id: sourceObjectId,
+      title,
+      description,
+      priority: "high",
+      workqueue_status: "open",
+    });
+  }
+
+  if (parsed.providerLevelAdjustments.length) {
+    await routeEraIssue(
+      "835 provider-level adjustment requires review",
+      `ERA ${parsed.traceNumber} contains PLB provider adjustments. Review and post the PLB separately before reconciling the deposit.`,
+      "era",
+      eraFile.id,
+    );
+  }
+
+  for (const parsedClaim of parsed.claims) {
+    const matches = await repo.findClaimsByPatientControlNumber(parsedClaim.patientControlNumber);
+    const matchStatus = matches.length === 1
+      ? "matched"
+      : matches.length > 1
+        ? "ambiguous"
+        : "unmatched";
+    const claim = matches.length === 1 ? matches[0] : null;
 
     const eraClaim = await repo.createEraClaim({
       era_file_id: eraFile.id,
-      patient_control_number: claim.patient_control_number || null,
-      client_id: claim.client_id || null,
-      claim_id: claim.id,
-      charge_amount_cents: totalChargeCents,
-      paid_amount_cents: input.paidAmountCents,
-      status: "matched",
-      raw_data: { demo: true, patientResponsibilityCents },
+      payer_claim_number: parsedClaim.payerClaimNumber || null,
+      patient_control_number: parsedClaim.patientControlNumber || null,
+      client_id: claim?.client_id || null,
+      claim_id: claim?.id || null,
+      charge_amount_cents: parsedClaim.totalChargeCents,
+      paid_amount_cents: parsedClaim.paidAmountCents,
+      status: matchStatus,
+      raw_data: {
+        claim_status_code: parsedClaim.claimStatusCode,
+        patient_responsibility_cents: parsedClaim.patientResponsibilityCents,
+        patient_last_name: parsedClaim.patientLastName,
+        patient_first_name: parsedClaim.patientFirstName,
+        adjustments: parsedClaim.adjustments,
+        remark_codes: parsedClaim.remarkCodes,
+        raw_segments: parsedClaim.rawSegments,
+      },
     });
 
     await repo.createEraMatch({
       era_claim_id: eraClaim.id,
-      claim_id: claim.id,
-      match_status: "matched",
-      confidence: 1,
+      claim_id: claim?.id || null,
+      match_status: matchStatus,
+      confidence: claim ? 1 : 0,
     });
 
-    let paymentId: string | null = null;
-    if (input.paidAmountCents > 0) {
-      const paymentResult = await postInsurancePaymentWorkflow(repo, {
+    if (!claim) {
+      await routeEraIssue(
+        matches.length > 1 ? "Ambiguous 835 claim match" : "Unmatched 835 claim",
+        matches.length > 1
+          ? `Multiple claims match patient control number ${parsedClaim.patientControlNumber}.`
+          : `No internal claim matches patient control number ${parsedClaim.patientControlNumber}.`,
+        "era",
+        eraFile.id,
+        "unmatched_era",
+      );
+      continue;
+    }
+
+    matchedCount += 1;
+    if (claim.payer_id) matchedPayerIds.add(String(claim.payer_id));
+
+    const claimLines = await repo.getClaimLines(claim.id);
+    for (const service of parsedClaim.serviceLines) {
+      const matchingLines = claimLines.filter((line) =>
+        String(line.cpt_code ?? "") === service.cptCode &&
+        (!service.serviceDate || String(line.service_date ?? "") === service.serviceDate),
+      );
+      await repo.createEraServiceLine({
+        era_claim_id: eraClaim.id,
+        claim_line_id: matchingLines.length === 1 ? matchingLines[0].id : null,
+        service_date: service.serviceDate,
+        cpt_code: service.cptCode || null,
+        charge_amount_cents: service.chargeAmountCents,
+        paid_amount_cents: service.paidAmountCents,
+        raw_data: {
+          adjustments: service.adjustments,
+          raw_segments: service.rawSegments,
+          match_count: matchingLines.length,
+        },
+      });
+    }
+
+    if (Number(claim.total_charge_cents ?? 0) !== parsedClaim.totalChargeCents) {
+      await routeEraIssue(
+        "835 claim charge does not match",
+        `${parsedClaim.patientControlNumber}: ERA charge ${parsedClaim.totalChargeCents} cents does not match internal claim charge ${Number(claim.total_charge_cents ?? 0)} cents.`,
+        "claim",
+        claim.id,
+      );
+      continue;
+    }
+
+    if (hasNegativeAdjustment(parsedClaim)) {
+      await routeEraIssue(
+        "835 reversal/negative adjustment requires review",
+        `${parsedClaim.patientControlNumber} contains a negative CAS adjustment. Do not auto-post until the reversal or recoupment is reviewed.`,
+        "claim",
+        claim.id,
+      );
+      continue;
+    }
+
+    const adjustments = claimAdjustmentTotalCents(parsedClaim);
+    if (parsedClaim.paidAmountCents + adjustments !== parsedClaim.totalChargeCents) {
+      await routeEraIssue(
+        "835 claim does not reconcile",
+        `${parsedClaim.patientControlNumber}: paid plus CAS adjustments does not equal the ERA claim charge.`,
+        "claim",
+        claim.id,
+      );
+      continue;
+    }
+
+    const unsupported = unsupportedAdjustmentGroups(parsedClaim);
+    if (unsupported.length) {
+      await routeEraIssue(
+        "835 adjustment group requires review",
+        `${parsedClaim.patientControlNumber} contains unsupported CAS group(s): ${unsupported.join(", ")}. THERASSISTANT will not auto-write off these adjustments.`,
+        "claim",
+        claim.id,
+      );
+      continue;
+    }
+
+    if (parsedClaim.claimStatusCode === "4") {
+      if (parsedClaim.paidAmountCents > 0) {
+        await routeEraIssue(
+          "Denied 835 claim includes payment",
+          `${parsedClaim.patientControlNumber} has CLP status 4 but also includes a payment. Review before posting.`,
+          "claim",
+          claim.id,
+        );
+        continue;
+      }
+      const adjustment = firstAdjustment(parsedClaim);
+      const denial = await createDenialFromAdjudicationWorkflow(repo, {
         claimId: claim.id,
-        amountCents: input.paidAmountCents,
-        allocations: [{ claimId: claim.id, amountCents: input.paidAmountCents }],
-        unappliedCents: 0,
-        traceNumber: input.traceNumber,
-        paymentMethod: "eft",
+        amountCents: parsedClaim.totalChargeCents,
+        carcCode: adjustment?.reasonCode,
+        rarcCode: parsedClaim.remarkCodes[0],
+        category: "other",
+        reason: [
+          adjustment ? `${adjustment.groupCode}-${adjustment.reasonCode}` : "835 denial",
+          ...parsedClaim.remarkCodes,
+        ].join(" · "),
+        workability: "needs_review",
       });
-      if (!paymentResult.ok) return paymentResult;
-      paymentId = paymentResult.value.payment.id;
+      if (!denial.ok) {
+        await routeEraIssue(
+          "Unable to post 835 denial",
+          denial.message,
+          "claim",
+          claim.id,
+        );
+        continue;
+      }
+      await repo.updateClaim(claim.id, {
+        payer_claim_number: parsedClaim.payerClaimNumber || claim.payer_claim_number || null,
+      });
+      await repo.updateEraClaim(eraClaim.id, { status: "posted" });
+      postedCount += 1;
+      continue;
     }
 
-    if (input.adjustmentAmountCents > 0) {
-      const adjustment = await repo.createAdjustment({
-        client_id: claim.client_id || null,
-        claim_id: claim.id,
-        payer_id: claim.payer_id || null,
-        adjustment_type: "contractual",
-        adjustment_status: "posted",
-        adjustment_date: new Date().toISOString().slice(0, 10),
-        amount_cents: input.adjustmentAmountCents,
-        reason: "Contractual adjustment from synthetic ERA",
-        carc_code: input.carcCode || "45",
-        posted_at: new Date().toISOString(),
-      });
-
-      await repo.createAdjustmentAllocation({
-        adjustment_id: adjustment.id,
-        client_id: claim.client_id || null,
-        claim_id: claim.id,
-        amount_cents: input.adjustmentAmountCents,
-      });
+    if (!AUTO_POST_CLAIM_STATUS_CODES.has(parsedClaim.claimStatusCode)) {
+      await routeEraIssue(
+        "835 claim status requires review",
+        `${parsedClaim.patientControlNumber} has CLP status ${parsedClaim.claimStatusCode}, which is not auto-posted.`,
+        "claim",
+        claim.id,
+      );
+      continue;
     }
 
-    const openBalance = totalChargeCents - input.paidAmountCents - input.adjustmentAmountCents;
-    const responsibility = partitionAdjudicatedBalance(openBalance, patientResponsibilityCents);
-    const insuranceRemainder = responsibility.insuranceResponsibilityCents;
-    const claimStatus = openBalance === 0
-      ? "paid"
-      : patientResponsibilityCents > 0 && insuranceRemainder === 0
-        ? "patient_responsibility"
-        : "partially_paid";
-    const currentMetadata = claim.metadata && typeof claim.metadata === "object" && !Array.isArray(claim.metadata)
-      ? claim.metadata
-      : {};
-    await repo.updateClaim(claim.id, {
-      claim_status: claimStatus,
-      metadata: {
-        ...currentMetadata,
-        patient_responsibility_cents: responsibility.patientResponsibilityCents,
-        insurance_responsibility_cents: responsibility.insuranceResponsibilityCents,
-      },
-      ...(claimStatus === "paid" ? { paid_at: new Date().toISOString() } : { paid_at: null }),
+    prepared.push({
+      parsedClaim,
+      claim,
+      eraClaim,
+      contractualCents: claimContractualAdjustmentCents(parsedClaim),
+      patientResponsibilityCents: claimPatientResponsibilityCents(parsedClaim),
     });
+  }
 
-    await repo.updateEraFile(eraFile.id, { status: "posted" });
-
-    return success({ eraFileId: eraFile.id, paymentId, claimStatus });
-  } catch (error) {
-    return failure(
-      "era_post_failed",
-      error instanceof Error ? error.message : "Unable to post synthetic ERA.",
+  const parsedPaidTotal = parsed.claims.reduce((sum, claim) => sum + claim.paidAmountCents, 0);
+  if (!parsed.providerLevelAdjustments.length && parsedPaidTotal !== parsed.paymentAmountCents) {
+    await routeEraIssue(
+      "835 payment does not reconcile to claim payments",
+      `BPR payment is ${parsed.paymentAmountCents} cents but CLP paid amounts total ${parsedPaidTotal} cents.`,
+      "era",
+      eraFile.id,
     );
   }
+
+  if (matchedPayerIds.size === 1) {
+    await repo.updateEraFile(eraFile.id, { payer_id: [...matchedPayerIds][0] });
+  } else if (matchedPayerIds.size > 1) {
+    await routeEraIssue(
+      "835 matched claims span multiple payers",
+      "Matched claims reference more than one internal payer. Review payer mapping before posting.",
+      "era",
+      eraFile.id,
+    );
+  }
+
+  let paymentId: string | null = null;
+  if (parsed.paymentAmountCents > 0) {
+    const payment = await repo.createPayment({
+      client_id: null,
+      payer_id: matchedPayerIds.size === 1 ? [...matchedPayerIds][0] : null,
+      payment_source: "insurance",
+      payment_method: paymentMethodFrom835(parsed.paymentMethodCode),
+      payment_status: "pending",
+      payment_date: parsed.paymentDate || new Date().toISOString().slice(0, 10),
+      amount_cents: parsed.paymentAmountCents,
+      trace_number: parsed.traceNumber,
+      notes: `Imported from 835 ${input.fileName.trim() || parsed.traceNumber}`,
+    });
+    paymentId = payment.id;
+
+    let allocatedCents = 0;
+    for (const item of prepared) {
+      if (item.parsedClaim.paidAmountCents <= 0) continue;
+      await repo.createPaymentAllocation({
+        payment_id: payment.id,
+        client_id: item.claim.client_id || null,
+        claim_id: item.claim.id,
+        claim_line_id: null,
+        amount_cents: item.parsedClaim.paidAmountCents,
+      });
+      allocatedCents += item.parsedClaim.paidAmountCents;
+    }
+
+    const paymentStatus = allocatedCents === 0
+      ? "unapplied"
+      : allocatedCents === parsed.paymentAmountCents
+        ? "posted"
+        : "partially_applied";
+    await repo.updatePayment(payment.id, {
+      payment_status: paymentStatus,
+      posted_at: allocatedCents > 0 ? new Date().toISOString() : null,
+    });
+    if (allocatedCents !== parsed.paymentAmountCents) {
+      await routeEraIssue(
+        "835 payment has unapplied balance",
+        `${parsed.paymentAmountCents - allocatedCents} cents from trace ${parsed.traceNumber} remains unapplied because one or more ERA claims require review.`,
+        "era",
+        eraFile.id,
+      );
+    }
+  }
+
+  for (const item of prepared) {
+    if (item.contractualCents > 0) {
+      const adjustment = await repo.createAdjustment({
+        client_id: item.claim.client_id || null,
+        claim_id: item.claim.id,
+        payer_id: item.claim.payer_id || null,
+        adjustment_type: "contractual",
+        adjustment_status: "posted",
+        adjustment_date: parsed.paymentDate || new Date().toISOString().slice(0, 10),
+        amount_cents: item.contractualCents,
+        reason: "Contractual adjustment from imported 835",
+        carc_code: [
+          ...item.parsedClaim.adjustments,
+          ...item.parsedClaim.serviceLines.flatMap((line) => line.adjustments),
+        ].find((row) => row.groupCode === "CO")?.reasonCode || null,
+        posted_at: new Date().toISOString(),
+      });
+      await repo.createAdjustmentAllocation({
+        adjustment_id: adjustment.id,
+        client_id: item.claim.client_id || null,
+        claim_id: item.claim.id,
+        claim_line_id: null,
+        amount_cents: item.contractualCents,
+      });
+    }
+
+    const remaining = Math.max(
+      0,
+      item.parsedClaim.totalChargeCents -
+        item.parsedClaim.paidAmountCents -
+        item.contractualCents,
+    );
+    const patientResponsibility = Math.min(
+      remaining,
+      item.patientResponsibilityCents,
+    );
+    const insuranceResponsibility = Math.max(0, remaining - patientResponsibility);
+    const claimStatus = remaining === 0
+      ? "paid"
+      : patientResponsibility > 0 && insuranceResponsibility === 0
+        ? "patient_responsibility"
+        : "partially_paid";
+    const currentMetadata =
+      item.claim.metadata &&
+      typeof item.claim.metadata === "object" &&
+      !Array.isArray(item.claim.metadata)
+        ? item.claim.metadata
+        : {};
+
+    await repo.updateClaim(item.claim.id, {
+      claim_status: claimStatus,
+      payer_claim_number:
+        item.parsedClaim.payerClaimNumber || item.claim.payer_claim_number || null,
+      metadata: {
+        ...currentMetadata,
+        patient_responsibility_cents: patientResponsibility,
+        insurance_responsibility_cents: insuranceResponsibility,
+        last_835_trace_number: parsed.traceNumber,
+      },
+      ...(claimStatus === "paid" ? { paid_at: new Date().toISOString() } : {}),
+    });
+    await repo.updateEraClaim(item.eraClaim.id, { status: "posted" });
+    postedCount += 1;
+  }
+
+  const finalFileStatus = exceptionCount === 0 && postedCount === parsed.claims.length
+    ? "posted"
+    : matchedCount === parsed.claims.length
+      ? "partially_matched"
+      : "partially_matched";
+  await repo.updateEraFile(eraFile.id, { status: finalFileStatus });
+
+  return success({
+    eraFileId: eraFile.id,
+    claimCount: parsed.claims.length,
+    matchedCount,
+    postedCount,
+    exceptionCount,
+    paymentId,
+  });
 }
 
 export async function createDenialFromAdjudicationWorkflow(

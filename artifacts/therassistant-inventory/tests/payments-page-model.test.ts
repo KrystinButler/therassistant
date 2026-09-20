@@ -18,3 +18,14 @@ test("Payments owns payment exceptions but not Denials", () => {
 test("Payments no longer links to the retired Claim Submission page", () => {
   assert.doesNotMatch(source, /href="\/claims\/submission"/);
 });
+
+
+test("Payments uses real 835 import rather than synthetic payer adjudication", () => {
+  assert.match(source, /Import ERA \/ 835/);
+  assert.match(source, /import835/);
+  assert.match(source, /type="file"/);
+  assert.doesNotMatch(source, /postDemoEra/);
+  assert.doesNotMatch(source, /Post Paid ERA/);
+  assert.doesNotMatch(source, /Demo Denied/);
+  assert.doesNotMatch(source, /synthetic payer outcomes/i);
+});
