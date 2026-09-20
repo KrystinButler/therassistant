@@ -132,7 +132,9 @@ export async function postManualPayment(input: {
     claimClientId: claim ? String(claim.client_id ?? "") || undefined : undefined,
     claimPayerId: claim ? String(claim.payer_id ?? "") || undefined : undefined,
   });
-  return tenantRpc<DemoManualPaymentResult>("post_demo_manual_payment", {
+  const tenantId = await getCurrentTenantId();
+  return tenantRpc<ManualPaymentResult>("post_manual_payment", {
+    p_tenant_id: tenantId,
     p_amount_cents: draft.amountCents,
     p_source: draft.source,
     p_method: draft.method,
@@ -149,7 +151,9 @@ export async function postManualPayment(input: {
 export async function reversePayment(paymentId: string, reason: string) {
   if (!paymentId) throw new Error("Payment is required.");
   if (!reason.trim()) throw new Error("Reversal reason is required.");
-  return tenantRpc<DemoPaymentReversalResult>("reverse_demo_payment", {
+  const tenantId = await getCurrentTenantId();
+  return tenantRpc<PaymentReversalResult>("reverse_payment", {
+    p_tenant_id: tenantId,
     p_payment_id: paymentId,
     p_reason: reason.trim(),
   });
