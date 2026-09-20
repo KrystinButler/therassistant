@@ -9,8 +9,8 @@ const paymentRepositorySource = readFileSync(
   new URL("../src/domains/payments/repository.ts", import.meta.url),
   "utf8",
 );
-const atomicReversalMigrationUrl = new URL(
-  "../../../supabase/migrations/20260914005021_phase3_atomic_demo_payment_reversal.sql",
+const productionPaymentMigrationUrl = new URL(
+  "../../../supabase/migrations/20260920122438_production_payment_posting.sql",
   import.meta.url,
 );
 const patientArSeedSource = readFileSync(
@@ -59,26 +59,24 @@ function makeEraRepo() {
   return { repo, claims, adjustments };
 }
 
-test("payment reversal is a single constrained database RPC with no direct anon allocation update", () => {
-  assert.equal(existsSync(atomicReversalMigrationUrl), true);
-  if (!existsSync(atomicReversalMigrationUrl)) return;
-  const sql = readFileSync(atomicReversalMigrationUrl, "utf8");
+test("payment reversal is a single tenant-scoped database RPC with ledger reversal", () => {
+  assert.equal(existsSync(productionPaymentMigrationUrl), true);
+  if (!existsSync(productionPaymentMigrationUrl)) return;
+  const sql = readFileSync(productionPaymentMigrationUrl, "utf8");
 
-  assert.match(sql, /create\s+or\s+replace\s+function\s+private\.reverse_demo_payment/i);
-  assert.match(sql, /security\s+definer/i);
-  assert.match(sql, /settings\s*->>\s*'demo'/i);
+  assert.match(sql, /create\s+or\s+replace\s+function\s+public\.reverse_payment/i);
+  assert.match(sql, /security\s+invoker/i);
+  assert.match(sql, /assert_tenant_access\(p_tenant_id\)/i);
   assert.match(sql, /insert\s+into\s+public\.payment_reversals/i);
   assert.match(sql, /update\s+public\.payment_allocations/i);
-  assert.match(sql, /update\s+public\.payments/i);
-  assert.match(sql, /update\s+public\.professional_claims/i);
-  assert.match(sql, /revoke\s+update\s*\(\s*reversed_at\s*\)\s+on\s+table\s+public\.payment_allocations\s+from\s+anon/i);
-  assert.match(sql, /revoke\s+insert\s+on\s+table\s+public\.payment_reversals\s+from\s+anon/i);
-  assert.match(sql, /create\s+or\s+replace\s+function\s+public\.reverse_demo_payment/i);
-  assert.match(sql, /security\s+invoker/i);
+  assert.match(sql, /source_type='payment_reversal'|payment_reversal/i);
+  assert.match(sql, /entry_type','reversal'|entry_type',\s*'reversal'/i);
+  assert.match(sql, /revoke\s+all\s+on\s+function\s+public\.reverse_payment/i);
 
   const reverseSection = paymentRepositorySource.split("export async function reversePayment")[1] ?? "";
-  assert.match(reverseSection, /tenantRpc/);
-  assert.match(reverseSection, /reverse_demo_payment/);
+  assert.match(reverseSection, /tenantRpc<PaymentReversalResult>\("reverse_payment"/);
+  assert.match(reverseSection, /p_tenant_id:\s*tenantId/);
+  assert.doesNotMatch(reverseSection, /reverse_demo_payment/);
   assert.doesNotMatch(reverseSection, /tenantUpdate<DataRow>\("payment_allocations"/);
   assert.doesNotMatch(reverseSection, /tenantInsert<DataRow>\("payment_reversals"/);
 });
