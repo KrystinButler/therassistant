@@ -8,6 +8,7 @@ import { shortDate } from "../../lib/format";
 import { storageClient } from "../../lib/storage-client";
 import {
   getCurrentTenantId,
+  referenceSelect,
   tenantInsert,
   tenantRpc,
   tenantSelect,
@@ -32,6 +33,7 @@ type WorkspaceTab =
   | "participation"
   | "roster"
   | "expirations"
+  | "templates"
   | "reports";
 type DrawerTab =
   | "overview"
@@ -80,6 +82,24 @@ type RequirementForm = {
   category: string;
   status: string;
   due_date: string;
+  notes: string;
+};
+
+type RequirementTemplateForm = {
+  name: string;
+  payer_id: string;
+  payer_plan_id: string;
+  application_type: string;
+  provider_type: string;
+  state: string;
+  notes: string;
+};
+
+type RequirementTemplateItemForm = {
+  requirement_key: string;
+  requirement_name: string;
+  category: string;
+  due_offset_days: string;
   notes: string;
 };
 
@@ -237,6 +257,28 @@ function emptyRequirementForm(): RequirementForm {
   };
 }
 
+function emptyRequirementTemplateForm(): RequirementTemplateForm {
+  return {
+    name: "",
+    payer_id: "",
+    payer_plan_id: "",
+    application_type: "",
+    provider_type: "",
+    state: "",
+    notes: "",
+  };
+}
+
+function emptyRequirementTemplateItemForm(): RequirementTemplateItemForm {
+  return {
+    requirement_key: "",
+    requirement_name: "",
+    category: "",
+    due_offset_days: "",
+    notes: "",
+  };
+}
+
 function emptyFollowupForm(): FollowupForm {
   return {
     followup_date: new Date().toISOString().slice(0, 10),
@@ -272,6 +314,10 @@ export function CredentialingPage() {
   const [verificationRows, setVerificationRows] = useState<Row[]>([]);
   const [networkParticipationRows, setNetworkParticipationRows] = useState<Row[]>([]);
   const [rosterActions, setRosterActions] = useState<Row[]>([]);
+  const [requirementTemplates, setRequirementTemplates] = useState<Row[]>([]);
+  const [requirementTemplateItems, setRequirementTemplateItems] = useState<Row[]>([]);
+  const [payers, setPayers] = useState<Row[]>([]);
+  const [payerPlans, setPayerPlans] = useState<Row[]>([]);
 
   const [selectedCase, setSelectedCase] = useState<Row | null>(null);
   const [enrollmentEdit, setEnrollmentEdit] = useState<EnrollmentEdit>(emptyEnrollmentEdit);
@@ -295,6 +341,13 @@ export function CredentialingPage() {
   const [addingRequirement, setAddingRequirement] = useState(false);
   const [followupForm, setFollowupForm] = useState<FollowupForm>(emptyFollowupForm);
   const [addingFollowup, setAddingFollowup] = useState(false);
+  const [templateForm, setTemplateForm] = useState<RequirementTemplateForm>(emptyRequirementTemplateForm);
+  const [templateItemForm, setTemplateItemForm] = useState<RequirementTemplateItemForm>(emptyRequirementTemplateItemForm);
+  const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null);
+  const [savingTemplate, setSavingTemplate] = useState(false);
+  const [savingTemplateItem, setSavingTemplateItem] = useState(false);
+  const [applyingTemplates, setApplyingTemplates] = useState(false);
+  const [templateMessage, setTemplateMessage] = useState<string | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -328,6 +381,10 @@ export function CredentialingPage() {
           verificationHistoryRows,
           networkParticipationHistoryRows,
           rosterActionRows,
+          requirementTemplateRows,
+          requirementTemplateItemRows,
+          payerRows,
+          payerPlanRows,
         ] = await Promise.all([
           tenantSelect("v_credentialing_case_summary"),
           tenantSelect("v_provider_enrollment_matrix"),
@@ -342,6 +399,10 @@ export function CredentialingPage() {
           tenantSelect("participation_verifications"),
           tenantSelect("provider_network_participation"),
           tenantSelect("roster_actions"),
+          tenantSelect("credentialing_requirement_templates", { order: "name.asc" }),
+          tenantSelect("credentialing_requirement_template_items", { order: "sort_order.asc,requirement_name.asc" }),
+          referenceSelect("payers", { order: "name.asc" }),
+          referenceSelect("payer_plans", { order: "name.asc" }),
         ]);
 
         if (!active) return;
@@ -358,6 +419,10 @@ export function CredentialingPage() {
         setVerificationRows(verificationHistoryRows);
         setNetworkParticipationRows(networkParticipationHistoryRows);
         setRosterActions(rosterActionRows);
+        setRequirementTemplates(requirementTemplateRows);
+        setRequirementTemplateItems(requirementTemplateItemRows);
+        setPayers(payerRows);
+        setPayerPlans(payerPlanRows);
       } catch (err: unknown) {
         if (!active) return;
         setError(
@@ -466,6 +531,15 @@ export function CredentialingPage() {
 
   const selectedRequirements = selectedCase?.application_id
     ? requirements.filter((row) => row.application_id === selectedCase.application_id)
+    : [];
+  const selectedTemplate = selectedTemplateId
+    ? requirementTemplates.find((row) => row.id === selectedTemplateId) ?? null
+    : null;
+  const selectedTemplateItems = selectedTemplateId
+    ? requirementTemplateItems.filter((row) => row.template_id === selectedTemplateId)
+    : [];
+  const templatePayerPlans = templateForm.payer_id
+    ? payerPlans.filter((row) => row.payer_id === templateForm.payer_id)
     : [];
   const selectedFollowups = selectedCase?.application_id
     ? followups
@@ -668,6 +742,107 @@ export function CredentialingPage() {
     }
   }
 
+  async function createRequirementTemplate() {
+    if (!templateForm.name.trim() || !templateForm.payer_id) {
+      setError("Template name and payer are required.");
+      return;
+    }
+    setSavingTemplate(true);
+    setError(null);
+    setTemplateMessage(null);
+    try {
+      const template = await tenantInsert<Row>("credentialing_requirement_templates", {
+        name: templateForm.name.trim(),
+        payer_id: templateForm.payer_id,
+        payer_plan_id: templateForm.payer_plan_id || null,
+        application_type: templateForm.application_type.trim() || null,
+        provider_type: templateForm.provider_type.trim() || null,
+        state: templateForm.state.trim().toUpperCase() || null,
+        notes: templateForm.notes.trim() || null,
+        is_active: true,
+      });
+      setSelectedTemplateId(template.id);
+      setTemplateForm(emptyRequirementTemplateForm());
+      setTemplateMessage("Requirement template created.");
+      setVersion((value) => value + 1);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to create requirement template.");
+    } finally {
+      setSavingTemplate(false);
+    }
+  }
+
+  async function addRequirementTemplateItem() {
+    if (!selectedTemplateId || !templateItemForm.requirement_name.trim()) return;
+    setSavingTemplateItem(true);
+    setError(null);
+    setTemplateMessage(null);
+    try {
+      const requirementKey =
+        templateItemForm.requirement_key.trim() ||
+        templateItemForm.requirement_name
+          .trim()
+          .toLowerCase()
+          .replace(/[^a-z0-9]+/g, "_")
+          .replace(/^_+|_+$/g, "");
+      await tenantInsert("credentialing_requirement_template_items", {
+        template_id: selectedTemplateId,
+        requirement_key: requirementKey,
+        requirement_name: templateItemForm.requirement_name.trim(),
+        category: templateItemForm.category.trim() || null,
+        due_offset_days: templateItemForm.due_offset_days
+          ? Number(templateItemForm.due_offset_days)
+          : null,
+        notes: templateItemForm.notes.trim() || null,
+        sort_order: selectedTemplateItems.length,
+      });
+      setTemplateItemForm(emptyRequirementTemplateItemForm());
+      setTemplateMessage("Requirement added to template.");
+      setVersion((value) => value + 1);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to add template requirement.");
+    } finally {
+      setSavingTemplateItem(false);
+    }
+  }
+
+  async function toggleRequirementTemplate(template: Row) {
+    setError(null);
+    setTemplateMessage(null);
+    try {
+      await tenantUpdate("credentialing_requirement_templates", template.id, {
+        is_active: !Boolean(template.is_active),
+      });
+      setTemplateMessage(Boolean(template.is_active) ? "Template deactivated." : "Template activated.");
+      setVersion((value) => value + 1);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to update requirement template.");
+    }
+  }
+
+  async function applyMatchingRequirementTemplates() {
+    if (!selectedCase?.application_id) return;
+    setApplyingTemplates(true);
+    setError(null);
+    setTemplateMessage(null);
+    try {
+      const tenantId = await getCurrentTenantId();
+      const inserted = await tenantRpc<number>("apply_matching_credentialing_requirement_templates", {
+        p_tenant_id: tenantId,
+        p_application_id: selectedCase.application_id,
+      });
+      setTemplateMessage(
+        inserted > 0
+          ? String(inserted) + " missing requirement" + (inserted === 1 ? "" : "s") + " added from matching templates."
+          : "No new matching template requirements were needed.",
+      );
+      setVersion((value) => value + 1);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to apply matching requirement templates.");
+    } finally {
+      setApplyingTemplates(false);
+    }
+  }
   async function addRequirement() {
     if (!selectedCase?.application_id || !requirementForm.requirement_name.trim()) return;
     setAddingRequirement(true);
@@ -1166,6 +1341,7 @@ export function CredentialingPage() {
           ["participation", "Participation Matrix"],
           ["roster", "Roster Management"],
           ["expirations", "Expirations"],
+          ["templates", "Requirement Templates"],
           ["reports", "Reports"],
         ] as const).map(([id, label]) => (
           <button
@@ -1467,6 +1643,64 @@ export function CredentialingPage() {
         </section>
       ) : null}
 
+      {!loading && workspaceTab === "templates" ? (
+        <div className="thera-stack">
+          <section className="thera-card">
+            <div className="thera-card-header">
+              <div>
+                <h2>Requirement Templates</h2>
+                <p>Define reusable payer requirements once. New cases receive matching requirements automatically, and existing cases can apply them without duplicating existing requirement keys.</p>
+              </div>
+            </div>
+            {templateMessage ? <div className="thera-alert" style={{ marginBottom: 12 }}>{templateMessage}</div> : null}
+            <div className="thera-form-grid">
+              <label>Template Name *<input className="thera-input" value={templateForm.name} onChange={(event) => setTemplateForm({ ...templateForm, name: event.target.value })} /></label>
+              <label>Payer *<select className="thera-input" value={templateForm.payer_id} onChange={(event) => setTemplateForm({ ...templateForm, payer_id: event.target.value, payer_plan_id: "" })}><option value="">Select payer</option>{payers.map((payer) => <option key={payer.id} value={payer.id}>{payer.name}</option>)}</select></label>
+              <label>Plan / Product<select className="thera-input" value={templateForm.payer_plan_id} onChange={(event) => setTemplateForm({ ...templateForm, payer_plan_id: event.target.value })}><option value="">All products</option>{templatePayerPlans.map((plan) => <option key={plan.id} value={plan.id}>{plan.name}</option>)}</select></label>
+              <label>Application Type<input className="thera-input" placeholder="initial, recredentialing..." value={templateForm.application_type} onChange={(event) => setTemplateForm({ ...templateForm, application_type: event.target.value })} /></label>
+              <label>Provider Type / Credential<input className="thera-input" placeholder="LPC, LCSW, PMHNP..." value={templateForm.provider_type} onChange={(event) => setTemplateForm({ ...templateForm, provider_type: event.target.value })} /></label>
+              <label>State<input className="thera-input" maxLength={2} placeholder="CO" value={templateForm.state} onChange={(event) => setTemplateForm({ ...templateForm, state: event.target.value.toUpperCase().slice(0, 2) })} /></label>
+              <label style={{ gridColumn: "1 / -1" }}>Notes<textarea className="thera-input" rows={2} value={templateForm.notes} onChange={(event) => setTemplateForm({ ...templateForm, notes: event.target.value })} /></label>
+            </div>
+            <div className="thera-filter-row" style={{ marginTop: 16 }}><button type="button" className="thera-action" disabled={savingTemplate || !templateForm.name.trim() || !templateForm.payer_id} onClick={() => void createRequirementTemplate()}>{savingTemplate ? "Creating..." : "Create Template"}</button></div>
+          </section>
+
+          <section className="thera-card">
+            <div className="thera-card-header"><div><h2>Configured Templates</h2><p>Select a template to manage its reusable checklist.</p></div></div>
+            <div className="thera-table-wrap"><table className="thera-table"><thead><tr><th>Template</th><th>Payer</th><th>Product</th><th>Application</th><th>Provider</th><th>State</th><th>Items</th><th>Status</th><th>Action</th></tr></thead>
+              <tbody>
+                {requirementTemplates.length === 0 ? <tr><td colSpan={9}>No requirement templates configured.</td></tr> : null}
+                {requirementTemplates.map((template) => {
+                  const payer = payers.find((row) => row.id === template.payer_id);
+                  const plan = payerPlans.find((row) => row.id === template.payer_plan_id);
+                  const itemCount = requirementTemplateItems.filter((row) => row.template_id === template.id).length;
+                  return <tr key={template.id}>
+                    <td><button type="button" className="thera-table-link" onClick={() => setSelectedTemplateId(template.id)}>{template.name}</button></td>
+                    <td>{payer?.name || "—"}</td><td>{plan?.name || "All products"}</td><td>{template.application_type || "All"}</td><td>{template.provider_type || "All"}</td><td>{template.state || "All"}</td><td>{itemCount}</td><td><StatusBadge value={template.is_active ? "active" : "inactive"} /></td>
+                    <td><button type="button" className="thera-action secondary" onClick={() => void toggleRequirementTemplate(template)}>{template.is_active ? "Deactivate" : "Activate"}</button></td>
+                  </tr>;
+                })}
+              </tbody>
+            </table></div>
+          </section>
+
+          {selectedTemplate ? <section className="thera-card">
+            <div className="thera-card-header"><div><h2>{selectedTemplate.name}</h2><p>Add canonical requirement keys once. More-specific templates override broader templates when the same key matches.</p></div><button type="button" className="thera-action secondary" onClick={() => setSelectedTemplateId(null)}>Close</button></div>
+            <div className="thera-form-grid">
+              <label>Requirement *<input className="thera-input" value={templateItemForm.requirement_name} onChange={(event) => setTemplateItemForm({ ...templateItemForm, requirement_name: event.target.value })} /></label>
+              <label>Requirement Key<input className="thera-input" placeholder="auto-generated when blank" value={templateItemForm.requirement_key} onChange={(event) => setTemplateItemForm({ ...templateItemForm, requirement_key: event.target.value })} /></label>
+              <label>Category<input className="thera-input" value={templateItemForm.category} onChange={(event) => setTemplateItemForm({ ...templateItemForm, category: event.target.value })} /></label>
+              <label>Due Offset Days<input className="thera-input" type="number" min="0" max="365" value={templateItemForm.due_offset_days} onChange={(event) => setTemplateItemForm({ ...templateItemForm, due_offset_days: event.target.value })} /></label>
+              <label style={{ gridColumn: "1 / -1" }}>Notes<textarea className="thera-input" rows={2} value={templateItemForm.notes} onChange={(event) => setTemplateItemForm({ ...templateItemForm, notes: event.target.value })} /></label>
+            </div>
+            <div className="thera-filter-row" style={{ marginTop: 16 }}><button type="button" className="thera-action" disabled={savingTemplateItem || !templateItemForm.requirement_name.trim()} onClick={() => void addRequirementTemplateItem()}>{savingTemplateItem ? "Adding..." : "Add Requirement"}</button></div>
+            <div className="thera-table-wrap" style={{ marginTop: 16 }}><table className="thera-table"><thead><tr><th>Requirement</th><th>Key</th><th>Category</th><th>Due Offset</th><th>Notes</th></tr></thead><tbody>
+              {selectedTemplateItems.length === 0 ? <tr><td colSpan={5}>No requirements in this template.</td></tr> : null}
+              {selectedTemplateItems.map((item) => <tr key={item.id}><td>{item.requirement_name}</td><td><code>{item.requirement_key}</code></td><td>{item.category || "—"}</td><td>{item.due_offset_days != null ? String(item.due_offset_days) + " days" : "—"}</td><td>{item.notes || "—"}</td></tr>)}
+            </tbody></table></div>
+          </section> : null}
+        </div>
+      ) : null}
       {!loading && workspaceTab === "reports" ? (
         <div className="thera-stack">
           <section className="thera-card">
@@ -1918,7 +2152,18 @@ export function CredentialingPage() {
           {drawerTab === "requirements" ? (
             <div className="thera-stack">
               <section className="thera-card">
-                <h2>Add Requirement</h2>
+                <div className="thera-card-header split">
+                  <div><h2>Add Requirement</h2><p>Add a one-off requirement, or pull reusable payer requirements from configured templates.</p></div>
+                  <button
+                    type="button"
+                    className="thera-action secondary"
+                    disabled={applyingTemplates || !selectedCase?.application_id}
+                    onClick={() => void applyMatchingRequirementTemplates()}
+                  >
+                    {applyingTemplates ? "Applying..." : "Apply Matching Templates"}
+                  </button>
+                </div>
+                {templateMessage ? <div className="thera-alert" style={{ marginBottom: 12 }}>{templateMessage}</div> : null}
                 <div className="thera-form-grid">
                   <label>
                     Requirement *
