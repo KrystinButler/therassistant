@@ -9,6 +9,7 @@ export type BillingRepository = {
   updateEncounter(id: string, values: Record<string, unknown>): Promise<unknown>;
   getExistingCharges(encounterId: string): Promise<Array<Record<string, any>>>;
   createCharge(values: Record<string, unknown>): Promise<Record<string, any>>;
+  updateCharge(id: string, values: Record<string, unknown>): Promise<Record<string, any>>;
   updateServiceLine(id: string, values: Record<string, unknown>): Promise<unknown>;
 };
 
@@ -105,48 +106,104 @@ export async function createChargeFromEncounterWorkflow(
   encounterId: string,
 ): Promise<WorkflowResult<Array<Record<string, any>>>> {
   const routed = await routeEncounterToBillingWorkflow(repo, encounterId);
-  if (!routed.ok) return routed;
+  if (!routed.ok && !routed.blocked) return routed;
 
   try {
-    const existing = await repo.getExistingCharges(encounterId);
-    if (existing.length) return success(existing);
-
     const context = await repo.getBillingContext(encounterId);
+    const noteSigned = Boolean(
+      context.note && ["signed", "locked"].includes(String(context.note.note_status)),
+    );
+    if (!noteSigned) {
+      return routed.ok
+        ? blocked("note_unsigned", "The clinical note must be signed before charge capture.")
+        : routed;
+    }
+
+    if (!context.serviceLines.length) {
+      return routed.ok
+        ? blocked("service_line_missing", "A service line is required before charge capture.")
+        : routed;
+    }
+
+    const readiness = evaluateBillingReadiness(context);
+    const blockingMessages = readiness.checks
+      .filter((check) => check.blocking)
+      .map((check) => check.message);
+    const chargeStatus = readiness.ready ? "ready_for_claim" : "blocked";
+    const blockReason = readiness.ready ? null : blockingMessages.join(" ");
+
     const primaryDiagnosis =
-      context.diagnoses.find((diagnosis) => diagnosis.is_primary) ?? context.diagnoses[0];
+      context.diagnoses.find((diagnosis) => diagnosis.is_primary) ?? context.diagnoses[0] ?? null;
+    const existing = await repo.getExistingCharges(encounterId);
+    const activeByServiceLine = new Map(
+      existing
+        .filter(
+          (charge) =>
+            charge.service_line_id &&
+            String(charge.charge_status ?? "") !== "voided",
+        )
+        .map((charge) => [String(charge.service_line_id), charge]),
+    );
 
     const charges: Array<Record<string, any>> = [];
     for (const line of context.serviceLines) {
-      const charge = await repo.createCharge({
+      const serviceLineId = String(line.id ?? "");
+      const cptCode = String(line.cpt_hcpcs_code ?? "").trim();
+      if (!serviceLineId || !cptCode) continue;
+
+      const current = activeByServiceLine.get(serviceLineId);
+      if (
+        current &&
+        ["claim_created", "patient_responsibility"].includes(String(current.charge_status ?? ""))
+      ) {
+        charges.push(current);
+        continue;
+      }
+
+      const values = {
+        service_line_id: serviceLineId,
         encounter_id: encounterId,
         client_id: context.encounter.client_id,
         appointment_id: context.encounter.appointment_id ?? null,
         clinical_note_id: context.note?.id ?? null,
         provider_id: context.encounter.provider_id ?? null,
         payer_id: context.encounter.payer_id ?? null,
-        service_date: context.note?.service_date ?? String(context.encounter.started_at ?? "").slice(0, 10),
-        cpt_code: line.cpt_hcpcs_code,
+        service_date:
+          context.note?.service_date ??
+          String(context.encounter.started_at ?? "").slice(0, 10),
+        cpt_code: cptCode,
         modifier1: line.modifier1 ?? null,
         modifier2: line.modifier2 ?? null,
+        units: Number(line.units ?? 1),
         diagnosis_code: primaryDiagnosis?.diagnosis_code ?? null,
-        place_of_service: line.place_of_service_code,
+        place_of_service: line.place_of_service_code ?? null,
         charge_amount_cents: Number(line.charge_amount_cents ?? 0),
-        charge_status: "ready_for_claim",
-        block_reason: null,
-      });
+        charge_status: chargeStatus,
+        block_reason: blockReason,
+      };
+
+      const charge = current
+        ? await repo.updateCharge(String(current.id), values)
+        : await repo.createCharge(values);
       charges.push(charge);
-      if (line.id) await repo.updateServiceLine(String(line.id), { ready_for_claim: true });
+      await repo.updateServiceLine(serviceLineId, { ready_for_claim: readiness.ready });
+    }
+
+    if (!charges.length) {
+      return routed.ok
+        ? blocked("charge_source_missing", "No chargeable service line is available.")
+        : routed;
     }
 
     await repo.updateEncounter(encounterId, {
-      billing_status: "charged",
+      billing_status: readiness.ready ? "charged" : "held",
     });
 
     return success(charges);
   } catch (error) {
     return failure(
       "charge_creation_failed",
-      error instanceof Error ? error.message : "Unable to create charge.",
+      error instanceof Error ? error.message : "Unable to capture charge.",
     );
   }
 }
