@@ -65,7 +65,7 @@ test("payment reversal is a single tenant-scoped database RPC with ledger revers
   const sql = readFileSync(productionPaymentMigrationUrl, "utf8");
 
   assert.match(sql, /create\s+or\s+replace\s+function\s+public\.reverse_payment/i);
-  assert.match(sql, /security\s+invoker/i);
+  assert.doesNotMatch(sql, /security\s+definer/i);
   assert.match(sql, /assert_tenant_access\(p_tenant_id\)/i);
   assert.match(sql, /insert\s+into\s+public\.payment_reversals/i);
   assert.match(sql, /update\s+public\.payment_allocations/i);
