@@ -5,7 +5,6 @@ import * as schedulingWorkflow from "../src/domains/scheduling/workflow.ts";
 
 const {
   buildAppointmentInput,
-  syntheticEligibilityStatus,
 } = schedulingWorkflow;
 
 type SchedulePresentation = {
@@ -46,15 +45,6 @@ test("appointment input derives workflow context instead of accepting insurance 
     new Date(input.ends_at).getTime() - new Date(input.starts_at).getTime(),
     60 * 60 * 1000,
   );
-});
-
-test("synthetic eligibility adapter returns active for ordinary demo member IDs", () => {
-  assert.equal(syntheticEligibilityStatus("DEMO12345"), "active");
-});
-
-test("synthetic eligibility adapter demonstrates inactive and unable-to-verify outcomes", () => {
-  assert.equal(syntheticEligibilityStatus("DEMO12340"), "inactive");
-  assert.equal(syntheticEligibilityStatus("DEMO12349"), "unable_to_verify");
 });
 
 test("schedule check-in status is restricted to the four approved states", () => {

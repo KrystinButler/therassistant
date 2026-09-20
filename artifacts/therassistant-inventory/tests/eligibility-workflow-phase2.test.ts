@@ -2,22 +2,35 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import {
-  syntheticEligibilityStatus,
-  buildSyntheticEligibilityResponse,
+  isVerifiedEligibilitySource,
   parseEligibilityBenefits,
 } from "../src/domains/eligibility/workflow.ts";
 
-test("synthetic eligibility supports active, inactive and unable-to-verify outcomes", () => {
-  assert.equal(syntheticEligibilityStatus("MEM123"), "active");
-  assert.equal(syntheticEligibilityStatus("MEM120"), "inactive");
-  assert.equal(syntheticEligibilityStatus("MEM129"), "unable_to_verify");
+test("synthetic demo eligibility is never treated as verified coverage", () => {
+  assert.equal(isVerifiedEligibilitySource("synthetic_demo_270_271"), false);
+  assert.equal(isVerifiedEligibilitySource("manual_payer_portal"), true);
+  assert.equal(isVerifiedEligibilitySource("manual_payer_phone"), true);
+  assert.equal(isVerifiedEligibilitySource("clearinghouse_271"), true);
+  assert.equal(isVerifiedEligibilitySource(""), true);
 });
 
-test("active synthetic 271 contains usable benefit fields", () => {
-  const raw = buildSyntheticEligibilityResponse("MEM123", "active");
+test("payer-confirmed manual benefits parse into usable fields", () => {
+  const raw = {
+    manual: true,
+    verification_source: "payer_portal",
+    benefits: {
+      copay_cents: 2000,
+      coinsurance_percent: 20,
+      deductible_cents: 150000,
+      deductible_remaining_cents: 75000,
+      out_of_pocket_cents: 500000,
+      out_of_pocket_remaining_cents: 325000,
+      network_status: "in_network",
+      authorization_required: false,
+    },
+  };
   const benefits = parseEligibilityBenefits(raw);
 
-  assert.equal(raw.transaction, "271");
   assert.equal(benefits.copayCents, 2000);
   assert.equal(benefits.coinsurancePercent, 20);
   assert.equal(benefits.deductibleCents, 150000);
@@ -25,9 +38,13 @@ test("active synthetic 271 contains usable benefit fields", () => {
   assert.equal(benefits.authorizationRequired, false);
 });
 
-test("non-active eligibility does not invent active benefits", () => {
-  const raw = buildSyntheticEligibilityResponse("MEM120", "inactive");
-  const benefits = parseEligibilityBenefits(raw);
+test("missing benefit fields do not invent coverage amounts", () => {
+  const benefits = parseEligibilityBenefits({
+    manual: true,
+    verification_source: "payer_phone",
+    benefits: {},
+  });
   assert.equal(benefits.copayCents, null);
+  assert.equal(benefits.deductibleRemainingCents, null);
   assert.equal(benefits.networkStatus, "unknown");
 });

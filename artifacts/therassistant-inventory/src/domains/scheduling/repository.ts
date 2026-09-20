@@ -6,11 +6,11 @@ import {
   type Row,
 } from "../../lib/tenant-data-client";
 import { evaluatePreSession } from "../readiness/evaluate-pre-session";
+import { isVerifiedEligibilitySource } from "../eligibility/workflow";
 import type { PreSessionReadiness } from "../readiness/types";
 import {
   buildAppointmentInput,
   buildSchedulePatientPresentation,
-  syntheticEligibilityStatus,
   type AppointmentDraft,
   type ScheduleCheckInStatus,
   type SchedulePreVisitInsight,
@@ -89,18 +89,25 @@ function latestEligibility(
   rows: DataRow[],
   clientId: string,
   policyId: string | null,
+  serviceDate: string,
 ) {
-  return rows
+  const verified = rows
     .filter(
       (row) =>
         row.client_id === clientId &&
-        (!policyId || row.insurance_policy_id === policyId),
+        (!policyId || row.insurance_policy_id === policyId) &&
+        isVerifiedEligibilitySource(row.response_source),
     )
-    .sort((a, b) =>
-      String(b.created_at ?? b.updated_at ?? "").localeCompare(
+    .sort((a, b) => {
+      const aExact = String(a.service_date ?? "") === serviceDate;
+      const bExact = String(b.service_date ?? "") === serviceDate;
+      if (aExact && !bExact) return -1;
+      if (bExact && !aExact) return 1;
+      return String(b.created_at ?? b.updated_at ?? "").localeCompare(
         String(a.created_at ?? a.updated_at ?? ""),
-      ),
-    )[0] ?? null;
+      );
+    });
+  return verified[0] ?? null;
 }
 
 function activeAuthorization(
@@ -210,10 +217,12 @@ export async function getScheduleData(): Promise<ScheduleData> {
     const providerId = appointment.provider_id ? String(appointment.provider_id) : null;
     const policy = primaryPolicy(policies, clientId);
     const payerId = policy?.payer_id ? String(policy.payer_id) : null;
+    const serviceDate = String(appointment.starts_at ?? "").slice(0, 10);
     const eligibilityRow = latestEligibility(
       eligibility,
       clientId,
       policy?.id ?? null,
+      serviceDate,
     );
     const policyMetadata = metadata(policy);
     const authorizationRequired = billingType === "self_pay" ? false : policyMetadata.authorization_required === true;
@@ -228,7 +237,6 @@ export async function getScheduleData(): Promise<ScheduleData> {
         row.provider_id === providerId &&
         row.payer_id === payerId,
     );
-    const serviceDate = String(appointment.starts_at ?? "").slice(0, 10);
     const treatmentPlan = currentTreatmentPlan(treatmentPlans, clientId, serviceDate);
     const checkin = checkinsByAppointment.get(appointment.id) ?? null;
     const openBalanceCents = Number(
@@ -243,7 +251,12 @@ export async function getScheduleData(): Promise<ScheduleData> {
       billingType,
       policy: policy ? { status: String(policy.status ?? "unknown") } : null,
       eligibility: eligibilityRow
-        ? { eligibility_status: String(eligibilityRow.eligibility_status ?? "") }
+        ? {
+            eligibility_status: String(eligibilityRow.eligibility_status ?? ""),
+            service_date: eligibilityRow.service_date
+              ? String(eligibilityRow.service_date)
+              : null,
+          }
         : null,
       authorizationRequired,
       authorization: authorization
@@ -336,33 +349,4 @@ export async function updateAppointmentStatus(id: string, status: string) {
   const values: Row = { appointment_status: status };
   if (status === "completed") values.completed_at = new Date().toISOString();
   return tenantUpdate<DataRow>("appointments", id, values);
-}
-
-export async function runEligibility(appointmentId: string) {
-  const { appointment } = await getPreSessionData(appointmentId);
-  if (!appointment.policyId || !appointment.payerId || !appointment.memberId) {
-    throw new Error("Add a primary insurance policy before running eligibility.");
-  }
-
-  const status = syntheticEligibilityStatus(appointment.memberId);
-  const serviceDate = appointment.startsAt.slice(0, 10);
-
-  return tenantInsert<DataRow>("eligibility_checks", {
-    client_id: appointment.clientId,
-    insurance_policy_id: appointment.policyId,
-    payer_id: appointment.payerId,
-    service_date: serviceDate,
-    eligibility_status: status,
-    response_source: "synthetic_demo_270_271",
-    raw_response: {
-      demo: true,
-      transaction: "271",
-      member_id: appointment.memberId,
-      outcome: status,
-    },
-    notes:
-      status === "active"
-        ? "Synthetic 270/271 response: active coverage."
-        : `Synthetic 270/271 response: ${status.replaceAll("_", " ")}.`,
-  });
 }

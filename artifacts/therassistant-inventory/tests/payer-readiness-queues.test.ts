@@ -35,6 +35,39 @@ test("eligibility queue uses the latest policy-specific result", () => {
   assert.equal(taylor?.needsAttention, true);
 });
 
+test("eligibility queue ignores legacy synthetic demo results", () => {
+  const rows = buildEligibilityQueue({
+    clients,
+    payers,
+    policies,
+    eligibility: [
+      {
+        id: "demo",
+        client_id: "c1",
+        insurance_policy_id: "pol1",
+        eligibility_status: "active",
+        response_source: "synthetic_demo_270_271",
+        service_date: "2026-09-20",
+        created_at: "2026-09-20T12:00:00Z",
+      },
+      {
+        id: "verified",
+        client_id: "c1",
+        insurance_policy_id: "pol1",
+        eligibility_status: "inactive",
+        response_source: "manual_payer_portal",
+        service_date: "2026-09-20",
+        created_at: "2026-09-20T11:00:00Z",
+      },
+    ],
+  });
+
+  const jordan = rows.find((row) => row.patientId === "c1");
+  assert.equal(jordan?.status, "inactive");
+  assert.equal(jordan?.responseSource, "manual_payer_portal");
+  assert.equal(jordan?.needsAttention, true);
+});
+
 test("authorization queue surfaces required coverage with no authorization", () => {
   const rows = buildAuthorizationQueue({
     clients,
