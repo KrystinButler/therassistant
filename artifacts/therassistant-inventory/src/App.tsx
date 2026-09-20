@@ -45,6 +45,7 @@ import { WorkCenterPage } from "./pages/work-center";
 import { AdministrationPage } from "./pages/administration";
 import { ClientsPage } from "./pages/clients";
 import { PayerDetailPage } from "./pages/payer-detail";
+import { PracticeConfigurationPage } from "./pages/practice-configuration";
 import { ProviderDetailPage } from "./pages/provider-detail";
 import { ProvidersPage } from "./pages/providers";
 import { ReportsPage } from "./pages/operational-workspaces";
@@ -100,6 +101,7 @@ function StaffRoutes() {
         <Route path="/mailroom"><MailroomPage /></Route>
         <Route path="/reports"><ReportsPage /></Route>
         <Route path="/administration/imports"><ImportsPage /></Route>
+        <Route path="/administration/practices"><PracticeConfigurationPage /></Route>
         <Route path="/administration"><AdministrationPage /></Route>
         <Route path="/"><Redirect to="/schedule" /></Route>
         <Route><div className="thera-state">Page not found.</div></Route>
