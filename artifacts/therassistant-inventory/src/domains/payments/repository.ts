@@ -101,6 +101,28 @@ const repository: EraImportRepository = {
       limit: "1",
     }));
   },
+  async getExpectedEraPayerIdentifier(payerId) {
+    const tenantId = await getCurrentTenantId();
+    const tenants = await referenceSelect<DataRow>("tenants", {
+      id: `eq.${tenantId}`,
+      limit: "1",
+    });
+    const settings = tenants[0]?.settings;
+    const root = settings && typeof settings === "object" && !Array.isArray(settings)
+      ? settings as Record<string, unknown>
+      : {};
+    const claims837p = root.claims_837p && typeof root.claims_837p === "object" && !Array.isArray(root.claims_837p)
+      ? root.claims_837p as Record<string, unknown>
+      : {};
+    const eraIdentifiers =
+      claims837p.eraPayerIdentifiers &&
+      typeof claims837p.eraPayerIdentifiers === "object" &&
+      !Array.isArray(claims837p.eraPayerIdentifiers)
+        ? claims837p.eraPayerIdentifiers as Record<string, unknown>
+        : {};
+    const value = String(eraIdentifiers[payerId] ?? "").trim();
+    return value || null;
+  },
   createPayment(values) { return tenantInsert<DataRow>("payments", values); },
   updatePayment(id, values) { return tenantUpdate<DataRow>("payments", id, values); },
   createPaymentAllocation(values) { return tenantInsert<DataRow>("payment_allocations", values); },
