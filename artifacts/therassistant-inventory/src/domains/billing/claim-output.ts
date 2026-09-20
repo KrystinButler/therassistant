@@ -76,6 +76,7 @@ export type Edi837PConfig = {
   usageIndicator: "P" | "T";
   payerIds: Record<string, string>;
   claimFilingIndicators: Record<string, string>;
+  eraPayerIdentifiers: Record<string, string>;
 };
 
 export type ClaimOutputItem = {
