@@ -648,23 +648,3 @@ export function GoldenThreadPage() {
     />
   );
 }
-
-export function PatientPortalPage() {
-  const [, params] =
-    useRoute<{
-      clientId: string;
-    }>(
-      "/patient-portal/:clientId",
-    );
-
-  return (
-    <ModulePage
-      endpoint={
-        `/api/clients/${params?.clientId ?? ""}`
-      }
-      eyebrow="PATIENT EXPERIENCE"
-      title="Patient Portal Preview"
-      description="Synthetic client-facing preview using the same connected client record."
-    />
-  );
-}
