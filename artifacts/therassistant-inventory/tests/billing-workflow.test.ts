@@ -194,3 +194,36 @@ test("re-audit clears a blocked charge without creating a duplicate", async () =
   assert.equal(repo.charges[0].block_reason, null);
   assert.equal(repo.encounterUpdate.billing_status, "charged");
 });
+
+test("self-pay encounter is billing ready without payer checks", () => {
+  const result = evaluateBillingReadiness({
+    ...cleanContext,
+    billingType: "self_pay",
+    eligibilityStatus: null,
+    providerEnrollmentStatus: null,
+    encounter: { ...cleanContext.encounter, payer_id: null },
+  });
+
+  assert.equal(result.ready, true);
+  assert.ok(result.checks.some((check) => check.code === "self_pay" && !check.blocking));
+  assert.equal(result.checks.some((check) => check.code === "eligibility_not_active"), false);
+  assert.equal(result.checks.some((check) => check.code === "provider_enrollment"), false);
+});
+
+test("self-pay encounter creates patient-responsibility charge instead of claim-ready charge", async () => {
+  const repo = fakeRepo({
+    ...cleanContext,
+    billingType: "self_pay",
+    eligibilityStatus: null,
+    providerEnrollmentStatus: null,
+    encounter: { ...cleanContext.encounter, payer_id: null },
+  });
+
+  const result = await createChargeFromEncounterWorkflow(repo, "enc-1");
+  assert.equal(result.ok, true);
+  assert.equal(repo.charges.length, 1);
+  assert.equal(repo.charges[0].charge_status, "patient_responsibility");
+  assert.equal(repo.charges[0].payer_id, null);
+  assert.equal(repo.encounterUpdate.billing_status, "charged");
+  assert.equal(repo.serviceLineUpdates[0].values.ready_for_claim, false);
+});
