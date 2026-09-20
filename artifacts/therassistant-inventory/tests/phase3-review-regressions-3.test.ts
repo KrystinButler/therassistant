@@ -99,6 +99,8 @@ test("anonymous payment allocation reversal writes are removed in favor of an at
   assert.match(sql, /revoke\s+update\s*\(\s*reversed_at\s*\)\s+on\s+table\s+public\.payment_allocations\s+from\s+anon/i);
   assert.match(sql, /revoke\s+insert\s+on\s+table\s+public\.payment_reversals\s+from\s+anon/i);
   assert.match(sql, /create\s+or\s+replace\s+function\s+public\.reverse_demo_payment/i);
-  assert.match(paymentRepositorySource, /tenantRpc<DemoPaymentReversalResult>\("reverse_demo_payment"/);
+  assert.match(paymentRepositorySource, /tenantRpc<PaymentReversalResult>\("reverse_payment"/);
+  assert.match(paymentRepositorySource, /p_tenant_id:\s*tenantId/);
+  assert.doesNotMatch(paymentRepositorySource, /reverse_demo_payment/);
   assert.doesNotMatch(paymentRepositorySource, /tenantUpdate<DataRow>\("payment_allocations"/);
 });

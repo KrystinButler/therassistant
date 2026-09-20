@@ -61,9 +61,10 @@ test("Payments allow unapplied money to be allocated to an existing claim", () =
   assert.match(paymentsPage, /AllocatePaymentDrawer/);
   assert.match(paymentsPage, /allocateExistingPayment/);
   assert.match(paymentDrawers, /Apply Payment/);
-  assert.match(paymentAllocation, /payment_allocations/);
-  assert.match(paymentAllocation, /partially_applied/);
-  assert.match(paymentAllocation, /applied/);
+  assert.match(paymentAllocation, /allocate_payment/);
+  assert.match(paymentAllocation, /tenantRpc/);
+  assert.match(paymentAllocation, /p_tenant_id/);
+  assert.doesNotMatch(paymentAllocation, /tenantInsert|tenantUpdate/);
 });
 
 test("Claims, Rejections, Denials, and Payments expose queue navigation in their work drawers", () => {

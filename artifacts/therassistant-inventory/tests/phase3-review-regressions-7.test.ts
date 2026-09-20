@@ -11,33 +11,33 @@ const paymentRepositorySource = readFileSync(
   "utf8",
 );
 const atomicPostingMigrationUrl = new URL(
-  "../../../supabase/migrations/20260914083753_phase3_preserve_partial_patient_responsibility.sql",
+  "../../../supabase/migrations/20260920122438_production_payment_posting.sql",
   import.meta.url,
 );
 
-test("manual payment posting uses one constrained database transaction", () => {
+test("manual payment posting uses one tenant-scoped database transaction", () => {
   assert.equal(existsSync(atomicPostingMigrationUrl), true);
   if (!existsSync(atomicPostingMigrationUrl)) return;
 
   const sql = readFileSync(atomicPostingMigrationUrl, "utf8");
-  assert.match(sql, /create\s+or\s+replace\s+function\s+private\.post_demo_manual_payment/i);
-  assert.match(sql, /security\s+definer/i);
-  assert.match(sql, /settings\s*->>\s*'demo'/i);
-  assert.match(sql, /t\.name\s*=\s*'Therassistant Demo'/i);
+  assert.match(sql, /create\s+or\s+replace\s+function\s+public\.post_manual_payment/i);
+  assert.doesNotMatch(sql, /security\s+definer/i);
+  assert.match(sql, /assert_tenant_access\(p_tenant_id\)/i);
   assert.match(sql, /insert\s+into\s+public\.payments/i);
   assert.match(sql, /insert\s+into\s+public\.payment_allocations/i);
   assert.match(sql, /update\s+public\.professional_claims/i);
-  assert.match(sql, /p\.payment_source\s*=\s*p_source/i);
   assert.match(sql, /patient_responsibility_cents/);
   assert.match(sql, /insurance_responsibility_cents/);
   assert.match(sql, /least\(v_allocation,\s*v_open,\s*v_source_open,\s*p_amount_cents\)/i);
-  assert.match(sql, /'patient_responsibility'::public\.claim_status_enum/);
-  assert.match(sql, /when\s+v_claim\.claim_status\s*=\s*'patient_responsibility'::public\.claim_status_enum\s+then\s+'patient_responsibility'/i);
-  assert.match(sql, /create\s+or\s+replace\s+function\s+public\.post_demo_manual_payment/i);
-  assert.match(sql, /security\s+invoker/i);
+  assert.match(sql, /create_ledger_transaction/i);
+  assert.match(sql, /'1100'/);
+  assert.match(sql, /'2100'/);
+  assert.match(sql, /'2110'/);
 
   const manualSection = paymentRepositorySource.split("export async function postManualPayment")[1]?.split("export async function reversePayment")[0] ?? "";
-  assert.match(manualSection, /tenantRpc<[^>]+>\("post_demo_manual_payment"/);
+  assert.match(manualSection, /tenantRpc<ManualPaymentResult>\("post_manual_payment"/);
+  assert.match(manualSection, /p_tenant_id:\s*tenantId/);
+  assert.doesNotMatch(manualSection, /post_demo_manual_payment/);
   assert.doesNotMatch(manualSection, /tenantInsert<DataRow>\("payments"/);
   assert.doesNotMatch(manualSection, /tenantInsert<DataRow>\("payment_allocations"/);
 });
