@@ -13,18 +13,26 @@ const indexPath = fileURLToPath(
   new URL("../../../supabase/functions/invite-patient-portal/index.ts", import.meta.url),
 );
 
-test("invite request requires a UUID-like client id", () => {
+test("invite request requires a UUID-like client id and explicit restore flag", () => {
   assert.throws(() => normalizeInviteRequest({ client_id: "" }), /valid patient ID/i);
-  assert.equal(
-    normalizeInviteRequest({ client_id: "11111111-1111-4111-8111-111111111111" }).clientId,
-    "11111111-1111-4111-8111-111111111111",
-  );
+  const normal = normalizeInviteRequest({
+    client_id: "11111111-1111-4111-8111-111111111111",
+  });
+  assert.equal(normal.clientId, "11111111-1111-4111-8111-111111111111");
+  assert.equal(normal.restoreRevoked, false);
+
+  const restore = normalizeInviteRequest({
+    client_id: "11111111-1111-4111-8111-111111111111",
+    restore_revoked: true,
+  });
+  assert.equal(restore.restoreRevoked, true);
 });
 
-test("existing live portal access is idempotent", () => {
+test("existing portal access is idempotent and revoked restore must be explicit", () => {
   assert.equal(decideInviteAction("active"), "return-existing");
   assert.equal(decideInviteAction("invited"), "return-existing");
   assert.equal(decideInviteAction("revoked"), "block-revoked");
+  assert.equal(decideInviteAction("revoked", true), "restore-revoked");
   assert.equal(decideInviteAction(null), "invite");
 });
 
@@ -71,8 +79,15 @@ test("failed compensating Auth deletion is surfaced", () => {
   assert.doesNotMatch(source, /deleteUser\([^)]*\)\.catch/i);
 });
 
-test("revoked portal access is blocked from automatic relinking", () => {
+test("revoked portal access restores only the already-linked identity", () => {
   const source = readFileSync(indexPath, "utf8");
-  assert.match(source, /block-revoked/);
-  assert.match(source, /re-enrollment is not supported/i);
+  assert.match(source, /restore-revoked/);
+  assert.match(source, /access_user_id/);
+  assert.match(source, /access_invited_email/);
+  assert.match(source, /getUserById\(accessUserId\)/);
+  assert.match(source, /email !== invitedEmail/);
+  assert.match(source, /linkedUser\.user\.email/);
+  assert.match(source, /\.eq\("user_id", accessUserId\)/);
+  assert.match(source, /\.eq\("status", "revoked"\)/);
+  assert.doesNotMatch(source, /restore-revoked[\s\S]*inviteUserByEmail\(email/);
 });
