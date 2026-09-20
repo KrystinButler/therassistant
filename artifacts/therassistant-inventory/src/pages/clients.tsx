@@ -213,6 +213,15 @@ function subscriberComplete(coverage: InsuranceForm) {
   );
 }
 
+function insuranceCoverageComplete(coverage: InsuranceForm) {
+  return Boolean(
+    coverage.payer_id &&
+    coverage.member_id.trim() &&
+    coverage.relationship_to_subscriber &&
+    subscriberComplete(coverage)
+  );
+}
+
 function requiredAddFieldsComplete(form: FormState) {
   const demographicsComplete = Boolean(
     form.first_name.trim() &&
@@ -350,6 +359,19 @@ export function ClientsPage() {
         setFormError("Complete the patient's required demographics and structured address.");
         return;
       }
+      if (form.billing_type === "insurance" && !insuranceCoverageComplete(form.primary)) {
+        setFormError("Complete the primary insurance and subscriber information before saving.");
+        return;
+      }
+      if (
+        form.billing_type === "insurance" &&
+        hasSecondaryData(form.secondary) &&
+        !insuranceCoverageComplete(form.secondary)
+      ) {
+        setFormError("Complete the secondary insurance and subscriber information before saving.");
+        return;
+      }
+
       setSaving(true);
       try {
         await tenantUpdate("clients", form.id, {
@@ -372,6 +394,35 @@ export function ClientsPage() {
           client_status: form.client_status,
           registration_status: form.registration_status,
         });
+
+        if (form.billing_type === "insurance") {
+          const primaryPayload = coveragePayload(plans, form.primary, form);
+          if (form.primary.id) {
+            await tenantUpdate("client_insurance_policies", form.primary.id, primaryPayload);
+          } else {
+            await tenantInsert("client_insurance_policies", {
+              ...primaryPayload,
+              client_id: form.id,
+              insurance_order: "primary",
+              status: "pending_verification",
+            });
+          }
+
+          if (hasSecondaryData(form.secondary)) {
+            const secondaryPayload = coveragePayload(plans, form.secondary, form);
+            if (form.secondary.id) {
+              await tenantUpdate("client_insurance_policies", form.secondary.id, secondaryPayload);
+            } else {
+              await tenantInsert("client_insurance_policies", {
+                ...secondaryPayload,
+                client_id: form.id,
+                insurance_order: "secondary",
+                status: "pending_verification",
+              });
+            }
+          }
+        }
+
         closeForm();
         setVersion((v) => v + 1);
       } catch (err) {
@@ -475,28 +526,45 @@ export function ClientsPage() {
     }
   }
 
-  function edit(client: ClientRow) {
-    const next = blankPatient();
-    openForm({
-      ...next,
-      id: client.id,
-      first_name: client.firstName,
-      last_name: client.lastName,
-      preferred_name: client.preferredName || "",
-      date_of_birth: client.dateOfBirth || "",
-      sex: client.sex || "",
-      address_line1: client.addressLine1 || "",
-      address_line2: client.addressLine2 || "",
-      city: client.city || "",
-      state: client.state || "",
-      postal_code: client.postalCode || "",
-      email: client.email || "",
-      phone: client.phone || "",
-      billing_type: client.billingType || "insurance",
-      metadata: client.metadata || {},
-      client_status: client.clientStatus,
-      registration_status: client.registrationStatus,
-    });
+  async function edit(client: ClientRow) {
+    setFormError(null);
+    try {
+      const policies = await tenantSelect<Row>("client_insurance_policies", {
+        client_id: `eq.${client.id}`,
+        order: "insurance_order.asc,created_at.desc",
+      });
+      const primary = policies.find((row) => String(row.insurance_order ?? "") === "primary");
+      const secondary = policies.find((row) => String(row.insurance_order ?? "") === "secondary");
+      const next = blankPatient();
+      openForm({
+        ...next,
+        id: client.id,
+        first_name: client.firstName,
+        last_name: client.lastName,
+        preferred_name: client.preferredName || "",
+        date_of_birth: client.dateOfBirth || "",
+        sex: client.sex || "",
+        address_line1: client.addressLine1 || "",
+        address_line2: client.addressLine2 || "",
+        city: client.city || "",
+        state: client.state || "",
+        postal_code: client.postalCode || "",
+        email: client.email || "",
+        phone: client.phone || "",
+        billing_type: client.billingType || "insurance",
+        metadata: client.metadata || {},
+        client_status: client.clientStatus,
+        registration_status: client.registrationStatus,
+        primary: coverageFromRow(primary, plans, true),
+        secondary: coverageFromRow(secondary, plans, false),
+      });
+    } catch (err) {
+      setPageNotice({
+        kind: "error",
+        message: err instanceof Error ? err.message : "Unable to load patient insurance for editing.",
+        patientId: client.id,
+      });
+    }
   }
 
   const primaryPlanNames = form ? plans.filter((plan) => plan.payer_id === form.primary.payer_id) : [];
@@ -519,7 +587,7 @@ export function ClientsPage() {
     <section className="thera-card">
       {loading && <div className="thera-state">Loading patients...</div>}
       {error && <div className="thera-state error">{error}</div>}
-      {!loading && !error && <div className="thera-table-wrap"><table className="thera-table"><thead><tr><th>Patient</th><th>DOB</th><th>Insurance</th><th>Registration</th><th>Billing Readiness</th><th>Next Appointment</th><th>Open Balance</th><th>Actions</th></tr></thead><tbody>{(data ?? []).map((client) => <tr key={client.id}><td><Link href={`/clients/${client.id}`} className="thera-table-link">{client.firstName} {client.lastName}</Link><div className="thera-table-subtext"><StatusBadge value={client.clientStatus} /></div></td><td>{shortDate(client.dateOfBirth)}</td><td><strong>{client.payerName || "—"}</strong><div className="thera-table-subtext">{client.planName || ""}</div></td><td><StatusBadge value={client.registrationStatus} /></td><td><StatusBadge value={client.billingReadinessStatus} /></td><td>{client.nextAppointment ? dateTime(client.nextAppointment) : "—"}</td><td>{money(client.openBalanceCents)}</td><td><button type="button" className="thera-action secondary" onClick={() => edit(client)}>Edit</button></td></tr>)}</tbody></table></div>}
+      {!loading && !error && <div className="thera-table-wrap"><table className="thera-table"><thead><tr><th>Patient</th><th>DOB</th><th>Insurance</th><th>Registration</th><th>Billing Readiness</th><th>Next Appointment</th><th>Open Balance</th><th>Actions</th></tr></thead><tbody>{(data ?? []).map((client) => <tr key={client.id}><td><Link href={`/clients/${client.id}`} className="thera-table-link">{client.firstName} {client.lastName}</Link><div className="thera-table-subtext"><StatusBadge value={client.clientStatus} /></div></td><td>{shortDate(client.dateOfBirth)}</td><td><strong>{client.payerName || "—"}</strong><div className="thera-table-subtext">{client.planName || ""}</div></td><td><StatusBadge value={client.registrationStatus} /></td><td><StatusBadge value={client.billingReadinessStatus} /></td><td>{client.nextAppointment ? dateTime(client.nextAppointment) : "—"}</td><td>{money(client.openBalanceCents)}</td><td><button type="button" className="thera-action secondary" onClick={() => void edit(client)}>Edit</button></td></tr>)}</tbody></table></div>}
     </section>
 
     {form && <WorkDrawer
