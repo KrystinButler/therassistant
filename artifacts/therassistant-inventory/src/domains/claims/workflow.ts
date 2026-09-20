@@ -519,11 +519,23 @@ export async function recordExternalClaimAcknowledgementWorkflow(
       submissionClaims.every(
         (row) => String(latestByClaim.get(row.id)?.response_status ?? "") === "accepted",
       );
+    const allRejected =
+      allResponded &&
+      submissionClaims.every(
+        (row) => String(latestByClaim.get(row.id)?.response_status ?? "") === "rejected",
+      );
     const submissionStatus = allAccepted
       ? "accepted"
       : allResponded && anyRejected
         ? "rejected"
         : "pending_response";
+    const batchStatus = allAccepted
+      ? "accepted"
+      : allRejected
+        ? "rejected"
+        : allResponded && anyRejected
+          ? "partially_accepted"
+          : "submitted";
 
     const originalPayload =
       submission.response_payload &&
@@ -546,7 +558,7 @@ export async function recordExternalClaimAcknowledgementWorkflow(
 
     if (submission.batch_id) {
       await repo.updateBatch(String(submission.batch_id), {
-        batch_status: submissionStatus,
+        batch_status: batchStatus,
       });
     }
 
