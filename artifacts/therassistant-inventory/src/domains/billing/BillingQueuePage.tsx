@@ -15,7 +15,6 @@ import { getBatchExportData } from "./claim-output-repository";
 import {
   createChargeFromEncounter,
   getBillingQueueData,
-  routeEncounterToBilling,
 } from "./repository";
 
 type BillingData = Awaited<ReturnType<typeof getBillingQueueData>>;
@@ -91,14 +90,12 @@ export function BillingQueuePage() {
     setError(null);
     setMessage(null);
     try {
-      const result = action === "audit"
-        ? await routeEncounterToBilling(id)
-        : await createChargeFromEncounter(id);
+      const result = await createChargeFromEncounter(id);
       if (!result.ok) {
         setError(result.details?.length ? `${result.message} ${result.details.join(" ")}` : result.message);
         return;
       }
-      setMessage(action === "audit" ? "Billing-readiness audit completed." : "Charge created.");
+      setMessage(action === "audit" ? "Billing-readiness audit completed and charge state reconciled." : "Charge created.");
       if (action === "charge") setTab("unbatched");
       await load();
     } catch (err) {

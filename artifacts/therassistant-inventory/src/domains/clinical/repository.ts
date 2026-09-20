@@ -4,7 +4,7 @@ import {
   tenantUpdate,
   type Row,
 } from "../../lib/tenant-data-client";
-import { routeEncounterToBilling } from "../billing/repository";
+import { createChargeFromEncounter } from "../billing/repository";
 import { updateEncounter } from "../encounters/repository";
 import { signNoteWorkflow, type ClinicalSigningRepository } from "./workflow";
 
@@ -65,7 +65,7 @@ const signingRepository: ClinicalSigningRepository = {
       });
     }
 
-    const readiness = await routeEncounterToBilling(encounterId);
+    const readiness = await createChargeFromEncounter(encounterId);
     if (!readiness.ok && !readiness.blocked) {
       throw new Error(readiness.message);
     }

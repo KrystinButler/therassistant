@@ -186,6 +186,7 @@ test("charges are marked claim-created only after claim lines and diagnoses pers
       cpt_code: "90837",
       diagnosis_code: "F41.1",
       place_of_service: "10",
+      units: 2,
       charge_amount_cents: 12500,
     },
     {
@@ -199,6 +200,7 @@ test("charges are marked claim-created only after claim lines and diagnoses pers
       cpt_code: "90785",
       diagnosis_code: "F41.1",
       place_of_service: "10",
+      units: 1,
       charge_amount_cents: 1500,
     },
   ];
@@ -241,6 +243,8 @@ test("charges are marked claim-created only after claim lines and diagnoses pers
 
   assert.equal(result.value.claim.source_encounter_id, "encounter-1");
   assert.equal(createdLines.length, 2);
+  assert.equal(createdLines[0].units, 2);
+  assert.equal(createdLines[1].units, 1);
   assert.equal(createdDiagnoses.length, 1);
   assert.equal(updatedCharges.length, 2);
   assert.ok(calls.lastIndexOf("diagnosis") < calls.indexOf("charge:claim_created"));
