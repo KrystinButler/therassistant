@@ -13,7 +13,7 @@ const paid835 = [
   "ST*835*0001",
   "BPR*I*80.00*C*ACH*CCP************20260920",
   "TRN*1*TRACE-1001*1512345678",
-  "N1*PR*AETNA",
+  "N1*PR*AETNA*XV*AETNA835",
   "N1*PE*EXAMPLE BEHAVIORAL HEALTH",
   "CLP*TH-1001*1*100.00*80.00*20.00**PAYER-1001*11*1",
   "NM1*QC*1*PATIENT*DEMO",
@@ -29,6 +29,8 @@ test("parses core 835 payment and claim adjudication segments", () => {
   assert.equal(era.paymentAmountCents, 8000);
   assert.equal(era.paymentMethodCode, "ACH");
   assert.equal(era.payerName, "AETNA");
+  assert.equal(era.payerIdentifierQualifier, "XV");
+  assert.equal(era.payerIdentifier, "AETNA835");
   assert.equal(era.claims.length, 1);
   assert.equal(era.claims[0].patientControlNumber, "TH-1001");
   assert.equal(era.claims[0].paidAmountCents, 8000);
