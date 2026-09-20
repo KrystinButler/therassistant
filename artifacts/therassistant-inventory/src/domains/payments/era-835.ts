@@ -36,6 +36,8 @@ export type Parsed835 = {
   paymentMethodCode: string;
   paymentDate: string | null;
   payerName: string;
+  payerIdentifierQualifier: string;
+  payerIdentifier: string;
   payeeName: string;
   claims: Era835Claim[];
   providerLevelAdjustments: string[];
@@ -115,6 +117,8 @@ export function parse835(raw: string): Parsed835 {
   let paymentMethodCode = "";
   let paymentDate: string | null = null;
   let payerName = "";
+  let payerIdentifierQualifier = "";
+  let payerIdentifier = "";
   let payeeName = "";
   const providerLevelAdjustments: string[] = [];
   const claims: Era835Claim[] = [];
@@ -143,6 +147,8 @@ export function parse835(raw: string): Parsed835 {
     }
     if (tag === "N1" && elements[1] === "PR") {
       payerName = String(elements[2] ?? "");
+      payerIdentifierQualifier = String(elements[3] ?? "");
+      payerIdentifier = String(elements[4] ?? "");
       continue;
     }
     if (tag === "N1" && elements[1] === "PE") {
@@ -227,6 +233,8 @@ export function parse835(raw: string): Parsed835 {
     paymentMethodCode,
     paymentDate,
     payerName,
+    payerIdentifierQualifier,
+    payerIdentifier,
     payeeName,
     claims,
     providerLevelAdjustments,
