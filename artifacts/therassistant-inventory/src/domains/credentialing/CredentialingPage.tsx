@@ -8,6 +8,7 @@ import { shortDate } from "../../lib/format";
 import { storageClient } from "../../lib/storage-client";
 import {
   getCurrentTenantId,
+  referenceSelect,
   tenantInsert,
   tenantRpc,
   tenantSelect,
@@ -32,6 +33,7 @@ type WorkspaceTab =
   | "participation"
   | "roster"
   | "expirations"
+  | "templates"
   | "reports";
 type DrawerTab =
   | "overview"
@@ -80,6 +82,24 @@ type RequirementForm = {
   category: string;
   status: string;
   due_date: string;
+  notes: string;
+};
+
+type RequirementTemplateForm = {
+  name: string;
+  payer_id: string;
+  payer_plan_id: string;
+  application_type: string;
+  provider_type: string;
+  state: string;
+  notes: string;
+};
+
+type RequirementTemplateItemForm = {
+  requirement_key: string;
+  requirement_name: string;
+  category: string;
+  due_offset_days: string;
   notes: string;
 };
 
@@ -237,6 +257,28 @@ function emptyRequirementForm(): RequirementForm {
   };
 }
 
+function emptyRequirementTemplateForm(): RequirementTemplateForm {
+  return {
+    name: "",
+    payer_id: "",
+    payer_plan_id: "",
+    application_type: "",
+    provider_type: "",
+    state: "",
+    notes: "",
+  };
+}
+
+function emptyRequirementTemplateItemForm(): RequirementTemplateItemForm {
+  return {
+    requirement_key: "",
+    requirement_name: "",
+    category: "",
+    due_offset_days: "",
+    notes: "",
+  };
+}
+
 function emptyFollowupForm(): FollowupForm {
   return {
     followup_date: new Date().toISOString().slice(0, 10),
@@ -272,6 +314,10 @@ export function CredentialingPage() {
   const [verificationRows, setVerificationRows] = useState<Row[]>([]);
   const [networkParticipationRows, setNetworkParticipationRows] = useState<Row[]>([]);
   const [rosterActions, setRosterActions] = useState<Row[]>([]);
+  const [requirementTemplates, setRequirementTemplates] = useState<Row[]>([]);
+  const [requirementTemplateItems, setRequirementTemplateItems] = useState<Row[]>([]);
+  const [payers, setPayers] = useState<Row[]>([]);
+  const [payerPlans, setPayerPlans] = useState<Row[]>([]);
 
   const [selectedCase, setSelectedCase] = useState<Row | null>(null);
   const [enrollmentEdit, setEnrollmentEdit] = useState<EnrollmentEdit>(emptyEnrollmentEdit);
@@ -295,6 +341,13 @@ export function CredentialingPage() {
   const [addingRequirement, setAddingRequirement] = useState(false);
   const [followupForm, setFollowupForm] = useState<FollowupForm>(emptyFollowupForm);
   const [addingFollowup, setAddingFollowup] = useState(false);
+  const [templateForm, setTemplateForm] = useState<RequirementTemplateForm>(emptyRequirementTemplateForm);
+  const [templateItemForm, setTemplateItemForm] = useState<RequirementTemplateItemForm>(emptyRequirementTemplateItemForm);
+  const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null);
+  const [savingTemplate, setSavingTemplate] = useState(false);
+  const [savingTemplateItem, setSavingTemplateItem] = useState(false);
+  const [applyingTemplates, setApplyingTemplates] = useState(false);
+  const [templateMessage, setTemplateMessage] = useState<string | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -328,6 +381,10 @@ export function CredentialingPage() {
           verificationHistoryRows,
           networkParticipationHistoryRows,
           rosterActionRows,
+          requirementTemplateRows,
+          requirementTemplateItemRows,
+          payerRows,
+          payerPlanRows,
         ] = await Promise.all([
           tenantSelect("v_credentialing_case_summary"),
           tenantSelect("v_provider_enrollment_matrix"),
@@ -342,6 +399,10 @@ export function CredentialingPage() {
           tenantSelect("participation_verifications"),
           tenantSelect("provider_network_participation"),
           tenantSelect("roster_actions"),
+          tenantSelect("credentialing_requirement_templates", { order: "name.asc" }),
+          tenantSelect("credentialing_requirement_template_items", { order: "sort_order.asc,requirement_name.asc" }),
+          referenceSelect("payers", { order: "name.asc" }),
+          referenceSelect("payer_plans", { order: "name.asc" }),
         ]);
 
         if (!active) return;
@@ -358,6 +419,10 @@ export function CredentialingPage() {
         setVerificationRows(verificationHistoryRows);
         setNetworkParticipationRows(networkParticipationHistoryRows);
         setRosterActions(rosterActionRows);
+        setRequirementTemplates(requirementTemplateRows);
+        setRequirementTemplateItems(requirementTemplateItemRows);
+        setPayers(payerRows);
+        setPayerPlans(payerPlanRows);
       } catch (err: unknown) {
         if (!active) return;
         setError(
