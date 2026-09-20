@@ -114,8 +114,9 @@ test("manual payment and reversal both delegate atomically to the database", () 
     paymentRepositorySource,
     /input\.clientId\s*\|\|\s*claim\?\.client_id/,
   );
-  assert.match(paymentRepositorySource, /tenantRpc<DemoManualPaymentResult>\("post_demo_manual_payment"/);
-  assert.match(paymentRepositorySource, /tenantRpc<DemoPaymentReversalResult>\("reverse_demo_payment"/);
+  assert.match(paymentRepositorySource, /tenantRpc<ManualPaymentResult>\("post_manual_payment"/);
+  assert.match(paymentRepositorySource, /tenantRpc<PaymentReversalResult>\("reverse_payment"/);
+  assert.doesNotMatch(paymentRepositorySource, /post_demo_manual_payment|reverse_demo_payment/);
 });
 
 test("superseded rejection responses do not keep an accepted claim in the rejection queue", () => {
