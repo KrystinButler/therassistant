@@ -195,7 +195,7 @@ const secured = withSupabase({ auth: "user" }, async (req, ctx) => {
     if (req.method === "GET" && action === "transactions") {
       const { data, error } = await ctx.supabaseAdmin
         .from("payment_desk_transactions")
-        .select("id,created_at,operator_email,customer_name,amount_cents,currency,reference,note,square_payment_id,square_status,receipt_url,card_brand,card_last4,failure_code,failure_detail,crm_account_id")
+        .select("id,created_at,operator_email,customer_name,amount_cents,currency,reference,note,square_payment_id,square_status,receipt_url,card_brand,card_last4,failure_code,failure_detail,crm_account_id,square_environment")
         .order("created_at", { ascending: false })
         .limit(100);
 
@@ -375,6 +375,7 @@ const secured = withSupabase({ auth: "user" }, async (req, ctx) => {
           status: "created",
           created_by: email,
           updated_at: new Date().toISOString(),
+          square_environment: environment,
         }, { onConflict: "square_payment_link_id" })
         .select("*")
         .single();
@@ -485,6 +486,7 @@ const secured = withSupabase({ auth: "user" }, async (req, ctx) => {
           failure_code: null,
           failure_detail: null,
           crm_account_id: link.account_id,
+          square_environment: environment,
         };
         const { data: inserted, error: insertError } = await ctx.supabaseAdmin
           .from("payment_desk_transactions")
@@ -629,6 +631,7 @@ const secured = withSupabase({ auth: "user" }, async (req, ctx) => {
         failure_code: squareError?.code || null,
         failure_detail: squareError?.detail || null,
         crm_account_id: crmAccountId || null,
+        square_environment: environment,
       };
 
       const { data: saved, error: saveError } = await ctx.supabaseAdmin
