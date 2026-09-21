@@ -1,0 +1,20 @@
+export type CrmRole = "admin" | "operator";
+export type CrmAccess = { email:string; displayName:string; role:CrmRole; active:boolean };
+export type CrmAccountStatus = "active" | "payment_plan" | "paid" | "closed";
+export type CrmAccount = {
+  id:string; account_number:string; customer_name:string; phone:string|null; email:string|null;
+  address_line1:string|null; address_line2:string|null; city:string|null; state:string|null; postal_code:string|null;
+  original_balance_cents:number; status:CrmAccountStatus; next_follow_up_at:string|null;
+  created_by:string; created_at:string; updated_by:string; updated_at:string;
+  originalBalanceCents:number; completedPaymentsCents:number; currentBalanceCents:number;
+  payments?:CrmPayment[];
+};
+export type CrmCall = { id:string; account_id:string; direction:"inbound"|"outbound"; disposition:string; notes:string|null; promise_to_pay_cents:number|null; promise_to_pay_date:string|null; next_follow_up_at:string|null; created_by:string; created_at:string };
+export type CrmNote = { id:string; account_id:string; note:string; created_by:string; created_at:string };
+export type CrmDocument = { id:string; account_id:string; display_name:string; storage_path:string; mime_type:string; file_size_bytes:number; category:string; uploaded_by:string; uploaded_at:string };
+export type CrmActivity = { id:string; account_id:string; activity_type:string; summary:string; related_table:string|null; related_id:string|null; metadata:Record<string,unknown>; actor_email:string; created_at:string };
+export type CrmPayment = { id:string; created_at:string; amount_cents:number; square_status:string; receipt_url:string|null; card_brand:string|null; card_last4:string|null; operator_email:string; crm_account_id?:string|null };
+export type CrmInstallment = { id:string; plan_id:string; sequence_number:number; due_date:string; amount_due_cents:number; amount_paid_cents:number; status:string; paid_at:string|null };
+export type CrmPaymentPlan = { id:string; account_id:string; status:string; balance_at_creation_cents:number; down_payment_cents:number; remaining_balance_cents:number; frequency:"weekly"|"biweekly"|"monthly"; first_installment_date:string; installment_cents:number; installment_count:number; final_installment_cents:number; final_installment_date:string; grace_period_days:number; special_terms:string|null; agreement_status:string; agreement_version:number; created_by:string; created_at:string; updated_by:string; updated_at:string };
+export type CrmPlanBundle = { plan:CrmPaymentPlan|null; installments:CrmInstallment[] };
+export type CrmPaymentLink = { id:string; account_id:string; installment_id:string|null; amount_cents:number; url:string; status:string; created_at:string };
