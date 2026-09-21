@@ -113,7 +113,8 @@ export function renderAgreementPdf(model:AgreementModel):Uint8Array{
 export function downloadPaymentPlanAgreement(account:CrmAccount,plan:CrmPaymentPlan,installments:CrmInstallment[]){
   const model=buildAgreementModel(account,plan,installments);
   const bytes=renderAgreementPdf(model);
-  const blob=new Blob([bytes],{type:"application/pdf"});
+  const arrayBuffer=bytes.buffer.slice(bytes.byteOffset,bytes.byteOffset+bytes.byteLength) as ArrayBuffer;
+  const blob=new Blob([arrayBuffer],{type:"application/pdf"});
   const url=URL.createObjectURL(blob);
   const anchor=document.createElement("a");
   anchor.href=url;anchor.download=model.fileName;anchor.click();
