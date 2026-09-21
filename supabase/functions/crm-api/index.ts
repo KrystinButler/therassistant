@@ -390,6 +390,21 @@ const secured = withSupabase({ auth: "user" }, async (req, ctx) => {
       if (!Number.isInteger(fileSize) || fileSize < 1 || fileSize > MAX_FILE_SIZE) throw new HttpError(400, "Document size is invalid.");
       const category = String(body.category ?? "other");
       if (!["invoice","contract","correspondence","collection_notice","payment_plan_agreement","signed_payment_plan_agreement","other"].includes(category)) throw new HttpError(400, "Document category is invalid.");
+
+      const { data: fileInfo, error: fileInfoError } = await ctx.supabaseAdmin.storage
+        .from(DOCUMENT_BUCKET)
+        .info(storagePath);
+      if (fileInfoError || !fileInfo) {
+        throw new HttpError(400, "The uploaded document could not be verified.");
+      }
+      const actualSize = Number(fileInfo.size ?? 0);
+      if (!Number.isInteger(actualSize) || actualSize < 1 || actualSize > MAX_FILE_SIZE) {
+        throw new HttpError(400, "The uploaded document size is invalid.");
+      }
+      if (actualSize !== fileSize) {
+        throw new HttpError(400, "The uploaded document size does not match the selected file.");
+      }
+
       const { data, error } = await ctx.supabaseAdmin.from("crm_documents").insert({
         account_id: accountId,
         display_name: safeFileName(body.displayName || storagePath.split("/").at(-1)),
