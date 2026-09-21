@@ -45,8 +45,8 @@ export async function signNoteWorkflow(
   if (!noteText) {
     return blocked("note_text_missing", "Clinical note text is required before signing.");
   }
-  // Diagnosis, coding, charge, eligibility, authorization, and enrollment
-  // requirements belong to billing readiness. They must not block a provider
+  // Diagnosis, coding, charge, eligibility, and enrollment requirements
+  // belong to billing readiness. They must not block a provider
   // from completing and signing the clinical record.
 
   const signedAt = new Date().toISOString();
