@@ -29,7 +29,7 @@ test("agreement renderer produces valid-looking PDF bytes with account content",
     phone:null,email:null,address_line1:null,address_line2:null,city:null,state:null,postal_code:null,
     original_balance_cents:10000,status:"payment_plan",next_follow_up_at:null,
     created_by:"admin@example.com",created_at:"2026-09-21T00:00:00Z",updated_by:"admin@example.com",updated_at:"2026-09-21T00:00:00Z",
-    originalBalanceCents:10000,completedPaymentsCents:0,currentBalanceCents:10000,payments:[],
+    originalBalanceCents:10000,completedPaymentsCents:0,currentBalanceCents:10000,accountCreditCents:0,payments:[],
   } satisfies CrmAccount;
   const plan={
     id:"22222222-2222-4222-8222-222222222222",account_id:account.id,status:"draft",
