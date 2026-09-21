@@ -183,11 +183,13 @@ async function accountSummary(ctx: any, account: any) {
     .filter((p: any) => p.square_status === "COMPLETED" && p.square_environment === "production")
     .reduce((sum: number, p: any) => sum + Number(p.amount_cents || 0), 0);
 
+  const rawBalanceCents = Number(account.original_balance_cents) - completedPaymentsCents;
   return {
     ...account,
     originalBalanceCents: account.original_balance_cents,
     completedPaymentsCents,
-    currentBalanceCents: Math.max(0, Number(account.original_balance_cents) - completedPaymentsCents),
+    currentBalanceCents: Math.max(0, rawBalanceCents),
+    accountCreditCents: Math.max(0, -rawBalanceCents),
     payments: payments ?? [],
   };
 }
