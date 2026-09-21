@@ -402,6 +402,38 @@ const secured = withSupabase({ auth: "user" }, async (req, ctx) => {
       }).select("*").single();
       if (error) throw new HttpError(400, error.message || "Unable to save document metadata.");
       await addActivity(ctx, { accountId, activityType: "document", summary: `Document uploaded: ${data.display_name}.`, actorEmail: access.email, relatedTable: "crm_documents", relatedId: data.id });
+
+      if (category === "signed_payment_plan_agreement") {
+        const { data: activePlan, error: planLookupError } = await ctx.supabaseAdmin
+          .from("crm_payment_plans")
+          .select("id")
+          .eq("account_id", accountId)
+          .in("status", ["draft","active","defaulted"])
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        if (planLookupError) throw new HttpError(500, "Document was saved, but the payment plan could not be checked.");
+        if (activePlan) {
+          const { error: signedError } = await ctx.supabaseAdmin
+            .from("crm_payment_plans")
+            .update({
+              agreement_status: "signed",
+              updated_by: access.email,
+              updated_at: new Date().toISOString(),
+            })
+            .eq("id", activePlan.id);
+          if (signedError) throw new HttpError(500, "Signed agreement was uploaded, but the payment plan status could not be updated.");
+          await addActivity(ctx, {
+            accountId,
+            activityType: "agreement_status",
+            summary: "Signed payment-plan agreement uploaded.",
+            actorEmail: access.email,
+            relatedTable: "crm_payment_plans",
+            relatedId: activePlan.id,
+          });
+        }
+      }
+
       return json({ document: data }, 201);
     }
 
