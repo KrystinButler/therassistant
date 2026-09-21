@@ -9,15 +9,15 @@ export function AccountsPage({access}:{access:CrmAccess}) {
   const [accounts,setAccounts]=useState<CrmAccount[]>([]);
   const [error,setError]=useState<string|null>(null);
   const [showNew,setShowNew]=useState(false);
-  const [form,setForm]=useState({customerName:"",accountNumber:"",originalBalance:"",phone:"",email:""});
+  const [form,setForm]=useState({customerName:"",originalBalance:"",phone:"",email:""});
   const load=()=>crmApi<{accounts:CrmAccount[]}>("accounts").then(r=>setAccounts(r.accounts)).catch(e=>setError(e instanceof Error?e.message:"Unable to load accounts."));
   useEffect(()=>{void load();},[]);
   async function createAccount(e:React.FormEvent){
     e.preventDefault();
     const cents=Math.round(Number(form.originalBalance)*100);
     try{
-      await crmApi("create-account",{method:"POST",body:{customerName:form.customerName,accountNumber:form.accountNumber,originalBalanceCents:cents,phone:form.phone,email:form.email}});
-      setShowNew(false);setForm({customerName:"",accountNumber:"",originalBalance:"",phone:"",email:""});await load();
+      await crmApi("create-account",{method:"POST",body:{customerName:form.customerName,originalBalanceCents:cents,phone:form.phone,email:form.email}});
+      setShowNew(false);setForm({customerName:"",originalBalance:"",phone:"",email:""});await load();
     }catch(err){setError(err instanceof Error?err.message:"Unable to create account.");}
   }
   return <section className="crm-stack">
@@ -25,8 +25,7 @@ export function AccountsPage({access}:{access:CrmAccess}) {
     {error&&<div className="crm-alert">{error}</div>}
     {showNew&&<form className="crm-card crm-form-grid" onSubmit={createAccount}>
       <label>Customer name<input required value={form.customerName} onChange={e=>setForm({...form,customerName:e.target.value})}/></label>
-      <label>Account number<input required value={form.accountNumber} onChange={e=>setForm({...form,accountNumber:e.target.value})}/></label>
-      <label>Original balance<input required inputMode="decimal" value={form.originalBalance} onChange={e=>setForm({...form,originalBalance:e.target.value})}/></label>
+      <div className="crm-muted">An internal CRM account number will be assigned automatically.</div><label>Original balance<input required inputMode="decimal" value={form.originalBalance} onChange={e=>setForm({...form,originalBalance:e.target.value})}/></label>
       <label>Phone<input type="tel" value={form.phone} onChange={e=>setForm({...form,phone:e.target.value})}/></label>
       <label>Email<input type="email" value={form.email} onChange={e=>setForm({...form,email:e.target.value})}/></label>
       <div className="crm-form-actions"><button className="crm-primary" type="submit">Create Account</button><button type="button" onClick={()=>setShowNew(false)}>Cancel</button></div>
