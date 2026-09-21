@@ -801,10 +801,10 @@ git commit -m "feat: add CRM payments and payment links"
 
 Use pnpm only:
 ```bash
-pnpm --filter @workspace/therassistant-inventory add pdf-lib@<current-compatible-version>
+pnpm --filter @workspace/therassistant-inventory add pdf-lib@1.17.1
 ```
 
-Before running, inspect the current package/lock conventions and choose the current stable compatible version; record the exact version in the ledger.
+Use exactly `pdf-lib@1.17.1`, the current stable upstream release verified during planning, and keep the resulting lockfile change.
 
 - [ ] **Step 2: Write failing agreement tests**
 
