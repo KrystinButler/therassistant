@@ -38,10 +38,6 @@ export type ScheduleAppointment = {
   cptCode: string;
   registrationStatus: string;
   eligibilityStatus: string | null;
-  authorizationRequired: boolean;
-  authorizationStatus: string | null;
-  authorizationNumber: string | null;
-  remainingUnits: number | null;
   providerEnrollmentStatus: string | null;
   treatmentPlanStatus: string | null;
   treatmentPlanReviewDueDate: string | null;
@@ -110,24 +106,6 @@ function latestEligibility(
   return verified[0] ?? null;
 }
 
-function activeAuthorization(
-  rows: DataRow[],
-  clientId: string,
-  payerId: string | null,
-) {
-  return rows
-    .filter(
-      (row) =>
-        row.client_id === clientId &&
-        (!payerId || row.payer_id === payerId),
-    )
-    .sort((a, b) => {
-      if (a.status === "approved" && b.status !== "approved") return -1;
-      if (b.status === "approved" && a.status !== "approved") return 1;
-      return String(b.end_date ?? "").localeCompare(String(a.end_date ?? ""));
-    })[0] ?? null;
-}
-
 function currentTreatmentPlan(
   rows: DataRow[],
   clientId: string,
@@ -150,24 +128,6 @@ function currentTreatmentPlan(
     })[0] ?? null;
 }
 
-function remainingUnitsFor(
-  units: DataRow[],
-  authorizationId: string | null,
-  cptCode: string,
-) {
-  if (!authorizationId) return null;
-  const relevant = units.filter(
-    (row) =>
-      row.authorization_id === authorizationId &&
-      (!cptCode || !row.cpt_code || row.cpt_code === cptCode),
-  );
-  if (!relevant.length) return null;
-  return relevant.reduce(
-    (sum, row) => sum + Number(row.remaining_units ?? 0),
-    0,
-  );
-}
-
 export async function getScheduleData(): Promise<ScheduleData> {
   const [
     appointments,
@@ -175,8 +135,6 @@ export async function getScheduleData(): Promise<ScheduleData> {
     providers,
     policies,
     eligibility,
-    authorizations,
-    authorizationUnits,
     enrollments,
     treatmentPlans,
     checkins,
@@ -189,8 +147,6 @@ export async function getScheduleData(): Promise<ScheduleData> {
     tenantSelect<DataRow>("providers", { order: "last_name.asc,first_name.asc" }),
     tenantSelect<DataRow>("client_insurance_policies"),
     tenantSelect<DataRow>("eligibility_checks"),
-    tenantSelect<DataRow>("authorizations"),
-    tenantSelect<DataRow>("authorization_units"),
     tenantSelect<DataRow>("provider_payer_enrollments"),
     tenantSelect<DataRow>("treatment_plans"),
     tenantSelect<DataRow>("client_checkins"),
@@ -224,14 +180,6 @@ export async function getScheduleData(): Promise<ScheduleData> {
       policy?.id ?? null,
       serviceDate,
     );
-    const policyMetadata = metadata(policy);
-    const authorizationRequired = billingType === "self_pay" ? false : policyMetadata.authorization_required === true;
-    const authorization = activeAuthorization(authorizations, clientId, payerId);
-    const remainingUnits = remainingUnitsFor(
-      authorizationUnits,
-      authorization?.id ?? null,
-      String(appointment.cpt_code ?? ""),
-    );
     const enrollment = enrollments.find(
       (row) =>
         row.provider_id === providerId &&
@@ -256,13 +204,6 @@ export async function getScheduleData(): Promise<ScheduleData> {
             service_date: eligibilityRow.service_date
               ? String(eligibilityRow.service_date)
               : null,
-          }
-        : null,
-      authorizationRequired,
-      authorization: authorization
-        ? {
-            status: String(authorization.status ?? "unknown"),
-            remaining_units: remainingUnits,
           }
         : null,
       providerEnrollmentStatus: enrollment
@@ -305,14 +246,6 @@ export async function getScheduleData(): Promise<ScheduleData> {
       eligibilityStatus: eligibilityRow
         ? String(eligibilityRow.eligibility_status ?? "")
         : null,
-      authorizationRequired,
-      authorizationStatus: authorization
-        ? String(authorization.status ?? "unknown")
-        : null,
-      authorizationNumber: authorization
-        ? String(authorization.authorization_number ?? "") || null
-        : null,
-      remainingUnits,
       providerEnrollmentStatus: enrollment
         ? String(enrollment.enrollment_status ?? "unknown")
         : null,
