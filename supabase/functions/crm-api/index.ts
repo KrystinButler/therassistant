@@ -225,11 +225,10 @@ const secured = withSupabase({ auth: "user" }, async (req, ctx) => {
       const accountNumber = cleanText(body.accountNumber, 80);
       const originalBalanceCents = Number(body.originalBalanceCents);
       if (!customerName) throw new HttpError(400, "Customer name is required.");
-      if (!accountNumber) throw new HttpError(400, "Account number is required.");
       if (!Number.isInteger(originalBalanceCents) || originalBalanceCents < 0) throw new HttpError(400, "Original balance is invalid.");
 
       const row = {
-        account_number: accountNumber,
+        ...(accountNumber ? { account_number: accountNumber } : {}),
         customer_name: customerName,
         phone: cleanText(body.phone, 40),
         email: normalizeEmail(body.email) || null,
