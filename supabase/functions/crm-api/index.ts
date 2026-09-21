@@ -417,6 +417,7 @@ const secured = withSupabase({ auth: "user" }, async (req, ctx) => {
             .from("crm_payment_plans")
             .update({
               agreement_status: "signed",
+              status: "active",
               updated_by: access.email,
               updated_at: new Date().toISOString(),
             })
