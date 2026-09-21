@@ -7,9 +7,6 @@ export type BillingReadinessInput = {
   serviceLines: Array<Record<string, any>>;
   billingType?: string | null;
   eligibilityStatus?: string | null;
-  authorizationRequired: boolean;
-  authorizationStatus?: string | null;
-  remainingUnits?: number | null;
   providerEnrollmentStatus?: string | null;
 };
 
@@ -73,18 +70,6 @@ export function evaluateBillingReadiness(input: BillingReadinessInput): BillingR
       checks.push(result("eligibility_not_active", "Eligibility", "fail", true, `Eligibility is ${String(input.eligibilityStatus ?? "not verified").replaceAll("_", " ")}.`, "Verify active coverage for the service date."));
     } else {
       checks.push(result("eligibility_active", "Eligibility", "pass", false, "Coverage is active for the service date."));
-    }
-  
-    if (input.authorizationRequired) {
-      if (input.authorizationStatus !== "approved") {
-        checks.push(result("authorization_not_approved", "Authorization", "fail", true, `Authorization is ${String(input.authorizationStatus ?? "missing").replaceAll("_", " ")}.`, "Resolve the authorization before billing."));
-      } else if (input.remainingUnits !== null && input.remainingUnits !== undefined && input.remainingUnits <= 0) {
-        checks.push(result("authorization_exhausted", "Authorization", "fail", true, "Authorization has no remaining units.", "Obtain additional authorized units."));
-      } else {
-        checks.push(result("authorization_approved", "Authorization", "pass", false, "Authorization requirement is satisfied."));
-      }
-    } else {
-      checks.push(result("authorization_not_required", "Authorization", "pass", false, "Authorization is not required."));
     }
   
     if (input.providerEnrollmentStatus === "needs_revalidation") {

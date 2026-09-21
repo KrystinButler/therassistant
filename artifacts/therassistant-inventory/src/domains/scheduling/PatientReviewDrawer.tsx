@@ -150,7 +150,7 @@ export function PatientReviewDrawer({ appointment, open, onOpenChange, onEditApp
   const dob = text(patient, ["date_of_birth"]);
   const age = dob ? ageOn(dob) : null;
   const pronouns = text(patient, ["pronouns", "preferred_pronouns"]);
-  const payerAttention = appointment.readiness.checks.filter((check) => check.blocking);
+  const payerAttention = appointment.readiness.checks.filter((check) => check.status !== "pass");
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -207,7 +207,7 @@ export function PatientReviewDrawer({ appointment, open, onOpenChange, onEditApp
             </ReviewSection>
 
             <ReviewSection icon={<CheckCircle2 size={15} />} title="Payer / Billing Readiness">
-              <div className={`patient-review-highlight ${appointment.readiness.ready ? "positive" : "warning"}`}><CheckCircle2 size={18} /><div><strong>{appointment.readiness.ready ? "Payer checks complete" : "Clinical care can proceed"}</strong><p>{appointment.readiness.ready ? "Current payer-readiness checks are complete." : `${payerAttention.length} payer or billing item${payerAttention.length === 1 ? "" : "s"} need attention. They do not prevent starting the encounter or documenting care.`}</p></div></div>
+              <div className={`patient-review-highlight ${payerAttention.length ? "warning" : "positive"}`}><CheckCircle2 size={18} /><div><strong>{payerAttention.length ? "Administrative follow-up needed" : "Payer checks complete"}</strong><p>{payerAttention.length ? `${payerAttention.length} payer or billing item${payerAttention.length === 1 ? "" : "s"} need attention. They do not prevent starting the encounter or documenting care.` : "Current payer-readiness checks are complete."}</p></div></div>
             </ReviewSection>
           </div> : null}
         </div>

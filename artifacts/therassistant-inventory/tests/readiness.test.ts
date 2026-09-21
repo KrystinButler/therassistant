@@ -6,8 +6,6 @@ import { evaluatePreSession } from "../src/domains/readiness/evaluate-pre-sessio
 const readyBase = {
   policy: { status: "active" },
   eligibility: { eligibility_status: "active" },
-  authorizationRequired: false,
-  authorization: null,
   providerEnrollmentStatus: "approved",
 };
 
@@ -31,28 +29,13 @@ test("inactive coverage is visible but does not block clinical care", () => {
   );
 });
 
-test("missing required authorization does not block clinical care", () => {
-  const result = evaluatePreSession({
-    ...readyBase,
-    authorizationRequired: true,
-  });
-
+test("pre-session readiness does not evaluate authorization", () => {
+  const result = evaluatePreSession(readyBase);
   assert.equal(result.ready, true);
-  assert.ok(
-    result.checks.some(
-      (check) => check.code === "authorization_missing" && !check.blocking,
-    ),
+  assert.equal(
+    result.checks.some((check) => check.code.startsWith("authorization")),
+    false,
   );
-});
-
-test("approved authorization with remaining units is ready", () => {
-  const result = evaluatePreSession({
-    ...readyBase,
-    authorizationRequired: true,
-    authorization: { status: "approved", remaining_units: 4 },
-  });
-
-  assert.equal(result.ready, true);
 });
 
 test("provider enrollment issue is nonblocking clinical context", () => {
@@ -88,8 +71,6 @@ test("self-pay patient is ready without payer prerequisites", () => {
     billingType: "self_pay",
     policy: null,
     eligibility: null,
-    authorizationRequired: false,
-    authorization: null,
     providerEnrollmentStatus: null,
   });
 

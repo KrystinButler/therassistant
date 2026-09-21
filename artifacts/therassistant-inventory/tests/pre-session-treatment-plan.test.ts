@@ -6,8 +6,6 @@ import { evaluatePreSession } from "../src/domains/readiness/evaluate-pre-sessio
 const payerReady = {
   policy: { status: "active" },
   eligibility: { eligibility_status: "active" },
-  authorizationRequired: false,
-  authorization: null,
   providerEnrollmentStatus: "approved",
 };
 

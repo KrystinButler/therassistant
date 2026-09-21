@@ -51,7 +51,6 @@ test("primary routes map to the owning workspace", () => {
     ["/schedule", "care-delivery"],
     ["/clinical", "care-delivery"],
     ["/eligibility", "care-delivery"],
-    ["/authorizations", "care-delivery"],
     ["/billing", "revenue-cycle"],
     ["/billing/charges", "revenue-cycle"],
     ["/charges", "revenue-cycle"],
@@ -127,10 +126,12 @@ test("accordion toggle allows at most one expanded workspace", () => {
   assert.equal(toggleExpandedWorkspace("revenue-cycle", "revenue-cycle"), null);
 });
 
-test("unmapped paths fail soft instead of inventing an owner", () => {
-  const context = getWorkspaceContext("/not-a-real-route");
-  assert.equal(context.workspace, undefined);
-  assert.equal(context.child, undefined);
+test("unmapped and retired paths fail soft instead of inventing an owner", () => {
+  for (const path of ["/not-a-real-route", "/authorizations"]) {
+    const context = getWorkspaceContext(path);
+    assert.equal(context.workspace, undefined, path);
+    assert.equal(context.child, undefined, path);
+  }
 });
 
 test("contextual record routes may have a workspace without a visible child", () => {

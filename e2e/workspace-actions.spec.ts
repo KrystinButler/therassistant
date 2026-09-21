@@ -130,21 +130,20 @@ test("Providers opens an add-provider drawer without saving", async ({ page }) =
   await expectWorkspace(page, "Providers");
 });
 
-for (const workspace of [
-  { path: "/eligibility", heading: "Eligibility" },
-  { path: "/authorizations", heading: "Authorizations" },
-] as const) {
-  test(`${workspace.heading} attention filter toggles without navigation`, async ({
-    page,
-  }) => {
-    await page.goto(workspace.path);
-    const needsAttention = page.getByRole("button", {
-      name: /^Needs Attention \(\d+\)$/,
-    });
-    await expect(needsAttention).toBeVisible();
-    await needsAttention.click();
-    await expect(page.getByRole("button", { name: "Show All" })).toBeVisible();
-    expect(new URL(page.url()).pathname).toBe(workspace.path);
-    await expectWorkspace(page, workspace.heading);
+test("Eligibility attention filter toggles without navigation", async ({ page }) => {
+  await page.goto("/eligibility");
+  const needsAttention = page.getByRole("button", {
+    name: /^Needs Attention \(\d+\)$/,
   });
-}
+  await expect(needsAttention).toBeVisible();
+  await needsAttention.click();
+  await expect(page.getByRole("button", { name: "Show All" })).toBeVisible();
+  expect(new URL(page.url()).pathname).toBe("/eligibility");
+  await expectWorkspace(page, "Eligibility");
+});
+
+test("retired Authorizations route redirects to Eligibility", async ({ page }) => {
+  await page.goto("/authorizations");
+  await expect.poll(() => new URL(page.url()).pathname).toBe("/eligibility");
+  await expectWorkspace(page, "Eligibility");
+});

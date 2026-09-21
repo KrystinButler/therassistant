@@ -15,7 +15,6 @@ export type BillingRepository = {
 
 function queueForCode(code: string) {
   if (code.startsWith("eligibility")) return "eligibility_issue";
-  if (code.startsWith("authorization")) return "authorization_issue";
   if (code === "provider_enrollment") return "credentialing_issue";
   if (code.startsWith("note_") || code.startsWith("diagnosis_")) return "missing_documentation";
   return "charge_validation";

@@ -37,24 +37,16 @@ async function getBillingContext(encounterId: string): Promise<BillingReadinessI
   );
   if (!encounter) throw new Error("Encounter not found.");
 
-  const [clients, notes, diagnoses, serviceLines, policies, eligibilityRows, authorizationRows, enrollmentRows] = await Promise.all([
+  const [clients, notes, diagnoses, serviceLines, eligibilityRows, enrollmentRows] = await Promise.all([
     tenantSelect<DataRow>("clients", { id: `eq.${String(encounter.client_id)}`, limit: "1" }),
     tenantSelect<DataRow>("clinical_notes", { encounter_id: `eq.${encounterId}`, order: "created_at.desc", limit: "1" }),
     tenantSelect<DataRow>("encounter_diagnoses", { encounter_id: `eq.${encounterId}`, order: "sequence_number.asc" }),
     tenantSelect<DataRow>("encounter_service_lines", { encounter_id: `eq.${encounterId}`, order: "created_at.asc" }),
-    encounter.insurance_policy_id
-      ? tenantSelect<DataRow>("client_insurance_policies", { id: `eq.${String(encounter.insurance_policy_id)}`, limit: "1" })
-      : Promise.resolve([]),
     tenantSelect<DataRow>("eligibility_checks", {
       client_id: `eq.${String(encounter.client_id)}`,
       ...(encounter.insurance_policy_id ? { insurance_policy_id: `eq.${String(encounter.insurance_policy_id)}` } : {}),
       order: "created_at.desc",
       limit: "1",
-    }),
-    tenantSelect<DataRow>("authorizations", {
-      client_id: `eq.${String(encounter.client_id)}`,
-      ...(encounter.payer_id ? { payer_id: `eq.${String(encounter.payer_id)}` } : {}),
-      order: "created_at.desc",
     }),
     encounter.provider_id && encounter.payer_id
       ? tenantSelect<DataRow>("provider_payer_enrollments", {
@@ -68,20 +60,6 @@ async function getBillingContext(encounterId: string): Promise<BillingReadinessI
 
   const client = first(clients);
   const billingType = String(metadata(client).billing_type ?? "insurance");
-  const policy = first(policies);
-  const policyMetadata = metadata(policy);
-  const authorizationRequired = billingType === "self_pay" ? false : policyMetadata.authorization_required === true;
-  const authorization =
-    authorizationRows.find((row) => row.status === "approved") ?? authorizationRows[0] ?? null;
-  const units = authorization
-    ? await tenantSelect<DataRow>("authorization_units", {
-        authorization_id: `eq.${authorization.id}`,
-      })
-    : [];
-  const remainingUnits = units.length
-    ? units.reduce((sum, row) => sum + Number(row.remaining_units ?? 0), 0)
-    : null;
-
   return {
     encounter,
     billingType,
@@ -91,9 +69,6 @@ async function getBillingContext(encounterId: string): Promise<BillingReadinessI
     eligibilityStatus: first(eligibilityRows)
       ? String(first(eligibilityRows)?.eligibility_status ?? "")
       : null,
-    authorizationRequired,
-    authorizationStatus: authorization ? String(authorization.status ?? "unknown") : null,
-    remainingUnits,
     providerEnrollmentStatus: first(enrollmentRows)
       ? String(first(enrollmentRows)?.enrollment_status ?? "unknown")
       : null,
@@ -151,7 +126,6 @@ const repository: BillingRepository = {
   async resolveStaleWorkItems(encounterId, activeTypes) {
     const billingTypes = new Set([
       "eligibility_issue",
-      "authorization_issue",
       "credentialing_issue",
       "missing_documentation",
       "charge_validation",

@@ -53,9 +53,9 @@ test("claim detail remains contextual to Claims", () => {
   assert.equal(getActiveItemForPath("/claims/claim-1")?.label, "Claims");
 });
 
-test("authorization remains a reference page outside Revenue Cycle workqueues", () => {
-  assert.equal(getSectionForPath("/authorizations")?.id, "care-delivery");
-  assert.equal(getActiveItemForPath("/authorizations")?.label, "Authorizations");
+test("authorization is retired from active staff navigation", () => {
+  assert.equal(getSectionForPath("/authorizations"), undefined);
+  assert.equal(getActiveItemForPath("/authorizations"), undefined);
 });
 
 test("section context and accordion behavior replace workspace terminology", () => {

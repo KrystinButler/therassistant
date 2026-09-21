@@ -6,7 +6,6 @@ const routes = [
   { path: "/claims", heading: "Claims" },
   { path: "/payments", heading: "Payments" },
   { path: "/eligibility", heading: "Eligibility" },
-  { path: "/authorizations", heading: "Authorizations" },
   { path: "/credentialing", heading: "Credentialing" },
   { path: "/mailroom", heading: "Mailroom" },
   { path: "/providers", heading: "Providers" },
@@ -22,6 +21,15 @@ for (const route of routes) {
     ).toBeVisible();
   });
 }
+
+test("retired Authorizations route resolves to Eligibility", async ({ page }) => {
+  await page.goto("/authorizations");
+  await expect.poll(() => new URL(page.url()).pathname).toBe("/eligibility");
+  await expect(
+    page.getByRole("heading", { level: 1, name: "Eligibility" }),
+  ).toBeVisible();
+});
+
 
 test("provider root redirects to Schedule and does not expose Overview or Home", async ({ page }) => {
   await page.goto("/");

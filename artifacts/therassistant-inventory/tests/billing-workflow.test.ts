@@ -25,9 +25,6 @@ const cleanContext = {
     place_of_service_code: "02",
   }],
   eligibilityStatus: "active",
-  authorizationRequired: false,
-  authorizationStatus: null,
-  remainingUnits: null,
   providerEnrollmentStatus: "approved",
 };
 
@@ -58,6 +55,14 @@ test("signed complete encounter is billing ready", () => {
   const result = evaluateBillingReadiness(cleanContext);
   assert.equal(result.ready, true);
   assert.equal(result.checks.some((check) => check.blocking), false);
+});
+
+test("billing readiness contains no authorization gate", () => {
+  const result = evaluateBillingReadiness(cleanContext);
+  assert.equal(
+    result.checks.some((check) => check.code.startsWith("authorization")),
+    false,
+  );
 });
 
 function fakeRepo(context: any = cleanContext, initialCharges: Array<Record<string, any>> = []) {

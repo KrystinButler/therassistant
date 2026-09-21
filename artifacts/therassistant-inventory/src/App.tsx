@@ -22,7 +22,6 @@ import { JournalPage } from "./domains/journal/JournalPage";
 import { ImportsPage } from "./domains/imports/ImportsPage";
 import { MailroomPage } from "./domains/mailroom/MailroomPage";
 import { PaymentsPage } from "./domains/payments/PaymentsPage";
-import { AuthorizationsPage } from "./domains/payer-readiness/AuthorizationsPage";
 import { EligibilityPage } from "./domains/payer-readiness/EligibilityPage";
 import { PatientChartPage } from "./domains/patients/PatientChartPage";
 import { PatientCheckInPage } from "./domains/portal/PatientCheckInPage";
@@ -91,7 +90,7 @@ function StaffRoutes() {
         <Route path="/clinical"><ClinicalPage /></Route>
         <Route path="/journal"><JournalPage /></Route>
         <Route path="/eligibility"><EligibilityPage /></Route>
-        <Route path="/authorizations"><AuthorizationsPage /></Route>
+        <Route path="/authorizations"><Redirect to="/eligibility" /></Route>
         <Route path="/medicaid"><MedicaidPage /></Route>
         <Route path="/billing"><BillingHubPage /></Route>
         <Route path="/claims"><ClaimsPage /></Route>

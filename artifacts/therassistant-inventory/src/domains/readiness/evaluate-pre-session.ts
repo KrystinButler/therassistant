@@ -156,64 +156,6 @@ function payerReadinessChecks(input: PreSessionInput): ReadinessCheck[] {
     );
   }
 
-  if (!input.authorizationRequired) {
-    checks.push(
-      check(
-        "authorization_not_required",
-        "Authorization",
-        "pass",
-        false,
-        "Authorization is not required for this service.",
-      ),
-    );
-  } else if (!input.authorization) {
-    checks.push(
-      check(
-        "authorization_missing",
-        "Authorization",
-        "fail",
-        false,
-        "This service requires authorization, but no authorization is on file.",
-        "Add or obtain authorization for billing follow-up.",
-      ),
-    );
-  } else if (input.authorization.status !== "approved") {
-    checks.push(
-      check(
-        `authorization_${input.authorization.status ?? "unknown"}`,
-        "Authorization",
-        "fail",
-        false,
-        `Authorization status is ${(input.authorization.status ?? "unknown").replaceAll("_", " ")}.`,
-        "Resolve the authorization status before billing or claim submission.",
-      ),
-    );
-  } else {
-    const remaining = Number(input.authorization.remaining_units ?? 1);
-    if (Number.isFinite(remaining) && remaining <= 0) {
-      checks.push(
-        check(
-          "authorization_exhausted",
-          "Authorization",
-          "fail",
-          false,
-          "The authorization has no remaining units.",
-          "Obtain additional authorized units and route the item for billing follow-up.",
-        ),
-      );
-    } else {
-      checks.push(
-        check(
-          "authorization_approved",
-          "Authorization",
-          "pass",
-          false,
-          "Authorization is approved with units available.",
-        ),
-      );
-    }
-  }
-
   if (input.providerEnrollmentStatus !== "approved") {
     checks.push(
       check(
@@ -254,7 +196,7 @@ export function evaluatePreSession(
         "Billing Type",
         "pass",
         false,
-        "Patient is self-pay. Insurance, eligibility, authorization, and payer enrollment checks do not apply.",
+        "Patient is self-pay. Insurance, eligibility, and payer enrollment checks do not apply.",
       ),
     );
   } else {
