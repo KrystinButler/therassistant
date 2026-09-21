@@ -276,7 +276,7 @@ export async function createClaimFromCharges(chargeIds: string[]) {
 export async function validateClaim(claimId: string) {
   try {
     const result = await tenantRpc<BackendClaimValidationResult>(
-      "validate_claim",
+      "rcm_validate_claim",
       { p_claim_id: claimId },
     );
     const issues = Array.isArray(result.issues) ? result.issues.map(String) : [];
