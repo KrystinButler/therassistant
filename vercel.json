@@ -11,6 +11,14 @@
   "outputDirectory": "artifacts/therassistant-inventory/dist/public",
   "rewrites": [
     {
+      "source": "/payment-desk",
+      "destination": "/payment-desk.html"
+    },
+    {
+      "source": "/payment-desk/",
+      "destination": "/payment-desk.html"
+    },
+    {
       "source": "/(.*)",
       "destination": "/index.html"
     }
