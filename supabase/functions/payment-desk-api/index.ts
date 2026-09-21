@@ -69,8 +69,11 @@ async function allocateCrmPayment(
   transactionId: string,
   amountCents: number,
   actorEmail: string,
+  squareEnvironment: "sandbox" | "production",
   preferredInstallmentId?: string | null,
 ) {
+  if (squareEnvironment !== "production") return;
+
   const { data: existingAllocations, error: existingError } = await ctx.supabaseAdmin
     .from("crm_payment_allocations")
     .select("id")
@@ -418,6 +421,9 @@ const secured = withSupabase({ auth: "user" }, async (req, ctx) => {
 
       const account = await requireCrmAccount(ctx, link.account_id);
       const environment = Deno.env.get("SQUARE_ENV") === "production" ? "production" : "sandbox";
+      if (link.square_environment && link.square_environment !== environment) {
+        return json({ error: "This payment link belongs to the " + link.square_environment + " Square environment and cannot be refreshed with " + environment + " credentials." }, 409);
+      }
       const accessToken = Deno.env.get("SQUARE_ACCESS_TOKEN");
       if (!accessToken) return json({ error: "Square has not been connected to Payment Desk yet." }, 503);
 
@@ -477,7 +483,7 @@ const secured = withSupabase({ auth: "user" }, async (req, ctx) => {
           currency: "USD",
           reference: account.account_number,
           note: "Paid through Square payment link",
-          idempotency_key: ("payment-link:" + payment.id).slice(0, 80),
+          idempotency_key: ("payment-link:" + payment.id).slice(0, 45),
           square_payment_id: payment.id,
           square_status: payment.status,
           receipt_url: payment.receipt_url || null,
@@ -503,6 +509,7 @@ const secured = withSupabase({ auth: "user" }, async (req, ctx) => {
         transaction.id,
         Number(transaction.amount_cents),
         link.created_by,
+        environment,
         link.installment_id,
       );
 
@@ -554,13 +561,13 @@ const secured = withSupabase({ auth: "user" }, async (req, ctx) => {
         return json({ error: "Enter a valid payment amount." }, 400);
       }
       if (!customerName) return json({ error: "Customer name is required." }, 400);
-      if (!idempotencyKey || idempotencyKey.length > 80) {
+      if (!idempotencyKey || idempotencyKey.length > 45) {
         return json({ error: "A valid payment request ID is required." }, 400);
       }
 
       const { data: existing } = await ctx.supabaseAdmin
         .from("payment_desk_transactions")
-        .select("id,square_payment_id,square_status,receipt_url,amount_cents,customer_name,crm_account_id")
+        .select("id,square_payment_id,square_status,receipt_url,amount_cents,customer_name,crm_account_id,square_environment")
         .eq("idempotency_key", idempotencyKey)
         .maybeSingle();
 
@@ -572,6 +579,7 @@ const secured = withSupabase({ auth: "user" }, async (req, ctx) => {
             existing.id,
             Number(existing.amount_cents),
             email,
+            existing.square_environment === "production" ? "production" : "sandbox",
             crmInstallmentId || null,
           );
         }
@@ -663,6 +671,7 @@ const secured = withSupabase({ auth: "user" }, async (req, ctx) => {
           saved.id,
           Number(saved.amount_cents),
           email,
+          environment,
           crmInstallmentId || null,
         );
       }
