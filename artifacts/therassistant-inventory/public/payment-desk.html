@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="robots" content="noindex,nofollow">
+  <title>Therassistant Payment Desk</title>
+  <style>
+    body{margin:0;background:#f7f2e8;color:#183048;font:14px Arial,sans-serif}
+    .loading{min-height:100vh;display:grid;place-items:center}
+    .card{background:#fffdfa;border:1px solid #d8ddd9;padding:28px 34px;max-width:420px;text-align:center}
+  </style>
+</head>
+<body>
+  <div class="loading"><div class="card">Loading Therassistant Payment Desk…</div></div>
+  <script>
+    (async function(){
+      try{
+        const r=await fetch("https://lpjwfdvaxobewxcklenl.supabase.co/functions/v1/payment-desk",{cache:"no-store"});
+        if(!r.ok) throw new Error("Unable to load Payment Desk ("+r.status+")");
+        const html=await r.text();
+        document.open();
+        document.write(html);
+        document.close();
+      }catch(e){
+        document.body.innerHTML='<div class="loading"><div class="card"><strong>Payment Desk could not load.</strong><br><br>'+String(e.message||e)+'</div></div>';
+      }
+    })();
+  </script>
+</body>
+</html>
