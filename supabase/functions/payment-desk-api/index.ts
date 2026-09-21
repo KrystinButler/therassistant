@@ -44,25 +44,6 @@ async function requireCrmAccount(ctx: any, accountId: string) {
   return data;
 }
 
-async function addCrmPaymentActivity(ctx: any, input: {
-  accountId: string;
-  transactionId: string;
-  amountCents: number;
-  actorEmail: string;
-  summary?: string;
-}) {
-  const { error } = await ctx.supabaseAdmin.from("crm_activity").insert({
-    account_id: input.accountId,
-    activity_type: "payment",
-    summary: input.summary || ("Payment received: $" + (input.amountCents / 100).toFixed(2) + "."),
-    related_table: "payment_desk_transactions",
-    related_id: input.transactionId,
-    actor_email: input.actorEmail,
-    metadata: { amountCents: input.amountCents },
-  });
-  if (error) throw new Error("Payment completed, but CRM activity could not be saved.");
-}
-
 async function allocateCrmPayment(
   ctx: any,
   accountId: string,
@@ -74,85 +55,20 @@ async function allocateCrmPayment(
 ) {
   if (squareEnvironment !== "production") return;
 
-  const { data: existingAllocations, error: existingError } = await ctx.supabaseAdmin
-    .from("crm_payment_allocations")
-    .select("id")
-    .eq("payment_transaction_id", transactionId)
-    .limit(1);
-  if (existingError) throw new Error("Unable to verify CRM payment allocation.");
-  if ((existingAllocations ?? []).length > 0) return;
-
-  const { data: plan, error: planError } = await ctx.supabaseAdmin
-    .from("crm_payment_plans")
-    .select("id")
-    .eq("account_id", accountId)
-    .eq("status", "active")
-    .order("created_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
-  if (planError) throw new Error("Unable to load CRM payment plan.");
-
-  if (plan) {
-    const { data: installments, error: installmentError } = await ctx.supabaseAdmin
-      .from("crm_installments")
-      .select("id,sequence_number,due_date,amount_due_cents,amount_paid_cents,status")
-      .eq("plan_id", plan.id)
-      .order("due_date", { ascending: true })
-      .order("sequence_number", { ascending: true });
-    if (installmentError) throw new Error("Unable to load CRM installments.");
-
-    let remaining = amountCents;
-    const rows = [...(installments ?? [])];
-    if (preferredInstallmentId) {
-      rows.sort((a: any, b: any) => {
-        if (a.id === preferredInstallmentId) return -1;
-        if (b.id === preferredInstallmentId) return 1;
-        return String(a.due_date).localeCompare(String(b.due_date)) ||
-          Number(a.sequence_number) - Number(b.sequence_number);
-      });
-    }
-
-    for (const installment of rows) {
-      if (remaining <= 0) break;
-      if (installment.status === "waived") continue;
-      const outstanding = Math.max(
-        0,
-        Number(installment.amount_due_cents) - Number(installment.amount_paid_cents),
-      );
-      if (outstanding <= 0) continue;
-      const allocation = Math.min(outstanding, remaining);
-      const newPaid = Number(installment.amount_paid_cents) + allocation;
-      const paid = newPaid >= Number(installment.amount_due_cents);
-
-      const { error: allocationError } = await ctx.supabaseAdmin
-        .from("crm_payment_allocations")
-        .insert({
-          payment_transaction_id: transactionId,
-          installment_id: installment.id,
-          amount_cents: allocation,
-        });
-      if (allocationError) throw new Error("Payment completed, but CRM allocation could not be saved.");
-
-      const { error: updateError } = await ctx.supabaseAdmin
-        .from("crm_installments")
-        .update({
-          amount_paid_cents: newPaid,
-          status: paid ? "paid" : "partial",
-          paid_at: paid ? new Date().toISOString() : null,
-          updated_at: new Date().toISOString(),
-        })
-        .eq("id", installment.id);
-      if (updateError) throw new Error("Payment completed, but installment status could not be updated.");
-      remaining -= allocation;
-    }
-  }
-
-  await addCrmPaymentActivity(ctx, {
-    accountId,
-    transactionId,
-    amountCents,
-    actorEmail,
+  const { error } = await ctx.supabaseAdmin.rpc("crm_allocate_production_payment_atomic", {
+    p_account_id: accountId,
+    p_transaction_id: transactionId,
+    p_amount_cents: amountCents,
+    p_actor_email: actorEmail,
+    p_preferred_installment_id: preferredInstallmentId || null,
   });
+
+  if (error) {
+    throw new Error(
+      "Payment completed, but CRM installment allocation could not be finalized. " +
+      "Do not charge again; retry the same payment request or refresh the payment link."
+    );
+  }
 }
 
 const secured = withSupabase({ auth: "user" }, async (req, ctx) => {
