@@ -135,7 +135,7 @@ test("CRM migration defines required isolated tables and RLS", () => {
 
 Run:
 ```bash
-CRM_MIGRATION_FILE="<exact path printed by Step 1>" pnpm --filter ./scripts exec tsx --test ../artifacts/therassistant-inventory/tests/crm-schema-contract.test.ts
+CRM_MIGRATION_FILE="$(ls -1t supabase/migrations/*_add_therassistant_crm.sql | head -n1)" pnpm --filter ./scripts exec tsx --test ../artifacts/therassistant-inventory/tests/crm-schema-contract.test.ts
 ```
 
 Expected: FAIL because the fresh migration is empty.
@@ -283,8 +283,38 @@ export type CrmAccess = {
   active: boolean;
 };
 
-export async function requireCrmAccess(ctx: any): Promise<CrmAccess> { /* lookup payment_desk_users */ }
-export function requireAdmin(access: CrmAccess): void { /* throw typed 403 */ }
+export class HttpError extends Error {
+  constructor(public status: number, message: string) {
+    super(message);
+  }
+}
+
+export async function requireCrmAccess(ctx: any): Promise<CrmAccess> {
+  const email = String(ctx.userClaims?.email ?? "").trim().toLowerCase();
+  if (!email) throw new HttpError(401, "Authenticated email is required.");
+
+  const { data, error } = await ctx.supabaseAdmin
+    .from("payment_desk_users")
+    .select("email,display_name,role,active")
+    .eq("email", email)
+    .maybeSingle();
+
+  if (error) throw new HttpError(500, "Unable to verify CRM access.");
+  if (!data?.active) throw new HttpError(403, "This account is not authorized for CRM.");
+
+  return {
+    email,
+    displayName: data.display_name || email,
+    role: data.role,
+    active: true,
+  };
+}
+
+export function requireAdmin(access: CrmAccess): void {
+  if (access.role !== "admin") {
+    throw new HttpError(403, "Administrator access required.");
+  }
+}
 ```
 
 Do not authorize from user-editable JWT metadata.
@@ -321,7 +351,7 @@ Account response includes derived:
 
 - [ ] **Step 5: Implement private document upload/download flow**
 
-Backend creates signed upload token/path for `crm-documents/<accountId>/<uuid>/<sanitizedName>`, finalizes metadata only after upload, and returns signed download URLs with short expiration.
+Backend creates an object path with `const objectPath = `${accountId}/${crypto.randomUUID()}/${safeFileName}`;`, finalizes metadata only after upload, and returns signed download URLs with short expiration.
 
 Reject file sizes/types outside the migration's configured allowlist before issuing upload credentials.
 
@@ -401,6 +431,8 @@ pnpm --filter ./scripts exec tsx --test   ../artifacts/therassistant-inventory/t
 Use integer cents only and deterministic ISO dates.
 
 ```ts
+import { addDays, addMonths, format, parseISO } from "date-fns";
+
 export type PlanFrequency = "weekly" | "biweekly" | "monthly";
 
 export function buildInstallmentSchedule(input: {
@@ -408,7 +440,41 @@ export function buildInstallmentSchedule(input: {
   installmentCents: number;
   frequency: PlanFrequency;
   firstDueDate: string;
-}): Array<{ sequence: number; dueDate: string; amountCents: number }> { /* ... */ }
+}): Array<{ sequence: number; dueDate: string; amountCents: number }> {
+  const { remainingBalanceCents, installmentCents, frequency, firstDueDate } = input;
+  if (!Number.isInteger(remainingBalanceCents) || remainingBalanceCents <= 0) {
+    throw new Error("Remaining balance must be a positive integer number of cents.");
+  }
+  if (!Number.isInteger(installmentCents) || installmentCents <= 0) {
+    throw new Error("Installment amount must be a positive integer number of cents.");
+  }
+
+  const increment = (date: Date) =>
+    frequency === "weekly"
+      ? addDays(date, 7)
+      : frequency === "biweekly"
+        ? addDays(date, 14)
+        : addMonths(date, 1);
+
+  const schedule: Array<{ sequence: number; dueDate: string; amountCents: number }> = [];
+  let remaining = remainingBalanceCents;
+  let due = parseISO(firstDueDate);
+  let sequence = 1;
+
+  while (remaining > 0) {
+    const amountCents = Math.min(installmentCents, remaining);
+    schedule.push({
+      sequence,
+      dueDate: format(due, "yyyy-MM-dd"),
+      amountCents,
+    });
+    remaining -= amountCents;
+    due = increment(due);
+    sequence += 1;
+  }
+
+  return schedule;
+}
 ```
 
 - [ ] **Step 5: Run GREEN**
@@ -544,7 +610,7 @@ pnpm --filter ./scripts exec tsx --test ../artifacts/therassistant-inventory/tes
 
 Define exact response models for Account, Call, Note, Document, Activity, Plan, Installment, Payment, PaymentLink, CrmUser.
 
-`crmApi` obtains the session from the existing Supabase client/auth context and sends `Authorization: Bearer <user JWT>`.
+`crmApi` obtains the session from the existing Supabase client/auth context and sends `Authorization: Bearer ${session.access_token}`.
 
 - [ ] **Step 4: Implement `CrmGate` and CRM route switch**
 
@@ -730,7 +796,7 @@ git commit -m "feat: add private CRM documents"
 **Interfaces:**
 - Payment Panel calls `payment-desk-api?action=charge` with `crmAccountId`.
 - Payment Link Panel calls `create-payment-link` / `refresh-payment-link`.
-- Mobile text action builds `sms:<phone>?body=<encoded message>`.
+- Mobile text action uses `const smsHref = `sms:${phone.replace(/[^\\d+]/g, "")}?body=${encodeURIComponent(message)}`;`.
 
 - [ ] **Step 1: Write failing UI/payment safety tests**
 
