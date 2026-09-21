@@ -6,12 +6,17 @@ const source = readFileSync(
   new URL("../../../supabase/functions/payment-desk-api/index.ts", import.meta.url),
   "utf8",
 );
+const allocationMigration = readFileSync(
+  new URL("../../../supabase/migrations/20260921083200_crm_atomic_payment_allocation.sql", import.meta.url),
+  "utf8",
+);
 
 test("preserves payment idempotency and links completed payments to CRM", () => {
   assert.match(source, /idempotency_key/);
   assert.match(source, /crm_account_id/);
-  assert.match(source, /crm_payment_allocations/);
   assert.match(source, /allocateCrmPayment/);
+  assert.match(source, /crm_allocate_production_payment_atomic/);
+  assert.match(allocationMigration, /insert into public\.crm_payment_allocations/i);
 });
 
 test("creates Square-hosted payment links server-side", () => {
@@ -37,9 +42,12 @@ test("sandbox payments never allocate to real CRM installments", () => {
   assert.match(source, /squareEnvironment:\s*["']sandbox["']\s*\|\s*["']production["']/);
   assert.match(source, /squareEnvironment !== ["']production["']\) return/);
   assert.match(source, /idempotencyKey\.length > 45/);
+  assert.match(allocationMigration, /square_environment='production'/i);
 });
 
 test("production payment allocation delegates to one atomic database RPC", () => {
   assert.match(source, /crm_allocate_production_payment_atomic/);
   assert.doesNotMatch(source, /from\(["']crm_payment_allocations["']\)\s*\n?\s*\.insert/);
+  assert.match(allocationMigration, /for update/i);
+  assert.match(allocationMigration, /unallocatedCents/i);
 });
