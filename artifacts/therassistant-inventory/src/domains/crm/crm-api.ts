@@ -55,7 +55,7 @@ export async function uploadCrmDocument(input:{
   const form=new FormData();
   form.append("cacheControl","3600");
   form.append("",input.file);
-  const uploadResponse=await fetch(signed.signedUrl,{method:"PUT",body:form});
+  const uploadResponse=await fetch(signed.signedUrl,{method:"PUT",headers:{"x-upsert":"false"},body:form});
   if(!uploadResponse.ok){
     const message=await uploadResponse.text().catch(()=>"");
     throw new Error(message || `Document upload failed (${uploadResponse.status}).`);
