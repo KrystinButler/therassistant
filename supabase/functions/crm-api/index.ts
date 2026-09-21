@@ -456,26 +456,45 @@ const secured = withSupabase({ auth: "user" }, async (req, ctx) => {
     if (req.method === "POST" && action === "create-plan") {
       const body = await req.json().catch(() => ({}));
       const accountId = requireUuid(body.accountId, "Account ID");
-      const { data: account, error: accountError } = await ctx.supabaseAdmin.from("crm_accounts").select("*").eq("id", accountId).maybeSingle();
+      const { data: account, error: accountError } = await ctx.supabaseAdmin
+        .from("crm_accounts")
+        .select("*")
+        .eq("id", accountId)
+        .maybeSingle();
       if (accountError) throw new HttpError(500, "Unable to load CRM account.");
       if (!account) throw new HttpError(404, "CRM account not found.");
+
       const summary = await accountSummary(ctx, account);
-      if (summary.currentBalanceCents <= 0) throw new HttpError(400, "This account does not have a balance to place on a payment plan.");
+      if (summary.currentBalanceCents <= 0) {
+        throw new HttpError(400, "This account does not have a balance to place on a payment plan.");
+      }
+
+      const { data: existingOpenPlan, error: existingPlanError } = await ctx.supabaseAdmin
+        .from("crm_payment_plans")
+        .select("id")
+        .eq("account_id", accountId)
+        .in("status", ["draft","active","defaulted"])
+        .limit(1)
+        .maybeSingle();
+      if (existingPlanError) throw new HttpError(500, "Unable to check existing payment plans.");
+      if (existingOpenPlan) throw new HttpError(409, "An open payment plan already exists for this account.");
 
       const downPaymentCents = Number(body.downPaymentCents ?? 0);
       const installmentCents = Number(body.installmentCents);
       const frequency = String(body.frequency ?? "");
       const firstInstallmentDate = String(body.firstInstallmentDate ?? "");
       const gracePeriodDays = Number(body.gracePeriodDays ?? 0);
-      if (!Number.isInteger(downPaymentCents) || downPaymentCents < 0 || downPaymentCents >= summary.currentBalanceCents) throw new HttpError(400, "Down payment is invalid.");
-      if (!Number.isInteger(gracePeriodDays) || gracePeriodDays < 0 || gracePeriodDays > 90) throw new HttpError(400, "Grace period is invalid.");
+      if (!Number.isInteger(downPaymentCents) || downPaymentCents < 0 || downPaymentCents >= summary.currentBalanceCents) {
+        throw new HttpError(400, "Down payment is invalid.");
+      }
+      if (!Number.isInteger(gracePeriodDays) || gracePeriodDays < 0 || gracePeriodDays > 90) {
+        throw new HttpError(400, "Grace period is invalid.");
+      }
+
       const remainingBalanceCents = summary.currentBalanceCents - downPaymentCents;
       const schedule = buildSchedule(remainingBalanceCents, installmentCents, frequency, firstInstallmentDate);
       const last = schedule.at(-1)!;
-
-      const planRow = {
-        account_id: accountId,
-        status: body.status === "active" ? "active" : "draft",
+      const planPayload = {
         balance_at_creation_cents: summary.currentBalanceCents,
         down_payment_cents: downPaymentCents,
         remaining_balance_cents: remainingBalanceCents,
@@ -487,89 +506,100 @@ const secured = withSupabase({ auth: "user" }, async (req, ctx) => {
         final_installment_date: last.due_date,
         grace_period_days: gracePeriodDays,
         special_terms: cleanText(body.specialTerms, 5000),
-        agreement_status: "not_generated",
-        agreement_version: 0,
-        created_by: access.email,
-        updated_by: access.email,
       };
-      const { data: plan, error: planError } = await ctx.supabaseAdmin.from("crm_payment_plans").insert(planRow).select("*").single();
-      if (planError) throw new HttpError(400, planError.message || "Unable to create payment plan.");
 
-      const { error: versionError } = await ctx.supabaseAdmin.from("crm_payment_plan_versions").insert({
-        plan_id: plan.id,
-        version_number: 1,
-        snapshot: { ...planRow, schedule },
-        reason: "created",
-        created_by: access.email,
+      const { error: createError } = await ctx.supabaseAdmin.rpc("crm_create_plan_atomic", {
+        p_account_id: accountId,
+        p_plan: planPayload,
+        p_installments: schedule,
+        p_actor_email: access.email,
       });
-      if (versionError) throw new HttpError(500, "Payment plan was created but its version history could not be saved.");
+      if (createError) {
+        const message = String(createError.message ?? "");
+        if (message.includes("open payment plan")) throw new HttpError(409, message);
+        throw new HttpError(400, message || "Unable to create payment plan.");
+      }
 
-      const installmentRows = schedule.map((row) => ({ ...row, plan_id: plan.id }));
-      const { error: installmentError } = await ctx.supabaseAdmin.from("crm_installments").insert(installmentRows);
-      if (installmentError) throw new HttpError(500, "Payment plan was created but its installments could not be saved.");
-
-      await ctx.supabaseAdmin.from("crm_accounts").update({ status: "payment_plan", updated_by: access.email, updated_at: new Date().toISOString() }).eq("id", accountId);
-      await addActivity(ctx, { accountId, activityType: "payment_plan_created", summary: `Payment plan created with ${schedule.length} installments.`, actorEmail: access.email, relatedTable: "crm_payment_plans", relatedId: plan.id, metadata: { downPaymentCents, installmentCents, frequency } });
       return json(await loadPlanBundle(ctx, accountId), 201);
     }
 
     if (req.method === "POST" && action === "modify-plan") {
       const body = await req.json().catch(() => ({}));
       const planId = requireUuid(body.planId, "Payment plan ID");
-      const { data: plan, error: planError } = await ctx.supabaseAdmin.from("crm_payment_plans").select("*").eq("id", planId).maybeSingle();
+      const { data: plan, error: planError } = await ctx.supabaseAdmin
+        .from("crm_payment_plans")
+        .select("*")
+        .eq("id", planId)
+        .maybeSingle();
       if (planError) throw new HttpError(500, "Unable to load payment plan.");
       if (!plan) throw new HttpError(404, "Payment plan not found.");
+      if (!["draft","active","defaulted"].includes(String(plan.status))) {
+        throw new HttpError(409, "Only an open payment plan can be modified.");
+      }
+
       const accountId = plan.account_id;
-      const { data: account, error: accountError } = await ctx.supabaseAdmin.from("crm_accounts").select("*").eq("id", accountId).maybeSingle();
+      const { data: account, error: accountError } = await ctx.supabaseAdmin
+        .from("crm_accounts")
+        .select("*")
+        .eq("id", accountId)
+        .maybeSingle();
       if (accountError || !account) throw new HttpError(404, "CRM account not found.");
       const summary = await accountSummary(ctx, account);
 
-      const { data: existingInstallments, error: existingError } = await ctx.supabaseAdmin.from("crm_installments").select("*").eq("plan_id", planId).order("sequence_number", { ascending: true });
+      const { data: existingInstallments, error: existingError } = await ctx.supabaseAdmin
+        .from("crm_installments")
+        .select("*")
+        .eq("plan_id", planId)
+        .order("sequence_number", { ascending: true });
       if (existingError) throw new HttpError(500, "Unable to load existing installments.");
+
       const preserved = (existingInstallments ?? []).filter((row: any) => Number(row.amount_paid_cents) > 0);
-      const preservedOutstanding = preserved.reduce((sum: number, row: any) => sum + Math.max(0, Number(row.amount_due_cents) - Number(row.amount_paid_cents)), 0);
+      const preservedOutstanding = preserved.reduce(
+        (sum: number, row: any) => sum + Math.max(0, Number(row.amount_due_cents) - Number(row.amount_paid_cents)),
+        0,
+      );
       const frequency = String(body.frequency ?? plan.frequency);
       const installmentCents = Number(body.installmentCents ?? plan.installment_cents);
       const firstInstallmentDate = String(body.firstInstallmentDate ?? plan.first_installment_date);
       const gracePeriodDays = Number(body.gracePeriodDays ?? plan.grace_period_days ?? 0);
-      const amountForNewRows = Math.max(0, summary.currentBalanceCents - preservedOutstanding);
-      const startSequence = preserved.reduce((max: number, row: any) => Math.max(max, Number(row.sequence_number)), 0) + 1;
-      const schedule = amountForNewRows > 0 ? buildSchedule(amountForNewRows, installmentCents, frequency, firstInstallmentDate, startSequence) : [];
-
-      const { error: deleteError } = await ctx.supabaseAdmin.from("crm_installments").delete().eq("plan_id", planId).eq("amount_paid_cents", 0);
-      if (deleteError) throw new HttpError(500, "Unable to replace future installments.");
-      if (schedule.length) {
-        const { error: newInstallmentError } = await ctx.supabaseAdmin.from("crm_installments").insert(schedule.map((row) => ({ ...row, plan_id: planId })));
-        if (newInstallmentError) throw new HttpError(500, "Unable to save revised installments.");
+      if (!Number.isInteger(gracePeriodDays) || gracePeriodDays < 0 || gracePeriodDays > 90) {
+        throw new HttpError(400, "Grace period is invalid.");
       }
 
-      const agreementVersion = Number(plan.agreement_version || 0) + 1;
+      const amountForNewRows = Math.max(0, summary.currentBalanceCents - preservedOutstanding);
+      const startSequence =
+        preserved.reduce((max: number, row: any) => Math.max(max, Number(row.sequence_number)), 0) + 1;
+      const schedule =
+        amountForNewRows > 0
+          ? buildSchedule(amountForNewRows, installmentCents, frequency, firstInstallmentDate, startSequence)
+          : [];
+
       const finalRow: any = schedule.at(-1) ?? preserved.at(-1);
+      if (!finalRow) throw new HttpError(400, "The revised plan has no remaining installment schedule.");
+
       const patch = {
-        status: body.status && ["draft","active","completed","defaulted","cancelled"].includes(String(body.status)) ? String(body.status) : plan.status,
         remaining_balance_cents: summary.currentBalanceCents,
         frequency,
         first_installment_date: firstInstallmentDate,
         installment_cents: installmentCents,
-        installment_count: preserved.filter((row: any) => Number(row.amount_paid_cents) < Number(row.amount_due_cents)).length + schedule.length,
-        final_installment_cents: finalRow ? Number(finalRow.amount_due_cents) : installmentCents,
-        final_installment_date: finalRow ? String(finalRow.due_date) : firstInstallmentDate,
+        installment_count:
+          preserved.filter((row: any) => Number(row.amount_paid_cents) < Number(row.amount_due_cents)).length +
+          schedule.length,
+        final_installment_cents: Number(finalRow.amount_due_cents),
+        final_installment_date: String(finalRow.due_date),
         grace_period_days: gracePeriodDays,
-        special_terms: body.specialTerms !== undefined ? cleanText(body.specialTerms, 5000) : plan.special_terms,
-        agreement_status: "not_generated",
-        agreement_version: agreementVersion,
-        updated_by: access.email,
-        updated_at: new Date().toISOString(),
+        special_terms:
+          body.specialTerms !== undefined ? cleanText(body.specialTerms, 5000) : plan.special_terms,
       };
-      const { data: updated, error: updateError } = await ctx.supabaseAdmin.from("crm_payment_plans").update(patch).eq("id", planId).select("*").single();
-      if (updateError) throw new HttpError(400, updateError.message || "Unable to revise payment plan.");
 
-      const { data: priorVersions, error: versionLookupError } = await ctx.supabaseAdmin.from("crm_payment_plan_versions").select("version_number").eq("plan_id", planId).order("version_number", { ascending: false }).limit(1);
-      if (versionLookupError) throw new HttpError(500, "Unable to load payment plan version history.");
-      const nextVersion = (priorVersions?.[0]?.version_number ?? 0) + 1;
-      const { error: versionError } = await ctx.supabaseAdmin.from("crm_payment_plan_versions").insert({ plan_id: planId, version_number: nextVersion, snapshot: { ...updated, schedule }, reason: "modified", created_by: access.email });
-      if (versionError) throw new HttpError(500, "Payment plan was revised but its version history could not be saved.");
-      await addActivity(ctx, { accountId, activityType: "payment_plan_modified", summary: "Payment plan terms modified; a new agreement is required.", actorEmail: access.email, relatedTable: "crm_payment_plans", relatedId: planId, metadata: { version: nextVersion } });
+      const { error: modifyError } = await ctx.supabaseAdmin.rpc("crm_modify_plan_atomic", {
+        p_plan_id: planId,
+        p_patch: patch,
+        p_installments: schedule,
+        p_actor_email: access.email,
+      });
+      if (modifyError) throw new HttpError(400, modifyError.message || "Unable to revise payment plan.");
+
       return json(await loadPlanBundle(ctx, accountId));
     }
 
@@ -577,17 +607,53 @@ const secured = withSupabase({ auth: "user" }, async (req, ctx) => {
       const body = await req.json().catch(() => ({}));
       const planId = requireUuid(body.planId, "Payment plan ID");
       const agreementStatus = String(body.agreementStatus ?? "");
-      if (!["not_generated","generated","sent","signed","declined"].includes(agreementStatus)) throw new HttpError(400, "Agreement status is invalid.");
-      const patch: Record<string, unknown> = { agreement_status: agreementStatus, updated_by: access.email, updated_at: new Date().toISOString() };
+
+      if (agreementStatus === "signed") {
+        throw new HttpError(400, "A signed agreement must be uploaded before the payment plan can be marked signed.");
+      }
+      if (!["generated","sent","declined"].includes(agreementStatus)) {
+        throw new HttpError(400, "Agreement status is invalid.");
+      }
+
+      const { data: currentPlan, error: currentError } = await ctx.supabaseAdmin
+        .from("crm_payment_plans")
+        .select("id,account_id,status,agreement_status,agreement_version")
+        .eq("id", planId)
+        .maybeSingle();
+      if (currentError) throw new HttpError(500, "Unable to load payment plan.");
+      if (!currentPlan) throw new HttpError(404, "Payment plan not found.");
+      if (currentPlan.agreement_status === "signed") {
+        throw new HttpError(409, "A signed agreement cannot be downgraded. Modify the plan to create a new agreement version.");
+      }
+      if (agreementStatus === "sent" && !["generated","sent"].includes(currentPlan.agreement_status)) {
+        throw new HttpError(409, "Generate the agreement before marking it sent.");
+      }
+
+      const patch: Record<string, unknown> = {
+        agreement_status: agreementStatus,
+        updated_by: access.email,
+        updated_at: new Date().toISOString(),
+      };
       if (agreementStatus === "generated") {
-        const { data: currentPlan, error: currentError } = await ctx.supabaseAdmin.from("crm_payment_plans").select("agreement_version").eq("id", planId).maybeSingle();
-        if (currentError || !currentPlan) throw new HttpError(404, "Payment plan not found.");
         patch.agreement_version = Math.max(1, Number(currentPlan.agreement_version || 0));
       }
-      const { data: plan, error } = await ctx.supabaseAdmin.from("crm_payment_plans").update(patch).eq("id", planId).select("id,account_id,agreement_status,agreement_version").maybeSingle();
+
+      const { data: plan, error } = await ctx.supabaseAdmin
+        .from("crm_payment_plans")
+        .update(patch)
+        .eq("id", planId)
+        .select("id,account_id,agreement_status,agreement_version,status")
+        .single();
       if (error) throw new HttpError(400, error.message || "Unable to update agreement status.");
-      if (!plan) throw new HttpError(404, "Payment plan not found.");
-      await addActivity(ctx, { accountId: plan.account_id, activityType: "agreement_status", summary: `Payment plan agreement marked ${agreementStatus.replaceAll("_", " ")}.`, actorEmail: access.email, relatedTable: "crm_payment_plans", relatedId: plan.id });
+
+      await addActivity(ctx, {
+        accountId: plan.account_id,
+        activityType: "agreement_status",
+        summary: `Payment plan agreement marked ${agreementStatus.replaceAll("_", " ")}.`,
+        actorEmail: access.email,
+        relatedTable: "crm_payment_plans",
+        relatedId: plan.id,
+      });
       return json({ plan });
     }
 
