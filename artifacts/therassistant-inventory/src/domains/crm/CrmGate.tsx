@@ -5,11 +5,11 @@ import { PasswordRecoveryPage } from "../../auth/PasswordRecoveryPage";
 import { useAuth } from "../../auth/auth-context";
 import { crmApi } from "./crm-api";
 import { CrmShell } from "./CrmShell";
+import { AccountsPage } from "./AccountsPage";
+import { AccountDetailPage } from "./AccountDetailPage";
+import { FollowUpsPage } from "./FollowUpsPage";
+import { UsersPage } from "./UsersPage";
 import type { CrmAccess } from "./types";
-
-function Placeholder({title}:{title:string}) {
-  return <section className="crm-card"><h1>{title}</h1><p>CRM workspace is loading its account tools.</p></section>;
-}
 
 export function CrmGate() {
   const {session,loading,passwordRecovery}=useAuth();
@@ -36,10 +36,10 @@ export function CrmGate() {
 
   return <CrmShell access={access}>
     <Switch>
-      <Route path="/crm/accounts/:id"><Placeholder title="Collection Account"/></Route>
-      <Route path="/crm/follow-ups"><Placeholder title="Follow-Ups"/></Route>
-      <Route path="/crm/users"><Placeholder title="CRM Users"/></Route>
-      <Route path="/crm"><Placeholder title="Collection Accounts"/></Route>
+      <Route path="/crm/accounts/:id"><AccountDetailPage /></Route>
+      <Route path="/crm/follow-ups"><FollowUpsPage /></Route>
+      <Route path="/crm/users"><UsersPage access={access} /></Route>
+      <Route path="/crm"><AccountsPage access={access} /></Route>
       <Route><div className="thera-state">CRM page not found.</div></Route>
     </Switch>
   </CrmShell>;
