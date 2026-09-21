@@ -83,12 +83,6 @@ export function PreSessionPage() {
         </section>
 
         <section className="thera-card">
-          <div className="thera-card-header"><div><h2>Authorization</h2><p>Required units and approval status for the scheduled service.</p></div></div>
-          <div className="thera-definition-grid"><Field label="Required" value={appointment.authorizationRequired ? "Yes" : "No"} /><Field label="Status" value={<StatusBadge value={appointment.authorizationStatus || (appointment.authorizationRequired ? "missing" : "not required")} />} /><Field label="Authorization #" value={appointment.authorizationNumber || "—"} /><Field label="Remaining Units" value={appointment.remainingUnits ?? "—"} /></div>
-          <div style={{ marginTop: 14 }}><Link className="thera-link" href="/authorizations">Open Authorizations</Link></div>
-        </section>
-
-        <section className="thera-card">
           <div className="thera-card-header"><div><h2>Provider Participation</h2><p>Billing eligibility for the scheduled payer.</p></div></div>
           <div className="thera-definition-grid"><Field label="Provider" value={appointment.providerName} /><Field label="Payer" value={appointment.payerName} /><Field label="Enrollment" value={<StatusBadge value={appointment.providerEnrollmentStatus || "not confirmed"} />} /></div>
           <div className="thera-filter-row" style={{ marginTop: 14 }}>{appointment.providerId && <Link className="thera-link" href={`/providers/${appointment.providerId}`}>Open Provider</Link>}<Link className="thera-link" href="/credentialing">Open Credentialing</Link></div>
