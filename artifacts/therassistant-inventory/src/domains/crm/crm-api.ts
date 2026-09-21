@@ -34,3 +34,41 @@ export function crmApi<T>(action:string, options:ApiOptions={}) {
 export function paymentDeskApi<T>(action:string, options:ApiOptions={}) {
   return callApi<T>(PAYMENT_API_URL,action,options);
 }
+
+export async function uploadCrmDocument(input:{
+  accountId:string;
+  file:File;
+  category:string;
+}) {
+  const signed=await crmApi<{path:string;token:string;signedUrl:string}>("create-document-upload",{
+    method:"POST",
+    body:{accountId:input.accountId,fileName:input.file.name,mimeType:input.file.type,fileSize:input.file.size},
+  });
+  const form=new FormData();
+  form.append("cacheControl","3600");
+  form.append("",input.file);
+  const uploadResponse=await fetch(signed.signedUrl,{method:"PUT",body:form});
+  if(!uploadResponse.ok){
+    const message=await uploadResponse.text().catch(()=>"");
+    throw new Error(message || `Document upload failed (${uploadResponse.status}).`);
+  }
+  return crmApi<{document:unknown}>("finalize-document",{
+    method:"POST",
+    body:{
+      accountId:input.accountId,
+      storagePath:signed.path,
+      displayName:input.file.name,
+      mimeType:input.file.type,
+      fileSize:input.file.size,
+      category:input.category,
+    },
+  });
+}
+
+export async function getCrmDocumentDownloadUrl(documentId:string) {
+  const result=await crmApi<{url:string;expiresIn:number}>("document-download",{
+    method:"POST",
+    body:{documentId},
+  });
+  return result.url;
+}
