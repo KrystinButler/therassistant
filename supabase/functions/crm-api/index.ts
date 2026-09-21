@@ -174,13 +174,13 @@ async function addActivity(ctx: any, input: {
 async function accountSummary(ctx: any, account: any) {
   const { data: payments, error: paymentError } = await ctx.supabaseAdmin
     .from("payment_desk_transactions")
-    .select("id,created_at,amount_cents,square_status,receipt_url,card_brand,card_last4,operator_email")
+    .select("id,created_at,amount_cents,square_status,receipt_url,card_brand,card_last4,operator_email,square_environment")
     .eq("crm_account_id", account.id)
     .order("created_at", { ascending: false });
   if (paymentError) throw new HttpError(500, "Unable to load CRM payments.");
 
   const completedPaymentsCents = (payments ?? [])
-    .filter((p: any) => p.square_status === "COMPLETED")
+    .filter((p: any) => p.square_status === "COMPLETED" && p.square_environment === "production")
     .reduce((sum: number, p: any) => sum + Number(p.amount_cents || 0), 0);
 
   return {
