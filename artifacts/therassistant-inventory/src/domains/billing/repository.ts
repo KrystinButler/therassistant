@@ -37,14 +37,11 @@ async function getBillingContext(encounterId: string): Promise<BillingReadinessI
   );
   if (!encounter) throw new Error("Encounter not found.");
 
-  const [clients, notes, diagnoses, serviceLines, policies, eligibilityRows, enrollmentRows] = await Promise.all([
+  const [clients, notes, diagnoses, serviceLines, eligibilityRows, enrollmentRows] = await Promise.all([
     tenantSelect<DataRow>("clients", { id: `eq.${String(encounter.client_id)}`, limit: "1" }),
     tenantSelect<DataRow>("clinical_notes", { encounter_id: `eq.${encounterId}`, order: "created_at.desc", limit: "1" }),
     tenantSelect<DataRow>("encounter_diagnoses", { encounter_id: `eq.${encounterId}`, order: "sequence_number.asc" }),
     tenantSelect<DataRow>("encounter_service_lines", { encounter_id: `eq.${encounterId}`, order: "created_at.asc" }),
-    encounter.insurance_policy_id
-      ? tenantSelect<DataRow>("client_insurance_policies", { id: `eq.${String(encounter.insurance_policy_id)}`, limit: "1" })
-      : Promise.resolve([]),
     tenantSelect<DataRow>("eligibility_checks", {
       client_id: `eq.${String(encounter.client_id)}`,
       ...(encounter.insurance_policy_id ? { insurance_policy_id: `eq.${String(encounter.insurance_policy_id)}` } : {}),
