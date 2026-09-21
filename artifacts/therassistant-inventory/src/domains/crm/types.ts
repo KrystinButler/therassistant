@@ -6,7 +6,7 @@ export type CrmAccount = {
   address_line1:string|null; address_line2:string|null; city:string|null; state:string|null; postal_code:string|null;
   original_balance_cents:number; status:CrmAccountStatus; next_follow_up_at:string|null;
   created_by:string; created_at:string; updated_by:string; updated_at:string;
-  originalBalanceCents:number; completedPaymentsCents:number; currentBalanceCents:number;
+  originalBalanceCents:number; completedPaymentsCents:number; currentBalanceCents:number; accountCreditCents:number;
   payments?:CrmPayment[];
 };
 export type CrmCall = { id:string; account_id:string; direction:"inbound"|"outbound"; disposition:string; notes:string|null; promise_to_pay_cents:number|null; promise_to_pay_date:string|null; next_follow_up_at:string|null; created_by:string; created_at:string };
