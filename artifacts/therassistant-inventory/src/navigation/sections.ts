@@ -44,7 +44,6 @@ export const NAV_SECTIONS: readonly NavigationSection[] = [
       { id: "schedule", label: "Schedule", href: "/schedule", visibility: visibleToAll },
       { id: "clinical", label: "Clinical", href: "/clinical", visibility: visibleToAll },
       { id: "eligibility", label: "Eligibility & Benefits", href: "/eligibility", visibility: visibleToAll },
-      { id: "authorizations", label: "Authorizations", href: "/authorizations", visibility: visibleToAll },
     ],
     contextualPaths: ["/encounters", "/medicaid"],
   },
