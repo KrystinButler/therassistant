@@ -8,7 +8,6 @@ import {
   type Row,
 } from "../../lib/tenant-data-client";
 import {
-  recordExternalClaimAcknowledgementWorkflow,
   type ClaimCreationRepository,
   type ClaimsRepository,
 } from "./workflow";
@@ -221,6 +220,15 @@ type BackendSubmissionResult = {
   submitted_at: string;
 };
 
+type BackendAcknowledgementResult = {
+  submission_id: string;
+  claim_id: string;
+  outcome: string;
+  submission_status: string;
+  responded_claim_count: number;
+  total_claim_count: number;
+};
+
 function errorMessage(error: unknown, fallback: string) {
   return error instanceof Error ? error.message : fallback;
 }
@@ -354,7 +362,7 @@ export async function recordExternalSubmission(
   }
 }
 
-export function recordExternalClaimAcknowledgement(input: {
+export async function recordExternalClaimAcknowledgement(input: {
   submissionId: string;
   claimId: string;
   outcome: "accepted" | "rejected";
@@ -363,7 +371,49 @@ export function recordExternalClaimAcknowledgement(input: {
   responseMessage: string;
   externalReference: string;
 }) {
-  return recordExternalClaimAcknowledgementWorkflow(repository, input);
+  if (!input.externalReference.trim()) {
+    return blocked(
+      "ack_reference_required",
+      "Enter the acknowledgement or clearinghouse reference.",
+    );
+  }
+  if (!input.responseCode.trim()) {
+    return blocked("ack_code_required", "Enter the acknowledgement response code.");
+  }
+  if (!input.responseMessage.trim()) {
+    return blocked(
+      "ack_message_required",
+      "Enter the acknowledgement response message.",
+    );
+  }
+
+  try {
+    const tenantId = await getCurrentTenantId();
+    const result = await tenantRpc<BackendAcknowledgementResult>(
+      "rcm_record_external_acknowledgement",
+      {
+        p_tenant_id: tenantId,
+        p_submission_id: input.submissionId,
+        p_claim_id: input.claimId,
+        p_outcome: input.outcome,
+        p_acknowledgement_type: input.acknowledgementType,
+        p_response_code: input.responseCode.trim(),
+        p_response_message: input.responseMessage.trim(),
+        p_external_reference: input.externalReference.trim(),
+      },
+    );
+    return success({
+      submissionId: result.submission_id,
+      claimId: result.claim_id,
+      outcome: result.outcome,
+      submissionStatus: result.submission_status,
+    });
+  } catch (error) {
+    return failure(
+      "external_acknowledgement_failed",
+      errorMessage(error, "Unable to record external claim acknowledgement."),
+    );
+  }
 }
 
 function personName(row?: Row) {
