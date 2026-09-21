@@ -142,6 +142,7 @@ export function EncounterPage() {
     setMessage(null);
     try {
       const providerId = String(data?.encounter.provider_id ?? "");
+      await saveClinicalNote(encounterId, { noteType, noteText, goalAddressed });
       const result = await signEncounterNote(encounterId, providerId, signatureText);
       if (!result.ok) {
         setError(result.details?.length ? `${result.message} ${result.details.join(" ")}` : result.message);
