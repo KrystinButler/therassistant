@@ -3,8 +3,7 @@
   "git": {
     "deploymentEnabled": {
       "main": true,
-      "phase3-advanced-billing-ar": true,
-      "feature/therassistant-crm": true
+      "phase3-advanced-billing-ar": true
     }
   },
   "installCommand": "pnpm install --frozen-lockfile",
