@@ -32,3 +32,9 @@ test("refreshes a link through order tender payment id", () => {
 test("does not add PAN or CVV persistence", () => {
   assert.doesNotMatch(source, /card_number|security_code|\bcvv\b|\bpan\b/i);
 });
+
+test("sandbox payments never allocate to real CRM installments", () => {
+  assert.match(source, /squareEnvironment:\s*["']sandbox["']\s*\|\s*["']production["']/);
+  assert.match(source, /squareEnvironment !== ["']production["']\) return/);
+  assert.match(source, /idempotencyKey\.length > 45/);
+});
