@@ -38,3 +38,8 @@ test("sandbox payments never allocate to real CRM installments", () => {
   assert.match(source, /squareEnvironment !== ["']production["']\) return/);
   assert.match(source, /idempotencyKey\.length > 45/);
 });
+
+test("production payment allocation delegates to one atomic database RPC", () => {
+  assert.match(source, /crm_allocate_production_payment_atomic/);
+  assert.doesNotMatch(source, /from\(["']crm_payment_allocations["']\)\s*\n?\s*\.insert/);
+});
