@@ -4,3 +4,5 @@
 
 .crm-plan-actions{display:flex;gap:.45rem;flex-wrap:wrap;margin:.8rem 0}.crm-plan-actions button{min-height:44px;border:1px solid #bcc8c1;background:white;color:#203b4e;border-radius:.5rem;padding:.6rem .8rem;font-weight:650}
 @media(max-width:640px){.crm-plan-actions{display:grid;grid-template-columns:1fr}.crm-plan-actions button{width:100%}}
+
+.crm-section-title{font-size:1rem;margin:.35rem 0 0;color:#355064}.crm-section-title.overdue{color:#8c3a33}
