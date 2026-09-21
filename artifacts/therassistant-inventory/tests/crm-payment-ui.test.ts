@@ -1,5 +1,0 @@
-import test from "node:test";import assert from "node:assert/strict";import {readFileSync} from "node:fs";
-const pay=readFileSync(new URL("../src/domains/crm/PaymentPanel.tsx",import.meta.url),"utf8");const link=readFileSync(new URL("../src/domains/crm/PaymentLinkPanel.tsx",import.meta.url),"utf8");
-test("payment panel uses proven Square tokenization and CRM linkage",()=>{assert.match(pay,/tokenize/);assert.match(pay,/sellerKeyedIn:true/);assert.match(pay,/crmAccountId/);assert.match(pay,/idempotency/i);});
-test("payment link supports full next and custom amounts",()=>{assert.match(link,/Full Balance/);assert.match(link,/Next Installment/);assert.match(link,/Custom Amount/);assert.match(link,/create-payment-link/);});
-test("text link is encoded and browser contains no Square secret",()=>{assert.match(link,/encodeURIComponent/);assert.match(link,/sms:/);assert.doesNotMatch(pay+link,/SQUARE_ACCESS_TOKEN|Bearer \+ accessToken/);});

@@ -42,7 +42,6 @@ import {
 } from "./domains/portal/routes";
 import { SchedulePage } from "./domains/scheduling/SchedulePage";
 import { WorkCenterPage } from "./pages/work-center";
-import { CrmGate } from "./domains/crm/CrmGate";
 import { AdministrationPage } from "./pages/administration";
 import { ClientsPage } from "./pages/clients";
 import { PayerDetailPage } from "./pages/payer-detail";
@@ -158,7 +157,6 @@ function PatientPortalRoutes() {
 
 function ApplicationRoutes() {
   const [location] = useLocation();
-  if (location === "/crm" || location.startsWith("/crm/")) return <CrmGate />;
   return isPatientPortalPath(location) ? <PatientPortalRoutes /> : <StaffGate />;
 }
 
