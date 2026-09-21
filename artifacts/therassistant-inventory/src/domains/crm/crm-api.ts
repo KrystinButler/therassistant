@@ -3,6 +3,14 @@ import { authenticatedFetch, SUPABASE_URL } from "../../lib/supabase-client";
 const CRM_API_URL = SUPABASE_URL + "/functions/v1/crm-api";
 const PAYMENT_API_URL = SUPABASE_URL + "/functions/v1/payment-desk-api";
 
+export class CrmApiError extends Error {
+  status:number;
+  data:Record<string,unknown>;
+  constructor(message:string,status:number,data:Record<string,unknown>){
+    super(message);this.status=status;this.data=data;
+  }
+}
+
 type ApiOptions = {
   method?: "GET" | "POST";
   query?: Record<string, string | number | null | undefined>;
@@ -23,7 +31,7 @@ async function callApi<T>(baseUrl:string, action:string, options:ApiOptions={}):
     body:options.body === undefined ? undefined : JSON.stringify(options.body),
   });
   const payload=await response.json().catch(()=>({})) as Record<string,unknown>;
-  if (!response.ok) throw new Error(String(payload.error ?? ("Request failed ("+response.status+").")));
+  if (!response.ok) throw new CrmApiError(String(payload.error ?? ("Request failed ("+response.status+").")),response.status,payload);
   return payload as T;
 }
 
