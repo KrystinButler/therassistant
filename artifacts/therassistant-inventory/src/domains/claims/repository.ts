@@ -1,19 +1,21 @@
 import {
+  getCurrentTenantId,
   tenantInsert,
+  tenantRpc,
   tenantSelect,
   tenantUpdate,
   referenceSelect,
   type Row,
 } from "../../lib/tenant-data-client";
 import {
-  recordExternalClaimAcknowledgementWorkflow,
-  createBatchWorkflow,
-  createClaimFromChargesWorkflow,
-  recordExternalSubmissionWorkflow,
-  validateClaimWorkflow,
   type ClaimCreationRepository,
   type ClaimsRepository,
 } from "./workflow";
+import {
+  blocked,
+  failure,
+  success,
+} from "../shared/workflow-result";
 
 type DataRow = Row & { id: string };
 type EnrichedClaimRow = DataRow & {
@@ -189,32 +191,178 @@ const repository: ClaimsRepository = {
   },
 };
 
-export function createClaimFromCharges(chargeIds: string[]) {
-  return createClaimFromChargesWorkflow(claimCreationRepository, chargeIds);
+type BackendClaimCreationResult = {
+  claim_id: string;
+  patient_control_number: string;
+  line_count: number;
+  diagnosis_count: number;
+  total_charge_cents: number;
+};
+
+type BackendClaimValidationResult = {
+  claim_id: string;
+  valid: boolean;
+  status: string;
+  issues: string[];
+};
+
+type BackendBatchResult = {
+  batch_id: string;
+  claim_count: number;
+  payer_id: string;
+  total_charge_cents: number;
+};
+
+type BackendSubmissionResult = {
+  batch_id: string;
+  submission_id: string;
+  claim_count: number;
+  submitted_at: string;
+};
+
+type BackendAcknowledgementResult = {
+  submission_id: string;
+  claim_id: string;
+  outcome: string;
+  submission_status: string;
+  responded_claim_count: number;
+  total_claim_count: number;
+};
+
+function errorMessage(error: unknown, fallback: string) {
+  return error instanceof Error ? error.message : fallback;
 }
 
-export function validateClaim(claimId: string) {
-  return validateClaimWorkflow(repository, claimId);
+export async function createClaimFromCharges(chargeIds: string[]) {
+  if (!chargeIds.length) {
+    return blocked("no_charges", "Select at least one ready charge to create a claim.");
+  }
+
+  try {
+    const tenantId = await getCurrentTenantId();
+    const result = await tenantRpc<BackendClaimCreationResult>(
+      "rcm_create_claim_from_charges",
+      {
+        p_tenant_id: tenantId,
+        p_charge_ids: chargeIds,
+      },
+    );
+    const claim = first(
+      await tenantSelect<DataRow>("professional_claims", {
+        id: `eq.${result.claim_id}`,
+        limit: "1",
+      }),
+    );
+    if (!claim) {
+      return failure(
+        "claim_creation_failed",
+        "The claim was created but could not be reloaded.",
+      );
+    }
+
+    return success({
+      claim,
+      lineCount: Number(result.line_count ?? 0),
+      diagnosisCount: Number(result.diagnosis_count ?? 0),
+    });
+  } catch (error) {
+    return failure(
+      "claim_creation_failed",
+      errorMessage(error, "Unable to create claim from charges."),
+    );
+  }
 }
 
-export function createBatch(claimIds: string[], batchName?: string) {
-  return createBatchWorkflow(repository, claimIds, batchName);
+export async function validateClaim(claimId: string) {
+  try {
+    const result = await tenantRpc<BackendClaimValidationResult>(
+      "rcm_validate_claim",
+      { p_claim_id: claimId },
+    );
+    const issues = Array.isArray(result.issues) ? result.issues.map(String) : [];
+    if (!result.valid) {
+      return blocked(
+        "claim_validation_failed",
+        "Claim failed validation.",
+        issues,
+      );
+    }
+    return success({
+      claimId: result.claim_id,
+      status: String(result.status ?? "ready_for_batch"),
+    });
+  } catch (error) {
+    return failure(
+      "claim_validation_failed",
+      errorMessage(error, "Unable to validate claim."),
+    );
+  }
 }
 
-export function recordExternalSubmission(
+export async function createBatch(claimIds: string[], batchName?: string) {
+  if (!claimIds.length) {
+    return blocked("no_claims", "Select at least one claim for the batch.");
+  }
+
+  try {
+    const tenantId = await getCurrentTenantId();
+    const result = await tenantRpc<BackendBatchResult>(
+      "rcm_create_claim_batch",
+      {
+        p_tenant_id: tenantId,
+        p_claim_ids: claimIds,
+        p_batch_name: batchName?.trim() || null,
+      },
+    );
+    return success({
+      batchId: result.batch_id,
+      claimCount: Number(result.claim_count ?? 0),
+    });
+  } catch (error) {
+    return failure(
+      "batch_creation_failed",
+      errorMessage(error, "Unable to create claim batch."),
+    );
+  }
+}
+
+export async function recordExternalSubmission(
   batchId: string,
   externalReference: string,
   submissionMethod = "external_837p",
 ) {
-  return recordExternalSubmissionWorkflow(
-    repository,
-    batchId,
-    externalReference,
-    submissionMethod,
-  );
+  if (!externalReference.trim()) {
+    return blocked(
+      "external_reference_required",
+      "Enter the clearinghouse or submission reference before recording submission.",
+    );
+  }
+
+  try {
+    const tenantId = await getCurrentTenantId();
+    const result = await tenantRpc<BackendSubmissionResult>(
+      "rcm_record_external_submission",
+      {
+        p_tenant_id: tenantId,
+        p_batch_id: batchId,
+        p_external_reference: externalReference.trim(),
+        p_submission_method: submissionMethod,
+      },
+    );
+    return success({
+      batchId: result.batch_id,
+      submissionId: result.submission_id,
+      claimCount: Number(result.claim_count ?? 0),
+    });
+  } catch (error) {
+    return failure(
+      "batch_submission_record_failed",
+      errorMessage(error, "Unable to record external claim submission."),
+    );
+  }
 }
 
-export function recordExternalClaimAcknowledgement(input: {
+export async function recordExternalClaimAcknowledgement(input: {
   submissionId: string;
   claimId: string;
   outcome: "accepted" | "rejected";
@@ -223,7 +371,49 @@ export function recordExternalClaimAcknowledgement(input: {
   responseMessage: string;
   externalReference: string;
 }) {
-  return recordExternalClaimAcknowledgementWorkflow(repository, input);
+  if (!input.externalReference.trim()) {
+    return blocked(
+      "ack_reference_required",
+      "Enter the acknowledgement or clearinghouse reference.",
+    );
+  }
+  if (!input.responseCode.trim()) {
+    return blocked("ack_code_required", "Enter the acknowledgement response code.");
+  }
+  if (!input.responseMessage.trim()) {
+    return blocked(
+      "ack_message_required",
+      "Enter the acknowledgement response message.",
+    );
+  }
+
+  try {
+    const tenantId = await getCurrentTenantId();
+    const result = await tenantRpc<BackendAcknowledgementResult>(
+      "rcm_record_external_acknowledgement",
+      {
+        p_tenant_id: tenantId,
+        p_submission_id: input.submissionId,
+        p_claim_id: input.claimId,
+        p_outcome: input.outcome,
+        p_acknowledgement_type: input.acknowledgementType,
+        p_response_code: input.responseCode.trim(),
+        p_response_message: input.responseMessage.trim(),
+        p_external_reference: input.externalReference.trim(),
+      },
+    );
+    return success({
+      submissionId: result.submission_id,
+      claimId: result.claim_id,
+      outcome: result.outcome,
+      submissionStatus: result.submission_status,
+    });
+  } catch (error) {
+    return failure(
+      "external_acknowledgement_failed",
+      errorMessage(error, "Unable to record external claim acknowledgement."),
+    );
+  }
 }
 
 function personName(row?: Row) {
