@@ -5,6 +5,8 @@ import {
   type Row,
 } from "../../lib/tenant-data-client";
 import { createChargeFromEncounter } from "../billing/repository";
+import { saveStructuredClinicalData } from "./fast-charting-repository";
+import type { StructuredSelections } from "./fast-charting";
 import { updateEncounter } from "../encounters/repository";
 import { signNoteWorkflow, type ClinicalSigningRepository } from "./workflow";
 
@@ -79,36 +81,49 @@ export async function saveClinicalNote(
     noteType?: string;
     noteText: string;
     goalAddressed?: string;
+    structuredSelections?: StructuredSelections;
+    generatedNarrative?: string;
+    carryForwardContext?: Row;
   },
 ) {
   const state = await clinicalState(encounterId);
   if (!state.encounter) throw new Error("Encounter not found.");
 
+  let saved: DataRow;
   if (state.note) {
     const status = String(state.note.note_status ?? "draft");
     if (["signed", "locked", "voided"].includes(status)) {
       throw new Error("Signed or locked documentation cannot be edited. Amend the note instead.");
     }
-    return tenantUpdate<DataRow>("clinical_notes", state.note.id, {
+    saved = await tenantUpdate<DataRow>("clinical_notes", state.note.id, {
       note_type: values.noteType || state.note.note_type || "psychotherapy",
       note_status: "ready_for_signature",
       note_text: values.noteText,
       goal_addressed: values.goalAddressed || null,
     });
+  } else {
+    const serviceDate = String(state.encounter.started_at ?? new Date().toISOString()).slice(0, 10);
+    saved = await tenantInsert<DataRow>("clinical_notes", {
+      encounter_id: encounterId,
+      client_id: state.encounter.client_id,
+      appointment_id: state.encounter.appointment_id || null,
+      provider_id: state.encounter.provider_id || null,
+      note_type: values.noteType || "psychotherapy",
+      note_status: "ready_for_signature",
+      service_date: serviceDate,
+      note_text: values.noteText,
+      goal_addressed: values.goalAddressed || null,
+    });
   }
 
-  const serviceDate = String(state.encounter.started_at ?? new Date().toISOString()).slice(0, 10);
-  return tenantInsert<DataRow>("clinical_notes", {
-    encounter_id: encounterId,
-    client_id: state.encounter.client_id,
-    appointment_id: state.encounter.appointment_id || null,
-    provider_id: state.encounter.provider_id || null,
-    note_type: values.noteType || "psychotherapy",
-    note_status: "ready_for_signature",
-    service_date: serviceDate,
-    note_text: values.noteText,
-    goal_addressed: values.goalAddressed || null,
-  });
+  if (values.structuredSelections) {
+    await saveStructuredClinicalData(saved, {
+      selections: values.structuredSelections,
+      generatedNarrative: values.generatedNarrative || "",
+      carryForwardContext: values.carryForwardContext || {},
+    });
+  }
+  return saved;
 }
 
 export async function addEncounterDiagnosis(

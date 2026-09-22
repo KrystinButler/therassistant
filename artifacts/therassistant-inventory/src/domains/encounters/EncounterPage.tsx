@@ -11,6 +11,9 @@ import {
 } from "../clinical/repository";
 import { buildPatientReviewCheckIn } from "../scheduling/patient-review-model";
 import { treatmentPlanAlert } from "../treatment-plans/workflow";
+import { FastChartingPanel } from "../clinical/FastChartingPanel";
+import { createSmartPhrase, getFastChartingContext, getSmartPhrases } from "../clinical/fast-charting-repository";
+import { emptyStructuredSelections, expandSmartPhraseAtCursor, synthesizeStructuredNarrative, type PriorStructuredContext, type SmartPhrase, type StructuredSelections } from "../clinical/fast-charting";
 import { Icd10SearchInput } from "../coding/Icd10SearchInput";
 import { ProcedureCodeSearchInput } from "../coding/ProcedureCodeSearchInput";
 import { PlaceOfServiceSearchInput } from "../coding/PlaceOfServiceSearchInput";
@@ -74,6 +77,10 @@ export function EncounterPage() {
   const [chargeDollars, setChargeDollars] = useState("");
   const [placeOfService, setPlaceOfService] = useState("11");
   const [signatureText, setSignatureText] = useState("");
+  const [smartPhrases, setSmartPhrases] = useState<SmartPhrase[]>([]);
+  const [structuredSelections, setStructuredSelections] = useState<StructuredSelections>(() => emptyStructuredSelections());
+  const [carryForwardContext, setCarryForwardContext] = useState<Record<string, unknown>>({});
+  const [priorStructuredContext, setPriorStructuredContext] = useState<PriorStructuredContext | null>(null);
 
   async function load() {
     if (!encounterId) return;
@@ -83,6 +90,11 @@ export function EncounterPage() {
       const result = await getEncounterDetail(encounterId);
       setData(result);
       const note = result.notes[0];
+      const fastCharting = await getFastChartingContext(String(result.encounter.client_id ?? ""), encounterId, note?.id ? String(note.id) : undefined);
+      setSmartPhrases(fastCharting.phrases);
+      setStructuredSelections(fastCharting.current?.selections ?? emptyStructuredSelections());
+      setCarryForwardContext(fastCharting.current?.carryForwardContext ?? {});
+      setPriorStructuredContext(fastCharting.prior);
       setNoteText(String(note?.note_text ?? ""));
       setNoteType(String(note?.note_type ?? "psychotherapy"));
       setGoalAddressed(String(note?.goal_addressed ?? ""));
@@ -109,6 +121,7 @@ export function EncounterPage() {
     () => Boolean(data?.notes.some((note) => ["signed", "locked"].includes(String(note.note_status)))),
     [data],
   );
+  const generatedNarrative = useMemo(() => synthesizeStructuredNarrative(structuredSelections), [structuredSelections]);
 
   async function withSave(action: () => Promise<unknown>, successMessage: string) {
     setSaving(true);
@@ -127,7 +140,7 @@ export function EncounterPage() {
 
   async function saveNote() {
     await withSave(
-      () => saveClinicalNote(encounterId, { noteType, noteText, goalAddressed }),
+      () => saveClinicalNote(encounterId, { noteType, noteText, goalAddressed, structuredSelections, generatedNarrative, carryForwardContext }),
       "Clinical note saved and marked ready for signature.",
     );
   }
@@ -166,7 +179,7 @@ export function EncounterPage() {
     setMessage(null);
     try {
       const providerId = String(data?.encounter.provider_id ?? "");
-      await saveClinicalNote(encounterId, { noteType, noteText, goalAddressed });
+      await saveClinicalNote(encounterId, { noteType, noteText, goalAddressed, structuredSelections, generatedNarrative, carryForwardContext });
       const result = await signEncounterNote(encounterId, providerId, signatureText);
       if (!result.ok) {
         setError(result.details?.length ? `${result.message} ${result.details.join(" ")}` : result.message);
@@ -242,7 +255,19 @@ export function EncounterPage() {
   ] as const;
   const billingFollowUpCount = completionChecks.filter((check) => check.status !== "pass").length;
 
-  function handleNoteChange(value: string) {
+  function handleNoteChange(value: string, cursor: number) {
+    const expansion = expandSmartPhraseAtCursor(value, cursor, smartPhrases);
+    if (expansion) {
+      setNoteText(expansion.value);
+      setShowSlashMenu(false);
+      requestAnimationFrame(() => {
+        const textarea = noteRef.current;
+        if (!textarea) return;
+        textarea.focus();
+        textarea.setSelectionRange(expansion.cursor, expansion.cursor);
+      });
+      return;
+    }
     setNoteText(value);
     setShowSlashMenu(value.endsWith("/"));
   }
@@ -292,6 +317,24 @@ export function EncounterPage() {
     setMessage("Patient-shared journal content was inserted as labeled source material for provider review. It remains editable until signature.");
   }
 
+  async function addSmartPhrase(input: { shortcut: string; label: string; content: string; scope: "user" | "practice" }) {
+    await createSmartPhrase(input);
+    setSmartPhrases(await getSmartPhrases());
+    setMessage("SmartPhrase saved.");
+  }
+
+  function carryForwardStructured() {
+    if (signed || !priorStructuredContext) return;
+    setStructuredSelections(priorStructuredContext.selections);
+    if (!goalAddressed.trim() && priorStructuredContext.goalAddressed) setGoalAddressed(priorStructuredContext.goalAddressed);
+    setCarryForwardContext({
+      source_note_id: priorStructuredContext.noteId,
+      source_service_date: priorStructuredContext.serviceDate,
+      copied_fields: ["structured_selections", "goal_addressed"],
+    });
+    setMessage("Structured clinical context carried forward. Prior narrative text was not copied.");
+  }
+
   return (
     <>
       <div className="thera-breadcrumb">
@@ -339,7 +382,8 @@ export function EncounterPage() {
             <label><div className="thera-field-label">Note Type</div><select className="thera-input" value={noteType} disabled={signed} onChange={(event) => setNoteType(event.target.value)}><option value="psychotherapy">Psychotherapy</option><option value="assessment">Assessment</option><option value="intake">Intake</option><option value="crisis">Crisis</option><option value="case_management">Case Management</option><option value="medication_management">Medication Management</option><option value="other">Other</option></select></label>
             <label><div className="thera-field-label">Goal / Objective Addressed</div><input className="thera-input" value={goalAddressed} disabled={signed} onChange={(event) => setGoalAddressed(event.target.value)} placeholder="Goal or objective addressed" /></label>
           </div>
-          <div className="encounter-editor-wrap"><label><div className="thera-field-label">Session / SOAP Note</div><textarea ref={noteRef} className="thera-input encounter-note-editor" value={noteText} disabled={signed} onChange={(event) => handleNoteChange(event.target.value)} placeholder="Document subjective/objective findings, assessment, interventions, response, plan, risk, and relevant clinical context. Type / for quick inserts." /></label>{showSlashMenu && !signed && <div className="encounter-slash-menu"><div>QUICK INSERTS</div><button type="button" onClick={() => injectQuickText("Risk Assessment: Client denies suicidal or homicidal ideation. No acute safety concerns reported.")}>Risk: Standard Negative</button><button type="button" onClick={() => injectQuickText("Mental Status: Alert and oriented x4. Appearance and behavior appropriate. Speech normal. Thought process linear and goal directed.")}>MSE: Within Normal Limits</button><button type="button" onClick={() => injectQuickText("Intervention: Supportive psychotherapy, reflective listening, validation, and collaborative problem solving were utilized.")}>Intervention: Supportive</button></div>}</div>
+          <div className="encounter-editor-wrap"><label><div className="thera-field-label">Session / SOAP Note</div><textarea ref={noteRef} className="thera-input encounter-note-editor" value={noteText} disabled={signed} onChange={(event) => handleNoteChange(event.target.value, event.target.selectionStart)} placeholder="Document subjective/objective findings, assessment, interventions, response, plan, risk, and relevant clinical context. Type / for quick inserts." /></label>{showSlashMenu && !signed && <div className="encounter-slash-menu"><div>QUICK INSERTS</div><button type="button" onClick={() => injectQuickText("Risk Assessment: Client denies suicidal or homicidal ideation. No acute safety concerns reported.")}>Risk: Standard Negative</button><button type="button" onClick={() => injectQuickText("Mental Status: Alert and oriented x4. Appearance and behavior appropriate. Speech normal. Thought process linear and goal directed.")}>MSE: Within Normal Limits</button><button type="button" onClick={() => injectQuickText("Intervention: Supportive psychotherapy, reflective listening, validation, and collaborative problem solving were utilized.")}>Intervention: Supportive</button></div>}</div>
+          <FastChartingPanel signed={signed} phrases={smartPhrases} selections={structuredSelections} generatedNarrative={generatedNarrative} priorContext={priorStructuredContext} onSelectionsChange={setStructuredSelections} onInsertNarrative={() => injectIntoNote("\n" + generatedNarrative + "\n")} onInsertPhrase={injectIntoNote} onCarryForward={carryForwardStructured} onCreatePhrase={addSmartPhrase} />
           {!signed && <div className="encounter-note-actions"><button type="button" className="thera-action" disabled={saving || !noteText.trim()} onClick={() => void saveNote()}>{saving ? "Saving..." : "Save Note"}</button><span>Saving does not sign or lock the clinical record.</span></div>}
           {signed && data.signatures[0] && <div className="thera-alert" style={{ marginTop: 12 }}>Signed {dateTime(String(data.signatures[0].signed_at ?? ""))} by {String(data.signatures[0].signature_text ?? "provider")}</div>}
         </section>
