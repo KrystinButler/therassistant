@@ -1,3 +1,5 @@
+import { buildPatientReviewCheckIn } from "./patient-review-model";
+
 export type AppointmentDraft = {
   clientId: string;
   providerId?: string | null;
@@ -11,7 +13,7 @@ export type AppointmentDraft = {
 };
 
 export type ScheduleCheckInStatus =
-  | "Not Checked-In"
+  | "Not Checked In"
   | "Ready"
   | "In Progress"
   | "Balance Issues";
@@ -19,6 +21,7 @@ export type ScheduleCheckInStatus =
 export type SchedulePreVisitInsight = {
   label: string;
   value: string;
+  tone: "positive" | "warning" | "neutral";
 };
 
 export type SchedulePatientPresentation = {
@@ -40,24 +43,27 @@ function textOf(value: unknown) {
 export function buildSchedulePatientPresentation(
   checkin: Record<string, unknown> | null,
   openBalanceCents: number,
+  journalShared = false,
 ): SchedulePatientPresentation {
   const responses = recordOf(checkin?.responses);
   const preVisit = recordOf(responses.pre_visit);
   const questions = recordOf(preVisit.visit_questions);
 
-  const insightFields: Array<[string, string]> = [
-    ["Since last visit", "feeling_since_last_visit"],
-    ["Important changes", "important_changes"],
-    ["Safety concerns", "safety_concerns"],
-    ["Treatment goal", "treatment_goal"],
-    ["Anything else", "anything_else"],
-  ];
+  const review = buildPatientReviewCheckIn(checkin);
+  const preVisitInsights: SchedulePreVisitInsight[] = [];
 
-  const preVisitInsights = insightFields
-    .map(([label, key]) => ({ label, value: textOf(questions[key]) }))
-    .filter((insight) => insight.value.length > 0);
+  if (review.hasSubmittedPreVisit) {
+    preVisitInsights.push({
+      label: "Check-In",
+      value: review.safetyConcern === true ? "Needs Review" : "Positive",
+      tone: review.safetyConcern === true ? "warning" : "positive",
+    });
+  }
+  if (journalShared) {
+    preVisitInsights.push({ label: "Journal", value: "Shared", tone: "neutral" });
+  }
 
-  const sessionFocus = textOf(questions.focus_today) || null;
+  const sessionFocus = review.focus || null;
   const checkInComplete = Boolean(preVisit.submitted_at || checkin?.checked_in_at);
   const checkInStarted = Boolean(
     checkin && (
@@ -68,7 +74,7 @@ export function buildSchedulePatientPresentation(
     ),
   );
 
-  let checkInStatus: ScheduleCheckInStatus = "Not Checked-In";
+  let checkInStatus: ScheduleCheckInStatus = "Not Checked In";
   if (openBalanceCents > 0) checkInStatus = "Balance Issues";
   else if (checkInComplete) checkInStatus = "Ready";
   else if (checkInStarted) checkInStatus = "In Progress";

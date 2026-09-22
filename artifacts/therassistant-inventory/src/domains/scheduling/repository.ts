@@ -138,6 +138,7 @@ export async function getScheduleData(): Promise<ScheduleData> {
     enrollments,
     treatmentPlans,
     checkins,
+    journalEntries,
     balances,
     payers,
     plans,
@@ -150,6 +151,7 @@ export async function getScheduleData(): Promise<ScheduleData> {
     tenantSelect<DataRow>("provider_payer_enrollments"),
     tenantSelect<DataRow>("treatment_plans"),
     tenantSelect<DataRow>("client_checkins"),
+    tenantSelect<DataRow>("patient_journal_entries", { order: "entry_date.desc,created_at.desc" }),
     tenantSelect<DataRow>("client_balance_summaries"),
     referenceSelect<DataRow>("payers", { order: "name.asc" }),
     referenceSelect<DataRow>("payer_plans", { order: "name.asc" }),
@@ -164,6 +166,15 @@ export async function getScheduleData(): Promise<ScheduleData> {
   );
   const balancesByClient = new Map(
     balances.map((row) => [String(row.client_id ?? ""), row]),
+  );
+  const clientsWithSharedJournal = new Set(
+    journalEntries
+      .filter((row) =>
+        String(row.visibility ?? "") === "shared_with_provider" &&
+        String(row.entry_status ?? "submitted") !== "draft" &&
+        Boolean(String(row.entry_text ?? "").trim()),
+      )
+      .map((row) => String(row.client_id ?? "")),
   );
 
   const enriched = appointments.map((appointment): ScheduleAppointment => {
@@ -193,6 +204,7 @@ export async function getScheduleData(): Promise<ScheduleData> {
     const patientPresentation = buildSchedulePatientPresentation(
       checkin,
       openBalanceCents,
+      clientsWithSharedJournal.has(clientId),
     );
 
     const readiness = evaluatePreSession({

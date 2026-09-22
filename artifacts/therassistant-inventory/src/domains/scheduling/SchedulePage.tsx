@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { ChevronRight } from "lucide-react";
+import { CalendarDays, ChevronRight } from "lucide-react";
 
 import { StatusBadge } from "../../components/status-badge";
 import { WorkDrawer } from "../../components/work-drawer";
@@ -88,6 +88,22 @@ function checkInTone(appointment: ScheduleAppointment) {
   return "waiting";
 }
 
+function sessionFocusAction(focus: string | null) {
+  const value = (focus ?? "").toLowerCase();
+  if (value.includes("review")) return "REVIEW";
+  if (value.includes("update")) return "UPDATE";
+  if (value.includes("create")) return "CREATE";
+  if (value.includes("resolve")) return "RESOLVE";
+  return "WORK ON";
+}
+
+function compactDate(startsAt: string) {
+  const value = new Date(startsAt);
+  return Number.isFinite(value.getTime())
+    ? value.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" })
+    : "—";
+}
+
 export function SchedulePage() {
   const [data, setData] = useState<ScheduleData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -127,7 +143,15 @@ export function SchedulePage() {
 
   const readyCount = visible.filter((appointment) => appointment.checkInStatus === "Ready").length;
   const attentionCount = visible.filter((appointment) => appointment.checkInStatus !== "Ready").length;
-  const journalInsightCount = visible.filter((appointment) => appointment.preVisitInsights.length > 0).length;
+  const now = Date.now();
+  const currentAppointmentId = view === "day"
+    ? visible.find((appointment) => new Date(appointment.startsAt).getTime() <= now && new Date(appointment.endsAt).getTime() > now)?.id ?? null
+    : null;
+  const nextAppointmentId = view === "day"
+    ? visible
+        .filter((appointment) => new Date(appointment.startsAt).getTime() > now)
+        .sort((left, right) => new Date(left.startsAt).getTime() - new Date(right.startsAt).getTime())[0]?.id ?? null
+    : null;
 
   const dirty = useMemo(() => Boolean(form && baseline && JSON.stringify(form) !== JSON.stringify(baseline)), [form, baseline]);
 
@@ -184,17 +208,10 @@ export function SchedulePage() {
     <div className="schedule-header">
       <div>
         <div className="thera-eyebrow">PREPARE · PROVIDER SCHEDULE</div>
-        <h1>Schedule & Pre-Session Review</h1>
-        <p>Prepare for care from one view: check-in, patient-reported context, coverage attention, and session focus.</p>
+        <h1>My Schedule</h1>
+        <p>See who is ready, review the pre-visit signal, and open the patient drawer without leaving the day.</p>
       </div>
-      <button type="button" className="thera-action" onClick={openNew}>+ New Appointment</button>
-    </div>
-
-    <div className="thera-metric-grid" style={{ marginBottom: 16 }}>
-      <div className="thera-metric-card"><div className="thera-metric-label">Appointments</div><div className="thera-metric-value">{visible.length}</div></div>
-      <div className="thera-metric-card"><div className="thera-metric-label">Ready</div><div className="thera-metric-value">{readyCount}</div></div>
-      <div className="thera-metric-card"><div className="thera-metric-label">Needs Attention</div><div className="thera-metric-value">{attentionCount}</div></div>
-      <div className="thera-metric-card"><div className="thera-metric-label">Patient Context</div><div className="thera-metric-value">{journalInsightCount}</div></div>
+      <button type="button" className="thera-action secondary" onClick={openNew}>+ Appointment</button>
     </div>
 
     <section className="schedule-toolbar">
@@ -202,6 +219,7 @@ export function SchedulePage() {
         <button type="button" aria-label="Previous" onClick={() => move(-1)}>‹</button>
         <div>{rangeLabel(anchor, view)}</div>
         <button type="button" aria-label="Next" onClick={() => move(1)}>›</button>
+        <button type="button" className="schedule-today" onClick={() => setAnchor(new Date())}>Today</button>
       </div>
       <div className="schedule-toolbar-right">
         <div className="schedule-view-tabs">{(["day", "week", "month"] as ViewMode[]).map((mode) => <button key={mode} type="button" className={view === mode ? "active" : ""} onClick={() => setView(mode)}>{mode[0].toUpperCase() + mode.slice(1)}</button>)}</div>
@@ -209,28 +227,31 @@ export function SchedulePage() {
       </div>
     </section>
 
+    <div className="schedule-summary" aria-label="Schedule summary">
+      <span><CalendarDays size={14} /> {visible.length} appointment{visible.length === 1 ? "" : "s"}</span>
+      <span>{readyCount} ready</span>
+      <span>{attentionCount} check-in{attentionCount === 1 ? "" : "s"} pending or needing attention</span>
+    </div>
+
     {error && <div className="thera-state error" style={{ marginBottom: 12 }}>{error}</div>}
     {loading && <div className="thera-state">Loading schedule...</div>}
 
     {!loading && data && <section className="schedule-card">
       {visible.length === 0 ? <div className="thera-empty">No appointments in this view.</div> : <div className="schedule-table-wrap"><table className="schedule-table"><thead><tr><th>Time</th><th>Patient</th><th>Check-In Status</th><th>Pre-Visit Insight</th><th>Session Focus</th><th aria-label="Open" /></tr></thead><tbody>{visible.map((appointment) => {
         const statusTone = checkInTone(appointment);
-        return <tr key={appointment.id} className="schedule-row" onClick={() => openReview(appointment)}>
-          <td className="schedule-time">{appointmentTime(appointment.startsAt)}</td>
-          <td><strong>{appointment.clientName}</strong><span>{appointment.serviceType || "Appointment"}</span></td>
+        const focusAction = sessionFocusAction(appointment.sessionFocus);
+        const rowState = appointment.id === currentAppointmentId ? " current" : appointment.id === nextAppointmentId ? " next" : "";
+        return <tr key={appointment.id} className={`schedule-row${rowState}`} onClick={() => openReview(appointment)}>
+          <td className="schedule-time">
+            {view !== "day" && <span className="schedule-date-mini">{compactDate(appointment.startsAt)}</span>}
+            <strong>{appointmentTime(appointment.startsAt)}</strong>
+            {appointment.id === currentAppointmentId && <span className="schedule-now-label">NOW</span>}
+            {appointment.id === nextAppointmentId && <span className="schedule-next-label">NEXT</span>}
+          </td>
+          <td><strong>{appointment.clientName}</strong><span>{appointment.serviceType || "Appointment"} · {appointment.locationType.replaceAll("_", " ")}</span></td>
           <td><span className={`schedule-status ${statusTone}`}><StatusBadge value={appointment.checkInStatus} /></span></td>
-          <td>
-            <div className="schedule-insight">
-              {appointment.preVisitInsights.length > 0
-                ? appointment.preVisitInsights.slice(0, 2).map((insight) => <span key={insight.label}><strong>{insight.label}:</strong> {insight.value}</span>)
-                : <span>No check-in responses provided.</span>}
-            </div>
-          </td>
-          <td>
-            <div className="schedule-focus work">
-              <strong>{appointment.sessionFocus ?? "Not provided"}</strong>
-            </div>
-          </td>
+          <td><div className="schedule-insight">{appointment.preVisitInsights.length > 0 ? appointment.preVisitInsights.map((insight) => <span className={`schedule-insight-pill ${insight.tone}`} key={insight.label}><strong>{insight.label}</strong>{insight.value}</span>) : <span className="schedule-insight-empty">No pre-visit signal yet</span>}</div></td>
+          <td><div className={`schedule-focus ${focusAction.toLowerCase().replace(" ", "-")}`}><span>{focusAction}</span><strong>{appointment.sessionFocus ?? "No focus submitted"}</strong></div></td>
           <td className="schedule-chevron"><ChevronRight size={17} /></td>
         </tr>;
       })}</tbody></table></div>}

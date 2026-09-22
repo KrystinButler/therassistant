@@ -8,14 +8,13 @@ const drawer = readFileSync(new URL("../src/domains/scheduling/PatientReviewDraw
 test("encounter follows the manual's provider preparation-to-documentation flow", () => {
   for (const label of [
     "TODAY&apos;S FOCUS",
-    "Session & Note",
-    "Treatment Plan",
-    "Patient Info",
-    "Attachments",
     "Active Progress Note",
-    "PATIENT-SUBMITTED CONTEXT",
-    "Import Check-In",
-    "Import Session Journal",
+    "Last Visit",
+    "Treatment Plan",
+    "Journal",
+    "Documents",
+    "Cite Check-In",
+    "Cite Journal",
     "Coding & Service",
     "Documentation Readiness & Signature",
     "Signed clinical record → Charge Capture",
@@ -25,7 +24,7 @@ test("encounter follows the manual's provider preparation-to-documentation flow"
 });
 
 test("billing follow-up is explicitly nonblocking for clinical signature", () => {
-  assert.match(encounter, /Billing follow-up never prevents the provider from completing the clinical record/);
+  assert.match(encounter, /Billing follow-up never prevents completion of the clinical record/);
   assert.match(encounter, /You may still sign the clinical note/);
   assert.doesNotMatch(encounter, /disabled=\{[^}]*billingFollowUpCount/);
 });

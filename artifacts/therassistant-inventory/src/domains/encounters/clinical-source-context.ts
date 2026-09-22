@@ -40,9 +40,12 @@ export function buildJournalNoteInsert(row: Row | null | undefined) {
   const date = String(row?.entry_date ?? row?.created_at ?? "").slice(0, 10);
   const text = String(row?.entry_text ?? "").trim();
   return [
-    "PATIENT-SHARED JOURNAL ENTRY (Patient Portal)",
+    "--------------------------------------------------",
+    "[PATIENT JOURNAL IMPORT — PATIENT-AUTHORED CONTENT]",
     date ? `Entry date: ${date}` : "",
-    `Patient text: ${text}`,
+    `Patient text: "${text}"`,
+    "[END PATIENT JOURNAL IMPORT]",
+    "--------------------------------------------------",
   ].filter(Boolean).join("\n");
 }
 
