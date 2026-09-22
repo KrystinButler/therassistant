@@ -291,3 +291,229 @@
     min-height: 280px;
   }
 }
+
+
+.encounter-console {
+  display: grid;
+  grid-template-columns: minmax(0, 3fr) minmax(320px, 2fr);
+  gap: 0;
+  align-items: stretch;
+  margin-bottom: 16px;
+}
+
+.encounter-console .encounter-note-card {
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
+}
+
+.encounter-context-rail {
+  display: grid;
+  grid-template-columns: 52px minmax(0, 1fr);
+  min-width: 52px;
+  border: 1px solid var(--thera-border);
+  border-left: 0;
+  border-radius: 0 10px 10px 0;
+  background: #f8fbfe;
+  overflow: hidden;
+}
+
+.encounter-context-rail:not(.open) {
+  grid-template-columns: 52px;
+}
+
+.encounter-context-tabs {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 6px;
+  border-right: 1px solid var(--thera-border);
+  background: #fff;
+}
+
+.encounter-context-tab,
+.encounter-context-collapse {
+  display: grid;
+  place-items: center;
+  gap: 2px;
+  min-height: 44px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--thera-muted);
+  cursor: pointer;
+}
+
+.encounter-context-tab:hover,
+.encounter-context-tab.active {
+  background: #eef7fb;
+  color: var(--thera-navy);
+}
+
+.encounter-context-tab span {
+  font-size: .72rem;
+  font-weight: 800;
+  letter-spacing: .04em;
+}
+
+.encounter-context-tab small {
+  display: none;
+}
+
+.encounter-context-collapse {
+  margin-top: auto;
+  font-size: 1.35rem;
+}
+
+.encounter-context-content {
+  min-width: 0;
+  max-height: 660px;
+  overflow: auto;
+  padding: 14px;
+}
+
+.encounter-context-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--thera-border);
+}
+
+.encounter-context-heading span {
+  color: var(--thera-blue);
+  font-size: .62rem;
+  font-weight: 800;
+  letter-spacing: .06em;
+}
+
+.encounter-context-heading h3 {
+  margin: 2px 0 0;
+  color: var(--thera-navy);
+  font-size: .92rem;
+}
+
+.encounter-context-section {
+  display: grid;
+  gap: 12px;
+  padding-top: 12px;
+}
+
+.encounter-context-source,
+.encounter-context-goal,
+.encounter-document-row {
+  display: grid;
+  gap: 7px;
+  padding: 10px;
+  border: 1px solid var(--thera-border);
+  border-radius: 8px;
+  background: #fff;
+}
+
+.encounter-context-source p,
+.encounter-context-goal strong {
+  margin: 0;
+  color: var(--thera-text);
+  font-size: .75rem;
+  line-height: 1.45;
+  white-space: pre-wrap;
+}
+
+.encounter-context-source small,
+.encounter-context-goal small,
+.encounter-document-row small {
+  color: var(--thera-muted);
+  font-size: .66rem;
+}
+
+.encounter-context-goal {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  border-left: 3px solid var(--thera-sage);
+}
+
+.encounter-context-goal > div,
+.encounter-document-row > div {
+  display: grid;
+  gap: 3px;
+}
+
+.encounter-context-goal button {
+  border: 0;
+  border-radius: 6px;
+  padding: 6px 8px;
+  background: #eef7fb;
+  color: var(--thera-blue);
+  font-size: .68rem;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.encounter-document-row {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+}
+
+.encounter-lower-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+@media (max-width: 1100px) {
+  .encounter-console {
+    grid-template-columns: minmax(0, 1fr) 52px;
+  }
+
+  .encounter-context-rail.open {
+    position: relative;
+    grid-template-columns: 52px minmax(280px, 360px);
+    width: 412px;
+    margin-left: -360px;
+    z-index: 4;
+    box-shadow: -12px 0 24px rgba(27, 59, 96, .12);
+  }
+}
+
+@media (max-width: 760px) {
+  .encounter-console,
+  .encounter-lower-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .encounter-console .encounter-note-card {
+    border-radius: 10px 10px 0 0;
+  }
+
+  .encounter-context-rail,
+  .encounter-context-rail.open {
+    position: static;
+    width: auto;
+    margin-left: 0;
+    grid-template-columns: minmax(0, 1fr);
+    border-left: 1px solid var(--thera-border);
+    border-radius: 0 0 10px 10px;
+    box-shadow: none;
+  }
+
+  .encounter-context-tabs {
+    flex-direction: row;
+    border-right: 0;
+    border-bottom: 1px solid var(--thera-border);
+  }
+
+  .encounter-context-tab,
+  .encounter-context-collapse {
+    flex: 1;
+    min-height: 38px;
+  }
+
+  .encounter-context-tab small {
+    display: block;
+    font-size: .58rem;
+  }
+
+  .encounter-context-rail:not(.open) .encounter-context-content {
+    display: none;
+  }
+}
