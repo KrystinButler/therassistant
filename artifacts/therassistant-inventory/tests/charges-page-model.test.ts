@@ -4,8 +4,11 @@ import { readFileSync } from "node:fs";
 
 const source = readFileSync(new URL("../src/domains/billing/BillingQueuePage.tsx", import.meta.url), "utf8");
 
-test("Charges owns validation, batching, submission and claim outputs", () => {
-  assert.match(source, /<h1>Charges<\/h1>/);
+test("Charge Capture and Claim Submission owns validation, batching, submission and claim outputs", () => {
+  assert.match(source, /<h1>Charge Capture & Claim Submission<\/h1>/);
+  assert.match(source, /Ready for Claim/);
+  assert.match(source, /Validation Hold/);
+  assert.match(source, /837P Batches/);
   assert.match(source, /validateClaim/);
   assert.match(source, /createBatch/);
   assert.match(source, /recordExternalSubmission/);
@@ -14,7 +17,7 @@ test("Charges owns validation, batching, submission and claim outputs", () => {
   assert.match(source, /Print CMS-1500/);
 });
 
-test("Charges no longer links to a separate claim submission workflow", () => {
+test("charge workflow remains one connected workspace instead of a separate claim-submission route", () => {
   assert.doesNotMatch(source, /href="\/claims\/submission"/);
-  assert.doesNotMatch(source, />Claim Submission</);
+  assert.match(source, /GET PAID · STAGES 04–05/);
 });
