@@ -76,3 +76,5 @@
   .schedule-summary { flex-wrap:wrap; }
   .schedule-summary span + span { border-left:0; padding-left:0; }
 }
+
+/* provider-schedule-ready */
