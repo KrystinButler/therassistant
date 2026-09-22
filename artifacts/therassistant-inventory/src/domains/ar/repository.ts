@@ -253,7 +253,7 @@ export async function getArWorkspaceData(asOfDate = new Date().toISOString().sli
       claimNumber: String(claim?.patient_control_number ?? "—"),
       clientName: personName(clientsById.get(clientId)),
       payerName: String(payersById.get(payerId)?.name ?? "—"),
-      policy: classifyDenialPolicy(denial.denial_category),
+      policy: classifyDenialPolicy(denial.denial_category, denial.carc_code),
       activeAppealId: activeAppealByDenial.get(denial.id)?.id ?? "",
     };
   });

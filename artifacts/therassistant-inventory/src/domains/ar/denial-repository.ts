@@ -75,7 +75,7 @@ async function findActiveWork(sourceType: string, sourceId: string, workqueueTyp
 export async function startDenialWork(denialId: string) {
   const denial = await first<DataRow>("denials", denialId);
   if (!denial) throw new Error("Denial not found.");
-  const policy = classifyDenialPolicy(denial.denial_category);
+  const policy = classifyDenialPolicy(denial.denial_category, denial.carc_code);
   if (policy === "auto_writeoff") {
     throw new Error("This denial follows the configured write-off policy. Use Write Off instead of appeal follow-up.");
   }
@@ -115,7 +115,7 @@ export async function createDenialAppeal(denialId: string, level: number, dueDat
     appeal_status: `in.(${ACTIVE_APPEAL_STATUSES.join(",")})`,
     limit: "1",
   });
-  assertAppealAllowed({ category: denial.denial_category, hasActiveAppeal: Boolean(activeAppeals[0]) });
+  assertAppealAllowed({ category: denial.denial_category, carcCode: denial.carc_code, hasActiveAppeal: Boolean(activeAppeals[0]) });
   const draft = createAppealInput(denial, level, dueDate, notes);
   const appeal = await tenantInsert<DataRow>("appeals", {
     denial_id: draft.denial_id,
@@ -179,7 +179,7 @@ export async function recordAppealOutcome(appealId: string, outcome: "approved" 
 export async function writeOffDenial(denialId: string) {
   const denial = await first<DataRow>("denials", denialId);
   if (!denial) throw new Error("Denial not found.");
-  if (classifyDenialPolicy(denial.denial_category) !== "auto_writeoff") {
+  if (classifyDenialPolicy(denial.denial_category, denial.carc_code) !== "auto_writeoff") {
     throw new Error("This denial is not configured for automatic write-off.");
   }
   const denialAmount = Number(denial.amount_cents ?? 0);

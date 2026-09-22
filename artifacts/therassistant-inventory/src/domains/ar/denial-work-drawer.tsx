@@ -5,6 +5,7 @@ import { StatusBadge } from "../../components/status-badge";
 import { money, shortDate } from "../../lib/format";
 import type { DenialQueueRow } from "./denials-queue-repository";
 import type { DenialFollowUpInput } from "./denial-follow-up";
+import { getDenialGuidance } from "./denial-guidance";
 
 function value(input: unknown, fallback = "—") {
   return input == null || input === "" ? fallback : String(input);
@@ -12,6 +13,23 @@ function value(input: unknown, fallback = "—") {
 
 function Fact({ label, children }: { label: string; children: React.ReactNode }) {
   return <div><div className="thera-table-subtext">{label}</div><strong>{children}</strong></div>;
+}
+
+function ContextResolution({ guidance }: { guidance: ReturnType<typeof getDenialGuidance> }) {
+  return (
+    <>
+      <div className="thera-form-grid" style={{ marginBottom: 12 }}>
+        <Fact label="Default action">{guidance.actionLabel}</Fact>
+        <Fact label="Appeal template">{guidance.template.replaceAll("_", " ")}</Fact>
+      </div>
+      <p>{guidance.summary}</p>
+      {guidance.warning ? <div className="thera-alert" style={{ marginBottom: 12 }}>{guidance.warning}</div> : null}
+      <div className="thera-table-subtext" style={{ marginBottom: 6 }}>Suggested evidence</div>
+      <ul style={{ margin: 0, paddingLeft: 20 }}>
+        {guidance.evidence.map((item) => <li key={item}>{item}</li>)}
+      </ul>
+    </>
+  );
 }
 
 type Props = {
@@ -73,6 +91,12 @@ export function DenialWorkDrawer({
     actionTaken,
     notes,
   };
+  const guidance = getDenialGuidance({
+    carcCode: row.carc_code,
+    rarcCode: row.rarc_code,
+    category: row.denial_category,
+    reason: row.reason,
+  });
 
   const footer = (
     <div className="thera-filter-row" style={{ justifyContent: "space-between" }}>
@@ -83,7 +107,7 @@ export function DenialWorkDrawer({
           ? <button type="button" className="thera-action" disabled={saving || row.denial_status === "resolved_writeoff"} onClick={() => onWriteOff(row)}>Write Off</button>
           : <>
             <button type="button" className="thera-action secondary" disabled={saving} onClick={() => onStartWork(row)}>Start Follow-Up</button>
-            <button type="button" className="thera-action" disabled={saving || Boolean(row.activeAppealId)} onClick={() => onCreateAppeal(row)}>{row.activeAppealId ? "Appeal Active" : "Create Appeal"}</button>
+            <button type="button" className="thera-action" disabled={saving || Boolean(row.activeAppealId)} onClick={() => onCreateAppeal(row)}>{row.activeAppealId ? "Appeal Active" : "Generate Appeal"}</button>
           </>}
       </div>
     </div>
@@ -112,7 +136,10 @@ export function DenialWorkDrawer({
           <Fact label="Claim">{row.claimNumber}</Fact>
           <Fact label="Payer claim #">{row.payerClaimNumber}</Fact>
           <Fact label="Payer">{row.payerName}</Fact>
+          <Fact label="Member ID">{value(row.memberId)}</Fact>
           <Fact label="DOS">{row.serviceDate ? shortDate(row.serviceDate) : "—"}</Fact>
+          <Fact label="CPT">{row.cptCodes.join(", ") || "—"}</Fact>
+          <Fact label="Diagnoses">{row.diagnosisCodes.join(", ") || "—"}</Fact>
           <Fact label="Rendering provider">{row.providerName}</Fact>
           <Fact label="Charge amount">{money(row.chargeAmountCents)}</Fact>
           <Fact label="Allowed amount">{money(row.allowedAmountCents)}</Fact>
@@ -130,6 +157,16 @@ export function DenialWorkDrawer({
       <section className="thera-card" style={{ marginBottom: 16 }}>
         <h2>Denial reason</h2>
         <p>{value(row.reason, "No denial reason recorded.")}</p>
+      </section>
+
+      <section className="thera-card" style={{ marginBottom: 16 }}>
+        <div className="thera-card-header">
+          <div>
+            <h2>Recommended resolution</h2>
+            <p>{guidance.title}</p>
+          </div>
+        </div>
+        <ContextResolution guidance={guidance} />
       </section>
 
       <section className="thera-card" style={{ marginBottom: 16 }}>
