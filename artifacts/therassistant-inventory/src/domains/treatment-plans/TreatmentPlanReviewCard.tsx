@@ -135,7 +135,7 @@ export function TreatmentPlanReviewCard({
       {goals.length ? <div className="thera-stack" style={{ marginTop: 10 }}>
         {goals.map((goal) => <div className="thera-card" style={{ padding: 12 }} key={goal.id}>
           <strong>{String(goal.goal_text_snapshot ?? "Goal")}</strong>
-          {goal.objective_text_snapshot && <div className="thera-table-subtext" style={{ marginTop: 3 }}>Objective: {String(goal.objective_text_snapshot)}</div>}
+          {Boolean(goal.objective_text_snapshot) && <div className="thera-table-subtext" style={{ marginTop: 3 }}>Objective: {String(goal.objective_text_snapshot)}</div>}
           <p style={{ marginBottom: 8 }}>{String(goal.progress_summary ?? "")}</p>
           <div className="thera-form-grid">
             <label className="thera-field">
