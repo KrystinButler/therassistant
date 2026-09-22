@@ -1,5 +1,6 @@
 import { useEffect } from "react";
 import { Route, Switch, useLocation, useRoute } from "wouter";
+import { Analytics } from "@vercel/analytics/react";
 
 import { AuthProvider, useAuth } from "./auth/auth-context";
 import { LoginPage } from "./auth/LoginPage";
@@ -166,6 +167,7 @@ export default function App() {
   return (
     <AuthProvider>
       <ApplicationRoutes />
+      <Analytics />
     </AuthProvider>
   );
 }
