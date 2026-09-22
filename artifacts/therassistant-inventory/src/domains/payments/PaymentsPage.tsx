@@ -232,9 +232,9 @@ export function PaymentsPage() {
   return <>
     <div className="thera-page-header split">
       <div>
-        <div className="thera-eyebrow">PAYMENTS / ERA</div>
-        <h1>Payments</h1>
-        <p>Post and allocate payments, manage unapplied funds and reversals, and work payer payment variances and recovery activity.</p>
+        <div className="thera-eyebrow">GET PAID · PAYMENT POSTING</div>
+        <h1>Payments, ERA & Reconciliation</h1>
+        <p>Post insurance and patient payments, import 835 remittance, reconcile allocations, and route underpayments, recoupments, and exceptions into follow-up work.</p>
       </div>
       <button type="button" className="thera-action" onClick={() => setPosting(true)}>+ Post Payment</button>
     </div>
