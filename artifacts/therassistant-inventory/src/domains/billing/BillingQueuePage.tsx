@@ -11,8 +11,9 @@ import {
   recordExternalSubmission,
   validateClaim,
 } from "../claims/repository";
-import { build837PText, buildCms1500Html } from "./claim-output";
-import { getBatchExportData } from "./claim-output-repository";
+import { build837PText } from "./claim-output";
+import { buildCms1500PreviewHtml } from "./cms1500-preview";
+import { getBatchExportData, getClaimPreviewData } from "./claim-output-repository";
 import {
   createChargeFromEncounter,
   getBillingQueueData,
@@ -304,26 +305,37 @@ export function BillingQueuePage() {
     }
   }
 
-  async function runPrintCms1500(batchId: string, claimId: string) {
-    setSavingId(`print-${claimId}`);
+  async function runCms1500Preview(claimId: string, autoPrint = false) {
+    const actionId = `${autoPrint ? "print" : "preview"}-${claimId}`;
+    const previewWindow = window.open("", "_blank");
+    if (!previewWindow) {
+      setError("Allow pop-ups to preview CMS-1500.");
+      return;
+    }
+    previewWindow.opener = null;
+    previewWindow.document.write("<p style='font-family:Arial,sans-serif;padding:24px'>Loading CMS-1500 preview…</p>");
+
+    setSavingId(actionId);
     setError(null);
     try {
-      const output = await getBatchExportData(batchId);
-      const item = output.claims.find((row) => String(row.claim.id) === claimId);
-      if (!item) throw new Error("Claim not found in this batch.");
-      const printWindow = window.open("", "_blank", "noopener,noreferrer");
-      if (!printWindow) throw new Error("Allow pop-ups to print CMS-1500.");
-      printWindow.document.open();
-      printWindow.document.write(buildCms1500Html(item));
-      printWindow.document.close();
-      printWindow.focus();
-      printWindow.onafterprint = () => printWindow.close();
-      printWindow.print();
+      const preview = await getClaimPreviewData(claimId);
+      previewWindow.document.open();
+      previewWindow.document.write(buildCms1500PreviewHtml(preview.item, preview.edi));
+      previewWindow.document.close();
+      previewWindow.focus();
+      if (autoPrint) {
+        window.setTimeout(() => previewWindow.print(), 75);
+      }
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Unable to print CMS-1500.");
+      previewWindow.close();
+      setError(err instanceof Error ? err.message : "Unable to preview CMS-1500.");
     } finally {
       setSavingId(null);
     }
+  }
+
+  async function runPrintCms1500(_batchId: string, claimId: string) {
+    await runCms1500Preview(claimId, true);
   }
 
   return (
@@ -374,6 +386,7 @@ export function BillingQueuePage() {
           savingId={savingId}
           onCreateClaim={(encounterId) => void runCreateClaim(encounterId)}
           onValidate={(claimId) => void runValidate(claimId)}
+          onPreview={(claimId) => void runCms1500Preview(claimId)}
           onCreatePayerBatch={(payerId) => void runCreatePayerBatch(payerId)}
         />
       )}
@@ -455,12 +468,14 @@ function UnbatchedCharges({
   savingId,
   onCreateClaim,
   onValidate,
+  onPreview,
   onCreatePayerBatch,
 }: {
   data: ChargesData;
   savingId: string | null;
   onCreateClaim: (encounterId: string) => void;
   onValidate: (claimId: string) => void;
+  onPreview: (claimId: string) => void;
   onCreatePayerBatch: (payerId: string) => void;
 }) {
   const encounters = new Map(data.billing.encounters.map((row) => [row.id, row]));
@@ -507,7 +522,7 @@ function UnbatchedCharges({
           <div><h2>{claims[0].payerName}</h2><p>{ready.length} validated claim(s) ready for this payer batch.</p></div>
           <button type="button" className="thera-action" disabled={!payerId || ready.length === 0 || savingId === `batch-${payerId}`} onClick={() => onCreatePayerBatch(payerId)}>Batch by Payer ({ready.length})</button>
         </div>
-        <div className="thera-table-wrap"><table className="thera-table"><thead><tr><th>Claim</th><th>DOS</th><th>Patient</th><th>Charge</th><th>Status</th><th>Action</th></tr></thead><tbody>{claims.map((claim) => <tr key={claim.id}><td><Link className="thera-table-link" href={`/claims/${claim.id}`}>{String(claim.patient_control_number || "Open")}</Link></td><td>{shortDate(String(claim.service_date_from ?? ""))}</td><td>{claim.clientName}</td><td>{money(Number(claim.total_charge_cents ?? 0))}</td><td><StatusBadge value={String(claim.claim_status)} /></td><td>{claim.claim_status === "ready_for_validation" ? <button type="button" className="thera-action" disabled={savingId === claim.id} onClick={() => onValidate(claim.id)}>Scrub Claim</button> : "Ready"}</td></tr>)}</tbody></table></div>
+        <div className="thera-table-wrap"><table className="thera-table"><thead><tr><th>Claim</th><th>DOS</th><th>Patient</th><th>Charge</th><th>Status</th><th>Action</th></tr></thead><tbody>{claims.map((claim) => <tr key={claim.id}><td><Link className="thera-table-link" href={`/claims/${claim.id}`}>{String(claim.patient_control_number || "Open")}</Link></td><td>{shortDate(String(claim.service_date_from ?? ""))}</td><td>{claim.clientName}</td><td>{money(Number(claim.total_charge_cents ?? 0))}</td><td><StatusBadge value={String(claim.claim_status)} /></td><td><div className="thera-filter-row"><button type="button" className="thera-action secondary" disabled={savingId === `preview-${claim.id}`} onClick={() => onPreview(claim.id)}>Preview CMS-1500</button>{claim.claim_status === "ready_for_validation" ? <button type="button" className="thera-action" disabled={savingId === claim.id} onClick={() => onValidate(claim.id)}>Scrub Claim</button> : <span className="thera-muted">Ready</span>}</div></td></tr>)}</tbody></table></div>
       </section>;
     })}
   </div>;
