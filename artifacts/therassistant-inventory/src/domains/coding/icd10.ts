@@ -1,18 +1,46 @@
+import { authenticatedFetch, SUPABASE_URL } from "../../lib/supabase-client";
+
 export type Icd10SearchResult = {
   code: string;
   name: string;
 };
 
-const ICD10_SEARCH_URL = "https://clinicaltables.nlm.nih.gov/api/icd10cm/v3/search";
+type SupabaseIcd10Row = {
+  code?: unknown;
+  name?: unknown;
+};
 
-export async function searchIcd10(
-  terms: string,
-  signal?: AbortSignal,
-): Promise<Icd10SearchResult[]> {
-  const value = terms.trim();
-  if (value.length < 2) return [];
+const NLM_FALLBACK_URL = "https://clinicaltables.nlm.nih.gov/api/icd10cm/v3/search";
 
-  const url = new URL(ICD10_SEARCH_URL);
+async function searchSupabase(value: string, signal?: AbortSignal): Promise<Icd10SearchResult[]> {
+  const response = await authenticatedFetch(
+    new URL(`${SUPABASE_URL}/rest/v1/rpc/search_icd10_codes`),
+    {
+      method: "POST",
+      signal,
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        p_search: value,
+        p_service_date: new Date().toISOString().slice(0, 10),
+        p_limit: 15,
+      }),
+    },
+  );
+  if (!response.ok) {
+    const detail = await response.text();
+    throw new Error(`Supabase ICD-10-CM search failed (${response.status})${detail ? `: ${detail}` : ""}`);
+  }
+  const rows = await response.json() as SupabaseIcd10Row[];
+  return rows
+    .map((row) => ({
+      code: String(row.code ?? "").trim().toUpperCase(),
+      name: String(row.name ?? "").trim(),
+    }))
+    .filter((row) => Boolean(row.code));
+}
+
+async function searchNlm(value: string, signal?: AbortSignal): Promise<Icd10SearchResult[]> {
+  const url = new URL(NLM_FALLBACK_URL);
   url.searchParams.set("terms", value);
   url.searchParams.set("count", "15");
   url.searchParams.set("df", "code,name");
@@ -20,9 +48,7 @@ export async function searchIcd10(
   url.searchParams.set("cf", "code");
 
   const response = await fetch(url.toString(), { signal });
-  if (!response.ok) {
-    throw new Error("ICD-10-CM reference search is temporarily unavailable.");
-  }
+  if (!response.ok) throw new Error("ICD-10-CM reference search is temporarily unavailable.");
 
   const payload = await response.json() as unknown;
   if (!Array.isArray(payload) || !Array.isArray(payload[3])) return [];
@@ -35,4 +61,21 @@ export async function searchIcd10(
       return code ? { code, name } : null;
     })
     .filter((row): row is Icd10SearchResult => Boolean(row));
+}
+
+export async function searchIcd10(
+  terms: string,
+  signal?: AbortSignal,
+): Promise<Icd10SearchResult[]> {
+  const value = terms.trim();
+  if (value.length < 2) return [];
+
+  try {
+    const local = await searchSupabase(value, signal);
+    if (local.length) return local;
+  } catch (error) {
+    if ((error as Error).name === "AbortError") throw error;
+  }
+
+  return searchNlm(value, signal);
 }
