@@ -5,7 +5,7 @@ type Row = Record<string, unknown> & { id?: string };
 type Props = {
   claim: Row & { clientName?: string; providerName?: string; payerName?: string };
   client: Row | null;
-  insurance: Row | null;
+  insurancePolicy: Row | null;
   renderingProvider: Row | null;
   billingProvider: Row | null;
   practiceEntity: Row | null;
@@ -50,7 +50,7 @@ function Box({ number, label, value, warning }: { number: string; label: string;
 export function Cms1500Preview({
   claim,
   client,
-  insurance,
+  insurancePolicy,
   renderingProvider,
   billingProvider,
   practiceEntity,
@@ -60,7 +60,7 @@ export function Cms1500Preview({
 }: Props) {
   const diagnosisByOrder = new Map(diagnoses.map((row) => [Number(row.pointer_order ?? 0), text(row.diagnosis_code)]));
   const missing: string[] = [];
-  if (!insurance?.member_id) missing.push("Box 1a — Insured ID");
+  if (!insurancePolicy?.member_id) missing.push("Box 1a — Insured ID");
   if (!client?.date_of_birth) missing.push("Box 3 — Patient DOB");
   if (!client?.address_line1) missing.push("Box 5 — Patient address");
   if (!diagnoses.length) missing.push("Box 21 — Diagnosis");
@@ -98,17 +98,17 @@ export function Cms1500Preview({
 
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 0 }}>
             <Box number="1" label="Type of insurance" value={claim.payerName || text(claim.payer_id)} />
-            <Box number="1a" label="Insured's ID number" value={text(insurance?.member_id)} warning={!insurance?.member_id} />
+            <Box number="1a" label="Insured's ID number" value={text(insurancePolicy?.member_id)} warning={!insurancePolicy?.member_id} />
             <Box number="2" label="Patient's name" value={fullName(client) || claim.clientName} />
             <Box number="3" label="Patient birth date" value={client?.date_of_birth ? shortDate(text(client.date_of_birth)) : ""} warning={!client?.date_of_birth} />
 
-            <Box number="4" label="Insured's name" value={text(insurance?.subscriber_name) || fullName(client)} />
+            <Box number="4" label="Insured's name" value={text(insurancePolicy?.subscriber_name) || fullName(client)} />
             <Box number="5" label="Patient address" value={address(client)} warning={!client?.address_line1} />
-            <Box number="6" label="Relationship to insured" value={text(insurance?.relationship_to_subscriber, "Self")} />
-            <Box number="7" label="Insured address" value={text((insurance?.metadata as Record<string, unknown> | undefined)?.subscriber_address) || address(client)} />
+            <Box number="6" label="Relationship to insured" value={text(insurancePolicy?.relationship_to_subscriber, "Self")} />
+            <Box number="7" label="Insured address" value={text((insurancePolicy?.metadata as Record<string, unknown> | undefined)?.subscriber_address) || address(client)} />
 
-            <Box number="11" label="Insured policy/group" value={text(insurance?.group_number)} />
-            <Box number="11a" label="Insured DOB" value={insurance?.subscriber_dob ? shortDate(text(insurance.subscriber_dob)) : ""} />
+            <Box number="11" label="Insured policy/group" value={text(insurancePolicy?.group_number)} />
+            <Box number="11a" label="Insured DOB" value={insurancePolicy?.subscriber_dob ? shortDate(text(insurance.subscriber_dob)) : ""} />
             <Box number="12" label="Patient signature" value="Signature on file" />
             <Box number="13" label="Insured signature" value="Signature on file" />
           </div>
