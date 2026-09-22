@@ -43,6 +43,7 @@ import { SchedulePage } from "./domains/scheduling/SchedulePage";
 import { DashboardPage } from "./pages/dashboard";
 import { WorkCenterPage } from "./pages/work-center";
 import { AdministrationPage } from "./pages/administration";
+import { AuditPage } from "./pages/audit";
 import { ClientsPage } from "./pages/clients";
 import { PayerDetailPage } from "./pages/payer-detail";
 import { PracticeConfigurationPage } from "./pages/practice-configuration";
@@ -101,6 +102,7 @@ function StaffRoutes() {
         <Route path="/mailroom"><MailroomPage /></Route>
         <Route path="/reports"><ReportsPage /></Route>
         <Route path="/administration/imports"><ImportsPage /></Route>
+        <Route path="/administration/audit"><AuditPage /></Route>
         <Route path="/administration/practices"><PracticeConfigurationPage /></Route>
         <Route path="/administration"><AdministrationPage /></Route>
         <Route path="/"><DashboardPage /></Route>
