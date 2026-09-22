@@ -9,12 +9,13 @@ const src = join(here, "..", "src");
 const schedule = readFileSync(join(src, "domains", "scheduling", "SchedulePage.tsx"), "utf8");
 const app = readFileSync(join(src, "App.tsx"), "utf8");
 
-test("schedule is the single pre-session workflow", () => {
-  assert.match(schedule, /My Schedule/);
+test("schedule is the PREPARE pre-session workflow", () => {
+  assert.match(schedule, /Schedule & Pre-Session Review/);
+  assert.match(schedule, /PREPARE · PROVIDER SCHEDULE/);
   assert.match(schedule, /PatientReviewDrawer/);
   assert.match(schedule, /Pre-Visit Insight/);
   assert.match(schedule, /Session Focus/);
-  assert.doesNotMatch(schedule, /href=\{?`?\/schedule\/\$\{/);
+  assert.doesNotMatch(schedule, /href=\{?\`?\/schedule\/\$\{/);
   assert.doesNotMatch(app, /<PreSessionPage/);
 });
 
