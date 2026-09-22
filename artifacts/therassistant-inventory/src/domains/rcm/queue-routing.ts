@@ -43,12 +43,12 @@ export function getOperationalHome(input: {
     return "denials";
   }
   if (
-    ["validation_failed", "rejected", "corrected"].includes(status)
+    status === "rejected"
     || (latestResponseStatus === "rejected" && ["submitted", "batched"].includes(status))
   ) {
     return "rejections";
   }
-  if (["ready_for_validation", "ready_for_batch", "batched"].includes(status)) {
+  if (["ready_for_validation", "validation_failed", "corrected", "ready_for_batch", "batched"].includes(status)) {
     return "charges";
   }
   if (["paid", "partially_paid"].includes(status) && input.openBalanceCents <= 0) {
