@@ -33,7 +33,7 @@ export function AppShell({ children }: Props) {
     ? context.item
       ? `${context.section.label} · ${context.item.label}`
       : context.section.label
-    : "Operations";
+    : location === "/" ? "Home · Connected Workflow" : "Operations";
 
   const userLabel = useMemo(() => {
     const metadata = user?.user_metadata ?? {};
@@ -66,11 +66,21 @@ export function AppShell({ children }: Props) {
           <div className="thera-brand-mark">T</div>
           <div>
             <div className="thera-brand-name">THERASSISTANT</div>
-            <div className="thera-brand-subtitle">Revenue Cycle Operations</div>
+            <div className="thera-brand-subtitle">Behavioral Health EHR + RCM</div>
           </div>
         </div>
 
         <nav className="thera-nav" aria-label="Primary navigation">
+          <Link
+            href="/"
+            className={location === "/" ? "thera-home-link active" : "thera-home-link"}
+            aria-current={location === "/" ? "page" : undefined}
+            onClick={() => setMobileNavOpen(false)}
+          >
+            <span>Home</span>
+            <span className="thera-home-link-subtitle">Connected workflow</span>
+          </Link>
+
           {getVisibleSections().map((section) => {
             const expanded = section.id === expandedSectionId;
             const activeSection = section.id === activeSectionId;
