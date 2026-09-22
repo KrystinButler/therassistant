@@ -30,18 +30,23 @@ test("active Claims workqueue opens a payer-follow-up drawer with queue navigati
   assert.match(claimDrawer, /openBalanceCents/);
 });
 
-test("Rejections prepare corrected claims without falsely recording transmission", () => {
+test("Rejections use field-level clearinghouse correction before resubmission", () => {
   assert.match(rejectionsPage, /import \{ RejectionWorkDrawer/);
   assert.match(rejectionsPage, /<RejectionWorkDrawer/);
   assert.doesNotMatch(rejectionsPage, /<ClaimWorkDrawer/);
-  assert.match(rejectionDrawer, /Rejection reason/);
-  assert.match(rejectionDrawer, /Current value/);
-  assert.match(rejectionDrawer, /Corrected value/);
+  assert.match(rejectionsPage, /claim_rejection/);
+  assert.match(rejectionsPage, /responseCode/);
+  assert.match(rejectionDrawer, /Clearinghouse rejection/);
+  assert.match(rejectionDrawer, /Correction needed/);
+  assert.match(rejectionDrawer, /focusTarget/);
+  assert.match(rejectionDrawer, /rejection-field-claim-lines/);
+  assert.match(rejectionDrawer, /rejection-field-diagnoses/);
+  assert.match(rejectionDrawer, /Icd10SearchInput/);
   assert.match(rejectionDrawer, /Revalidate/);
   assert.match(rejectionDrawer, /Prepare Resubmission/);
   assert.match(rejectionDrawer, /createBatch/);
   assert.doesNotMatch(rejectionDrawer, /submitBatch/);
-  assert.match(rejectionDrawer, /export and transmit the 837P/i);
+  assert.match(rejectionDrawer, /ready in a new 837P batch for resubmission/i);
   assert.match(claimsQueueRepository, /responseIsCurrent/);
 });
 
