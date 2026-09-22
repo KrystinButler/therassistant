@@ -7,7 +7,7 @@ const drawer = readFileSync(new URL("../src/domains/scheduling/PatientReviewDraw
 
 test("encounter follows the manual's provider preparation-to-documentation flow", () => {
   for (const label of [
-    "TODAY'S FOCUS",
+    "TODAY&apos;S FOCUS",
     "Session & Note",
     "Treatment Plan",
     "Patient Info",
