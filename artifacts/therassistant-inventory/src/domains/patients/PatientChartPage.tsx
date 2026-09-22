@@ -31,7 +31,10 @@ export function PatientChartPage() {
   const patientId = params?.id ?? "";
   const [chart, setChart] = useState<PatientChart | null>(null);
   const [relationships, setRelationships] = useState<Relationships | null>(null);
-  const [tab, setTab] = useState<Tab>("overview");
+  const requestedTab = new URLSearchParams(window.location.search).get("tab");
+  const [tab, setTab] = useState<Tab>(
+    tabs.some(([key]) => key === requestedTab) ? requestedTab as Tab : "overview",
+  );
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
