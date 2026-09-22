@@ -238,7 +238,28 @@ export function EncounterPage() {
   ] as const;
   const billingFollowUpCount = completionChecks.filter((check) => check.status !== "pass").length;
 
-  function handleNoteChange(value: string) {\n    setNoteText(value);\n    setShowSlashMenu(value.endsWith("/"));\n  }\n\n  function injectQuickText(text: string) {\n    const textarea = noteRef.current;\n    const start = textarea?.selectionStart ?? noteText.length;\n    const slashStart = noteText.slice(0, start).lastIndexOf("/");\n    const insertAt = slashStart >= 0 ? slashStart : start;\n    const end = textarea?.selectionEnd ?? start;\n    setNoteText((current) => `${current.slice(0, insertAt)}${text}${current.slice(end)}`);\n    setShowSlashMenu(false);\n    requestAnimationFrame(() => {\n      if (!textarea) return;\n      textarea.focus();\n      const cursor = insertAt + text.length;\n      textarea.setSelectionRange(cursor, cursor);\n    });\n  }\n\n  function injectIntoNote(text: string) {
+  function handleNoteChange(value: string) {
+    setNoteText(value);
+    setShowSlashMenu(value.endsWith("/"));
+  }
+
+  function injectQuickText(text: string) {
+    const textarea = noteRef.current;
+    const start = textarea?.selectionStart ?? noteText.length;
+    const slashStart = noteText.slice(0, start).lastIndexOf("/");
+    const insertAt = slashStart >= 0 ? slashStart : start;
+    const end = textarea?.selectionEnd ?? start;
+    setNoteText((current) => `${current.slice(0, insertAt)}${text}${current.slice(end)}`);
+    setShowSlashMenu(false);
+    requestAnimationFrame(() => {
+      if (!textarea) return;
+      textarea.focus();
+      const cursor = insertAt + text.length;
+      textarea.setSelectionRange(cursor, cursor);
+    });
+  }
+
+  function injectIntoNote(text: string) {
     if (signed || !text.trim()) return;
     const textarea = noteRef.current;
     const start = textarea?.selectionStart ?? noteText.length;
