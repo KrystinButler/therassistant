@@ -34,7 +34,7 @@ test("only submitted provider-shared journal entries are eligible for clinical i
   ]);
 
   assert.equal(latest?.id, "shared-submitted");
-  assert.match(buildJournalNoteInsert(latest), /PATIENT-SHARED JOURNAL ENTRY/);
+  assert.match(buildJournalNoteInsert(latest), /PATIENT JOURNAL IMPORT — PATIENT-AUTHORED CONTENT/);
   assert.match(buildJournalNoteInsert(latest), /Shared submitted entry/);
 });
 
