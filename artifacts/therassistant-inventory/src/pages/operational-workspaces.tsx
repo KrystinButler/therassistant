@@ -230,6 +230,134 @@ export function MailroomPage() {
 }
 
 export function ReportsPage() {
-  const state=useLoad(async()=>{const[clients,providers,claims,payments,denials,work]=await Promise.all([tenantSelect("clients"),tenantSelect("providers"),tenantSelect("professional_claims"),tenantSelect("payments"),tenantSelect("denials"),tenantSelect("workqueue_items")]);return{clients,providers,claims,payments,denials,work};});
-  return <><WorkspaceHeader eyebrow="OPERATIONAL INTELLIGENCE" title="Reports" description="Executive view with operational drill-downs instead of raw database fields." action={<div className="thera-filter-row"><Link className="thera-action secondary" href="/claims">Claims</Link><Link className="thera-action secondary" href="/payments">Payments</Link><Link className="thera-action secondary" href="/ar-denials">A/R & Denials</Link><Link className="thera-action" href="/work-center">Work Center</Link></div>}/><State loading={state.loading} error={state.error}/>{state.data&&<><div className="thera-metric-grid"><div className="thera-metric-card"><div className="thera-metric-label">Active Patients</div><div className="thera-metric-value">{state.data.clients.filter(c=>c.client_status==='active').length}</div></div><div className="thera-metric-card"><div className="thera-metric-label">Active Providers</div><div className="thera-metric-value">{state.data.providers.filter(p=>p.provider_status==='active').length}</div></div><div className="thera-metric-card"><div className="thera-metric-label">Open Claims</div><div className="thera-metric-value">{state.data.claims.filter(c=>!['paid','voided','reversed'].includes(c.claim_status)).length}</div></div><div className="thera-metric-card"><div className="thera-metric-label">Denials</div><div className="thera-metric-value">{state.data.denials.length}</div></div><div className="thera-metric-card"><div className="thera-metric-label">Payments</div><div className="thera-metric-value">{money(state.data.payments.reduce((s,p)=>s+Number(p.amount_cents||0),0))}</div></div><div className="thera-metric-card"><div className="thera-metric-label">Open Work</div><div className="thera-metric-value">{state.data.work.filter(w=>!['completed','cancelled'].includes(w.workqueue_status)).length}</div></div></div><section className="thera-card"><div className="thera-card-header"><div><h2>Operational Follow-Up</h2><p>Use the workspaces above for action; reports remain summary and drill-down focused.</p></div></div><div className="thera-story-grid"><div className="thera-story"><strong>Claims requiring attention</strong><p>{state.data.claims.filter(c=>['rejected','denied','validation_failed'].includes(c.claim_status)).length} claims need follow-up.</p></div><div className="thera-story"><strong>Credentialing impact</strong><p>Review provider participation before claim submission.</p><Link className="thera-link" href="/credentialing">Open Credentialing</Link></div><div className="thera-story"><strong>Revenue recovery</strong><p>{state.data.denials.length} denial records are available for resolution.</p><Link className="thera-link" href="/ar-denials">Open A/R & Denials</Link></div></div></section></>}</>;
+  const state = useLoad(async () => {
+    const [clients, providers, claims, balances, payments, denials, work] = await Promise.all([
+      tenantSelect("clients"),
+      tenantSelect("providers"),
+      tenantSelect("professional_claims"),
+      tenantSelect("claim_balance_summaries"),
+      tenantSelect("payments"),
+      tenantSelect("denials"),
+      tenantSelect("workqueue_items"),
+    ]);
+    return { clients, providers, claims, balances, payments, denials, work };
+  });
+
+  const data = state.data;
+  const balanceByClaim = new Map((data?.balances ?? []).map((row) => [String(row.claim_id), row]));
+  const openClaims = (data?.claims ?? []).filter((claim) => {
+    const balance = balanceByClaim.get(String(claim.id));
+    return Number(balance?.open_balance_cents ?? claim.total_charge_cents ?? 0) > 0;
+  });
+  const openAr = openClaims.reduce((sum, claim) => {
+    const balance = balanceByClaim.get(String(claim.id));
+    return sum + Number(balance?.open_balance_cents ?? claim.total_charge_cents ?? 0);
+  }, 0);
+  const arOver90 = openClaims.reduce((sum, claim) => {
+    const serviceDate = new Date(String(claim.service_date_from ?? ""));
+    if (!Number.isFinite(serviceDate.getTime())) return sum;
+    const ageDays = Math.floor((Date.now() - serviceDate.getTime()) / 86_400_000);
+    if (ageDays <= 90) return sum;
+    const balance = balanceByClaim.get(String(claim.id));
+    return sum + Number(balance?.open_balance_cents ?? claim.total_charge_cents ?? 0);
+  }, 0);
+  const claimAttention = (data?.claims ?? []).filter((claim) =>
+    ["rejected", "denied", "validation_failed"].includes(String(claim.claim_status ?? "")),
+  ).length;
+  const openWork = (data?.work ?? []).filter((item) =>
+    !["completed", "cancelled"].includes(String(item.workqueue_status ?? "")),
+  ).length;
+  const postedPayments = (data?.payments ?? []).reduce(
+    (sum, payment) => sum + Number(payment.amount_cents ?? 0),
+    0,
+  );
+
+  return (
+    <>
+      <WorkspaceHeader
+        eyebrow="OPERATE · MANAGEMENT VIEW"
+        title="Reports"
+        description="Operational and financial indicators reconcile to the same claims, payments, denials, and workqueues staff are actively using."
+        action={
+          <div className="thera-filter-row">
+            <Link className="thera-action secondary" href="/claims">Claims</Link>
+            <Link className="thera-action secondary" href="/payments">Payments</Link>
+            <Link className="thera-action secondary" href="/denials">Denials</Link>
+            <Link className="thera-action" href="/work-center">Work Center</Link>
+          </div>
+        }
+      />
+      <State loading={state.loading} error={state.error} />
+
+      {data && (
+        <>
+          <div className="thera-metric-grid">
+            <div className="thera-metric-card">
+              <div className="thera-metric-label">Active Patients</div>
+              <div className="thera-metric-value">{data.clients.filter((row) => row.client_status === "active").length}</div>
+            </div>
+            <div className="thera-metric-card">
+              <div className="thera-metric-label">Active Providers</div>
+              <div className="thera-metric-value">{data.providers.filter((row) => row.provider_status === "active").length}</div>
+            </div>
+            <div className="thera-metric-card">
+              <div className="thera-metric-label">Open A/R</div>
+              <div className="thera-metric-value">{money(openAr)}</div>
+            </div>
+            <div className="thera-metric-card">
+              <div className="thera-metric-label">A/R Over 90</div>
+              <div className="thera-metric-value">{money(arOver90)}</div>
+            </div>
+            <div className="thera-metric-card">
+              <div className="thera-metric-label">Claim Exceptions</div>
+              <div className="thera-metric-value">{claimAttention}</div>
+            </div>
+            <div className="thera-metric-card">
+              <div className="thera-metric-label">Active Denials</div>
+              <div className="thera-metric-value">{data.denials.filter((row) => !["resolved", "resolved_writeoff", "closed"].includes(String(row.denial_status ?? ""))).length}</div>
+            </div>
+            <div className="thera-metric-card">
+              <div className="thera-metric-label">Posted Payments</div>
+              <div className="thera-metric-value">{money(postedPayments)}</div>
+            </div>
+            <div className="thera-metric-card">
+              <div className="thera-metric-label">Open Work</div>
+              <div className="thera-metric-value">{openWork}</div>
+            </div>
+          </div>
+
+          <section className="thera-card">
+            <div className="thera-card-header">
+              <div>
+                <h2>Management Follow-Up</h2>
+                <p>Use the linked operating workspace for the underlying records and next action.</p>
+              </div>
+            </div>
+            <div className="thera-story-grid">
+              <div className="thera-story">
+                <strong>Claims requiring attention</strong>
+                <p>{claimAttention} rejected, denied, or validation-failed claims need action.</p>
+                <Link className="thera-link" href="/rejections">Open claim exceptions</Link>
+              </div>
+              <div className="thera-story">
+                <strong>Revenue recovery</strong>
+                <p>{money(arOver90)} of current open A/R is more than 90 days from service.</p>
+                <Link className="thera-link" href="/claims">Open A/R follow-up</Link>
+              </div>
+              <div className="thera-story">
+                <strong>Credentialing impact</strong>
+                <p>Provider participation and roster issues remain connected to billing readiness.</p>
+                <Link className="thera-link" href="/credentialing">Open Credentialing</Link>
+              </div>
+              <div className="thera-story">
+                <strong>Audit readiness</strong>
+                <p>Review tenant activity history across clinical, financial, payer, and document actions.</p>
+                <Link className="thera-link" href="/administration/audit">Open Audit History</Link>
+              </div>
+            </div>
+          </section>
+        </>
+      )}
+    </>
+  );
 }
