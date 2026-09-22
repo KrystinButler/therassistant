@@ -2,9 +2,8 @@ import { useEffect, useState } from "react";
 import { Link, useRoute } from "wouter";
 import { StatusBadge } from "../components/status-badge";
 import { buildProviderCredentialingView } from "../domains/credentialing/workflow";
-import { tenantSelect, referenceSelect } from "../lib/tenant-data-client";
+import { tenantInsert, tenantSelect, referenceSelect } from "../lib/tenant-data-client";
 import { money, shortDate } from "../lib/format";
-import { useApi } from "../lib/therassistant-api";
 
 type Row = Record<string, any>;
 
@@ -31,7 +30,9 @@ const blankIdentifier = {
 export function ProviderDetailPage() {
   const [, params] = useRoute<{ id: string }>("/providers/:id");
   const providerId = params?.id ?? "";
-  const { data, loading, error } = useApi<Detail>(`/api/providers/${providerId}`);
+  const [data, setData] = useState<Detail | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [credentialing, setCredentialing] = useState<CredentialingView | null>(null);
   const [credentialingError, setCredentialingError] = useState<string | null>(null);
   const [payers, setPayers] = useState<Row[]>([]);
@@ -42,6 +43,94 @@ export function ProviderDetailPage() {
   const [showIdentifier, setShowIdentifier] = useState(false);
   const [identifierForm, setIdentifierForm] = useState({ ...blankIdentifier });
   const [savingIdentifier, setSavingIdentifier] = useState(false);
+
+  useEffect(() => {
+    if (!providerId) return;
+    let active = true;
+    setLoading(true);
+    setError(null);
+
+    Promise.all([
+      tenantSelect("providers", { id: `eq.${providerId}` }),
+      tenantSelect("appointments", { provider_id: `eq.${providerId}`, order: "starts_at.desc" }),
+      tenantSelect("clinical_notes", { provider_id: `eq.${providerId}`, order: "service_date.desc" }),
+      tenantSelect("charge_capture_items", { provider_id: `eq.${providerId}`, order: "service_date.desc" }),
+      tenantSelect("professional_claims", { rendering_provider_id: `eq.${providerId}`, order: "service_date_from.desc" }),
+      tenantSelect("professional_claims", { billing_provider_id: `eq.${providerId}`, order: "service_date_from.desc" }),
+      tenantSelect("claim_balance_summaries"),
+      tenantSelect("clients"),
+      referenceSelect("payers"),
+      tenantSelect("workqueue_items", { order: "created_at.desc" }),
+    ])
+      .then(([providerRows, appointments, notes, charges, renderingClaims, billingClaims, balances, clients, payerRows, workItems]) => {
+        if (!active) return;
+        const provider = providerRows[0];
+        if (!provider) {
+          setError("Provider not found");
+          setData(null);
+          return;
+        }
+
+        const clientById = new Map(clients.map((row) => [String(row.id), row]));
+        const payerById = new Map(payerRows.map((row) => [String(row.id), row]));
+        const balanceByClaim = new Map(balances.map((row) => [String(row.claim_id), row]));
+
+        const withClient = (row: Row) => {
+          const client = clientById.get(String(row.client_id ?? ""));
+          return {
+            ...row,
+            clientName: client
+              ? [client.first_name, client.last_name].filter(Boolean).join(" ")
+              : "—",
+          };
+        };
+
+        const withClaimContext = (row: Row) => {
+          const payer = payerById.get(String(row.payer_id ?? ""));
+          const balance = balanceByClaim.get(String(row.id ?? ""));
+          return {
+            ...withClient(row),
+            payerName: payer?.name ?? "—",
+            openBalanceCents: Number(balance?.open_balance_cents ?? row.total_charge_cents ?? 0),
+          };
+        };
+
+        const relatedIds = new Set<string>([
+          providerId,
+          ...notes.map((row) => String(row.id)),
+          ...renderingClaims.map((row) => String(row.id)),
+          ...billingClaims.map((row) => String(row.id)),
+        ]);
+        const relatedWork = workItems.filter((item) =>
+          relatedIds.has(String(item.source_object_id ?? "")),
+        );
+
+        setData({
+          provider,
+          appointments: appointments.map(withClient),
+          clinicalNotes: notes.map(withClient),
+          charges: charges.map((row) => ({
+            ...withClient(row),
+            payerName: payerById.get(String(row.payer_id ?? ""))?.name ?? "—",
+          })),
+          renderingClaims: renderingClaims.map(withClaimContext),
+          billingClaims: billingClaims.map(withClaimContext),
+          workItems: relatedWork,
+        });
+      })
+      .catch((err: unknown) => {
+        if (!active) return;
+        setError(err instanceof Error ? err.message : "Unable to load provider.");
+        setData(null);
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [providerId, credentialingVersion]);
 
   useEffect(() => {
     if (!providerId) return;
@@ -86,22 +175,16 @@ export function ProviderDetailPage() {
   async function saveIdentifier() {
     if (!identifierForm.identifier_type.trim() || !identifierForm.identifier_value.trim()) return;
     setSavingIdentifier(true);
+    setCredentialingError(null);
     try {
-      const response = await fetch(`/api/providers/${providerId}/identifiers`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Accept: "application/json" },
-        body: JSON.stringify({
-          identifier_type: identifierForm.identifier_type.trim(),
-          identifier_value: identifierForm.identifier_value.trim(),
-          payer_id: identifierForm.payer_id || null,
-          effective_date: identifierForm.effective_date || null,
-          termination_date: identifierForm.termination_date || null,
-        }),
+      await tenantInsert("provider_identifiers", {
+        provider_id: providerId,
+        identifier_type: identifierForm.identifier_type.trim(),
+        identifier_value: identifierForm.identifier_value.trim(),
+        payer_id: identifierForm.payer_id || null,
+        effective_date: identifierForm.effective_date || null,
+        termination_date: identifierForm.termination_date || null,
       });
-      if (!response.ok) {
-        const body = await response.json().catch(() => ({}));
-        throw new Error(body.error || `Unable to save identifier (${response.status})`);
-      }
       setIdentifierForm({ ...blankIdentifier });
       setShowIdentifier(false);
       setCredentialingVersion((value) => value + 1);
@@ -142,7 +225,7 @@ export function ProviderDetailPage() {
 
       <div className="thera-page-header split">
         <div>
-          <div className="thera-eyebrow">PROVIDER 360</div>
+          <div className="thera-eyebrow">OPERATE · PROVIDER 360</div>
           <h1>
             {provider.first_name} {provider.last_name}
             {provider.credentials ? `, ${provider.credentials}` : ""}
