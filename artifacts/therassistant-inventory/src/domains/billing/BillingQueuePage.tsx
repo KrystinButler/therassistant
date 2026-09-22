@@ -330,18 +330,18 @@ export function BillingQueuePage() {
     <>
       <div className="thera-page-header">
         <div>
-          <div className="thera-eyebrow">REVENUE CYCLE</div>
-          <h1>Charges</h1>
-          <p>Signed notes become charges here, then claims are scrubbed, batched by payer, exported as 837P, externally submitted, or printed to CMS-1500.</p>
+          <div className="thera-eyebrow">GET PAID · STAGES 04–05</div>
+          <h1>Charge Capture & Claim Submission</h1>
+          <p>Move a signed encounter through charge readiness, clean-claim validation, 837P batching, submission, and response tracking without re-entering the clinical record.</p>
         </div>
       </div>
 
       <div className="thera-tabs" style={{ marginBottom: 16 }}>
-        <Tab active={tab === "ready"} onClick={() => setTab("ready")} label={`Ready (${groups.ready.length})`} />
-        <Tab active={tab === "blocked"} onClick={() => setTab("blocked")} label={`Blocked (${groups.blocked.length})`} />
-        <Tab active={tab === "unbatched"} onClick={() => setTab("unbatched")} label={`Unbatched (${groups.readyCharges.length + groups.preBatchClaims.length})`} />
-        <Tab active={tab === "batches"} onClick={() => setTab("batches")} label={`Batches (${groups.openBatches.length})`} />
-        <Tab active={tab === "submitted"} onClick={() => setTab("submitted")} label={`Submitted (${groups.submittedBatches.length})`} />
+        <Tab active={tab === "ready"} onClick={() => setTab("ready")} label={`Ready for Claim (${groups.ready.length})`} />
+        <Tab active={tab === "blocked"} onClick={() => setTab("blocked")} label={`Validation Hold (${groups.blocked.length})`} />
+        <Tab active={tab === "unbatched"} onClick={() => setTab("unbatched")} label={`Claim Prep (${groups.readyCharges.length + groups.preBatchClaims.length})`} />
+        <Tab active={tab === "batches"} onClick={() => setTab("batches")} label={`837P Batches (${groups.openBatches.length})`} />
+        <Tab active={tab === "submitted"} onClick={() => setTab("submitted")} label={`Submitted / Responses (${groups.submittedBatches.length})`} />
       </div>
 
       {error && <div className="thera-state error" style={{ marginBottom: 12 }}>{error}</div>}
