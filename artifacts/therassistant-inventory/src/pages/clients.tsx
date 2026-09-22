@@ -7,7 +7,6 @@ import { validatePatientIntakeEmergencyContact } from "../domains/patients/workf
 import { invitePatientPortal } from "../domains/portal/staff-portal-access";
 import { dateTime, money, shortDate } from "../lib/format";
 import { getCurrentTenantId, referenceSelect, tenantInsert, tenantRpc, tenantSelect, tenantUpdate, type Row } from "../lib/tenant-data-client";
-import { useApi } from "../lib/therassistant-api";
 
 type ClientRow = {
   id: string;
@@ -332,7 +331,9 @@ export function ClientsPage() {
   const [plans, setPlans] = useState<PayerPlanRow[]>([]);
   const [payerLookupError, setPayerLookupError] = useState<string | null>(null);
 
-  const { data, loading, error } = useApi<ClientRow[]>(`/api/clients?search=${encodeURIComponent(search)}&refresh=${version}`);
+  const [data, setData] = useState<ClientRow[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const dirty = useMemo(() => Boolean(form && baseline && JSON.stringify(form) !== JSON.stringify(baseline)), [form, baseline]);
   const addRequiredComplete = Boolean(form && !form.id && requiredAddFieldsComplete(form));
 
@@ -352,6 +353,120 @@ export function ClientsPage() {
     });
     return () => { active = false; };
   }, []);
+
+  useEffect(() => {
+    let active = true;
+    setLoading(true);
+    setError(null);
+
+    Promise.all([
+      tenantSelect<Row>("clients", { deleted_at: "is.null", order: "last_name.asc,first_name.asc" }),
+      tenantSelect<Row>("client_insurance_policies"),
+      referenceSelect<PayerRow>("payers"),
+      referenceSelect<PayerPlanRow>("payer_plans"),
+      tenantSelect<Row>("appointments", { order: "starts_at.asc" }),
+      tenantSelect<Row>("professional_claims"),
+      tenantSelect<Row>("claim_balance_summaries"),
+    ])
+      .then(([clientRows, policies, payerRows, planRows, appointments, claims, balances]) => {
+        if (!active) return;
+
+        const payerById = new Map(payerRows.map((row) => [row.id, row]));
+        const planById = new Map(planRows.map((row) => [row.id, row]));
+        const balanceByClaim = new Map(
+          balances.map((row) => [String(row.claim_id ?? ""), Number(row.open_balance_cents ?? 0)]),
+        );
+        const now = Date.now();
+        const needle = search.trim().toLowerCase();
+
+        const nextRows = clientRows
+          .map((client): ClientRow => {
+            const clientId = String(client.id ?? "");
+            const primaryPolicy = policies
+              .filter((row) =>
+                String(row.client_id ?? "") === clientId &&
+                String(row.insurance_order ?? "") === "primary" &&
+                String(row.status ?? "") === "active"
+              )
+              .sort((a, b) => String(b.created_at ?? "").localeCompare(String(a.created_at ?? "")))[0];
+
+            const payer = primaryPolicy
+              ? payerById.get(String(primaryPolicy.payer_id ?? ""))
+              : undefined;
+            const plan = primaryPolicy
+              ? planById.get(String(primaryPolicy.payer_plan_id ?? ""))
+              : undefined;
+
+            const nextAppointment = appointments
+              .filter((row) =>
+                String(row.client_id ?? "") === clientId &&
+                !["cancelled", "no_show", "late_cancel", "rescheduled", "completed"].includes(String(row.appointment_status ?? "")) &&
+                new Date(String(row.starts_at ?? "")).getTime() >= now
+              )
+              .sort((a, b) => String(a.starts_at ?? "").localeCompare(String(b.starts_at ?? "")))[0];
+
+            const patientClaims = claims.filter((claim) => String(claim.client_id ?? "") === clientId);
+            const openBalanceCents = patientClaims.reduce(
+              (sum, claim) =>
+                sum + (balanceByClaim.get(String(claim.id ?? "")) ?? Number(claim.total_charge_cents ?? 0)),
+              0,
+            );
+            const metadata = objectRow(client.metadata);
+
+            return {
+              id: clientId,
+              firstName: String(client.first_name ?? ""),
+              lastName: String(client.last_name ?? ""),
+              preferredName: client.preferred_name ? String(client.preferred_name) : null,
+              dateOfBirth: client.date_of_birth ? String(client.date_of_birth) : null,
+              email: client.email ? String(client.email) : null,
+              phone: client.phone ? String(client.phone) : null,
+              addressLine1: client.address_line1 ? String(client.address_line1) : null,
+              addressLine2: client.address_line2 ? String(client.address_line2) : null,
+              city: client.city ? String(client.city) : null,
+              state: client.state ? String(client.state) : null,
+              postalCode: client.postal_code ? String(client.postal_code) : null,
+              sex: ["M", "F"].includes(String(metadata.sex ?? "")) ? String(metadata.sex) as Sex : "",
+              billingType: String(metadata.billing_type ?? "insurance") === "self_pay" ? "self_pay" : "insurance",
+              metadata,
+              clientStatus: String(client.client_status ?? "active"),
+              registrationStatus: String(client.registration_status ?? "incomplete"),
+              billingReadinessStatus: String(client.billing_readiness_status ?? "not_ready"),
+              payerName: payer?.name ?? null,
+              planName: plan?.name ?? null,
+              nextAppointment: nextAppointment?.starts_at ? String(nextAppointment.starts_at) : null,
+              openBalanceCents,
+            };
+          })
+          .filter((client) => {
+            if (!needle) return true;
+            return [
+              client.firstName,
+              client.lastName,
+              client.preferredName,
+              client.email,
+              client.phone,
+            ]
+              .filter(Boolean)
+              .join(" ")
+              .toLowerCase()
+              .includes(needle);
+          });
+
+        setData(nextRows);
+      })
+      .catch((err: unknown) => {
+        if (!active) return;
+        setError(err instanceof Error ? err.message : "Unable to load patients.");
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [search, version]);
 
   function openForm(next: FormState) {
     setForm(next);
@@ -591,7 +706,7 @@ export function ClientsPage() {
 
   return <>
     <div className="thera-page-header split">
-      <div><div className="thera-eyebrow">PATIENT OPERATIONS</div><h1>Patients</h1><p>Clinical, payer, authorization, claim, payment, and work history in one record.</p></div>
+      <div><div className="thera-eyebrow">ENGAGE · PATIENT OPERATIONS</div><h1>Patients</h1><p>Patient identity, engagement, coverage, clinical context, claims, payments, and follow-up stay connected to one record.</p></div>
       <div className="thera-filter-row">
         <input className="thera-input" placeholder="Search patients..." value={search} onChange={(e) => setSearch(e.target.value)} />
         <button type="button" className="thera-action" onClick={() => openForm(blankPatient())}>+ Add Patient</button>
@@ -606,7 +721,7 @@ export function ClientsPage() {
     <section className="thera-card">
       {loading && <div className="thera-state">Loading patients...</div>}
       {error && <div className="thera-state error">{error}</div>}
-      {!loading && !error && <div className="thera-table-wrap"><table className="thera-table"><thead><tr><th>Patient</th><th>DOB</th><th>Insurance</th><th>Registration</th><th>Billing Readiness</th><th>Next Appointment</th><th>Open Balance</th><th>Actions</th></tr></thead><tbody>{(data ?? []).map((client) => <tr key={client.id}><td><Link href={`/clients/${client.id}`} className="thera-table-link">{client.firstName} {client.lastName}</Link><div className="thera-table-subtext"><StatusBadge value={client.clientStatus} /></div></td><td>{shortDate(client.dateOfBirth)}</td><td><strong>{client.payerName || "—"}</strong><div className="thera-table-subtext">{client.planName || ""}</div></td><td><StatusBadge value={client.registrationStatus} /></td><td><StatusBadge value={client.billingReadinessStatus} /></td><td>{client.nextAppointment ? dateTime(client.nextAppointment) : "—"}</td><td>{money(client.openBalanceCents)}</td><td><button type="button" className="thera-action secondary" onClick={() => void edit(client)}>Edit</button></td></tr>)}</tbody></table></div>}
+      {!loading && !error && <div className="thera-table-wrap"><table className="thera-table"><thead><tr><th>Patient</th><th>DOB</th><th>Insurance</th><th>Registration</th><th>Billing Readiness</th><th>Next Appointment</th><th>Open Balance</th><th>Actions</th></tr></thead><tbody>{data.map((client) => <tr key={client.id}><td><Link href={`/clients/${client.id}`} className="thera-table-link">{client.firstName} {client.lastName}</Link><div className="thera-table-subtext"><StatusBadge value={client.clientStatus} /></div></td><td>{shortDate(client.dateOfBirth)}</td><td><strong>{client.payerName || "—"}</strong><div className="thera-table-subtext">{client.planName || ""}</div></td><td><StatusBadge value={client.registrationStatus} /></td><td><StatusBadge value={client.billingReadinessStatus} /></td><td>{client.nextAppointment ? dateTime(client.nextAppointment) : "—"}</td><td>{money(client.openBalanceCents)}</td><td><button type="button" className="thera-action secondary" onClick={() => void edit(client)}>Edit</button></td></tr>)}</tbody></table></div>}
     </section>
 
     {form && <WorkDrawer
