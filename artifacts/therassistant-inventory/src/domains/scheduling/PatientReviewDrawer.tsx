@@ -158,7 +158,7 @@ export function PatientReviewDrawer({ appointment, open, onOpenChange, onEditApp
         <div className="patient-review-scroll">
           <SheetHeader className="patient-review-heading">
             <SheetTitle>Patient Review</SheetTitle>
-            <SheetDescription>Pre-session details and key information.</SheetDescription>
+            <SheetDescription>Focused pre-session review. Sensitive detail stays inside the drawer.</SheetDescription>
           </SheetHeader>
 
           <section className="patient-review-person-card">
@@ -206,8 +206,8 @@ export function PatientReviewDrawer({ appointment, open, onOpenChange, onEditApp
               <div className={`patient-review-highlight ${review.safety === true ? "warning" : "positive"}`}><CheckCircle2 size={18} /><div><strong>{review.safety === true ? "Safety concern documented" : review.safety === false ? "No safety concerns" : "Safety review not submitted"}</strong><p>{review.safetyText ? review.safetyText : review.safety === true ? "Review the documented risk information before the session." : review.safety === false ? "No risk factors reported in the latest check-in." : "Review available chart information before the session."}</p></div></div>
             </ReviewSection>
 
-            <ReviewSection icon={<CheckCircle2 size={15} />} title="Payer / Billing Readiness">
-              <div className={`patient-review-highlight ${payerAttention.length ? "warning" : "positive"}`}><CheckCircle2 size={18} /><div><strong>{payerAttention.length ? "Administrative follow-up needed" : "Payer checks complete"}</strong><p>{payerAttention.length ? `${payerAttention.length} payer or billing item${payerAttention.length === 1 ? "" : "s"} need attention. They do not prevent starting the encounter or documenting care.` : "Current payer-readiness checks are complete."}</p></div></div>
+            <ReviewSection icon={<CheckCircle2 size={15} />} title="Visit Readiness">
+              <div className={`patient-review-highlight ${payerAttention.length ? "warning" : "positive"}`}><CheckCircle2 size={18} /><div><strong>{payerAttention.length ? "Visit can start · administrative follow-up remains" : "Ready for session"}</strong><p>{payerAttention.length ? `${payerAttention.length} payer or billing item${payerAttention.length === 1 ? "" : "s"} need attention. THERASSISTANT routes those items outside the clinical workflow so they do not prevent starting the encounter or documenting care.` : "Required patient-side preparation is complete. The provider can move directly into documentation."}</p></div></div>
             </ReviewSection>
           </div> : null}
         </div>
