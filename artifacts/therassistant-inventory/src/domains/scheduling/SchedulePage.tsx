@@ -120,6 +120,7 @@ export function SchedulePage() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [selectedAppointment, setSelectedAppointment] = useState<ScheduleAppointment | null>(null);
+  const [clockNow, setClockNow] = useState(() => Date.now());
 
   async function load() {
     setLoading(true); setError(null);
@@ -129,6 +130,11 @@ export function SchedulePage() {
   }
 
   useEffect(() => { void load(); }, []);
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setClockNow(Date.now()), 30_000);
+    return () => window.clearInterval(timer);
+  }, []);
 
   useEffect(() => {
     if (!data) return;
@@ -141,7 +147,9 @@ export function SchedulePage() {
     setView("day");
   }, [data]);
 
-  const clinicianView = roles.includes("clinician");
+  const clinicianView =
+    roles.includes("clinician") &&
+    !roles.some((role) => ["platform_admin", "practice_admin", "billing_company_admin", "billing_manager", "front_desk"].includes(role));
   const signedInProvider = useMemo(() => {
     const email = String(user?.email ?? "").trim().toLowerCase();
     if (!data || !email) return null;
@@ -153,13 +161,17 @@ export function SchedulePage() {
     setProviderFilter(signedInProvider.id);
   }, [clinicianView, signedInProvider?.id]);
 
+  const effectiveProviderFilter = clinicianView
+    ? signedInProvider?.id ?? "__unlinked_clinician__"
+    : providerFilter;
+
   const visible = useMemo(() => data ? data.appointments.filter((appointment) =>
-    inView(appointment.startsAt, anchor, view) && (!providerFilter || appointment.providerId === providerFilter),
-  ) : [], [data, anchor, view, providerFilter]);
+    inView(appointment.startsAt, anchor, view) && (!effectiveProviderFilter || appointment.providerId === effectiveProviderFilter),
+  ) : [], [data, anchor, view, effectiveProviderFilter]);
 
   const readyCount = visible.filter((appointment) => appointment.checkInStatus === "Ready").length;
   const attentionCount = visible.filter((appointment) => appointment.checkInStatus !== "Ready").length;
-  const now = Date.now();
+  const now = clockNow;
   const currentAppointmentId = view === "day"
     ? visible.find((appointment) => new Date(appointment.startsAt).getTime() <= now && new Date(appointment.endsAt).getTime() > now)?.id ?? null
     : null;
@@ -239,8 +251,8 @@ export function SchedulePage() {
       </div>
       <div className="schedule-toolbar-right">
         <div className="schedule-view-tabs">{(["day", "week", "month"] as ViewMode[]).map((mode) => <button key={mode} type="button" className={view === mode ? "active" : ""} onClick={() => setView(mode)}>{mode[0].toUpperCase() + mode.slice(1)}</button>)}</div>
-        {clinicianView && signedInProvider
-          ? <div className="schedule-provider-identity"><span>Provider</span><strong>{personName(signedInProvider)}</strong></div>
+        {clinicianView
+          ? <div className={signedInProvider ? "schedule-provider-identity" : "schedule-provider-identity unlinked"}><span>Provider</span><strong>{signedInProvider ? personName(signedInProvider) : "Profile not linked"}</strong></div>
           : <select className="thera-input schedule-provider-filter" value={providerFilter} onChange={(e) => setProviderFilter(e.target.value)}><option value="">All providers</option>{(data?.providers ?? []).map((provider) => <option key={provider.id} value={provider.id}>{personName(provider)}</option>)}</select>}
       </div>
     </section>
@@ -251,6 +263,7 @@ export function SchedulePage() {
       <span>{attentionCount} check-in{attentionCount === 1 ? "" : "s"} pending or needing attention</span>
     </div>
 
+    {clinicianView && !signedInProvider && data && <div className="thera-state error" style={{ marginBottom: 12 }}>Your clinician login is not linked to a provider profile. The schedule is hidden until the provider email matches your sign-in email.</div>}
     {error && <div className="thera-state error" style={{ marginBottom: 12 }}>{error}</div>}
     {loading && <div className="thera-state">Loading schedule...</div>}
 

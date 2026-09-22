@@ -188,10 +188,11 @@ export async function getScheduleData(): Promise<ScheduleData> {
   const tenantSettings = tenantRows[0]?.settings && typeof tenantRows[0].settings === "object"
     ? tenantRows[0].settings as Record<string, unknown>
     : {};
-  const configuredBalanceThreshold = Number(tenantSettings.portal_balance_threshold_cents ?? 0);
-  const balanceThresholdCents = Number.isFinite(configuredBalanceThreshold) && configuredBalanceThreshold >= 0
-    ? configuredBalanceThreshold
-    : 0;
+  const configuredBalanceThreshold = Number(tenantSettings.portal_balance_threshold_cents);
+  const hasConfiguredBalanceThreshold =
+    Number.isFinite(configuredBalanceThreshold) &&
+    configuredBalanceThreshold >= 0;
+  const balanceThresholdCents = hasConfiguredBalanceThreshold ? configuredBalanceThreshold : 0;
 
   function journalSharedForVisit(appointment: DataRow, clientId: string, serviceDate: string) {
     const appointmentStart = String(appointment.starts_at ?? "");
@@ -239,6 +240,7 @@ export async function getScheduleData(): Promise<ScheduleData> {
       balancesByClient.get(clientId)?.open_balance_cents ?? 0,
     );
     const balanceIssue =
+      hasConfiguredBalanceThreshold &&
       openBalanceCents > balanceThresholdCents &&
       !activePaymentPlanClients.has(clientId) &&
       !approvedBalanceExceptionClients.has(clientId);

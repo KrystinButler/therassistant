@@ -53,10 +53,16 @@ export function buildSchedulePatientPresentation(
   const preVisitInsights: SchedulePreVisitInsight[] = [];
 
   if (review.hasSubmittedPreVisit) {
+    const negativeSignal = negativePatientSignal(
+      review.mood,
+      review.changes,
+      review.additionalContext,
+      review.safetyConcern,
+    );
     preVisitInsights.push({
       label: "Check-In",
-      value: negativePatientSignal(review.mood, review.changes, review.additionalContext, review.safetyConcern) ? "Negative" : "Positive",
-      tone: negativePatientSignal(review.mood, review.changes, review.additionalContext, review.safetyConcern) ? "warning" : "positive",
+      value: negativeSignal ? "Negative" : "Positive",
+      tone: negativeSignal ? "warning" : "positive",
     });
   }
   if (journalShared) {

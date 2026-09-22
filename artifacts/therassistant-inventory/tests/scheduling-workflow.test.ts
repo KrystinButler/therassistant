@@ -51,7 +51,7 @@ test("appointment input derives workflow context instead of accepting insurance 
 test("schedule check-in status is restricted to the four approved states", () => {
   const build = buildSchedulePatientPresentation;
 
-  assert.equal(build?.(null, 0).checkInStatus, "Not Checked In");
+  assert.equal(build?.(null, false).checkInStatus, "Not Checked In");
   assert.equal(
     build?.({ responses: { pre_visit: { updated_at: "2026-09-17T08:00:00Z" } } }, false).checkInStatus,
     "In Progress",

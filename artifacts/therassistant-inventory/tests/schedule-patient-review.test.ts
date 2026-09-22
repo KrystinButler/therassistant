@@ -21,6 +21,8 @@ test("schedule is the PREPARE pre-session workflow", () => {
   assert.match(schedule, /NEXT/);
   assert.match(schedule, /roles\.includes\("clinician"\)/);
   assert.match(schedule, /signedInProvider/);
+  assert.match(schedule, /__unlinked_clinician__/);
+  assert.match(schedule, /setInterval/);
   assert.match(schedule, /onKeyDown/);
   assert.doesNotMatch(app, /<PreSessionPage/);
 });
@@ -30,7 +32,7 @@ test("schedule exposes only limited pre-visit insight", () => {
     assert.match(workflow, new RegExp(state));
   }
   assert.match(workflow, /label: "Check-In"/);
-  assert.match(workflow, /"Negative" : "Positive"/);
+  assert.match(workflow, /negativeSignal \? "Negative" : "Positive"/);
   assert.match(workflow, /label: "Journal"/);
   assert.doesNotMatch(workflow, /Since last visit|Important changes|Safety concerns|Anything else/);
 });
