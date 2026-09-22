@@ -3,26 +3,26 @@ import { Link, useRoute } from "wouter";
 
 import { StatusBadge } from "../../components/status-badge";
 import { dateTime, money, shortDate } from "../../lib/format";
+import { buildCms1500PreviewHtml } from "../billing/cms1500-preview";
+import { getClaimPreviewData } from "../billing/claim-output-repository";
 import { getClaim360Data } from "./repository";
 import { getClaim360RelationshipsData } from "./relationships-repository";
-import { getCms1500PreviewData } from "./cms1500-repository";
-import { Cms1500Preview } from "./Cms1500Preview";
 
 type BaseData = Awaited<ReturnType<typeof getClaim360Data>>;
 type RelationshipData = Awaited<ReturnType<typeof getClaim360RelationshipsData>>;
 type Data = Omit<BaseData, "submissions" | "workItems"> & Pick<RelationshipData, "submissions" | "workItems">;
-type PreviewData = Awaited<ReturnType<typeof getCms1500PreviewData>>;
 
-type Tab = "overview" | "preview" | "lines" | "history" | "responses" | "denials" | "work";
+type Tab = "overview" | "lines" | "history" | "responses" | "denials" | "work";
 
 export function Claim360Page() {
   const [, params] = useRoute<{ id: string }>("/claims/:id");
   const claimId = params?.id ?? "";
   const [data, setData] = useState<Data | null>(null);
-  const [preview, setPreview] = useState<PreviewData | null>(null);
   const [tab, setTab] = useState<Tab>("overview");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [previewing, setPreviewing] = useState(false);
+  const [previewError, setPreviewError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!claimId) return;
@@ -31,19 +31,42 @@ export function Claim360Page() {
     void Promise.all([
       getClaim360Data(claimId),
       getClaim360RelationshipsData(claimId),
-      getCms1500PreviewData(claimId),
     ])
-      .then(([base, relationships, previewData]) => {
+      .then(([base, relationships]) => {
         setData({
           ...base,
           submissions: relationships.submissions,
           workItems: relationships.workItems,
         });
-        setPreview(previewData);
       })
       .catch((err) => setError(err instanceof Error ? err.message : "Unable to load claim."))
       .finally(() => setLoading(false));
   }, [claimId]);
+
+  async function runPreview() {
+    const previewWindow = window.open("", "_blank");
+    if (!previewWindow) {
+      setPreviewError("Allow pop-ups to preview CMS-1500.");
+      return;
+    }
+    previewWindow.opener = null;
+    previewWindow.document.write("<p style='font-family:Arial,sans-serif;padding:24px'>Loading CMS-1500 preview…</p>");
+
+    setPreviewing(true);
+    setPreviewError(null);
+    try {
+      const preview = await getClaimPreviewData(claimId);
+      previewWindow.document.open();
+      previewWindow.document.write(buildCms1500PreviewHtml(preview.item, preview.edi));
+      previewWindow.document.close();
+      previewWindow.focus();
+    } catch (err) {
+      previewWindow.close();
+      setPreviewError(err instanceof Error ? err.message : "Unable to preview CMS-1500.");
+    } finally {
+      setPreviewing(false);
+    }
+  }
 
   if (loading) return <div className="thera-state">Loading Claim 360...</div>;
   if (error || !data) return <div className="thera-state error">{error || "Claim not found."}</div>;
@@ -63,14 +86,18 @@ export function Claim360Page() {
           <p>{claim.clientName} · {claim.providerName} · {claim.payerName} · DOS {shortDate(String(claim.service_date_from ?? ""))}</p>
         </div>
         <div className="thera-header-badges">
+          <button type="button" className="thera-action secondary" disabled={previewing} onClick={() => void runPreview()}>
+            {previewing ? "Loading Preview…" : "Preview CMS-1500"}
+          </button>
           <StatusBadge value={String(claim.claim_status)} />
           <span className="thera-kpi-value">{money(Number(claim.total_charge_cents ?? 0))}</span>
         </div>
       </div>
 
+      {previewError && <div className="thera-state error" style={{ marginBottom: 12 }}>{previewError}</div>}
+
       <div className="thera-tabs" style={{ marginBottom: 16 }}>
         <TabButton active={tab === "overview"} onClick={() => setTab("overview")} label="Overview" />
-        <TabButton active={tab === "preview"} onClick={() => setTab("preview")} label="CMS-1500 Preview" />
         <TabButton active={tab === "lines"} onClick={() => setTab("lines")} label={`Lines & Diagnoses (${data.lines.length})`} />
         <TabButton active={tab === "history"} onClick={() => setTab("history")} label={`Status History (${data.history.length})`} />
         <TabButton active={tab === "responses"} onClick={() => setTab("responses")} label={`Submissions / Responses (${data.submissions.length + data.responses.length})`} />
@@ -79,8 +106,6 @@ export function Claim360Page() {
       </div>
 
       {tab === "overview" && <Overview data={data} />}
-      {tab === "preview" && preview && <Cms1500Preview {...preview} />}
-      {tab === "preview" && !preview && <div className="thera-state">CMS-1500 preview data is unavailable.</div>}
       {tab === "lines" && <Lines data={data} />}
       {tab === "history" && <History rows={data.history} />}
       {tab === "responses" && <Responses data={data} />}

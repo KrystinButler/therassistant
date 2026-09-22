@@ -3,6 +3,7 @@ import { Link, useLocation } from "wouter";
 import { StatusBadge } from "../components/status-badge";
 import { WorkDrawer } from "../components/work-drawer";
 import { createPatientWithOptionalPortal } from "../domains/patients/create-patient-with-portal";
+import { getPatientCreationPrerequisites, type PatientCreationPrerequisites } from "../domains/patients/setup-prerequisites";
 import { validatePatientIntakeEmergencyContact } from "../domains/patients/workflow";
 import { invitePatientPortal } from "../domains/portal/staff-portal-access";
 import { dateTime, money, shortDate } from "../lib/format";
@@ -330,12 +331,35 @@ export function ClientsPage() {
   const [payers, setPayers] = useState<PayerRow[]>([]);
   const [plans, setPlans] = useState<PayerPlanRow[]>([]);
   const [payerLookupError, setPayerLookupError] = useState<string | null>(null);
+  const [prerequisites, setPrerequisites] = useState<PatientCreationPrerequisites | null>(null);
+  const [prerequisiteLoading, setPrerequisiteLoading] = useState(true);
+  const [prerequisiteError, setPrerequisiteError] = useState<string | null>(null);
 
   const [data, setData] = useState<ClientRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const dirty = useMemo(() => Boolean(form && baseline && JSON.stringify(form) !== JSON.stringify(baseline)), [form, baseline]);
   const addRequiredComplete = Boolean(form && !form.id && requiredAddFieldsComplete(form));
+  const patientCreationReady = Boolean(prerequisites?.ready);
+
+  useEffect(() => {
+    let active = true;
+    setPrerequisiteLoading(true);
+    getPatientCreationPrerequisites()
+      .then((result) => {
+        if (!active) return;
+        setPrerequisites(result);
+        setPrerequisiteError(null);
+      })
+      .catch((err) => {
+        if (!active) return;
+        setPrerequisiteError(err instanceof Error ? err.message : "Unable to verify patient setup prerequisites.");
+      })
+      .finally(() => {
+        if (active) setPrerequisiteLoading(false);
+      });
+    return () => { active = false; };
+  }, [version]);
 
   useEffect(() => {
     let active = true;
@@ -567,6 +591,11 @@ export function ClientsPage() {
       return;
     }
 
+    if (!patientCreationReady) {
+      setFormError("Complete Practice Entity, Provider, and Practice Location setup before adding a patient.");
+      return;
+    }
+
     if (!requiredAddFieldsComplete(form)) {
       setFormError("Complete all required patient fields and primary insurance fields when billing insurance.");
       return;
@@ -709,9 +738,53 @@ export function ClientsPage() {
       <div><div className="thera-eyebrow">ENGAGE · PATIENT OPERATIONS</div><h1>Patients</h1><p>Patient identity, engagement, coverage, clinical context, claims, payments, and follow-up stay connected to one record.</p></div>
       <div className="thera-filter-row">
         <input className="thera-input" placeholder="Search patients..." value={search} onChange={(e) => setSearch(e.target.value)} />
-        <button type="button" className="thera-action" onClick={() => openForm(blankPatient())}>+ Add Patient</button>
+        <button
+          type="button"
+          className="thera-action"
+          disabled={prerequisiteLoading || !patientCreationReady}
+          title={patientCreationReady ? "Add patient" : "Complete practice entity, provider, and location setup first"}
+          onClick={() => openForm(blankPatient())}
+        >
+          + Add Patient
+        </button>
       </div>
     </div>
+
+    {prerequisiteError && <div className="thera-state error" style={{ marginBottom: 16 }}>{prerequisiteError}</div>}
+
+    {!prerequisiteLoading && prerequisites && !prerequisites.ready && (
+      <section className="thera-card" style={{ marginBottom: 16 }}>
+        <div className="thera-card-header">
+          <div>
+            <div className="thera-eyebrow">SETUP REQUIRED</div>
+            <h2>Complete practice setup before adding patients</h2>
+            <p>Patient intake stays locked until the tenant has an active practice entity, an active provider, and an active location linked to that entity.</p>
+          </div>
+        </div>
+        <div className="thera-definition-grid">
+          <div>
+            <div className="thera-field-label">Practice Entity</div>
+            <div className="thera-field-value">{prerequisites.activeEntity ? "Ready" : "Required"}</div>
+          </div>
+          <div>
+            <div className="thera-field-label">Provider</div>
+            <div className="thera-field-value">{prerequisites.activeProvider ? "Ready" : "Required"}</div>
+          </div>
+          <div>
+            <div className="thera-field-label">Practice Location</div>
+            <div className="thera-field-value">{prerequisites.activeLocation ? "Ready" : "Required"}</div>
+          </div>
+        </div>
+        <div className="thera-filter-row" style={{ marginTop: 14 }}>
+          {(!prerequisites.activeEntity || !prerequisites.activeLocation) && (
+            <Link href="/administration/practices" className="thera-action secondary">Complete Practice Setup</Link>
+          )}
+          {!prerequisites.activeProvider && (
+            <Link href="/providers" className="thera-action secondary">Add Provider</Link>
+          )}
+        </div>
+      </section>
+    )}
 
     {pageNotice && <div className={`thera-state${pageNotice.kind === "error" ? " error" : ""}`} style={{ marginBottom: 16 }}>
       {pageNotice.message} <Link href={`/clients/${pageNotice.patientId}`}>Open Patient 360</Link>
@@ -735,8 +808,8 @@ export function ClientsPage() {
       footer={<div className="thera-filter-row" style={{ justifyContent: "space-between", width: "100%" }}>
         <button type="button" className="thera-action secondary" onClick={closeForm}>Cancel</button>
         <div className="thera-filter-row">
-          {!form.id && <button type="button" className="thera-action secondary" disabled={saving || !addRequiredComplete} onClick={() => void save(true)}>Save + Send Portal Invite</button>}
-          <button type="button" className="thera-action" disabled={saving || (form.id ? !form.first_name.trim() || !form.last_name.trim() || !form.date_of_birth || !form.sex || !patientAddressComplete(form) : !addRequiredComplete)} onClick={() => void save(false)}>{saving ? "Saving..." : "Save Patient"}</button>
+          {!form.id && <button type="button" className="thera-action secondary" disabled={saving || !patientCreationReady || !addRequiredComplete} onClick={() => void save(true)}>Save + Send Portal Invite</button>}
+          <button type="button" className="thera-action" disabled={saving || (form.id ? !form.first_name.trim() || !form.last_name.trim() || !form.date_of_birth || !form.sex || !patientAddressComplete(form) : !patientCreationReady || !addRequiredComplete)} onClick={() => void save(false)}>{saving ? "Saving..." : "Save Patient"}</button>
         </div>
       </div>}
     >

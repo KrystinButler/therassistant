@@ -11,7 +11,12 @@ import {
 } from "../clinical/repository";
 import { buildPatientReviewCheckIn } from "../scheduling/patient-review-model";
 import { treatmentPlanAlert } from "../treatment-plans/workflow";
+import { FastChartingPanel } from "../clinical/FastChartingPanel";
+import { createSmartPhrase, getFastChartingContext, getSmartPhrases } from "../clinical/fast-charting-repository";
+import { emptyStructuredSelections, expandSmartPhraseAtCursor, synthesizeStructuredNarrative, type PriorStructuredContext, type SmartPhrase, type StructuredSelections } from "../clinical/fast-charting";
 import { Icd10SearchInput } from "../coding/Icd10SearchInput";
+import { ProcedureCodeSearchInput } from "../coding/ProcedureCodeSearchInput";
+import { PlaceOfServiceSearchInput } from "../coding/PlaceOfServiceSearchInput";
 import {
   appendClinicalSource,
   buildJournalNoteInsert,
@@ -72,6 +77,10 @@ export function EncounterPage() {
   const [chargeDollars, setChargeDollars] = useState("");
   const [placeOfService, setPlaceOfService] = useState("11");
   const [signatureText, setSignatureText] = useState("");
+  const [smartPhrases, setSmartPhrases] = useState<SmartPhrase[]>([]);
+  const [structuredSelections, setStructuredSelections] = useState<StructuredSelections>(() => emptyStructuredSelections());
+  const [carryForwardContext, setCarryForwardContext] = useState<Record<string, unknown>>({});
+  const [priorStructuredContext, setPriorStructuredContext] = useState<PriorStructuredContext | null>(null);
 
   async function load() {
     if (!encounterId) return;
@@ -81,6 +90,11 @@ export function EncounterPage() {
       const result = await getEncounterDetail(encounterId);
       setData(result);
       const note = result.notes[0];
+      const fastCharting = await getFastChartingContext(String(result.encounter.client_id ?? ""), encounterId, note?.id ? String(note.id) : undefined);
+      setSmartPhrases(fastCharting.phrases);
+      setStructuredSelections(fastCharting.current?.selections ?? emptyStructuredSelections());
+      setCarryForwardContext(fastCharting.current?.carryForwardContext ?? {});
+      setPriorStructuredContext(fastCharting.prior);
       setNoteText(String(note?.note_text ?? ""));
       setNoteType(String(note?.note_type ?? "psychotherapy"));
       setGoalAddressed(String(note?.goal_addressed ?? ""));
@@ -107,6 +121,7 @@ export function EncounterPage() {
     () => Boolean(data?.notes.some((note) => ["signed", "locked"].includes(String(note.note_status)))),
     [data],
   );
+  const generatedNarrative = useMemo(() => synthesizeStructuredNarrative(structuredSelections), [structuredSelections]);
 
   async function withSave(action: () => Promise<unknown>, successMessage: string) {
     setSaving(true);
@@ -125,7 +140,7 @@ export function EncounterPage() {
 
   async function saveNote() {
     await withSave(
-      () => saveClinicalNote(encounterId, { noteType, noteText, goalAddressed }),
+      () => saveClinicalNote(encounterId, { noteType, noteText, goalAddressed, structuredSelections, generatedNarrative, carryForwardContext }),
       "Clinical note saved and marked ready for signature.",
     );
   }
@@ -164,7 +179,7 @@ export function EncounterPage() {
     setMessage(null);
     try {
       const providerId = String(data?.encounter.provider_id ?? "");
-      await saveClinicalNote(encounterId, { noteType, noteText, goalAddressed });
+      await saveClinicalNote(encounterId, { noteType, noteText, goalAddressed, structuredSelections, generatedNarrative, carryForwardContext });
       const result = await signEncounterNote(encounterId, providerId, signatureText);
       if (!result.ok) {
         setError(result.details?.length ? `${result.message} ${result.details.join(" ")}` : result.message);
@@ -184,6 +199,7 @@ export function EncounterPage() {
   if (!data) return <div className="thera-state error">Encounter not found.</div>;
 
   const encounter = data.encounter;
+  const serviceDate = String(encounter.started_at ?? "").slice(0, 10);
   const note = data.notes[0];
   const currentTreatmentPlan = data.treatmentPlans.find((plan) =>
     ["active", "signed"].includes(String(plan.status ?? "")),
@@ -239,7 +255,19 @@ export function EncounterPage() {
   ] as const;
   const billingFollowUpCount = completionChecks.filter((check) => check.status !== "pass").length;
 
-  function handleNoteChange(value: string) {
+  function handleNoteChange(value: string, cursor: number) {
+    const expansion = expandSmartPhraseAtCursor(value, cursor, smartPhrases);
+    if (expansion) {
+      setNoteText(expansion.value);
+      setShowSlashMenu(false);
+      requestAnimationFrame(() => {
+        const textarea = noteRef.current;
+        if (!textarea) return;
+        textarea.focus();
+        textarea.setSelectionRange(expansion.cursor, expansion.cursor);
+      });
+      return;
+    }
     setNoteText(value);
     setShowSlashMenu(value.endsWith("/"));
   }
@@ -289,6 +317,24 @@ export function EncounterPage() {
     setMessage("Patient-shared journal content was inserted as labeled source material for provider review. It remains editable until signature.");
   }
 
+  async function addSmartPhrase(input: { shortcut: string; label: string; content: string; scope: "user" | "practice" }) {
+    await createSmartPhrase(input);
+    setSmartPhrases(await getSmartPhrases());
+    setMessage("SmartPhrase saved.");
+  }
+
+  function carryForwardStructured() {
+    if (signed || !priorStructuredContext) return;
+    setStructuredSelections(priorStructuredContext.selections);
+    if (!goalAddressed.trim() && priorStructuredContext.goalAddressed) setGoalAddressed(priorStructuredContext.goalAddressed);
+    setCarryForwardContext({
+      source_note_id: priorStructuredContext.noteId,
+      source_service_date: priorStructuredContext.serviceDate,
+      copied_fields: ["structured_selections", "goal_addressed"],
+    });
+    setMessage("Structured clinical context carried forward. Prior narrative text was not copied.");
+  }
+
   return (
     <>
       <div className="thera-breadcrumb">
@@ -336,7 +382,8 @@ export function EncounterPage() {
             <label><div className="thera-field-label">Note Type</div><select className="thera-input" value={noteType} disabled={signed} onChange={(event) => setNoteType(event.target.value)}><option value="psychotherapy">Psychotherapy</option><option value="assessment">Assessment</option><option value="intake">Intake</option><option value="crisis">Crisis</option><option value="case_management">Case Management</option><option value="medication_management">Medication Management</option><option value="other">Other</option></select></label>
             <label><div className="thera-field-label">Goal / Objective Addressed</div><input className="thera-input" value={goalAddressed} disabled={signed} onChange={(event) => setGoalAddressed(event.target.value)} placeholder="Goal or objective addressed" /></label>
           </div>
-          <div className="encounter-editor-wrap"><label><div className="thera-field-label">Session / SOAP Note</div><textarea ref={noteRef} className="thera-input encounter-note-editor" value={noteText} disabled={signed} onChange={(event) => handleNoteChange(event.target.value)} placeholder="Document subjective/objective findings, assessment, interventions, response, plan, risk, and relevant clinical context. Type / for quick inserts." /></label>{showSlashMenu && !signed && <div className="encounter-slash-menu"><div>QUICK INSERTS</div><button type="button" onClick={() => injectQuickText("Risk Assessment: Client denies suicidal or homicidal ideation. No acute safety concerns reported.")}>Risk: Standard Negative</button><button type="button" onClick={() => injectQuickText("Mental Status: Alert and oriented x4. Appearance and behavior appropriate. Speech normal. Thought process linear and goal directed.")}>MSE: Within Normal Limits</button><button type="button" onClick={() => injectQuickText("Intervention: Supportive psychotherapy, reflective listening, validation, and collaborative problem solving were utilized.")}>Intervention: Supportive</button></div>}</div>
+          <div className="encounter-editor-wrap"><label><div className="thera-field-label">Session / SOAP Note</div><textarea ref={noteRef} className="thera-input encounter-note-editor" value={noteText} disabled={signed} onChange={(event) => handleNoteChange(event.target.value, event.target.selectionStart)} placeholder="Document subjective/objective findings, assessment, interventions, response, plan, risk, and relevant clinical context. Type / for quick inserts." /></label>{showSlashMenu && !signed && <div className="encounter-slash-menu"><div>QUICK INSERTS</div><button type="button" onClick={() => injectQuickText("Risk Assessment: Client denies suicidal or homicidal ideation. No acute safety concerns reported.")}>Risk: Standard Negative</button><button type="button" onClick={() => injectQuickText("Mental Status: Alert and oriented x4. Appearance and behavior appropriate. Speech normal. Thought process linear and goal directed.")}>MSE: Within Normal Limits</button><button type="button" onClick={() => injectQuickText("Intervention: Supportive psychotherapy, reflective listening, validation, and collaborative problem solving were utilized.")}>Intervention: Supportive</button></div>}</div>
+          <FastChartingPanel signed={signed} phrases={smartPhrases} selections={structuredSelections} generatedNarrative={generatedNarrative} priorContext={priorStructuredContext} onSelectionsChange={setStructuredSelections} onInsertNarrative={() => injectIntoNote("\n" + generatedNarrative + "\n")} onInsertPhrase={injectIntoNote} onCarryForward={carryForwardStructured} onCreatePhrase={addSmartPhrase} />
           {!signed && <div className="encounter-note-actions"><button type="button" className="thera-action" disabled={saving || !noteText.trim()} onClick={() => void saveNote()}>{saving ? "Saving..." : "Save Note"}</button><span>Saving does not sign or lock the clinical record.</span></div>}
           {signed && data.signatures[0] && <div className="thera-alert" style={{ marginTop: 12 }}>Signed {dateTime(String(data.signatures[0].signed_at ?? ""))} by {String(data.signatures[0].signature_text ?? "provider")}</div>}
         </section>
@@ -358,8 +405,8 @@ export function EncounterPage() {
       </div>
 
       <div className="encounter-lower-grid">
-        <section className="thera-card"><div className="thera-card-header"><div><div className="thera-eyebrow">CLINICAL CONTEXT</div><h2>Diagnoses</h2></div></div>{data.diagnoses.length > 0 && <div className="thera-table-wrap"><table className="thera-table"><thead><tr><th>Code</th><th>Description</th><th>Primary</th></tr></thead><tbody>{data.diagnoses.map((diagnosis) => <tr key={diagnosis.id}><td><strong>{String(diagnosis.diagnosis_code)}</strong></td><td>{String(diagnosis.diagnosis_description ?? "—")}</td><td>{diagnosis.is_primary ? "Yes" : "No"}</td></tr>)}</tbody></table></div>}{!signed && <div className="encounter-compact-form"><Icd10SearchInput code={diagnosisCode} description={diagnosisDescription} onSelect={(result) => { setDiagnosisCode(result.code); if (result.name) setDiagnosisDescription(result.name); }} /><input className="thera-input" placeholder="Diagnosis description" value={diagnosisDescription} onChange={(event) => setDiagnosisDescription(event.target.value)} /><button type="button" className="thera-action secondary" disabled={saving || !diagnosisCode.trim()} onClick={() => void addDiagnosis()}>+ Add Diagnosis</button></div>}</section>
-        <section className="thera-card"><div className="thera-card-header"><div><div className="thera-eyebrow">CODE</div><h2>Coding & Service</h2></div></div><div className="encounter-coding-summary"><Field label="Scheduled Time" value={duration ? `${duration} minutes` : "Not available"} /><Field label="Visit Location" value={String(encounter.location_type ?? "—").replaceAll("_", " ")} /><Field label="Current POS" value={placeOfService || "—"} /><Field label="Payer" value={String(data.payer?.name ?? "—")} /></div>{!signed && <div className="encounter-service-form"><input className="thera-input" placeholder="CPT / HCPCS" value={serviceCode} onChange={(event) => setServiceCode(event.target.value)} /><input className="thera-input" placeholder="Modifier" value={modifier1} onChange={(event) => setModifier1(event.target.value)} /><input className="thera-input" type="number" min={1} value={units} onChange={(event) => setUnits(Number(event.target.value))} /><input className="thera-input" placeholder="POS" value={placeOfService} onChange={(event) => setPlaceOfService(event.target.value)} /><input className="thera-input" type="number" step="0.01" min="0" placeholder="Charge $" value={chargeDollars} onChange={(event) => setChargeDollars(event.target.value)} /><button type="button" className="thera-action secondary" disabled={saving || !serviceCode.trim()} onClick={() => void addServiceLine()}>+ Add Service Line</button></div>}</section>
+        <section className="thera-card"><div className="thera-card-header"><div><div className="thera-eyebrow">CLINICAL CONTEXT</div><h2>Diagnoses</h2></div></div>{data.diagnoses.length > 0 && <div className="thera-table-wrap"><table className="thera-table"><thead><tr><th>Code</th><th>Description</th><th>Primary</th></tr></thead><tbody>{data.diagnoses.map((diagnosis) => <tr key={diagnosis.id}><td><strong>{String(diagnosis.diagnosis_code)}</strong></td><td>{String(diagnosis.diagnosis_description ?? "—")}</td><td>{diagnosis.is_primary ? "Yes" : "No"}</td></tr>)}</tbody></table></div>}{!signed && <div className="encounter-compact-form"><Icd10SearchInput code={diagnosisCode} description={diagnosisDescription} serviceDate={serviceDate} onSelect={(result) => { setDiagnosisCode(result.code); if (result.name) setDiagnosisDescription(result.name); }} /><input className="thera-input" placeholder="Diagnosis description" value={diagnosisDescription} onChange={(event) => setDiagnosisDescription(event.target.value)} /><button type="button" className="thera-action secondary" disabled={saving || !diagnosisCode.trim()} onClick={() => void addDiagnosis()}>+ Add Diagnosis</button></div>}</section>
+        <section className="thera-card"><div className="thera-card-header"><div><div className="thera-eyebrow">CODE</div><h2>Coding & Service</h2></div></div><div className="encounter-coding-summary"><Field label="Scheduled Time" value={duration ? `${duration} minutes` : "Not available"} /><Field label="Visit Location" value={String(encounter.location_type ?? "—").replaceAll("_", " ")} /><Field label="Current POS" value={placeOfService || "—"} /><Field label="Payer" value={String(data.payer?.name ?? "—")} /></div>{!signed && <div className="encounter-service-form"><ProcedureCodeSearchInput code={serviceCode} serviceDate={serviceDate} onSelect={(result) => setServiceCode(result.code)} /><input className="thera-input" placeholder="Modifier" value={modifier1} onChange={(event) => setModifier1(event.target.value.toUpperCase())} /><input className="thera-input" type="number" min={1} value={units} onChange={(event) => setUnits(Number(event.target.value))} /><PlaceOfServiceSearchInput code={placeOfService} onSelect={(result) => setPlaceOfService(result.code)} /><input className="thera-input" type="number" step="0.01" min="0" placeholder="Charge $" value={chargeDollars} onChange={(event) => setChargeDollars(event.target.value)} /><button type="button" className="thera-action secondary" disabled={saving || !serviceCode.trim()} onClick={() => void addServiceLine()}>+ Add Service Line</button></div>}</section>
         <section className="thera-card thera-span-2 encounter-sign-card"><div className="thera-card-header"><div><div className="thera-eyebrow">REVIEW → SIGN</div><h2>Documentation Readiness & Signature</h2><p>Billing follow-up never prevents completion of the clinical record.</p></div><StatusBadge value={billingFollowUpCount ? "billing_follow_up" : "ready"} /></div><div className="encounter-readiness-grid">{completionChecks.map((check) => <div className="encounter-readiness-item" key={check.label}><StatusBadge value={check.status} /><div><strong>{check.label}</strong><span>{check.detail}</span></div></div>)}</div><div className="encounter-nonblocking-note">{billingFollowUpCount ? `${billingFollowUpCount} item(s) still need billing/coding follow-up. You may still sign the clinical note; THERASSISTANT will route those issues outside the clinical workflow.` : "The clinical record and current billing details are ready for handoff."}</div>{signed ? <div className="encounter-signed-handoff"><div><strong>Signed clinical record → Charge Capture</strong><span>The note is locked. Billing/coding corrections can continue without changing provider documentation.</span></div><Link href="/billing/charges" className="thera-action">Open Charge Capture</Link></div> : <div className="encounter-sign-row"><label><div className="thera-field-label">Provider Signature</div><input className="thera-input" value={signatureText} onChange={(event) => setSignatureText(event.target.value)} placeholder="Provider signature" /></label><button type="button" className="thera-action" disabled={saving || !noteText.trim() || !signatureText.trim()} onClick={() => void sign()}>{saving ? "Signing..." : "Sign & Lock Note"}</button></div>}</section>
       </div>
     </>

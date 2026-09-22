@@ -1,35 +1,27 @@
 import { useEffect, useState } from "react";
 
-import { searchIcd10, type Icd10SearchResult } from "./icd10";
+import { searchProcedureCodes, type ProcedureCodeSearchResult } from "./procedure-codes";
 
 type Props = {
   code: string;
-  description: string;
   disabled?: boolean;
   serviceDate?: string;
-  onSelect: (result: Icd10SearchResult) => void;
+  onSelect: (result: ProcedureCodeSearchResult) => void;
 };
 
-export function Icd10SearchInput({
-  code,
-  description,
-  disabled = false,
-  serviceDate,
-  onSelect,
-}: Props) {
+export function ProcedureCodeSearchInput({ code, disabled = false, serviceDate, onSelect }: Props) {
   const [query, setQuery] = useState(code);
-  const [results, setResults] = useState<Icd10SearchResult[]>([]);
+  const [results, setResults] = useState<ProcedureCodeSearchResult[]>([]);
   const [searching, setSearching] = useState(false);
   const [open, setOpen] = useState(false);
 
   useEffect(() => {
-    if (!code) return;
-    setQuery(description ? `${code} — ${description}` : code);
-  }, [code, description]);
+    setQuery(code);
+  }, [code]);
 
   useEffect(() => {
-    const raw = query.trim();
-    if (raw.length < 2 || (description && raw === `${code} — ${description}`)) {
+    const value = query.trim();
+    if (value.length < 2 || value === code) {
       setResults([]);
       setOpen(false);
       return;
@@ -38,7 +30,7 @@ export function Icd10SearchInput({
     const controller = new AbortController();
     const timer = window.setTimeout(() => {
       setSearching(true);
-      searchIcd10(raw, serviceDate, controller.signal)
+      searchProcedureCodes(value, serviceDate, controller.signal)
         .then((next) => {
           setResults(next);
           setOpen(next.length > 0);
@@ -50,17 +42,17 @@ export function Icd10SearchInput({
           }
         })
         .finally(() => setSearching(false));
-    }, 250);
+    }, 225);
 
     return () => {
       window.clearTimeout(timer);
       controller.abort();
     };
-  }, [query, code, description, serviceDate]);
+  }, [query, code, serviceDate]);
 
-  function choose(result: Icd10SearchResult) {
+  function choose(result: ProcedureCodeSearchResult) {
     onSelect(result);
-    setQuery(`${result.code} — ${result.name}`);
+    setQuery(result.code);
     setResults([]);
     setOpen(false);
   }
@@ -71,35 +63,30 @@ export function Icd10SearchInput({
         className="thera-input"
         value={query}
         disabled={disabled}
-        placeholder="Search ICD-10-CM code or diagnosis"
+        placeholder="Search CPT / HCPCS"
         autoComplete="off"
         onFocus={() => setOpen(results.length > 0)}
         onBlur={() => window.setTimeout(() => setOpen(false), 120)}
         onChange={(event) => {
-          const value = event.target.value;
+          const value = event.target.value.toUpperCase();
           setQuery(value);
-          const manualCode = value.trim().toUpperCase();
-          if (/^[A-Z][0-9A-Z]{2}(?:\.[0-9A-Z]{1,4})?$/.test(manualCode)) {
-            onSelect({ code: manualCode, name: "" });
+          if (/^[A-Z0-9]{4,5}$/.test(value.trim())) {
+            onSelect({ code: value.trim(), name: "", system: "", descriptionSource: "" });
           }
         }}
       />
-      {searching ? (
-        <div className="thera-table-subtext" style={{ marginTop: 4 }}>
-          Searching ICD-10-CM…
-        </div>
-      ) : null}
+      {searching ? <div className="thera-table-subtext" style={{ marginTop: 4 }}>Searching code library…</div> : null}
       {open && results.length ? (
         <div
           role="listbox"
-          aria-label="ICD-10-CM search results"
+          aria-label="Procedure code search results"
           style={{
             position: "absolute",
             zIndex: 30,
             top: "calc(100% + 4px)",
             left: 0,
             right: 0,
-            maxHeight: 280,
+            maxHeight: 300,
             overflowY: "auto",
             border: "1px solid var(--thera-border)",
             borderRadius: 8,
@@ -109,7 +96,7 @@ export function Icd10SearchInput({
         >
           {results.map((result) => (
             <button
-              key={result.code}
+              key={`${result.system}:${result.code}`}
               type="button"
               role="option"
               onMouseDown={(event) => event.preventDefault()}
@@ -126,7 +113,10 @@ export function Icd10SearchInput({
                 cursor: "pointer",
               }}
             >
-              <strong>{result.code}</strong>
+              <span style={{ display: "flex", justifyContent: "space-between", gap: 8 }}>
+                <strong>{result.code}</strong>
+                <small>{result.system}</small>
+              </span>
               <span className="thera-table-subtext">{result.name}</span>
             </button>
           ))}

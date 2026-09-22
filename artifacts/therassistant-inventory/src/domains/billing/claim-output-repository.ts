@@ -57,6 +57,107 @@ export function read837PConfig(settings: unknown): Edi837PConfig {
   };
 }
 
+function rowName(row: DataRow | null | undefined) {
+  if (!row) return "—";
+  return [row.first_name, row.last_name].filter(Boolean).join(" ") || "—";
+}
+
+function choosePrimaryPolicy(
+  policies: DataRow[],
+  clientId: string,
+  payerId: string,
+) {
+  return (
+    policies.find(
+      (row) =>
+        String(row.client_id ?? "") === clientId &&
+        String(row.payer_id ?? "") === payerId &&
+        String(row.status ?? "") === "active" &&
+        String(row.insurance_order ?? "") === "primary",
+    ) ??
+    policies.find(
+      (row) =>
+        String(row.client_id ?? "") === clientId &&
+        String(row.payer_id ?? "") === payerId &&
+        String(row.insurance_order ?? "") === "primary",
+    ) ??
+    policies.find(
+      (row) =>
+        String(row.client_id ?? "") === clientId &&
+        String(row.payer_id ?? "") === payerId,
+    ) ??
+    null
+  );
+}
+
+export async function getClaimPreviewData(claimId: string): Promise<{
+  edi: Edi837PConfig;
+  item: ClaimOutputItem;
+}> {
+  const claims = await tenantSelect<DataRow>("professional_claims", {
+    id: `eq.${claimId}`,
+    limit: "1",
+  });
+  const claim = claims[0];
+  if (!claim) throw new Error("Claim not found.");
+
+  const tenantId = await getCurrentTenantId();
+  const clientId = String(claim.client_id ?? "");
+  const payerId = String(claim.payer_id ?? "");
+  const providerId = String(claim.rendering_provider_id ?? "");
+
+  const [tenantRows, lines, diagnoses, clients, providers, payers, policies] = await Promise.all([
+    referenceSelect<DataRow>("tenants", { id: `eq.${tenantId}`, limit: "1" }),
+    tenantSelect<DataRow>("professional_claim_lines", {
+      claim_id: `eq.${claimId}`,
+      order: "service_date.asc,created_at.asc",
+    }),
+    tenantSelect<DataRow>("claim_diagnoses", {
+      claim_id: `eq.${claimId}`,
+      order: "pointer_order.asc",
+    }),
+    clientId
+      ? tenantSelect<DataRow>("clients", { id: `eq.${clientId}`, limit: "1" })
+      : Promise.resolve([]),
+    providerId
+      ? tenantSelect<DataRow>("providers", { id: `eq.${providerId}`, limit: "1" })
+      : Promise.resolve([]),
+    payerId
+      ? referenceSelect<DataRow>("payers", { id: `eq.${payerId}`, limit: "1" })
+      : Promise.resolve([]),
+    clientId
+      ? tenantSelect<DataRow>("client_insurance_policies", {
+          client_id: `eq.${clientId}`,
+          order: "created_at.desc",
+        })
+      : Promise.resolve([]),
+  ]);
+
+  const client = clients[0] ?? null;
+  const provider = providers[0] ?? null;
+  const payer = payers[0] ?? null;
+  const policy = choosePrimaryPolicy(policies, clientId, payerId);
+  const edi = read837PConfig(tenantRows[0]?.settings);
+
+  return {
+    edi,
+    item: {
+      claim: {
+        ...claim,
+        clientName: rowName(client),
+        providerName: rowName(provider),
+        payerName: String(payer?.name ?? "—"),
+      },
+      lines,
+      diagnoses,
+      client,
+      provider,
+      payer,
+      policy,
+    },
+  };
+}
+
 export async function getBatchExportData(batchId: string): Promise<BatchOutputData> {
   const data = await getClaimSubmissionData();
   const batch = data.batches.find((row) => row.id === batchId);
