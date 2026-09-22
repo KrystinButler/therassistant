@@ -5,17 +5,21 @@ import { StatusBadge } from "../../components/status-badge";
 import { dateTime, money, shortDate } from "../../lib/format";
 import { getClaim360Data } from "./repository";
 import { getClaim360RelationshipsData } from "./relationships-repository";
+import { getCms1500PreviewData } from "./cms1500-repository";
+import { Cms1500Preview } from "./Cms1500Preview";
 
 type BaseData = Awaited<ReturnType<typeof getClaim360Data>>;
 type RelationshipData = Awaited<ReturnType<typeof getClaim360RelationshipsData>>;
 type Data = Omit<BaseData, "submissions" | "workItems"> & Pick<RelationshipData, "submissions" | "workItems">;
+type PreviewData = Awaited<ReturnType<typeof getCms1500PreviewData>>;
 
-type Tab = "overview" | "lines" | "history" | "responses" | "denials" | "work";
+type Tab = "overview" | "preview" | "lines" | "history" | "responses" | "denials" | "work";
 
 export function Claim360Page() {
   const [, params] = useRoute<{ id: string }>("/claims/:id");
   const claimId = params?.id ?? "";
   const [data, setData] = useState<Data | null>(null);
+  const [preview, setPreview] = useState<PreviewData | null>(null);
   const [tab, setTab] = useState<Tab>("overview");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -27,13 +31,15 @@ export function Claim360Page() {
     void Promise.all([
       getClaim360Data(claimId),
       getClaim360RelationshipsData(claimId),
+      getCms1500PreviewData(claimId),
     ])
-      .then(([base, relationships]) => {
+      .then(([base, relationships, previewData]) => {
         setData({
           ...base,
           submissions: relationships.submissions,
           workItems: relationships.workItems,
         });
+        setPreview(previewData);
       })
       .catch((err) => setError(err instanceof Error ? err.message : "Unable to load claim."))
       .finally(() => setLoading(false));
@@ -64,6 +70,7 @@ export function Claim360Page() {
 
       <div className="thera-tabs" style={{ marginBottom: 16 }}>
         <TabButton active={tab === "overview"} onClick={() => setTab("overview")} label="Overview" />
+        <TabButton active={tab === "preview"} onClick={() => setTab("preview")} label="CMS-1500 Preview" />
         <TabButton active={tab === "lines"} onClick={() => setTab("lines")} label={`Lines & Diagnoses (${data.lines.length})`} />
         <TabButton active={tab === "history"} onClick={() => setTab("history")} label={`Status History (${data.history.length})`} />
         <TabButton active={tab === "responses"} onClick={() => setTab("responses")} label={`Submissions / Responses (${data.submissions.length + data.responses.length})`} />
@@ -72,6 +79,8 @@ export function Claim360Page() {
       </div>
 
       {tab === "overview" && <Overview data={data} />}
+      {tab === "preview" && preview && <Cms1500Preview {...preview} />}
+      {tab === "preview" && !preview && <div className="thera-state">CMS-1500 preview data is unavailable.</div>}
       {tab === "lines" && <Lines data={data} />}
       {tab === "history" && <History rows={data.history} />}
       {tab === "responses" && <Responses data={data} />}
