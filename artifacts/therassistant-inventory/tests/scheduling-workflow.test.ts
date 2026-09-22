@@ -8,14 +8,15 @@ const {
 } = schedulingWorkflow;
 
 type SchedulePresentation = {
-  checkInStatus: "Not Checked-In" | "Ready" | "In Progress" | "Balance Issues";
-  preVisitInsights: Array<{ label: string; value: string }>;
+  checkInStatus: "Not Checked In" | "Ready" | "In Progress" | "Balance Issues";
+  preVisitInsights: Array<{ label: string; value: string; tone: "positive" | "warning" | "neutral" }>;
   sessionFocus: string | null;
 };
 
 type PresentationBuilder = (
   checkin: Record<string, unknown> | null,
-  openBalanceCents: number,
+  balanceIssue: boolean,
+  journalShared?: boolean,
 ) => SchedulePresentation;
 
 const buildSchedulePatientPresentation = (
@@ -50,22 +51,22 @@ test("appointment input derives workflow context instead of accepting insurance 
 test("schedule check-in status is restricted to the four approved states", () => {
   const build = buildSchedulePatientPresentation;
 
-  assert.equal(build?.(null, 0).checkInStatus, "Not Checked-In");
+  assert.equal(build?.(null, 0).checkInStatus, "Not Checked In");
   assert.equal(
-    build?.({ responses: { pre_visit: { updated_at: "2026-09-17T08:00:00Z" } } }, 0).checkInStatus,
+    build?.({ responses: { pre_visit: { updated_at: "2026-09-17T08:00:00Z" } } }, false).checkInStatus,
     "In Progress",
   );
   assert.equal(
-    build?.({ responses: { pre_visit: { submitted_at: "2026-09-17T08:05:00Z" } } }, 0).checkInStatus,
+    build?.({ responses: { pre_visit: { submitted_at: "2026-09-17T08:05:00Z" } } }, false).checkInStatus,
     "Ready",
   );
   assert.equal(
-    build?.({ responses: { pre_visit: { submitted_at: "2026-09-17T08:05:00Z" } } }, 2500).checkInStatus,
+    build?.({ responses: { pre_visit: { submitted_at: "2026-09-17T08:05:00Z" } } }, true).checkInStatus,
     "Balance Issues",
   );
 });
 
-test("pre-visit insight contains only patient check-in answers and session focus uses focus_today", () => {
+test("pre-visit insight is limited to positive or negative signal plus journal-shared status", () => {
   const presentation = buildSchedulePatientPresentation?.({
     responses: {
       pre_visit: {
@@ -80,16 +81,13 @@ test("pre-visit insight contains only patient check-in answers and session focus
         },
       },
     },
-  }, 0);
+  }, false, true);
 
   assert.ok(presentation);
   assert.equal(presentation.sessionFocus, "Work on sleep and racing thoughts");
   assert.deepEqual(presentation.preVisitInsights, [
-    { label: "Since last visit", value: "More anxious this week" },
-    { label: "Important changes", value: "Started a new job" },
-    { label: "Safety concerns", value: "None" },
-    { label: "Treatment goal", value: "Use grounding skills more consistently" },
-    { label: "Anything else", value: "No additional concerns" },
+    { label: "Check-In", value: "Negative", tone: "warning" },
+    { label: "Journal", value: "Shared", tone: "neutral" },
   ]);
   assert.equal(
     presentation.preVisitInsights.some((insight) => insight.value === presentation.sessionFocus),

@@ -2,6 +2,7 @@ import {
   tenantInsert,
   tenantSelect,
   tenantUpdate,
+  getCurrentTenantId,
   referenceSelect,
   type Row,
 } from "../../lib/tenant-data-client";
@@ -129,6 +130,7 @@ function currentTreatmentPlan(
 }
 
 export async function getScheduleData(): Promise<ScheduleData> {
+  const tenantId = await getCurrentTenantId();
   const [
     appointments,
     clients,
@@ -140,6 +142,9 @@ export async function getScheduleData(): Promise<ScheduleData> {
     checkins,
     journalEntries,
     balances,
+    paymentPlans,
+    balanceExceptions,
+    tenantRows,
     payers,
     plans,
   ] = await Promise.all([
@@ -153,6 +158,9 @@ export async function getScheduleData(): Promise<ScheduleData> {
     tenantSelect<DataRow>("client_checkins"),
     tenantSelect<DataRow>("patient_journal_entries", { order: "entry_date.desc,created_at.desc" }),
     tenantSelect<DataRow>("client_balance_summaries"),
+    tenantSelect<DataRow>("patient_payment_plans"),
+    tenantSelect<DataRow>("portal_balance_exception_requests"),
+    referenceSelect<DataRow>("tenants", { id: `eq.${tenantId}`, limit: "1" }),
     referenceSelect<DataRow>("payers", { order: "name.asc" }),
     referenceSelect<DataRow>("payer_plans", { order: "name.asc" }),
   ]);
@@ -167,15 +175,44 @@ export async function getScheduleData(): Promise<ScheduleData> {
   const balancesByClient = new Map(
     balances.map((row) => [String(row.client_id ?? ""), row]),
   );
-  const clientsWithSharedJournal = new Set(
-    journalEntries
-      .filter((row) =>
-        String(row.visibility ?? "") === "shared_with_provider" &&
-        String(row.entry_status ?? "submitted") !== "draft" &&
-        Boolean(String(row.entry_text ?? "").trim()),
-      )
+  const activePaymentPlanClients = new Set(
+    paymentPlans
+      .filter((row) => String(row.status ?? "") === "active")
       .map((row) => String(row.client_id ?? "")),
   );
+  const approvedBalanceExceptionClients = new Set(
+    balanceExceptions
+      .filter((row) => String(row.status ?? "") === "approved")
+      .map((row) => String(row.client_id ?? "")),
+  );
+  const tenantSettings = tenantRows[0]?.settings && typeof tenantRows[0].settings === "object"
+    ? tenantRows[0].settings as Record<string, unknown>
+    : {};
+  const configuredBalanceThreshold = Number(tenantSettings.portal_balance_threshold_cents ?? 0);
+  const balanceThresholdCents = Number.isFinite(configuredBalanceThreshold) && configuredBalanceThreshold >= 0
+    ? configuredBalanceThreshold
+    : 0;
+
+  function journalSharedForVisit(appointment: DataRow, clientId: string, serviceDate: string) {
+    const appointmentStart = String(appointment.starts_at ?? "");
+    const previousAppointment = appointments
+      .filter((row) =>
+        String(row.client_id ?? "") === clientId &&
+        String(row.starts_at ?? "") < appointmentStart
+      )
+      .sort((left, right) => String(right.starts_at ?? "").localeCompare(String(left.starts_at ?? "")))[0];
+    const previousServiceDate = String(previousAppointment?.starts_at ?? "").slice(0, 10);
+
+    return journalEntries.some((row) => {
+      if (String(row.client_id ?? "") !== clientId) return false;
+      if (String(row.visibility ?? "") !== "shared_with_provider") return false;
+      if (String(row.entry_status ?? "submitted") === "draft") return false;
+      if (!String(row.entry_text ?? "").trim()) return false;
+      const entryDate = String(row.entry_date ?? row.submitted_at ?? row.created_at ?? "").slice(0, 10);
+      if (!entryDate || entryDate > serviceDate) return false;
+      return !previousServiceDate || entryDate > previousServiceDate;
+    });
+  }
 
   const enriched = appointments.map((appointment): ScheduleAppointment => {
     const clientId = String(appointment.client_id ?? "");
@@ -201,10 +238,14 @@ export async function getScheduleData(): Promise<ScheduleData> {
     const openBalanceCents = Number(
       balancesByClient.get(clientId)?.open_balance_cents ?? 0,
     );
+    const balanceIssue =
+      openBalanceCents > balanceThresholdCents &&
+      !activePaymentPlanClients.has(clientId) &&
+      !approvedBalanceExceptionClients.has(clientId);
     const patientPresentation = buildSchedulePatientPresentation(
       checkin,
-      openBalanceCents,
-      clientsWithSharedJournal.has(clientId),
+      balanceIssue,
+      journalSharedForVisit(appointment, clientId, serviceDate),
     );
 
     const readiness = evaluatePreSession({

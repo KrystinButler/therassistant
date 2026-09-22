@@ -36,9 +36,15 @@ function recordOf(value: unknown): Record<string, unknown> {
     : {};
 }
 
+function negativePatientSignal(mood: string, changes: string[], additionalContext: string, safetyConcern: boolean | null) {
+  if (safetyConcern === true) return true;
+  const reported = [mood, ...changes, additionalContext].join(" ").toLowerCase();
+  return /\b(worse|worsened|struggling|overwhelmed|anxious|anxiety|panic|depressed|depression|sad|upset|angry|poor|difficult|hard|not good|declined)\b/.test(reported);
+}
+
 export function buildSchedulePatientPresentation(
   checkin: Record<string, unknown> | null,
-  openBalanceCents: number,
+  balanceIssue: boolean,
   journalShared = false,
 ): SchedulePatientPresentation {
   const responses = recordOf(checkin?.responses);
@@ -49,8 +55,8 @@ export function buildSchedulePatientPresentation(
   if (review.hasSubmittedPreVisit) {
     preVisitInsights.push({
       label: "Check-In",
-      value: review.safetyConcern === true ? "Needs Review" : "Positive",
-      tone: review.safetyConcern === true ? "warning" : "positive",
+      value: negativePatientSignal(review.mood, review.changes, review.additionalContext, review.safetyConcern) ? "Negative" : "Positive",
+      tone: negativePatientSignal(review.mood, review.changes, review.additionalContext, review.safetyConcern) ? "warning" : "positive",
     });
   }
   if (journalShared) {
@@ -69,7 +75,7 @@ export function buildSchedulePatientPresentation(
   );
 
   let checkInStatus: ScheduleCheckInStatus = "Not Checked In";
-  if (openBalanceCents > 0) checkInStatus = "Balance Issues";
+  if (balanceIssue) checkInStatus = "Balance Issues";
   else if (checkInComplete) checkInStatus = "Ready";
   else if (checkInStarted) checkInStatus = "In Progress";
 

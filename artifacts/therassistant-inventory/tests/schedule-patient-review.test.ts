@@ -30,6 +30,7 @@ test("schedule exposes only limited pre-visit insight", () => {
     assert.match(workflow, new RegExp(state));
   }
   assert.match(workflow, /label: "Check-In"/);
+  assert.match(workflow, /"Negative" : "Positive"/);
   assert.match(workflow, /label: "Journal"/);
   assert.doesNotMatch(workflow, /Since last visit|Important changes|Safety concerns|Anything else/);
 });
