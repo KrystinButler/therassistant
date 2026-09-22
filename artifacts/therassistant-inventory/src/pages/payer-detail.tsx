@@ -2,23 +2,13 @@ import { useEffect, useState } from "react";
 import { Link, useRoute } from "wouter";
 import { StatusBadge } from "../components/status-badge";
 import { buildPayer360View } from "../domains/credentialing/payer-360";
-import { tenantSelect, referenceSelect } from "../lib/tenant-data-client";
+import { tenantInsert, tenantSelect, tenantUpdate, referenceSelect } from "../lib/tenant-data-client";
 import { money, shortDate } from "../lib/format";
 
 type Row = Record<string, any>;
 type View = ReturnType<typeof buildPayer360View>;
 
-type ModalKind = "plan" | "contract" | "schedule" | "rate" | null;
-
-async function apiJson(path: string, init: RequestInit) {
-  const response = await fetch(path, {
-    ...init,
-    headers: { Accept: "application/json", "Content-Type": "application/json", ...(init.headers ?? {}) },
-  });
-  const body = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(body.error || `Request failed (${response.status})`);
-  return body;
-}
+type ModalKind = "contract" | "schedule" | "rate" | null;
 
 export function PayerDetailPage() {
   const [, params] = useRoute<{ id: string }>("/payers/:id");
@@ -62,32 +52,35 @@ export function PayerDetailPage() {
     if (!view || !modal) return;
     setError(null);
     try {
-      if (modal === "plan") {
-        await apiJson(`/api/payers/${payerId}/plans`, {
-          method: "POST",
-          body: JSON.stringify({ name: form.name, plan_type: form.plan_type || null }),
-        });
-      } else if (modal === "contract") {
-        await apiJson(`/api/payers/${payerId}/contracts`, {
-          method: "POST",
-          body: JSON.stringify({ contract_name: form.contract_name, status: form.status || "draft", effective_date: form.effective_date || null, notes: form.notes || null }),
+      if (modal === "contract") {
+        if (!form.contract_name?.trim()) return;
+        await tenantInsert("payer_contracts", {
+          payer_id: payerId,
+          contract_name: form.contract_name.trim(),
+          status: form.status || "draft",
+          effective_date: form.effective_date || null,
+          notes: form.notes || null,
         });
       } else if (modal === "schedule") {
-        if (!form.contract_id) return;
-        await apiJson(`/api/payers/${payerId}/contracts/${form.contract_id}/fee-schedules`, {
-          method: "POST",
-          body: JSON.stringify({ name: form.name, status: form.status || "draft", effective_date: form.effective_date || null }),
+        if (!form.contract_id || !form.name?.trim()) return;
+        await tenantInsert("fee_schedules", {
+          payer_contract_id: form.contract_id,
+          name: form.name.trim(),
+          status: form.status || "draft",
+          effective_date: form.effective_date || null,
         });
       } else if (modal === "rate") {
-        if (!form.schedule_id) return;
-        await apiJson(`/api/payers/${payerId}/fee-schedules/${form.schedule_id}/lines`, {
-          method: "POST",
-          body: JSON.stringify({
-            cpt_code: form.cpt_code,
-            modifier: form.modifier || null,
-            rate_cents: Math.round(Number(form.rate || 0) * 100),
-            unit_type: form.unit_type || null,
-          }),
+        if (!form.schedule_id || !form.cpt_code?.trim()) return;
+        const rateCents = Math.round(Number(form.rate || 0) * 100);
+        if (!Number.isFinite(rateCents) || rateCents < 0) {
+          throw new Error("Enter a valid non-negative rate.");
+        }
+        await tenantInsert("fee_schedule_lines", {
+          fee_schedule_id: form.schedule_id,
+          cpt_code: form.cpt_code.trim(),
+          modifier: form.modifier || null,
+          rate_cents: rateCents,
+          unit_type: form.unit_type || "service",
         });
       }
       setModal(null);
@@ -101,12 +94,11 @@ export function PayerDetailPage() {
   async function updateContract(contract: Row, status: string) {
     setError(null);
     try {
-      await apiJson(`/api/payers/${payerId}/contracts/${contract.id}`, {
-        method: "PATCH",
-        body: JSON.stringify({
-          status,
-          termination_date: status === "terminated" ? new Date().toISOString().slice(0, 10) : null,
-        }),
+      await tenantUpdate("payer_contracts", String(contract.id), {
+        status,
+        termination_date: status === "terminated"
+          ? new Date().toISOString().slice(0, 10)
+          : null,
       });
       setVersion((value) => value + 1);
     } catch (err) {
@@ -125,12 +117,11 @@ export function PayerDetailPage() {
       <div className="thera-breadcrumb"><Link href="/payers-contracts" className="thera-link">Payers & Contracts</Link><span>/</span><span>{view.payer.name}</span></div>
       <div className="thera-page-header split">
         <div>
-          <div className="thera-eyebrow">PAYER 360</div>
+          <div className="thera-eyebrow">OPERATE · COLORADO PAYER PROFILE</div>
           <h1>{view.payer.name}</h1>
-          <p>{view.payer.payer_type || "Payer"} · Clearinghouse ID {view.payer.clearinghouse_payer_id || "not configured"}</p>
+          <p>{view.payer.payer_type || "Payer"} · Shared payer knowledge for eligibility, participation, claims, payment, credentialing, and reimbursement.</p>
         </div>
         <div className="thera-filter-row">
-          <button type="button" className="thera-action secondary" onClick={() => open("plan", { name: "", plan_type: "" })}>+ Plan</button>
           <button type="button" className="thera-action secondary" onClick={() => open("contract", { contract_name: "", status: "draft", effective_date: "", notes: "" })}>+ Contract</button>
           <button type="button" className="thera-action secondary" onClick={() => open("schedule", { contract_id: view.contracts[0]?.id || "", name: "", status: "draft", effective_date: "" })}>+ Fee Schedule</button>
           <button type="button" className="thera-action" onClick={() => open("rate", { schedule_id: schedules[0]?.id || "", cpt_code: "", modifier: "", rate: "", unit_type: "service" })}>+ Rate</button>
@@ -158,7 +149,7 @@ export function PayerDetailPage() {
         </section>
 
         <section className="thera-card">
-          <div className="thera-card-header"><div><h2>Plans & Products</h2><p>Products associated with this payer.</p></div><button type="button" className="thera-action secondary" onClick={() => open("plan", { name: "", plan_type: "" })}>+ Plan</button></div>
+          <div className="thera-card-header"><div><h2>Plans & Products</h2><p>Reference products associated with this payer and reused across coverage and credentialing workflows.</p></div></div>
           <div className="thera-table-wrap"><table className="thera-table"><thead><tr><th>Plan</th><th>Type</th></tr></thead><tbody>{view.plans.length === 0 && <tr><td colSpan={2}>No plans on file.</td></tr>}{view.plans.map((plan) => <tr key={plan.id}><td>{plan.name}</td><td>{plan.plan_type || "—"}</td></tr>)}</tbody></table></div>
         </section>
 
@@ -187,7 +178,6 @@ export function PayerDetailPage() {
       </div>
 
       {modal && <Modal title={modalTitle(modal)} onClose={() => setModal(null)}>
-        {modal === "plan" && <Grid><Input label="Plan Name" value={form.name || ""} onChange={(value) => setForm({ ...form, name: value })} /><Input label="Plan Type" value={form.plan_type || ""} onChange={(value) => setForm({ ...form, plan_type: value })} /></Grid>}
         {modal === "contract" && <Grid><Input label="Contract Name" value={form.contract_name || ""} onChange={(value) => setForm({ ...form, contract_name: value })} /><Select label="Status" value={form.status || "draft"} options={["draft", "pending", "active"]} onChange={(value) => setForm({ ...form, status: value })} /><Input label="Effective Date" type="date" value={form.effective_date || ""} onChange={(value) => setForm({ ...form, effective_date: value })} /><Input label="Notes" value={form.notes || ""} onChange={(value) => setForm({ ...form, notes: value })} /></Grid>}
         {modal === "schedule" && <Grid><Select label="Contract" value={form.contract_id || ""} options={view.contracts.map((contract) => ({ value: contract.id, label: contract.contract_name }))} onChange={(value) => setForm({ ...form, contract_id: value })} /><Input label="Schedule Name" value={form.name || ""} onChange={(value) => setForm({ ...form, name: value })} /><Select label="Status" value={form.status || "draft"} options={["draft", "pending", "active"]} onChange={(value) => setForm({ ...form, status: value })} /><Input label="Effective Date" type="date" value={form.effective_date || ""} onChange={(value) => setForm({ ...form, effective_date: value })} /></Grid>}
         {modal === "rate" && <Grid><Select label="Fee Schedule" value={form.schedule_id || ""} options={schedules.map((schedule) => ({ value: schedule.id, label: schedule.name }))} onChange={(value) => setForm({ ...form, schedule_id: value })} /><Input label="CPT Code" value={form.cpt_code || ""} onChange={(value) => setForm({ ...form, cpt_code: value })} /><Input label="Modifier" value={form.modifier || ""} onChange={(value) => setForm({ ...form, modifier: value })} /><Input label="Rate ($)" type="number" value={form.rate || ""} onChange={(value) => setForm({ ...form, rate: value })} /><Input label="Unit Type" value={form.unit_type || ""} onChange={(value) => setForm({ ...form, unit_type: value })} /></Grid>}
@@ -218,7 +208,6 @@ function Modal({ title, children, onClose }: { title: string; children: React.Re
 }
 
 function modalTitle(kind: Exclude<ModalKind, null>) {
-  if (kind === "plan") return "Add Payer Plan";
   if (kind === "contract") return "Add Contract";
   if (kind === "schedule") return "Add Fee Schedule";
   return "Add Fee Schedule Rate";
