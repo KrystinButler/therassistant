@@ -144,9 +144,9 @@ export function DenialsPage() {
   return (
     <>
       <div className="thera-page-header">
-        <div className="thera-eyebrow">PAYER DENIAL WORK</div>
-        <h1>Denials</h1>
-        <p>Work active denials by payer and CARC, with corrected claims, appeals, and deferred follow-up kept in the same payer queue.</p>
+        <div className="thera-eyebrow">GET PAID · CARC/RARC FOLLOW-UP</div>
+        <h1>Denials, Appeals & A/R</h1>
+        <p>Resolve denials by payer and CARC/RARC with corrected claims, appeals, deadlines, and deferred follow-up kept in the same connected account workflow.</p>
       </div>
 
       {error && <div className="thera-state error" style={{ marginBottom: 12 }}>{error}</div>}
