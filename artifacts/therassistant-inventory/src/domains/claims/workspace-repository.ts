@@ -26,7 +26,9 @@ export type ClaimsWorkspaceRow = DataRow & {
   diagnosisCodes: string[];
 };
 export type ClaimWorkData = { claim: DataRow; lines: DataRow[]; diagnoses: DataRow[]; responses: DataRow[]; denials: DataRow[]; appeals: DataRow[]; workItems: DataRow[]; history: DataRow[] };
-export type ClaimWorkFieldValues = { patient_control_number: string; payer_claim_number: string; service_date_from: string; service_date_to: string; place_of_service_code: string; claim_frequency_code: string; total_charge_cents: number };
+export type ClaimWorkFieldValues = { patient_control_number: string; payer_claim_number: string; service_date_from: string; service_date_to: string; total_charge_cents: number };
+export type ClaimLineCorrection = { id: string; service_date: string; cpt_code: string; modifier1: string; modifier2: string; diagnosis_pointer: string; place_of_service: string; units: number; charge_amount_cents: number };
+export type ClaimDiagnosisCorrection = { id: string; diagnosis_code: string; pointer_order: number };
 
 function personName(row?: Row) { if (!row) return "—"; return [row.first_name, row.last_name].filter(Boolean).join(" ") || "—"; }
 function total(rows: DataRow[], field: string) { return rows.reduce((sum, row) => sum + Number(row[field] ?? 0), 0); }
@@ -50,13 +52,41 @@ export async function saveClaimWorkFields(claimId: string, values: ClaimWorkFiel
     payer_claim_number: values.payer_claim_number.trim() || null,
     service_date_from: values.service_date_from || null,
     service_date_to: values.service_date_to || null,
-    place_of_service_code: values.place_of_service_code.trim() || null,
-    claim_frequency_code: values.claim_frequency_code.trim() || null,
     total_charge_cents: Math.max(0, Math.round(values.total_charge_cents)),
     ...(nextStatus !== oldStatus ? { claim_status: nextStatus } : {}),
   });
   if (nextStatus !== oldStatus) await tenantInsert<DataRow>("claim_status_history", { claim_id: claimId, old_status: oldStatus, new_status: nextStatus, reason: "Claim fields corrected in work drawer." });
   return revalidate ? validateClaim(claimId) : { kind: "success" as const };
+}
+
+export async function saveClaimLineCorrections(claimId: string, rows: ClaimLineCorrection[]) {
+  const current = await tenantSelect<DataRow>("professional_claim_lines", { claim_id: `eq.${claimId}` });
+  const allowed = new Set(current.map((row) => row.id));
+  for (const row of rows) {
+    if (!allowed.has(row.id)) continue;
+    await tenantUpdate<DataRow>("professional_claim_lines", row.id, {
+      service_date: row.service_date || null,
+      cpt_code: row.cpt_code.trim().toUpperCase(),
+      modifier1: row.modifier1.trim().toUpperCase() || null,
+      modifier2: row.modifier2.trim().toUpperCase() || null,
+      diagnosis_pointer: row.diagnosis_pointer.trim() || null,
+      place_of_service: row.place_of_service.trim() || null,
+      units: Number(row.units || 0),
+      charge_amount_cents: Math.max(0, Math.round(Number(row.charge_amount_cents || 0))),
+    });
+  }
+}
+
+export async function saveClaimDiagnosisCorrections(claimId: string, rows: ClaimDiagnosisCorrection[]) {
+  const current = await tenantSelect<DataRow>("claim_diagnoses", { claim_id: `eq.${claimId}` });
+  const allowed = new Set(current.map((row) => row.id));
+  for (const row of rows) {
+    if (!allowed.has(row.id)) continue;
+    await tenantUpdate<DataRow>("claim_diagnoses", row.id, {
+      diagnosis_code: row.diagnosis_code.trim().toUpperCase(),
+      pointer_order: Math.max(1, Math.round(Number(row.pointer_order || 1))),
+    });
+  }
 }
 
 export async function getClaimsWorkspaceData() {
