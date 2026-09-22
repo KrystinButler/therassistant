@@ -6,6 +6,7 @@ type Props = {
   code: string;
   description: string;
   disabled?: boolean;
+  serviceDate?: string;
   onSelect: (result: Icd10SearchResult) => void;
 };
 
@@ -13,6 +14,7 @@ export function Icd10SearchInput({
   code,
   description,
   disabled = false,
+  serviceDate,
   onSelect,
 }: Props) {
   const [query, setQuery] = useState(code);
@@ -36,7 +38,7 @@ export function Icd10SearchInput({
     const controller = new AbortController();
     const timer = window.setTimeout(() => {
       setSearching(true);
-      searchIcd10(raw, controller.signal)
+      searchIcd10(raw, serviceDate, controller.signal)
         .then((next) => {
           setResults(next);
           setOpen(next.length > 0);
@@ -54,7 +56,7 @@ export function Icd10SearchInput({
       window.clearTimeout(timer);
       controller.abort();
     };
-  }, [query, code, description]);
+  }, [query, code, description, serviceDate]);
 
   function choose(result: Icd10SearchResult) {
     onSelect(result);

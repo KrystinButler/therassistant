@@ -12,7 +12,7 @@ type SupabaseIcd10Row = {
 
 const NLM_FALLBACK_URL = "https://clinicaltables.nlm.nih.gov/api/icd10cm/v3/search";
 
-async function searchSupabase(value: string, signal?: AbortSignal): Promise<Icd10SearchResult[]> {
+async function searchSupabase(value: string, serviceDate?: string, signal?: AbortSignal): Promise<Icd10SearchResult[]> {
   const response = await authenticatedFetch(
     new URL(`${SUPABASE_URL}/rest/v1/rpc/search_icd10_codes`),
     {
@@ -21,7 +21,7 @@ async function searchSupabase(value: string, signal?: AbortSignal): Promise<Icd1
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         p_search: value,
-        p_service_date: new Date().toISOString().slice(0, 10),
+        p_service_date: serviceDate || new Date().toISOString().slice(0, 10),
         p_limit: 15,
       }),
     },
@@ -65,13 +65,14 @@ async function searchNlm(value: string, signal?: AbortSignal): Promise<Icd10Sear
 
 export async function searchIcd10(
   terms: string,
+  serviceDate?: string,
   signal?: AbortSignal,
 ): Promise<Icd10SearchResult[]> {
   const value = terms.trim();
   if (value.length < 2) return [];
 
   try {
-    const local = await searchSupabase(value, signal);
+    const local = await searchSupabase(value, serviceDate, signal);
     if (local.length) return local;
   } catch (error) {
     if ((error as Error).name === "AbortError") throw error;

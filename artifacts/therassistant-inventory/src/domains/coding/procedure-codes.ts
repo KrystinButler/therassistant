@@ -16,6 +16,7 @@ type ProcedureRow = {
 
 export async function searchProcedureCodes(
   terms: string,
+  serviceDate?: string,
   signal?: AbortSignal,
 ): Promise<ProcedureCodeSearchResult[]> {
   const value = terms.trim();
@@ -29,7 +30,7 @@ export async function searchProcedureCodes(
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         p_search: value,
-        p_service_date: new Date().toISOString().slice(0, 10),
+        p_service_date: serviceDate || new Date().toISOString().slice(0, 10),
         p_limit: 20,
       }),
     },

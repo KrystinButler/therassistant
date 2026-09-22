@@ -5,10 +5,11 @@ import { searchProcedureCodes, type ProcedureCodeSearchResult } from "./procedur
 type Props = {
   code: string;
   disabled?: boolean;
+  serviceDate?: string;
   onSelect: (result: ProcedureCodeSearchResult) => void;
 };
 
-export function ProcedureCodeSearchInput({ code, disabled = false, onSelect }: Props) {
+export function ProcedureCodeSearchInput({ code, disabled = false, serviceDate, onSelect }: Props) {
   const [query, setQuery] = useState(code);
   const [results, setResults] = useState<ProcedureCodeSearchResult[]>([]);
   const [searching, setSearching] = useState(false);
@@ -29,7 +30,7 @@ export function ProcedureCodeSearchInput({ code, disabled = false, onSelect }: P
     const controller = new AbortController();
     const timer = window.setTimeout(() => {
       setSearching(true);
-      searchProcedureCodes(value, controller.signal)
+      searchProcedureCodes(value, serviceDate, controller.signal)
         .then((next) => {
           setResults(next);
           setOpen(next.length > 0);
@@ -47,7 +48,7 @@ export function ProcedureCodeSearchInput({ code, disabled = false, onSelect }: P
       window.clearTimeout(timer);
       controller.abort();
     };
-  }, [query, code]);
+  }, [query, code, serviceDate]);
 
   function choose(result: ProcedureCodeSearchResult) {
     onSelect(result);
