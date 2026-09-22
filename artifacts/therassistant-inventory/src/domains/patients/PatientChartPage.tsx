@@ -6,6 +6,7 @@ import { dateTime, money, shortDate } from "../../lib/format";
 import { getClientChartRelationships } from "../clients/repository";
 import { DocumentsPanel } from "../documents/DocumentsPanel";
 import { InsurancePanel } from "../insurance/InsurancePanel";
+import { OutcomeMeasuresPanel } from "../outcomes/OutcomeMeasuresPanel";
 import { JournalPanel } from "../journal/JournalPanel";
 import { PortalAccessPanel } from "../portal/PortalAccessPanel";
 import { TreatmentPlanPanel } from "../treatment-plans/TreatmentPlanPanel";
@@ -80,6 +81,7 @@ export function PatientChartPage() {
     {tab === "care" && <>
       <Appointments chart={chart} />
       <Encounters rows={relationships?.encounters ?? chart.encounters} />
+      <OutcomeMeasuresPanel patientId={chart.patient.id} />
       <TreatmentPlanPanel chart={chart} onChanged={load} />
       <ClinicalNotes chart={chart} />
       <Diagnoses chart={chart} />
