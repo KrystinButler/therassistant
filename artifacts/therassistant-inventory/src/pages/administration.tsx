@@ -21,7 +21,7 @@ export function AdministrationPage() {
       description:
         "System activity and protected-health-information access history.",
       href: "/administration/audit",
-      available: false,
+      available: true,
     },
     {
       name: "Practice Configuration",
@@ -37,14 +37,14 @@ export function AdministrationPage() {
       <div className="thera-page-header">
         <div>
           <div className="thera-eyebrow">
-            SYSTEM CONTROL
+            OPERATE · PRACTICE CONTROLS
           </div>
 
           <h1>Administration</h1>
 
           <p>
-            Configuration, access control, auditing,
-            and practice management.
+            Practice configuration, audit history, access controls,
+            imports, and connected operating controls.
           </p>
         </div>
       </div>
