@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link, useRoute } from "wouter";
 import { StatusBadge } from "../components/status-badge";
+import { PayerIntelligencePanel } from "../components/payer-intelligence-panel";
 import { buildProviderCredentialingView } from "../domains/credentialing/workflow";
 import { tenantInsert, tenantSelect, referenceSelect } from "../lib/tenant-data-client";
 import { money, shortDate } from "../lib/format";
@@ -43,6 +44,7 @@ export function ProviderDetailPage() {
   const [showIdentifier, setShowIdentifier] = useState(false);
   const [identifierForm, setIdentifierForm] = useState({ ...blankIdentifier });
   const [savingIdentifier, setSavingIdentifier] = useState(false);
+  const [payerInstructions, setPayerInstructions] = useState<{ payerId: string; payerName: string; applicationId?: string } | null>(null);
 
   useEffect(() => {
     if (!providerId) return;
@@ -367,9 +369,9 @@ export function ProviderDetailPage() {
           </div>
           <div className="thera-table-wrap">
             <table className="thera-table">
-              <thead><tr><th>Payer</th><th>Product</th><th>Type</th><th>Application</th><th>Enrollment</th><th>Participation</th><th>Directory</th><th>Submitted</th><th>Next Follow-Up</th></tr></thead>
+              <thead><tr><th>Payer</th><th>Product</th><th>Type</th><th>Application</th><th>Enrollment</th><th>Participation</th><th>Directory</th><th>Submitted</th><th>Next Follow-Up</th><th>Resources</th></tr></thead>
               <tbody>
-                {credentialingApplications.length === 0 && <tr><td colSpan={9}>No credentialing applications on file.</td></tr>}
+                {credentialingApplications.length === 0 && <tr><td colSpan={10}>No credentialing applications on file.</td></tr>}
                 {credentialingApplications.map((row) => (
                   <tr key={row.application_id}>
                     <td>{row.payer_name || "—"}</td>
@@ -381,6 +383,7 @@ export function ProviderDetailPage() {
                     <td><StatusBadge value={row.directory_status || "unknown"} /></td>
                     <td>{shortDate(row.submitted_date)}</td>
                     <td>{shortDate(row.next_followup_date)}</td>
+                    <td><button type="button" className="thera-action secondary" disabled={!row.payer_id} onClick={() => setPayerInstructions({ payerId: String(row.payer_id), payerName: String(row.payer_name || "Payer"), applicationId: String(row.application_id || "") })}>Payer Instructions</button></td>
                   </tr>
                 ))}
               </tbody>
@@ -426,9 +429,9 @@ export function ProviderDetailPage() {
           </div>
           <div className="thera-table-wrap">
             <table className="thera-table">
-              <thead><tr><th>Payer</th><th>Status</th><th>Effective</th><th>Revalidation</th><th>Due State</th><th>Payer Provider ID</th></tr></thead>
+              <thead><tr><th>Payer</th><th>Status</th><th>Effective</th><th>Revalidation</th><th>Due State</th><th>Payer Provider ID</th><th>Resources</th></tr></thead>
               <tbody>
-                {enrollments.length === 0 && <tr><td colSpan={6}>No payer enrollment records on file.</td></tr>}
+                {enrollments.length === 0 && <tr><td colSpan={7}>No payer enrollment records on file.</td></tr>}
                 {enrollments.map((row) => (
                   <tr key={row.id}>
                     <td>{row.payerName || "—"}</td>
@@ -437,6 +440,7 @@ export function ProviderDetailPage() {
                     <td>{shortDate(row.revalidation_due_date)}</td>
                     <td><StatusBadge value={row.revalidationState} /></td>
                     <td>{row.payer_provider_id || "—"}</td>
+                    <td><button type="button" className="thera-action secondary" disabled={!row.payer_id} onClick={() => setPayerInstructions({ payerId: String(row.payer_id), payerName: String(row.payerName || "Payer") })}>Payer Instructions</button></td>
                   </tr>
                 ))}
               </tbody>
@@ -475,6 +479,20 @@ export function ProviderDetailPage() {
           </div>
         </section>
       </div>
+
+      {payerInstructions && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(15,23,42,.45)", display: "grid", placeItems: "center", zIndex: 1000, padding: 20 }}>
+          <div style={{ width: "min(900px,100%)", maxHeight: "90vh", overflow: "auto" }}>
+            <section className="thera-card" style={{ marginBottom: 12 }}>
+              <div className="thera-card-header">
+                <div><h2>{payerInstructions.payerName} Resources</h2><p>Contextual credentialing guidance for this provider.</p></div>
+                <button type="button" className="thera-action secondary" onClick={() => setPayerInstructions(null)}>Close</button>
+              </div>
+            </section>
+            <PayerIntelligencePanel payerId={payerInstructions.payerId} context="credentialing" providerId={providerId} applicationId={payerInstructions.applicationId || null} title="Payer Instructions" />
+          </div>
+        </div>
+      )}
 
       {showIdentifier && (
         <div style={{ position: "fixed", inset: 0, background: "rgba(15,23,42,.45)", display: "grid", placeItems: "center", zIndex: 1000, padding: 20 }}>
