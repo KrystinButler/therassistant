@@ -134,6 +134,7 @@ export const NAV_SECTIONS: readonly NavigationSection[] = [
     visibility: visibleToAll,
     children: [
       { id: "administration", label: "Administration", href: "/administration", visibility: visibleToAll },
+      { id: "audit", label: "Audit History", href: "/administration/audit", visibility: visibleToAll },
     ],
   },
 ] as const;
