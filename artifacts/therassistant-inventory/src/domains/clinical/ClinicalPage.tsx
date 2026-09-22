@@ -159,9 +159,9 @@ export function ClinicalPage() {
     <>
       <div className="thera-page-header split">
         <div>
-          <div className="thera-eyebrow">CLINICAL WORKFLOW</div>
-          <h1>Clinical</h1>
-          <p>One queue for starting, completing, and signing encounter documentation before billing.</p>
+          <div className="thera-eyebrow">DOCUMENT · CLINICAL WORKFLOW</div>
+          <h1>Clinical Documentation</h1>
+          <p>Carry the prepared visit into the encounter, complete the clinical record, sign it, and hand the same source data forward to charge capture.</p>
         </div>
       </div>
 

@@ -1,10 +1,9 @@
 export type SectionId =
-  | "care-delivery"
-  | "revenue-cycle"
-  | "operations"
-  | "insights"
-  | "client-experience"
-  | "help-center"
+  | "engage"
+  | "prepare"
+  | "document"
+  | "get-paid"
+  | "operate"
   | "settings";
 
 export type NavigationVisibility =
@@ -34,58 +33,80 @@ const visibleToAll = { mode: "all" } as const;
 
 export const NAV_SECTIONS: readonly NavigationSection[] = [
   {
-    id: "care-delivery",
-    label: "Care Delivery",
+    id: "engage",
+    label: "ENGAGE",
     renderInSidebar: true,
     primaryHref: "/clients",
     visibility: visibleToAll,
     children: [
       { id: "patients", label: "Patients", href: "/clients", visibility: visibleToAll },
-      { id: "schedule", label: "Schedule", href: "/schedule", visibility: visibleToAll },
-      { id: "clinical", label: "Clinical", href: "/clinical", visibility: visibleToAll },
-      { id: "eligibility", label: "Eligibility & Benefits", href: "/eligibility", visibility: visibleToAll },
+      { id: "journal", label: "Patient Journal", href: "/journal", visibility: visibleToAll },
     ],
-    contextualPaths: ["/encounters", "/medicaid"],
+    contextualPaths: ["/patient-portal"],
   },
   {
-    id: "revenue-cycle",
-    label: "Revenue Cycle",
+    id: "prepare",
+    label: "PREPARE",
+    renderInSidebar: true,
+    primaryHref: "/schedule",
+    visibility: visibleToAll,
+    children: [
+      { id: "schedule", label: "Schedule & Pre-Session", href: "/schedule", visibility: visibleToAll },
+      { id: "eligibility", label: "Eligibility & Benefits", href: "/eligibility", visibility: visibleToAll },
+    ],
+  },
+  {
+    id: "document",
+    label: "DOCUMENT",
+    renderInSidebar: true,
+    primaryHref: "/clinical",
+    visibility: visibleToAll,
+    children: [
+      { id: "clinical", label: "Clinical Documentation", href: "/clinical", visibility: visibleToAll },
+      { id: "medicaid", label: "Colorado Medicaid", href: "/medicaid", visibility: visibleToAll },
+    ],
+    contextualPaths: ["/encounters", "/clinical/golden-thread"],
+  },
+  {
+    id: "get-paid",
+    label: "GET PAID",
     renderInSidebar: true,
     primaryHref: "/billing/charges",
     visibility: visibleToAll,
     children: [
       {
         id: "charges",
-        label: "Charges",
+        label: "Charge Capture",
         href: "/billing/charges",
         matchPaths: ["/charges", "/claims/submission"],
         visibility: visibleToAll,
       },
-      { id: "rejections", label: "Rejections", href: "/rejections", visibility: visibleToAll },
+      { id: "rejections", label: "Claim Rejections", href: "/rejections", visibility: visibleToAll },
       {
         id: "claims",
-        label: "Claims",
+        label: "Claims & 837P",
         href: "/claims",
         matchPaths: ["/claims/follow-up"],
         visibility: visibleToAll,
       },
       {
         id: "denials",
-        label: "Denials",
+        label: "Denials & Appeals",
         href: "/denials",
         matchPaths: ["/ar-denials"],
         visibility: visibleToAll,
       },
-      { id: "payments", label: "Payments", href: "/payments", visibility: visibleToAll },
+      { id: "payments", label: "Payments & ERA", href: "/payments", visibility: visibleToAll },
     ],
   },
   {
-    id: "operations",
-    label: "Operations",
+    id: "operate",
+    label: "OPERATE",
     renderInSidebar: true,
-    primaryHref: "/providers",
+    primaryHref: "/work-center",
     visibility: visibleToAll,
     children: [
+      { id: "work-center", label: "Work Center", href: "/work-center", visibility: visibleToAll },
       { id: "providers", label: "Providers", href: "/providers", visibility: visibleToAll },
       { id: "credentialing", label: "Credentialing", href: "/credentialing", visibility: visibleToAll },
       {
@@ -96,6 +117,7 @@ export const NAV_SECTIONS: readonly NavigationSection[] = [
         visibility: visibleToAll,
       },
       { id: "mailroom", label: "Mailroom", href: "/mailroom", visibility: visibleToAll },
+      { id: "reports", label: "Reports", href: "/reports", visibility: visibleToAll },
       {
         id: "imports",
         label: "Imports / Migration",
@@ -105,32 +127,8 @@ export const NAV_SECTIONS: readonly NavigationSection[] = [
     ],
   },
   {
-    id: "insights",
-    label: "Insights",
-    renderInSidebar: true,
-    primaryHref: "/reports",
-    visibility: visibleToAll,
-    children: [{ id: "reports", label: "Reports", href: "/reports", visibility: visibleToAll }],
-  },
-  {
-    id: "client-experience",
-    label: "Client Experience",
-    renderInSidebar: true,
-    primaryHref: "/journal",
-    visibility: visibleToAll,
-    children: [{ id: "journal", label: "Journal", href: "/journal", visibility: visibleToAll }],
-    contextualPaths: ["/patient-portal"],
-  },
-  {
-    id: "help-center",
-    label: "Help Center",
-    renderInSidebar: false,
-    visibility: visibleToAll,
-    children: [],
-  },
-  {
     id: "settings",
-    label: "Settings",
+    label: "SETTINGS",
     renderInSidebar: true,
     primaryHref: "/administration",
     visibility: visibleToAll,

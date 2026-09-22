@@ -154,9 +154,9 @@ export function ClaimsPage() {
     <>
       <div className="thera-page-header">
         <div>
-          <div className="thera-eyebrow">REVENUE CYCLE</div>
-          <h1>Claims</h1>
-          <p>Outstanding payer claims organized into one workqueue per payer, then by response status and age.</p>
+          <div className="thera-eyebrow">GET PAID · PAYER FOLLOW-UP</div>
+          <h1>Claims & A/R Follow-Up</h1>
+          <p>Work outstanding payer claims by response status and age while keeping the claim connected to the patient, encounter, submission history, balance, and next action.</p>
         </div>
       </div>
 
