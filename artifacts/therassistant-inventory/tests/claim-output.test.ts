@@ -3,9 +3,9 @@ import assert from "node:assert/strict";
 
 import {
   build837PText,
-  buildCms1500Html,
   validate837PExport,
 } from "../src/domains/billing/claim-output";
+import { buildCms1500PreviewHtml } from "../src/domains/billing/cms1500-preview";
 
 function filingIndicatorFrom837P(x12: string) {
   const sbr = x12.split("\n").find((line) => line.startsWith("SBR*"));
@@ -204,11 +204,31 @@ test("837P export does not guess an ambiguous legacy relationship", () => {
   assert.ok(validate837PExport(invalid).some((error) => error.includes("supported HIPAA relationship code")));
 });
 
-test("CMS-1500 print output includes patient, payer, POS and service line context", () => {
-  const html = buildCms1500Html(sample.claims[0]);
-  assert.match(html, /CMS-1500 Claim Data/);
-  assert.match(html, /Demo Patient/);
+test("CMS-1500 preview renders recognizable claim boxes from the canonical claim model", () => {
+  const html = buildCms1500PreviewHtml(sample.claims[0], sample.edi);
+  assert.match(html, /CLAIM PREVIEW — NOT FOR PAPER SUBMISSION/);
+  assert.match(html, /data-cms-box="1a"/);
+  assert.match(html, /data-cms-box="21"/);
+  assert.match(html, /data-cms-box="24D"/);
+  assert.match(html, /data-cms-box="33"/);
+  assert.match(html, /Demo, Patient/);
   assert.match(html, /Aetna/);
   assert.match(html, /90837/);
   assert.match(html, />10</);
+  assert.match(html, /1093987654/);
+  assert.match(html, /1234567893/);
+});
+
+test("CMS-1500 preview creates continuation pages after six service lines", () => {
+  const lines = Array.from({ length: 7 }, (_, index) => ({
+    ...sample.claims[0].lines[0],
+    service_date: `2026-09-${String(index + 1).padStart(2, "0")}`,
+  }));
+  const html = buildCms1500PreviewHtml(
+    { ...sample.claims[0], lines },
+    sample.edi,
+  );
+  assert.equal((html.match(/class="cms-page"/g) ?? []).length, 2);
+  assert.match(html, /Page 1 of 2/);
+  assert.match(html, /Page 2 of 2/);
 });

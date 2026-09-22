@@ -3,6 +3,8 @@ import { Link, useRoute } from "wouter";
 
 import { StatusBadge } from "../../components/status-badge";
 import { dateTime, money, shortDate } from "../../lib/format";
+import { buildCms1500PreviewHtml } from "../billing/cms1500-preview";
+import { getClaimPreviewData } from "../billing/claim-output-repository";
 import { getClaim360Data } from "./repository";
 import { getClaim360RelationshipsData } from "./relationships-repository";
 
@@ -19,6 +21,8 @@ export function Claim360Page() {
   const [tab, setTab] = useState<Tab>("overview");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [previewing, setPreviewing] = useState(false);
+  const [previewError, setPreviewError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!claimId) return;
@@ -39,6 +43,31 @@ export function Claim360Page() {
       .finally(() => setLoading(false));
   }, [claimId]);
 
+  async function runPreview() {
+    const previewWindow = window.open("", "_blank");
+    if (!previewWindow) {
+      setPreviewError("Allow pop-ups to preview CMS-1500.");
+      return;
+    }
+    previewWindow.opener = null;
+    previewWindow.document.write("<p style='font-family:Arial,sans-serif;padding:24px'>Loading CMS-1500 preview…</p>");
+
+    setPreviewing(true);
+    setPreviewError(null);
+    try {
+      const preview = await getClaimPreviewData(claimId);
+      previewWindow.document.open();
+      previewWindow.document.write(buildCms1500PreviewHtml(preview.item, preview.edi));
+      previewWindow.document.close();
+      previewWindow.focus();
+    } catch (err) {
+      previewWindow.close();
+      setPreviewError(err instanceof Error ? err.message : "Unable to preview CMS-1500.");
+    } finally {
+      setPreviewing(false);
+    }
+  }
+
   if (loading) return <div className="thera-state">Loading Claim 360...</div>;
   if (error || !data) return <div className="thera-state error">{error || "Claim not found."}</div>;
 
@@ -57,10 +86,15 @@ export function Claim360Page() {
           <p>{claim.clientName} · {claim.providerName} · {claim.payerName} · DOS {shortDate(String(claim.service_date_from ?? ""))}</p>
         </div>
         <div className="thera-header-badges">
+          <button type="button" className="thera-action secondary" disabled={previewing} onClick={() => void runPreview()}>
+            {previewing ? "Loading Preview…" : "Preview CMS-1500"}
+          </button>
           <StatusBadge value={String(claim.claim_status)} />
           <span className="thera-kpi-value">{money(Number(claim.total_charge_cents ?? 0))}</span>
         </div>
       </div>
+
+      {previewError && <div className="thera-state error" style={{ marginBottom: 12 }}>{previewError}</div>}
 
       <div className="thera-tabs" style={{ marginBottom: 16 }}>
         <TabButton active={tab === "overview"} onClick={() => setTab("overview")} label="Overview" />
