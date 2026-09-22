@@ -117,9 +117,9 @@ export function WorkCenterPage() {
     <>
       <div className="thera-page-header">
         <div>
-          <div className="thera-eyebrow">UNIFIED OPERATIONS</div>
+          <div className="thera-eyebrow">OPERATE · CONNECTED OPERATIONS</div>
           <h1>Work Center</h1>
-          <p>Exception work only: start it, pend it, prioritize it, resolve it, and preserve the complete history.</p>
+          <p>One actionable queue for operational exceptions across patients, payers, claims, credentialing, mailroom, and revenue cycle follow-up.</p>
         </div>
       </div>
 
