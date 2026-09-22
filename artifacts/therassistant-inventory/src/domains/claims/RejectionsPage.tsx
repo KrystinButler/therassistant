@@ -16,6 +16,7 @@ type RejectionItem = {
   claim: ClaimsQueueRow;
   categories: RejectionCategory[];
   messages: string[];
+  responseCode: string;
 };
 
 const categoryLabels: Record<RejectionCategory, string> = {
@@ -75,19 +76,25 @@ export function RejectionsPage() {
 
       const next = await Promise.all(rejected.map(async (claim): Promise<RejectionItem> => {
         const work = await getClaimWorkData(claim.id);
-        const validationMessages = (work?.workItems ?? [])
+        const rejectionWorkMessages = (work?.workItems ?? [])
           .filter((row) =>
-            row.workqueue_type === "claim_validation" &&
+            row.workqueue_type === "claim_rejection" &&
             !["completed", "cancelled"].includes(String(row.workqueue_status ?? "")),
           )
           .flatMap((row) => splitMessages(row.description));
-        const responseMessages = (work?.responses ?? [])
-          .slice(0, 1)
-          .filter((row) => String(row.response_status ?? "").toLowerCase() === "rejected")
-          .flatMap((row) => splitMessages(row.response_message));
-        const messages = [...validationMessages, ...responseMessages];
+        const latestRejectedResponse = (work?.responses ?? [])
+          .find((row) => String(row.response_status ?? "").toLowerCase() === "rejected");
+        const responseMessages = latestRejectedResponse
+          ? splitMessages(latestRejectedResponse.response_message)
+          : [];
+        const messages = responseMessages.length ? responseMessages : rejectionWorkMessages;
         const categories = getRejectionCategories(messages.length ? messages : ["Other claim correction required."]);
-        return { claim, categories, messages };
+        return {
+          claim,
+          categories,
+          messages,
+          responseCode: String(latestRejectedResponse?.response_code ?? ""),
+        };
       }));
       setItems(next);
     } catch (err) {
@@ -213,7 +220,7 @@ export function RejectionsPage() {
           <section className="thera-card">
             <div className="thera-table-wrap">
               <table className="thera-table">
-                <thead><tr><th>Claim</th><th>Patient</th><th>DOS</th><th>Provider</th><th>Charge</th><th>Status</th><th>Correction Needed</th><th>Action</th></tr></thead>
+                <thead><tr><th>Claim</th><th>Patient</th><th>DOS</th><th>Provider</th><th>Charge</th><th>Rejection Code</th><th>Correction Needed</th><th>Action</th></tr></thead>
                 <tbody>
                   {visible.map((item) => (
                     <tr key={item.claim.id}>
@@ -222,7 +229,7 @@ export function RejectionsPage() {
                       <td>{shortDate(String(item.claim.service_date_from ?? ""))}</td>
                       <td>{item.claim.providerName}</td>
                       <td>{money(Number(item.claim.total_charge_cents ?? 0))}</td>
-                      <td><StatusBadge value={String(item.claim.claim_status)} /></td>
+                      <td>{item.responseCode || "—"}</td>
                       <td>{item.messages.filter((message) => getRejectionCategories([message]).includes(category || "other")).join(" ") || categoryLabels[category || "other"]}</td>
                       <td><button type="button" className="thera-action" onClick={() => setActiveClaimId(item.claim.id)}>Correct Claim</button></td>
                     </tr>
