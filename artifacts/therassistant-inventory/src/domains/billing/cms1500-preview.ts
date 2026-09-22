@@ -52,7 +52,7 @@ function address(row: Row | null | undefined) {
     text(row?.address_line2),
     [text(row?.city), text(row?.state), text(row?.postal_code)].filter(Boolean).join(" "),
   ].filter(Boolean);
-  return lines.join("<br>") || "—";
+  return lines.length ? lines.map(escapeHtml).join("<br>") : "—";
 }
 
 function relationshipLabel(value: unknown) {
@@ -148,6 +148,7 @@ function validatePreview(item: ClaimOutputItem, edi: Edi837PConfig): PreviewIssu
   }
 
   if (!item.diagnoses.length) issues.push({ box: "21", message: "At least one diagnosis is required." });
+  if (item.diagnoses.length > 12) issues.push({ box: "21", message: "CMS-1500 supports up to 12 diagnosis pointers." });
 
   for (const [index, line] of item.lines.entries()) {
     const lineLabel = `Service line ${index + 1}`;
@@ -173,7 +174,7 @@ function validatePreview(item: ClaimOutputItem, edi: Edi837PConfig): PreviewIssu
   }
   requireBox("33", edi.billingProviderName, "Billing provider name is missing.");
   if (text(edi.billingProviderNpi).replace(/\D/g, "").length !== 10) {
-    issues.push({ box: "33a", message: "Billing provider NPI must contain 10 digits." });
+    issues.push({ box: "33", message: "Billing provider NPI must contain 10 digits." });
   }
 
   return issues;
@@ -205,7 +206,7 @@ export function buildCms1500PreviewHtml(item: ClaimOutputItem, edi: Edi837PConfi
   const diagnoses = [...item.diagnoses]
     .sort((a, b) => Number(a.pointer_order ?? 0) - Number(b.pointer_order ?? 0));
   const diagnosisText = diagnoses
-    .map((row, index) => `${String.fromCharCode(65 + index)}. ${text(row.diagnosis_code)}`)
+    .map((row, index) => `${String.fromCharCode(65 + index)}. ${escapeHtml(row.diagnosis_code)}`)
     .join(" &nbsp;&nbsp; ");
   const pages = chunks(item.lines, 6);
   const issues = validatePreview(item, edi);
@@ -221,14 +222,15 @@ export function buildCms1500PreviewHtml(item: ClaimOutputItem, edi: Edi837PConfi
     text(edi.addressLine1),
     text(edi.addressLine2),
     [text(edi.city), text(edi.state), text(edi.postalCode)].filter(Boolean).join(" "),
-  ].filter(Boolean).join("<br>") || "—";
+  ].filter(Boolean).map(escapeHtml).join("<br>") || "—";
   const serviceFacility = text(claimMeta.service_facility_name)
-    || (item.lines[0]?.place_of_service ? `POS ${text(item.lines[0].place_of_service)}` : "—");
+    ? escapeHtml(claimMeta.service_facility_name)
+    : (item.lines[0]?.place_of_service ? `POS ${escapeHtml(item.lines[0].place_of_service)}` : "—");
   const serviceFacilityAddress = [
     text(claimMeta.service_facility_address_line1),
     text(claimMeta.service_facility_address_line2),
     [text(claimMeta.service_facility_city), text(claimMeta.service_facility_state), text(claimMeta.service_facility_postal_code)].filter(Boolean).join(" "),
-  ].filter(Boolean).join("<br>");
+  ].filter(Boolean).map(escapeHtml).join("<br>");
   const box32Value = [serviceFacility, serviceFacilityAddress].filter(Boolean).join("<br>");
   const referring = [text(claimMeta.referring_provider_last_name), text(claimMeta.referring_provider_first_name)].filter(Boolean).join(", ");
   const renderingName = personName(item.provider);
@@ -239,6 +241,12 @@ export function buildCms1500PreviewHtml(item: ClaimOutputItem, edi: Edi837PConfi
     : '<div class="validation-panel valid"><strong>Preview data complete</strong><div>No CMS-1500 preview fields are currently missing.</div></div>';
 
   const pageHtml = pages.map((pageLines, pageIndex) => {
+    const warningCell = (boxNumber: string) => {
+      const messages = issuesByBox.get(boxNumber) ?? [];
+      return messages.length
+        ? ` class="cms-warning-cell" title="${escapeHtml(messages.join(" "))}"`
+        : "";
+    };
     const serviceRows = Array.from({ length: 6 }, (_, rowIndex) => {
       const line = pageLines[rowIndex];
       const absoluteIndex = pageIndex * 6 + rowIndex;
@@ -247,13 +255,13 @@ export function buildCms1500PreviewHtml(item: ClaimOutputItem, edi: Edi837PConfi
       }
       const modifiers = [line.modifier1, line.modifier2].map(text).filter(Boolean).join(" ");
       return `<tr>
-        <td data-cms-box="24A">${escapeHtml(displayDate(line.service_date ?? item.claim.service_date_from))}</td>
-        <td data-cms-box="24B">${escapeHtml(line.place_of_service ?? "")}</td>
-        <td data-cms-box="24D"><strong>${escapeHtml(line.cpt_code ?? "")}</strong>${modifiers ? `<br><span class="small">${escapeHtml(modifiers)}</span>` : ""}</td>
-        <td data-cms-box="24E">${escapeHtml(line.diagnosis_pointer ?? "")}</td>
-        <td data-cms-box="24F">${escapeHtml(dollars(line.charge_amount_cents))}</td>
-        <td data-cms-box="24G">${escapeHtml(line.units ?? 1)}</td>
-        <td data-cms-box="24J">${escapeHtml(providerNpi || "—")}</td>
+        <td data-cms-box="24A"${warningCell("24A")}>${escapeHtml(displayDate(line.service_date ?? item.claim.service_date_from))}</td>
+        <td data-cms-box="24B"${warningCell("24B")}>${escapeHtml(line.place_of_service ?? "")}</td>
+        <td data-cms-box="24D"${warningCell("24D")}><strong>${escapeHtml(line.cpt_code ?? "")}</strong>${modifiers ? `<br><span class="small">${escapeHtml(modifiers)}</span>` : ""}</td>
+        <td data-cms-box="24E"${warningCell("24E")}>${escapeHtml(line.diagnosis_pointer ?? "")}</td>
+        <td data-cms-box="24F"${warningCell("24F")}>${escapeHtml(dollars(line.charge_amount_cents))}</td>
+        <td data-cms-box="24G"${warningCell("24G")}>${escapeHtml(line.units ?? 1)}</td>
+        <td data-cms-box="24J"${warningCell("24J")}>${escapeHtml(providerNpi || "—")}</td>
         <td>${absoluteIndex + 1}</td>
       </tr>`;
     }).join("");
@@ -374,6 +382,7 @@ body { margin: 0; background: #eceff1; color: #18202a; font-family: Arial, Helve
 .service-table th:last-child, .service-table td:last-child { border-right: 0; }
 .service-table th { color: #6b2737; font-size: 7px; text-transform: uppercase; height: 30px; }
 .service-table td { height: 34px; font-size: 9px; }
+.service-table td.cms-warning-cell { background: #fff7ed; box-shadow: inset 0 0 0 2px #c2410c; }
 .service-empty td { color: transparent; }
 .small { font-size: 7.5px; color: #4b5563; }
 .footer-grid .cms-box { min-height: 70px; }
