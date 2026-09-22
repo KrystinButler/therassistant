@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useLocation } from "wouter";
 
 import { StatusBadge } from "../../components/status-badge";
+import { PayerIntelligencePanel } from "../../components/payer-intelligence-panel";
 import { NewCredentialingCaseDrawer } from "./NewCredentialingCaseDrawer";
 import { WorkDrawer } from "../../components/work-drawer";
 import { shortDate } from "../../lib/format";
@@ -1964,6 +1965,17 @@ export function CredentialingPage() {
               </button>
             ))}
           </div>
+
+          {selectedCase.payer_id ? (
+            <PayerIntelligencePanel
+              payerId={String(selectedCase.payer_id)}
+              payerPlanId={selectedCase.payer_plan_id ? String(selectedCase.payer_plan_id) : null}
+              context="credentialing"
+              providerId={selectedCase.provider_id ? String(selectedCase.provider_id) : null}
+              applicationId={selectedCase.application_id ? String(selectedCase.application_id) : null}
+              title="Payer Instructions"
+            />
+          ) : null}
 
           {drawerTab === "overview" ? (
             <div className="thera-stack">
