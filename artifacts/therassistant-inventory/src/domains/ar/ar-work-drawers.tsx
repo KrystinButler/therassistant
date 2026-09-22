@@ -3,12 +3,66 @@ import { WorkDrawer } from "../../components/work-drawer";
 import { StatusBadge } from "../../components/status-badge";
 import { money, shortDate } from "../../lib/format";
 import type { AppealWorkspaceRow, ArRow, DenialWorkspaceRow, RecoveryWorkspaceRow, VarianceWorkspaceRow } from "./repository";
+import { buildAppealLetter } from "./appeal-template";
+import { getDenialGuidance } from "./denial-guidance";
 
 type CommonProps = { open: boolean; onOpenChange: (open: boolean) => void; saving?: boolean };
 type DenialDetail = DenialWorkspaceRow & { serviceDate?: string; providerName?: string; claimStatus?: string; chargeAmountCents?: number };
+type AppealDenialDetail = DenialWorkspaceRow & {
+  payerClaimNumber?: string;
+  dateOfBirth?: string;
+  memberId?: string;
+  serviceDate?: string;
+  cptCodes?: string[];
+  diagnosisCodes?: string[];
+  providerName?: string;
+  renderingProviderCredentials?: string;
+  renderingProviderNpi?: string;
+  billingProviderName?: string;
+  billingProviderNpi?: string;
+  submittedAt?: string;
+  authorizationNumber?: string;
+  authorizationStartDate?: string;
+  authorizationEndDate?: string;
+  clinicalDurationMinutes?: number | null;
+};
 function value(input: unknown, fallback = "—") { return input == null || input === "" ? fallback : String(input); }
 function ContextGrid({ children }: { children: React.ReactNode }) { return <div className="thera-form-grid" style={{ marginBottom: 16 }}>{children}</div>; }
 function Fact({ label, children }: { label: string; children: React.ReactNode }) { return <div><div className="thera-table-subtext">{label}</div><strong>{children}</strong></div>; }
+
+function safeAppealFilename(claimNumber: string) {
+  const clean = claimNumber.replace(/[^a-z0-9_-]+/gi, "-").replace(/^-+|-+$/g, "") || "claim";
+  return `appeal-${clean}.txt`;
+}
+
+function downloadAppealLetter(letter: string, claimNumber: string) {
+  const blob = new Blob([letter], { type: "text/plain;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = safeAppealFilename(claimNumber);
+  anchor.click();
+  URL.revokeObjectURL(url);
+}
+
+function escapeHtml(input: string) {
+  return input.replace(/[&<>"']/g, (char) => ({
+    "&": "&amp;",
+    "<": "&lt;",
+    ">": "&gt;",
+    '"': "&quot;",
+    "'": "&#039;",
+  }[char] ?? char));
+}
+
+function printAppealLetter(letter: string) {
+  const target = window.open("", "_blank", "noopener,noreferrer");
+  if (!target) return;
+  target.document.write(`<!doctype html><html><head><title>Appeal Letter</title><style>body{font-family:Arial,sans-serif;margin:48px;line-height:1.45;color:#111}pre{white-space:pre-wrap;font:inherit}</style></head><body><pre>${escapeHtml(letter)}</pre></body></html>`);
+  target.document.close();
+  target.focus();
+  target.print();
+}
 
 export function WorkDenialDrawer({ open, onOpenChange, row, saving, onStartWork, onCreateAppeal, onWriteOff }: CommonProps & { row: DenialWorkspaceRow | null; onStartWork: (row: DenialWorkspaceRow) => void; onCreateAppeal: (row: DenialWorkspaceRow) => void; onWriteOff: (row: DenialWorkspaceRow) => void }) {
   if (!row) return null; const detail = row as DenialDetail;
@@ -22,15 +76,116 @@ export function WorkDenialDrawer({ open, onOpenChange, row, saving, onStartWork,
 }
 
 export function CreateAppealDrawer({ open, onOpenChange, row, saving, onSave }: CommonProps & { row: DenialWorkspaceRow | null; onSave: (row: DenialWorkspaceRow, level: number, deadline: string, notes: string) => Promise<void> | void }) {
-  const [level, setLevel] = useState("1"); const [deadline, setDeadline] = useState(""); const [notes, setNotes] = useState("");
-  useEffect(() => { if (!open || !row) return; setLevel("1"); setDeadline(String(row.timely_filing_deadline ?? "").slice(0, 10)); setNotes(String(row.reason ?? "")); }, [open, row?.id]);
-  const dirty = useMemo(() => Boolean(row) && (level !== "1" || deadline !== String(row?.timely_filing_deadline ?? "").slice(0, 10) || notes !== String(row?.reason ?? "")), [row, level, deadline, notes]);
+  const [level, setLevel] = useState("1");
+  const [deadline, setDeadline] = useState("");
+  const [supportingFacts, setSupportingFacts] = useState("");
+  const [copied, setCopied] = useState(false);
+
+  useEffect(() => {
+    if (!open || !row) return;
+    setLevel("1");
+    setDeadline(String(row.timely_filing_deadline ?? "").slice(0, 10));
+    setSupportingFacts("");
+    setCopied(false);
+  }, [open, row?.id]);
+
+  const dirty = useMemo(
+    () => Boolean(row) && (
+      level !== "1"
+      || deadline !== String(row?.timely_filing_deadline ?? "").slice(0, 10)
+      || Boolean(supportingFacts)
+    ),
+    [row, level, deadline, supportingFacts],
+  );
+
+  const detail = row as AppealDenialDetail | null;
+  const guidance = getDenialGuidance({
+    carcCode: row?.carc_code,
+    rarcCode: row?.rarc_code,
+    category: row?.denial_category,
+    reason: row?.reason,
+  });
+  const letter = row && detail
+    ? buildAppealLetter({
+        patientName: row.clientName,
+        dateOfBirth: detail.dateOfBirth,
+        memberId: detail.memberId,
+        payerName: row.payerName,
+        claimNumber: row.claimNumber,
+        payerClaimNumber: detail.payerClaimNumber,
+        serviceDate: detail.serviceDate,
+        cptCodes: detail.cptCodes,
+        diagnosisCodes: detail.diagnosisCodes,
+        renderingProviderName: detail.providerName,
+        renderingProviderCredentials: detail.renderingProviderCredentials,
+        renderingProviderNpi: detail.renderingProviderNpi,
+        billingProviderName: detail.billingProviderName,
+        billingProviderNpi: detail.billingProviderNpi,
+        carcCode: value(row.carc_code, ""),
+        rarcCode: value(row.rarc_code, ""),
+        denialReason: value(row.reason, ""),
+        denialCategory: value(row.denial_category, ""),
+        deniedAmountCents: Number(row.amount_cents ?? 0),
+        submittedAt: detail.submittedAt,
+        authorizationNumber: detail.authorizationNumber,
+        authorizationStartDate: detail.authorizationStartDate,
+        authorizationEndDate: detail.authorizationEndDate,
+        clinicalDurationMinutes: detail.clinicalDurationMinutes,
+        supportingFacts,
+      })
+    : "";
+
   if (!row) return null;
-  const footer = <div className="thera-filter-row" style={{ justifyContent: "space-between" }}><button type="button" className="thera-action secondary" onClick={() => onOpenChange(false)}>Cancel</button><button type="button" className="thera-action" disabled={saving || !deadline || Number(level) < 1} onClick={() => void onSave(row, Number(level), deadline, notes)}>Create Appeal</button></div>;
-  return <WorkDrawer open={open} onOpenChange={onOpenChange} dirty={dirty} title="Create Appeal" subtitle={`${row.clientName} · ${row.claimNumber} · ${row.payerName}`} footer={footer}>
-    <ContextGrid><Fact label="CARC">{value(row.carc_code)}</Fact><Fact label="RARC">{value(row.rarc_code)}</Fact><Fact label="Denied amount">{money(Number(row.amount_cents ?? 0))}</Fact><Fact label="Workability">{value(row.workability ?? row.policy)}</Fact></ContextGrid>
-    <div className="thera-form-grid"><label>Appeal level<select className="thera-input" value={level} onChange={(e) => setLevel(e.target.value)}><option value="1">Level 1</option><option value="2">Level 2</option><option value="3">Level 3</option></select></label><label>Appeal deadline<input className="thera-input" type="date" value={deadline} onChange={(e) => setDeadline(e.target.value)} /></label><label style={{ gridColumn: "1 / -1" }}>Notes<textarea className="thera-input" rows={7} value={notes} onChange={(e) => setNotes(e.target.value)} /></label></div>
-  </WorkDrawer>;
+
+  const footer = (
+    <div className="thera-filter-row" style={{ justifyContent: "space-between" }}>
+      <button type="button" className="thera-action secondary" onClick={() => onOpenChange(false)}>Cancel</button>
+      <button type="button" className="thera-action" disabled={saving || Number(level) < 1 || !letter} onClick={() => void onSave(row, Number(level), deadline, letter)}>Create Appeal Record</button>
+    </div>
+  );
+
+  return (
+    <WorkDrawer open={open} onOpenChange={onOpenChange} dirty={dirty} title="Generate Appeal" subtitle={`${row.clientName} · ${row.claimNumber} · ${row.payerName}`} footer={footer}>
+      <ContextGrid>
+        <Fact label="CARC">{value(row.carc_code)}</Fact>
+        <Fact label="RARC">{value(row.rarc_code)}</Fact>
+        <Fact label="Denied amount">{money(Number(row.amount_cents ?? 0))}</Fact>
+        <Fact label="Default action">{guidance.actionLabel}</Fact>
+      </ContextGrid>
+
+      <section className="thera-card" style={{ marginBottom: 16 }}>
+        <h2>{guidance.title}</h2>
+        <p>{guidance.summary}</p>
+        {guidance.warning ? <div className="thera-alert" style={{ marginBottom: 12 }}>{guidance.warning}</div> : null}
+        {guidance.action !== "appeal" ? <div className="thera-alert" style={{ marginBottom: 12 }}>The default resolution is {guidance.actionLabel.toLowerCase()}. Generate an appeal only after confirming that an appeal is the appropriate next action.</div> : null}
+        <div className="thera-table-subtext" style={{ marginBottom: 6 }}>Suggested evidence</div>
+        <ul style={{ margin: 0, paddingLeft: 20 }}>
+          {guidance.evidence.map((item) => <li key={item}>{item}</li>)}
+        </ul>
+      </section>
+
+      <div className="thera-form-grid" style={{ marginBottom: 16 }}>
+        <label>Appeal level<select className="thera-input" value={level} onChange={(e) => setLevel(e.target.value)}><option value="1">Level 1</option><option value="2">Level 2</option><option value="3">Level 3</option></select></label>
+        <label>Appeal deadline (optional)<input className="thera-input" type="date" value={deadline} onChange={(e) => setDeadline(e.target.value)} /></label>
+        <label style={{ gridColumn: "1 / -1" }}>Additional supporting facts<textarea className="thera-input" rows={5} value={supportingFacts} onChange={(e) => setSupportingFacts(e.target.value)} placeholder="Add payer call details, timely-filing references, authorization details, or other verified facts that should appear in the appeal." /></label>
+      </div>
+
+      <section className="thera-card">
+        <div className="thera-card-header split">
+          <div>
+            <h2>Appeal preview</h2>
+            <p>Generated from the claim, denial, payer, provider, diagnosis, authorization, and clinical context already available in Therassistant.</p>
+          </div>
+          <div className="thera-filter-row">
+            <button type="button" className="thera-action secondary" onClick={() => { void navigator.clipboard.writeText(letter); setCopied(true); }}>{copied ? "Copied" : "Copy"}</button>
+            <button type="button" className="thera-action secondary" onClick={() => downloadAppealLetter(letter, row.claimNumber)}>Download .txt</button>
+            <button type="button" className="thera-action secondary" onClick={() => printAppealLetter(letter)}>Print / Save PDF</button>
+          </div>
+        </div>
+        <textarea className="thera-input" rows={24} readOnly value={letter} style={{ fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace" }} />
+      </section>
+    </WorkDrawer>
+  );
 }
 
 export function AppealOutcomeDrawer({ open, onOpenChange, row, saving, onSave }: CommonProps & { row: AppealWorkspaceRow | null; onSave: (row: AppealWorkspaceRow, outcome: "approved" | "partially_approved" | "denied" | "withdrawn", notes: string) => Promise<void> | void }) {
