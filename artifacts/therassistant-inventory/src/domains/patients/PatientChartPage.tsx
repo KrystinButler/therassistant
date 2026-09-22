@@ -3,7 +3,6 @@ import { Link, useRoute } from "wouter";
 
 import { StatusBadge } from "../../components/status-badge";
 import { dateTime, money, shortDate } from "../../lib/format";
-import { AuthorizationPanel } from "../authorizations/AuthorizationPanel";
 import { getClientChartRelationships } from "../clients/repository";
 import { DocumentsPanel } from "../documents/DocumentsPanel";
 import { InsurancePanel } from "../insurance/InsurancePanel";
@@ -15,14 +14,16 @@ import { getPatientChart } from "./repository";
 import type { PatientChart } from "./types";
 
 type Relationships = Awaited<ReturnType<typeof getClientChartRelationships>>;
-type Tab = "overview" | "demographics" | "insurance" | "authorizations" | "appointments" | "encounters" | "treatment" | "notes" | "diagnoses" | "charges" | "claims" | "payments" | "denials" | "documents" | "journal" | "work" | "portal";
+type Tab = "overview" | "care" | "coverage" | "revenue" | "documents" | "engagement" | "demographics";
 
 const tabs: Array<[Tab, string]> = [
-  ["overview", "Overview"], ["demographics", "Demographics & Contacts"], ["insurance", "Insurance & Eligibility"],
-  ["authorizations", "Authorizations"], ["appointments", "Appointments"], ["encounters", "Encounters"],
-  ["treatment", "Treatment Plan & Goals"], ["notes", "Clinical Notes"], ["diagnoses", "Diagnoses"],
-  ["charges", "Charges"], ["claims", "Claims"], ["payments", "Payments & Balances"], ["denials", "Denials / Appeals"],
-  ["documents", "Documents"], ["journal", "Journal"], ["work", "Work Items"], ["portal", "Portal / Check-In"],
+  ["overview", "Overview"],
+  ["care", "Care"],
+  ["coverage", "Coverage"],
+  ["revenue", "Revenue Cycle"],
+  ["documents", "Documents"],
+  ["engagement", "Engagement"],
+  ["demographics", "Demographics"],
 ];
 
 export function PatientChartPage() {
@@ -55,6 +56,9 @@ export function PatientChartPage() {
   const patient = chart.patient;
   const name = [patient.preferred_name || patient.first_name, patient.last_name].filter(Boolean).join(" ") || "Patient";
   const linkedWork = relationships?.workItems ?? chart.workItems;
+  const nextUpcoming = chart.appointments
+    .filter((row) => new Date(String(row.starts_at ?? "")) >= new Date() && !["cancelled","no_show","completed"].includes(String(row.appointment_status ?? "")))
+    .sort((a,b) => String(a.starts_at).localeCompare(String(b.starts_at)))[0];
 
   return <>
     <div className="thera-breadcrumb"><Link className="thera-link" href="/clients">Patients</Link><span>/</span><span>{name}</span></div>
@@ -62,7 +66,7 @@ export function PatientChartPage() {
 
     <div className="thera-metric-grid" style={{ marginBottom: 16 }}>
       <Metric label="Primary Payer" value={chart.summary.primaryPayerName} />
-      <Metric label="Authorization" value={chart.summary.authorizationAlert} />
+      <Metric label="Next Visit" value={nextUpcoming ? shortDate(String(nextUpcoming.starts_at ?? "")) : "None"} />
       <Metric label="Open Balance" value={money(chart.openBalanceCents)} />
       <Metric label="Open Work" value={linkedWork.filter((row) => ["open","in_progress","pending","snoozed","reopened"].includes(String(row.workqueue_status ?? ""))).length} />
     </div>
@@ -70,22 +74,27 @@ export function PatientChartPage() {
     <div className="thera-tabs" style={{ marginBottom: 16, flexWrap: "wrap" }}>{tabs.map(([key, label]) => <button key={key} type="button" className={tab === key ? "thera-tab active" : "thera-tab"} onClick={() => setTab(key)}>{label}</button>)}</div>
 
     {tab === "overview" && <Overview chart={chart} relationships={relationships} setTab={setTab} />}
-    {tab === "demographics" && <DemographicsPanel chart={chart} onChanged={load} />}
-    {tab === "insurance" && <InsurancePanel chart={chart} onChanged={load} />}
-    {tab === "authorizations" && <AuthorizationPanel chart={chart} onChanged={load} />}
-    {tab === "appointments" && <Appointments chart={chart} />}
-    {tab === "encounters" && <Encounters rows={relationships?.encounters ?? chart.encounters} />}
-    {tab === "treatment" && <TreatmentPlanPanel chart={chart} onChanged={load} />}
-    {tab === "notes" && <ClinicalNotes chart={chart} />}
-    {tab === "diagnoses" && <Diagnoses chart={chart} />}
-    {tab === "charges" && <Charges chart={chart} />}
-    {tab === "claims" && <Claims chart={chart} />}
-    {tab === "payments" && <Payments chart={chart} />}
-    {tab === "denials" && <DenialsAppeals chart={chart} />}
+    {tab === "care" && <>
+      <Appointments chart={chart} />
+      <Encounters rows={relationships?.encounters ?? chart.encounters} />
+      <TreatmentPlanPanel chart={chart} onChanged={load} />
+      <ClinicalNotes chart={chart} />
+      <Diagnoses chart={chart} />
+    </>}
+    {tab === "coverage" && <InsurancePanel chart={chart} onChanged={load} />}
+    {tab === "revenue" && <>
+      <Charges chart={chart} />
+      <Claims chart={chart} />
+      <Payments chart={chart} />
+      <DenialsAppeals chart={chart} />
+      <WorkItems rows={linkedWork} />
+    </>}
     {tab === "documents" && <DocumentsPanel chart={chart} onChanged={load} />}
-    {tab === "journal" && <JournalPanel chart={chart} onChanged={load} />}
-    {tab === "work" && <WorkItems rows={linkedWork} />}
-    {tab === "portal" && <PortalCheckIn chart={chart} />}
+    {tab === "engagement" && <>
+      <JournalPanel chart={chart} onChanged={load} />
+      <PortalCheckIn chart={chart} />
+    </>}
+    {tab === "demographics" && <DemographicsPanel chart={chart} onChanged={load} />}
   </>;
 }
 
@@ -93,10 +102,10 @@ function Overview({ chart, relationships, setTab }: { chart: PatientChart; relat
   const next = chart.appointments.filter((row) => new Date(String(row.starts_at ?? "")) >= new Date() && !["cancelled","no_show","completed"].includes(String(row.appointment_status ?? ""))).sort((a,b) => String(a.starts_at).localeCompare(String(b.starts_at)))[0];
   const activePlan = chart.treatmentPlans.find((row) => ["active","signed"].includes(String(row.status ?? "")));
   return <div className="thera-detail-grid">
-    <section className="thera-card"><h2>Registration & Coverage</h2><div className="thera-definition-grid"><Field label="Registration" value={<StatusBadge value={chart.summary.registrationStatus} />} /><Field label="Primary Payer" value={chart.summary.primaryPayerName} /><Field label="Authorization" value={chart.summary.authorizationAlert} /><Field label="Treatment Plan" value={activePlan ? <StatusBadge value={String(activePlan.status)} /> : "None active"} /></div><div className="thera-filter-row" style={{ marginTop: 14 }}><button className="thera-action secondary" type="button" onClick={() => setTab("insurance")}>Coverage</button><button className="thera-action secondary" type="button" onClick={() => setTab("authorizations")}>Authorizations</button></div></section>
-    <section className="thera-card"><h2>Next Appointment</h2>{next ? <><strong>{dateTime(String(next.starts_at ?? ""))}</strong><p>{String(next.service_type ?? "Appointment")} · {String(next.providerName ?? "—")}</p><Link className="thera-action secondary" href={`/schedule/${next.id}`}>Open Pre-Session</Link></> : <div className="thera-empty">No upcoming appointment.</div>}</section>
-    <section className="thera-card"><h2>Clinical / Billing Spine</h2><div className="thera-definition-grid"><Field label="Encounters" value={relationships?.encounters.length ?? chart.encounters.length} /><Field label="Signed Notes" value={chart.clinicalNotes.filter((row) => row.note_status === "signed" || row.note_status === "locked").length} /><Field label="Charges" value={chart.charges.length} /><Field label="Claims" value={chart.claims.length} /></div></section>
-    <section className="thera-card"><h2>Financial / Follow-Up</h2><div className="thera-definition-grid"><Field label="Open Balance" value={money(chart.openBalanceCents)} /><Field label="Payments" value={chart.payments.length} /><Field label="Denials" value={chart.denials.length} /><Field label="Appeals" value={chart.appeals.length} /></div></section>
+    <section className="thera-card"><div className="thera-eyebrow">ENGAGE + PREPARE</div><h2>Patient Readiness</h2><div className="thera-definition-grid"><Field label="Registration" value={<StatusBadge value={chart.summary.registrationStatus} />} /><Field label="Primary Payer" value={chart.summary.primaryPayerName} /><Field label="Treatment Plan" value={activePlan ? <StatusBadge value={String(activePlan.status)} /> : "None active"} /><Field label="Check-Ins" value={chart.checkins.length} /></div><div className="thera-filter-row" style={{ marginTop: 14 }}><button className="thera-action secondary" type="button" onClick={() => setTab("coverage")}>Coverage</button><button className="thera-action secondary" type="button" onClick={() => setTab("engagement")}>Engagement</button></div></section>
+    <section className="thera-card"><div className="thera-eyebrow">PREPARE</div><h2>Next Appointment</h2>{next ? <><strong>{dateTime(String(next.starts_at ?? ""))}</strong><p>{String(next.service_type ?? "Appointment")} · {String(next.providerName ?? "—")}</p><Link className="thera-action secondary" href={`/schedule/${next.id}`}>Open Pre-Session</Link></> : <div className="thera-empty">No upcoming appointment.</div>}</section>
+    <section className="thera-card"><div className="thera-eyebrow">DOCUMENT → GET PAID</div><h2>Care-to-Claim Spine</h2><div className="thera-definition-grid"><Field label="Encounters" value={relationships?.encounters.length ?? chart.encounters.length} /><Field label="Signed Notes" value={chart.clinicalNotes.filter((row) => row.note_status === "signed" || row.note_status === "locked").length} /><Field label="Charges" value={chart.charges.length} /><Field label="Claims" value={chart.claims.length} /></div><div className="thera-filter-row" style={{ marginTop: 14 }}><button className="thera-action secondary" type="button" onClick={() => setTab("care")}>Care</button><button className="thera-action secondary" type="button" onClick={() => setTab("revenue")}>Revenue Cycle</button></div></section>
+    <section className="thera-card"><div className="thera-eyebrow">GET PAID</div><h2>Financial / Follow-Up</h2><div className="thera-definition-grid"><Field label="Open Balance" value={money(chart.openBalanceCents)} /><Field label="Payments" value={chart.payments.length} /><Field label="Denials" value={chart.denials.length} /><Field label="Appeals" value={chart.appeals.length} /></div></section>
   </div>;
 }
 
