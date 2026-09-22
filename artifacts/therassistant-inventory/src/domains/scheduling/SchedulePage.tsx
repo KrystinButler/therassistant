@@ -125,6 +125,10 @@ export function SchedulePage() {
     inView(appointment.startsAt, anchor, view) && (!providerFilter || appointment.providerId === providerFilter),
   ) : [], [data, anchor, view, providerFilter]);
 
+  const readyCount = visible.filter((appointment) => appointment.checkInStatus === "Ready").length;
+  const attentionCount = visible.filter((appointment) => appointment.checkInStatus !== "Ready").length;
+  const journalInsightCount = visible.filter((appointment) => appointment.preVisitInsights.length > 0).length;
+
   const dirty = useMemo(() => Boolean(form && baseline && JSON.stringify(form) !== JSON.stringify(baseline)), [form, baseline]);
 
   function move(direction: -1 | 1) {
@@ -178,8 +182,19 @@ export function SchedulePage() {
 
   return <>
     <div className="schedule-header">
-      <div><h1>My Schedule</h1><p>Your appointments for the day at a glance.</p></div>
+      <div>
+        <div className="thera-eyebrow">PREPARE · PROVIDER SCHEDULE</div>
+        <h1>Schedule & Pre-Session Review</h1>
+        <p>Prepare for care from one view: check-in, patient-reported context, coverage attention, and session focus.</p>
+      </div>
       <button type="button" className="thera-action" onClick={openNew}>+ New Appointment</button>
+    </div>
+
+    <div className="thera-metric-grid" style={{ marginBottom: 16 }}>
+      <div className="thera-metric-card"><div className="thera-metric-label">Appointments</div><div className="thera-metric-value">{visible.length}</div></div>
+      <div className="thera-metric-card"><div className="thera-metric-label">Ready</div><div className="thera-metric-value">{readyCount}</div></div>
+      <div className="thera-metric-card"><div className="thera-metric-label">Needs Attention</div><div className="thera-metric-value">{attentionCount}</div></div>
+      <div className="thera-metric-card"><div className="thera-metric-label">Patient Context</div><div className="thera-metric-value">{journalInsightCount}</div></div>
     </div>
 
     <section className="schedule-toolbar">
