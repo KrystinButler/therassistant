@@ -1,12 +1,15 @@
 import { useEffect, useState } from "react";
 
 import { StatusBadge } from "../../components/status-badge";
+import { TreatmentPlanReviewCard } from "./TreatmentPlanReviewCard";
 import { shortDate } from "../../lib/format";
 import type { PatientChart } from "../patients/types";
 import {
   addTreatmentGoal,
   createTreatmentPlan,
   getTreatmentPlanOptions,
+  getTreatmentPlanReviews,
+  generateTreatmentPlanReview,
   updateTreatmentGoal,
   updateTreatmentPlan,
 } from "./repository";
@@ -30,10 +33,38 @@ export function TreatmentPlanPanel({ chart, onChanged }: { chart: PatientChart; 
   const [goalPlanId, setGoalPlanId] = useState<string | null>(null);
   const [goalId, setGoalId] = useState<string | null>(null);
   const [goalForm, setGoalForm] = useState<TreatmentGoalDraft>(blankGoal);
+  const [reviews, setReviews] = useState<Array<Record<string, unknown> & { id: string; goals?: Array<Record<string, unknown> & { id: string }> }>>([]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => { void getTreatmentPlanOptions().then(setProviders).catch(() => undefined); }, []);
+
+  async function loadReviews() {
+    try {
+      setReviews(await getTreatmentPlanReviews(chart.patient.id));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to load treatment-plan reviews.");
+    }
+  }
+
+  useEffect(() => { void loadReviews(); }, [chart.patient.id]);
+
+  async function refreshAfterReviewChange() {
+    await Promise.all([onChanged(), loadReviews()]);
+  }
+
+  async function generateReview(planId: string) {
+    setSaving(true);
+    setError(null);
+    try {
+      await generateTreatmentPlanReview(planId);
+      await loadReviews();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to generate 90-day review draft.");
+    } finally {
+      setSaving(false);
+    }
+  }
 
   function editPlan(row: Record<string, unknown> & { id: string }) {
     setForm({
@@ -92,8 +123,21 @@ export function TreatmentPlanPanel({ chart, onChanged }: { chart: PatientChart; 
     {chart.treatmentPlans.length ? <div className="thera-stack">{chart.treatmentPlans.map((plan) => {
       const alert = treatmentPlanAlert({ status: String(plan.status ?? "draft"), reviewDueDate: plan.review_due_date ? String(plan.review_due_date) : null });
       const goals = Array.isArray(plan.goals) ? plan.goals : [];
-      return <article className="thera-work-card" key={plan.id}><div className="thera-work-card-top"><div><strong>{String(plan.providerName ?? "Treatment Plan")}</strong><div className="thera-table-subtext">Effective {shortDate(String(plan.effective_date ?? ""))} · Review {shortDate(String(plan.review_due_date ?? ""))}</div></div><div><StatusBadge value={String(plan.status ?? "draft")} /> <StatusBadge value={alert.code} /></div></div><div className="thera-definition-grid"><Field label="Problem" value={String(plan.problem_statement ?? "—")} /><Field label="Plan" value={String(plan.plan_text ?? "—")} /><Field label="Interventions" value={String(plan.interventions ?? "—")} /><Field label="Review" value={alert.message} /></div><div style={{ marginTop: 14 }}><div className="thera-row-between"><strong>Goals & Objectives</strong><button type="button" className="thera-action secondary" onClick={() => beginGoal(plan.id)}>+ Add Goal</button></div>{goals.length ? <div className="thera-table-wrap"><table className="thera-table"><thead><tr><th>Goal</th><th>Objective</th><th>Status</th><th>Action</th></tr></thead><tbody>{goals.map((goal) => <tr key={goal.id}><td>{String(goal.goal_text ?? "—")}</td><td>{String(goal.objective_text ?? "—")}</td><td><StatusBadge value={String(goal.status ?? "active")} /></td><td><button type="button" className="thera-action secondary" onClick={() => beginGoal(plan.id, goal)}>Edit</button></td></tr>)}</tbody></table></div> : <div className="thera-empty">No goals added yet.</div>}</div><div className="thera-filter-row" style={{ marginTop: 12 }}><button type="button" className="thera-action secondary" onClick={() => editPlan(plan)}>Edit Plan</button></div></article>;
+      return <article className="thera-work-card" key={plan.id}><div className="thera-work-card-top"><div><strong>{String(plan.providerName ?? "Treatment Plan")}</strong><div className="thera-table-subtext">Effective {shortDate(String(plan.effective_date ?? ""))} · Review {shortDate(String(plan.review_due_date ?? ""))}</div></div><div><StatusBadge value={String(plan.status ?? "draft")} /> <StatusBadge value={alert.code} /></div></div><div className="thera-definition-grid"><Field label="Problem" value={String(plan.problem_statement ?? "—")} /><Field label="Plan" value={String(plan.plan_text ?? "—")} /><Field label="Interventions" value={String(plan.interventions ?? "—")} /><Field label="Review" value={alert.message} /></div><div style={{ marginTop: 14 }}><div className="thera-row-between"><strong>Goals & Objectives</strong><button type="button" className="thera-action secondary" onClick={() => beginGoal(plan.id)}>+ Add Goal</button></div>{goals.length ? <div className="thera-table-wrap"><table className="thera-table"><thead><tr><th>Goal</th><th>Objective</th><th>Status</th><th>Action</th></tr></thead><tbody>{goals.map((goal) => <tr key={goal.id}><td>{String(goal.goal_text ?? "—")}</td><td>{String(goal.objective_text ?? "—")}</td><td><StatusBadge value={String(goal.status ?? "active")} /></td><td><button type="button" className="thera-action secondary" onClick={() => beginGoal(plan.id, goal)}>Edit</button></td></tr>)}</tbody></table></div> : <div className="thera-empty">No goals added yet.</div>}</div><div className="thera-filter-row" style={{ marginTop: 12 }}><button type="button" className="thera-action secondary" onClick={() => editPlan(plan)}>Edit Plan</button>{["active","signed"].includes(String(plan.status ?? "")) && <button type="button" className="thera-action" disabled={saving} onClick={() => void generateReview(plan.id)}>Generate 90-Day Review Draft</button>}</div></article>;
     })}</div> : <div className="thera-empty">No treatment plan exists. Add one to connect goals to encounters and clinical documentation.</div>}
+
+    <div style={{ marginTop: 24 }}>
+      <div className="thera-card-header">
+        <div>
+          <div className="thera-eyebrow">LONGITUDINAL REVIEW</div>
+          <h2>90-Day Treatment Plan Reviews</h2>
+          <p>Evidence drafts summarize charted sessions and score changes. Clinicians choose every goal decision and sign the review.</p>
+        </div>
+      </div>
+      {reviews.length ? <div className="thera-stack">{reviews.map((review) =>
+        <TreatmentPlanReviewCard key={review.id} review={review} onChanged={refreshAfterReviewChange} />
+      )}</div> : <div className="thera-empty">No 90-day review draft has been generated.</div>}
+    </div>
   </section>;
 }
 
