@@ -128,7 +128,7 @@ export function PatientReviewDrawer({ appointment, open, onOpenChange, onEditApp
   }, [chart, appointment]);
 
   const existingEncounter = chart?.encounters.find((row) =>
-    String(row.appointment_id ?? "") === appointment.id &&
+    String(row.appointment_id ?? "") === String(appointment?.id ?? "") &&
     String(row.encounter_status ?? "") !== "voided"
   ) ?? null;
 
