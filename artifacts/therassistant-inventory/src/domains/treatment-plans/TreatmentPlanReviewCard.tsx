@@ -6,6 +6,7 @@ import { saveTreatmentPlanReview, signTreatmentPlanReview } from "./repository";
 
 type DataRow = Record<string, unknown> & { id: string };
 type Review = DataRow & { goals?: DataRow[] };
+type GoalEdit = { decision: string; comments: string };
 
 export function TreatmentPlanReviewCard({
   review,
@@ -17,15 +18,16 @@ export function TreatmentPlanReviewCard({
   const signed = String(review.status ?? "") === "signed";
   const goals = Array.isArray(review.goals) ? review.goals : [];
   const [clinicianSummary, setClinicianSummary] = useState(String(review.clinician_summary ?? ""));
-  const [goalEdits, setGoalEdits] = useState(() =>
-    Object.fromEntries(goals.map((goal) => [
-      goal.id,
-      {
+  const [goalEdits, setGoalEdits] = useState<Record<string, GoalEdit>>(() => {
+    const initial: Record<string, GoalEdit> = {};
+    for (const goal of goals) {
+      initial[goal.id] = {
         decision: String(goal.clinician_decision ?? "pending"),
         comments: String(goal.clinician_comments ?? ""),
-      },
-    ])),
-  );
+      };
+    }
+    return initial;
+  });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
