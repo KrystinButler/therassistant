@@ -11,14 +11,20 @@ const billingHubSource = readFileSync(
   "utf8",
 );
 
-const retiredRoutes = ["/work-center", "/claims/submission", "/claims/follow-up", "/ar-denials"];
+const retiredRoutes = ["/claims/submission", "/claims/follow-up", "/ar-denials"];
 
-test("active dashboard links use canonical RCM destinations", () => {
-  for (const route of retiredRoutes) assert.doesNotMatch(dashboardSource, new RegExp(route.replaceAll("/", "\\/")));
-  for (const route of ["/billing/charges", "/rejections", "/claims", "/denials", "/payments"]) {
+test("workflow dashboard links to the canonical connected destinations", () => {
+  for (const route of retiredRoutes) {
+    assert.doesNotMatch(dashboardSource, new RegExp(route.replaceAll("/", "\\/")));
+  }
+  for (const route of ["/work-center", "/billing/charges", "/rejections", "/claims", "/payments"]) {
     assert.match(dashboardSource, new RegExp(route.replaceAll("/", "\\/")));
   }
-  assert.doesNotMatch(dashboardSource, /Claim Submission|Work Center/);
+  assert.match(dashboardSource, /ENGAGE/);
+  assert.match(dashboardSource, /PREPARE/);
+  assert.match(dashboardSource, /DOCUMENT/);
+  assert.match(dashboardSource, /GET PAID/);
+  assert.match(dashboardSource, /OPERATE/);
 });
 
 test("Billing Hub routes every financial metric to a canonical owner", () => {
