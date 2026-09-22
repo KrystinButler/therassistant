@@ -211,7 +211,7 @@ test("CMS-1500 preview renders recognizable claim boxes from the canonical claim
   assert.match(html, /data-cms-box="21"/);
   assert.match(html, /data-cms-box="24D"/);
   assert.match(html, /data-cms-box="33"/);
-  assert.match(html, /Demo, Patient/);
+  assert.match(html, /Patient, Demo/);
   assert.match(html, /Aetna/);
   assert.match(html, /90837/);
   assert.match(html, />10</);
