@@ -53,6 +53,8 @@ export function EncounterPage() {
   const [data, setData] = useState<EncounterDetail | null>(null);
   const [contextTab, setContextTab] = useState<ContextTab>("lastVisit");
   const [contextOpen, setContextOpen] = useState(true);
+  const [elapsedSeconds, setElapsedSeconds] = useState(0);
+  const [showSlashMenu, setShowSlashMenu] = useState(false);
   const noteRef = useRef<HTMLTextAreaElement>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -236,7 +238,7 @@ export function EncounterPage() {
   ] as const;
   const billingFollowUpCount = completionChecks.filter((check) => check.status !== "pass").length;
 
-  function injectIntoNote(text: string) {
+  function handleNoteChange(value: string) {\n    setNoteText(value);\n    setShowSlashMenu(value.endsWith("/"));\n  }\n\n  function injectQuickText(text: string) {\n    const textarea = noteRef.current;\n    const start = textarea?.selectionStart ?? noteText.length;\n    const slashStart = noteText.slice(0, start).lastIndexOf("/");\n    const insertAt = slashStart >= 0 ? slashStart : start;\n    const end = textarea?.selectionEnd ?? start;\n    setNoteText((current) => `${current.slice(0, insertAt)}${text}${current.slice(end)}`);\n    setShowSlashMenu(false);\n    requestAnimationFrame(() => {\n      if (!textarea) return;\n      textarea.focus();\n      const cursor = insertAt + text.length;\n      textarea.setSelectionRange(cursor, cursor);\n    });\n  }\n\n  function injectIntoNote(text: string) {
     if (signed || !text.trim()) return;
     const textarea = noteRef.current;
     const start = textarea?.selectionStart ?? noteText.length;
@@ -312,7 +314,7 @@ export function EncounterPage() {
             <label><div className="thera-field-label">Note Type</div><select className="thera-input" value={noteType} disabled={signed} onChange={(event) => setNoteType(event.target.value)}><option value="psychotherapy">Psychotherapy</option><option value="assessment">Assessment</option><option value="intake">Intake</option><option value="crisis">Crisis</option><option value="case_management">Case Management</option><option value="medication_management">Medication Management</option><option value="other">Other</option></select></label>
             <label><div className="thera-field-label">Goal / Objective Addressed</div><input className="thera-input" value={goalAddressed} disabled={signed} onChange={(event) => setGoalAddressed(event.target.value)} placeholder="Goal or objective addressed" /></label>
           </div>
-          <label><div className="thera-field-label">Session / SOAP Note</div><textarea ref={noteRef} className="thera-input encounter-note-editor" value={noteText} disabled={signed} onChange={(event) => setNoteText(event.target.value)} placeholder="Document subjective/objective findings, assessment, interventions, response, plan, risk, and relevant clinical context." /></label>
+          <div className="encounter-editor-wrap"><label><div className="thera-field-label">Session / SOAP Note</div><textarea ref={noteRef} className="thera-input encounter-note-editor" value={noteText} disabled={signed} onChange={(event) => handleNoteChange(event.target.value)} placeholder="Document subjective/objective findings, assessment, interventions, response, plan, risk, and relevant clinical context. Type / for quick inserts." /></label>{showSlashMenu && !signed && <div className="encounter-slash-menu"><div>QUICK INSERTS</div><button type="button" onClick={() => injectQuickText("Risk Assessment: Client denies suicidal or homicidal ideation. No acute safety concerns reported.")}>Risk: Standard Negative</button><button type="button" onClick={() => injectQuickText("Mental Status: Alert and oriented x4. Appearance and behavior appropriate. Speech normal. Thought process linear and goal directed.")}>MSE: Within Normal Limits</button><button type="button" onClick={() => injectQuickText("Intervention: Supportive psychotherapy, reflective listening, validation, and collaborative problem solving were utilized.")}>Intervention: Supportive</button></div>}</div>
           {!signed && <div className="encounter-note-actions"><button type="button" className="thera-action" disabled={saving || !noteText.trim()} onClick={() => void saveNote()}>{saving ? "Saving..." : "Save Note"}</button><span>Saving does not sign or lock the clinical record.</span></div>}
           {signed && data.signatures[0] && <div className="thera-alert" style={{ marginTop: 12 }}>Signed {dateTime(String(data.signatures[0].signed_at ?? ""))} by {String(data.signatures[0].signature_text ?? "provider")}</div>}
         </section>
