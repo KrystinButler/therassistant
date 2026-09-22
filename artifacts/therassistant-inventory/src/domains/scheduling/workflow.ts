@@ -36,10 +36,6 @@ function recordOf(value: unknown): Record<string, unknown> {
     : {};
 }
 
-function textOf(value: unknown) {
-  return typeof value === "string" ? value.trim() : "";
-}
-
 export function buildSchedulePatientPresentation(
   checkin: Record<string, unknown> | null,
   openBalanceCents: number,
@@ -47,8 +43,6 @@ export function buildSchedulePatientPresentation(
 ): SchedulePatientPresentation {
   const responses = recordOf(checkin?.responses);
   const preVisit = recordOf(responses.pre_visit);
-  const questions = recordOf(preVisit.visit_questions);
-
   const review = buildPatientReviewCheckIn(checkin);
   const preVisitInsights: SchedulePreVisitInsight[] = [];
 
