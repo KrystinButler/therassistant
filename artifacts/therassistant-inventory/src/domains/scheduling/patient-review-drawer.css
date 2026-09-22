@@ -53,3 +53,43 @@
   .patient-review-person-card { grid-template-columns: auto 1fr; }
   .patient-review-appointment { grid-column: 2; border-left: 0; padding-left: 0; }
 }
+
+
+.patient-review-status-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-top: 2px;
+}
+.patient-review-status-row > span:last-child {
+  color: #6a7f9d;
+  font-size: .6rem;
+  text-transform: capitalize;
+}
+.patient-review-edit-appointment {
+  margin-top: 3px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #2c6eb4;
+  font-size: .61rem;
+  text-align: left;
+  cursor: pointer;
+}
+.patient-review-edit-appointment:hover {
+  text-decoration: underline;
+}
+.patient-review-source-tag {
+  display: inline-flex;
+  align-items: center;
+  min-height: 20px;
+  padding: 2px 6px;
+  border-radius: 999px;
+  background: #f4f7fa;
+  color: #617793;
+  font-size: .56rem;
+  font-weight: 700;
+  letter-spacing: .02em;
+  text-transform: uppercase;
+}

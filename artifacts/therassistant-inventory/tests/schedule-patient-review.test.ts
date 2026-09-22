@@ -19,6 +19,9 @@ test("schedule is the PREPARE pre-session workflow", () => {
   assert.doesNotMatch(schedule, /href=\{?\`?\/schedule\/\$\{/);
   assert.match(schedule, /NOW/);
   assert.match(schedule, /NEXT/);
+  assert.match(schedule, /roles\.includes\("clinician"\)/);
+  assert.match(schedule, /signedInProvider/);
+  assert.match(schedule, /onKeyDown/);
   assert.doesNotMatch(app, /<PreSessionPage/);
 });
 
@@ -44,5 +47,8 @@ test("patient review drawer exposes the requested clinical review sections", () 
     "Visit Readiness",
     "Open Chart",
     "Start Note",
+    "Resume Note",
+    "Patient submitted",
+    "Edit appointment",
   ]) assert.match(drawer, new RegExp(label));
 });

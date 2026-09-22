@@ -32,5 +32,5 @@ test("billing follow-up is explicitly nonblocking for clinical signature", () =>
 test("pre-session drawer ends in Visit Readiness and Start Note", () => {
   assert.match(drawer, /title="Visit Readiness"/);
   assert.match(drawer, /> Open Chart</);
-  assert.match(drawer, /> \{starting \? "Starting\.\.\." : "Start Note"\}/);
+  assert.match(drawer, /starting \? "Starting\.\.\." : existingEncounter \? "Resume Note" : "Start Note"/);
 });

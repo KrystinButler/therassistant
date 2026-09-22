@@ -127,8 +127,17 @@ export function PatientReviewDrawer({ appointment, open, onOpenChange, onEditApp
     };
   }, [chart, appointment]);
 
+  const existingEncounter = chart?.encounters.find((row) =>
+    String(row.appointment_id ?? "") === appointment.id &&
+    String(row.encounter_status ?? "") !== "voided"
+  ) ?? null;
+
   async function startNote() {
     if (!appointment) return;
+    if (existingEncounter?.id) {
+      navigate(`/encounters/${String(existingEncounter.id)}`);
+      return;
+    }
     setStarting(true);
     setError(null);
     try {
@@ -151,6 +160,19 @@ export function PatientReviewDrawer({ appointment, open, onOpenChange, onEditApp
   const age = dob ? ageOn(dob) : null;
   const pronouns = text(patient, ["pronouns", "preferred_pronouns"]);
   const payerAttention = appointment.readiness.checks.filter((check) => check.status !== "pass");
+  const checkInReady = appointment.checkInStatus === "Ready";
+  const readinessTitle =
+    appointment.checkInStatus === "Balance Issues" ? "Balance issue flagged before visit" :
+    appointment.checkInStatus === "In Progress" ? "Patient check-in is still in progress" :
+    appointment.checkInStatus === "Not Checked In" ? "Patient has not completed check-in" :
+    payerAttention.length ? "Patient-side preparation complete · administrative follow-up remains" :
+    "Ready for session";
+  const readinessText =
+    appointment.checkInStatus === "Balance Issues" ? "The account is flagged for a balance issue. This remains visible for follow-up but does not prevent the provider from opening the encounter and documenting care." :
+    appointment.checkInStatus === "In Progress" ? "The patient has started pre-visit steps but has not completed them. Available submitted information can still be reviewed in this drawer." :
+    appointment.checkInStatus === "Not Checked In" ? "No completed pre-visit check-in is available yet. The provider may still open the encounter when clinically appropriate." :
+    payerAttention.length ? `${payerAttention.length} administrative item${payerAttention.length === 1 ? "" : "s"} need follow-up. THERASSISTANT keeps those items outside the clinical workflow.` :
+    "Required patient-side preparation is complete. The provider can move directly into documentation.";
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -170,7 +192,11 @@ export function PatientReviewDrawer({ appointment, open, onOpenChange, onEditApp
             <div className="patient-review-appointment">
               <strong>{timeLabel(appointment.startsAt)}</strong>
               <span>{durationMinutes(appointment)} min · {appointment.serviceType || "Appointment"}</span>
-              <StatusBadge value={appointment.appointmentStatus} />
+              <div className="patient-review-status-row">
+                <StatusBadge value={appointment.checkInStatus} />
+                <span>{appointment.locationType.replaceAll("_", " ")}</span>
+              </div>
+              {onEditAppointment ? <button type="button" className="patient-review-edit-appointment" onClick={onEditAppointment}>Edit appointment</button> : null}
             </div>
           </section>
 
@@ -178,7 +204,7 @@ export function PatientReviewDrawer({ appointment, open, onOpenChange, onEditApp
           {loading && !review ? <div className="thera-state">Loading patient review...</div> : null}
 
           {review ? <div className="patient-review-sections">
-            <ReviewSection icon={<ClipboardList size={15} />} title="Check-In Summary" action={onEditAppointment ? <button type="button" onClick={onEditAppointment}>Edit</button> : null}>
+            <ReviewSection icon={<ClipboardList size={15} />} title="Check-In Summary" action={<span className="patient-review-source-tag">Patient submitted</span>}>
               <Definition label="Focus Today" value={review.focus} />
               <Definition label="Patient's Mood" value={review.mood} />
               <div className="patient-review-definition"><span>Recent Changes</span>{review.changes.length ? <ul>{review.changes.map((item) => <li key={item}>{item}</li>)}</ul> : <p>No recent changes submitted.</p>}</div>
@@ -207,14 +233,14 @@ export function PatientReviewDrawer({ appointment, open, onOpenChange, onEditApp
             </ReviewSection>
 
             <ReviewSection icon={<CheckCircle2 size={15} />} title="Visit Readiness">
-              <div className={`patient-review-highlight ${payerAttention.length ? "warning" : "positive"}`}><CheckCircle2 size={18} /><div><strong>{payerAttention.length ? "Visit can start · administrative follow-up remains" : "Ready for session"}</strong><p>{payerAttention.length ? `${payerAttention.length} payer or billing item${payerAttention.length === 1 ? "" : "s"} need attention. THERASSISTANT routes those items outside the clinical workflow so they do not prevent starting the encounter or documenting care.` : "Required patient-side preparation is complete. The provider can move directly into documentation."}</p></div></div>
+              <div className={`patient-review-highlight ${checkInReady && !payerAttention.length ? "positive" : "warning"}`}><CheckCircle2 size={18} /><div><strong>{readinessTitle}</strong><p>{readinessText}</p></div></div>
             </ReviewSection>
           </div> : null}
         </div>
 
         <footer className="patient-review-footer">
           <button type="button" className="patient-review-secondary" onClick={() => navigate(`/clients/${appointment.clientId}`)}><BookOpenText size={16} /> Open Chart</button>
-          <button type="button" className="patient-review-primary" disabled={starting} onClick={() => void startNote()}><FileText size={16} /> {starting ? "Starting..." : "Start Note"}</button>
+          <button type="button" className="patient-review-primary" disabled={starting} onClick={() => void startNote()}><FileText size={16} /> {starting ? "Starting..." : existingEncounter ? "Resume Note" : "Start Note"}</button>
         </footer>
       </SheetContent>
     </Sheet>

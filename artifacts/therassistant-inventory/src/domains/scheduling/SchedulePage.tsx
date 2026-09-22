@@ -2,6 +2,8 @@ import { useEffect, useMemo, useState } from "react";
 import { CalendarDays, ChevronRight } from "lucide-react";
 
 import { StatusBadge } from "../../components/status-badge";
+import { useAuth } from "../../auth/auth-context";
+import { useTenant } from "../../auth/tenant-context";
 import { WorkDrawer } from "../../components/work-drawer";
 import { updateAppointment } from "./appointment-edit";
 import { PatientReviewDrawer } from "./PatientReviewDrawer";
@@ -105,6 +107,8 @@ function compactDate(startsAt: string) {
 }
 
 export function SchedulePage() {
+  const { user } = useAuth();
+  const { roles } = useTenant();
   const [data, setData] = useState<ScheduleData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -136,6 +140,18 @@ export function SchedulePage() {
     setAnchor(new Date(appointment.startsAt));
     setView("day");
   }, [data]);
+
+  const clinicianView = roles.includes("clinician");
+  const signedInProvider = useMemo(() => {
+    const email = String(user?.email ?? "").trim().toLowerCase();
+    if (!data || !email) return null;
+    return data.providers.find((provider) => String(provider.email ?? "").trim().toLowerCase() === email) ?? null;
+  }, [data, user?.email]);
+
+  useEffect(() => {
+    if (!clinicianView || !signedInProvider) return;
+    setProviderFilter(signedInProvider.id);
+  }, [clinicianView, signedInProvider?.id]);
 
   const visible = useMemo(() => data ? data.appointments.filter((appointment) =>
     inView(appointment.startsAt, anchor, view) && (!providerFilter || appointment.providerId === providerFilter),
@@ -223,7 +239,9 @@ export function SchedulePage() {
       </div>
       <div className="schedule-toolbar-right">
         <div className="schedule-view-tabs">{(["day", "week", "month"] as ViewMode[]).map((mode) => <button key={mode} type="button" className={view === mode ? "active" : ""} onClick={() => setView(mode)}>{mode[0].toUpperCase() + mode.slice(1)}</button>)}</div>
-        <select className="thera-input schedule-provider-filter" value={providerFilter} onChange={(e) => setProviderFilter(e.target.value)}><option value="">All providers</option>{(data?.providers ?? []).map((provider) => <option key={provider.id} value={provider.id}>{personName(provider)}</option>)}</select>
+        {clinicianView && signedInProvider
+          ? <div className="schedule-provider-identity"><span>Provider</span><strong>{personName(signedInProvider)}</strong></div>
+          : <select className="thera-input schedule-provider-filter" value={providerFilter} onChange={(e) => setProviderFilter(e.target.value)}><option value="">All providers</option>{(data?.providers ?? []).map((provider) => <option key={provider.id} value={provider.id}>{personName(provider)}</option>)}</select>}
       </div>
     </section>
 
@@ -241,7 +259,20 @@ export function SchedulePage() {
         const statusTone = checkInTone(appointment);
         const focusAction = sessionFocusAction(appointment.sessionFocus);
         const rowState = appointment.id === currentAppointmentId ? " current" : appointment.id === nextAppointmentId ? " next" : "";
-        return <tr key={appointment.id} className={`schedule-row${rowState}`} onClick={() => openReview(appointment)}>
+        return <tr
+          key={appointment.id}
+          className={`schedule-row${rowState}`}
+          role="button"
+          tabIndex={0}
+          aria-label={`Review ${appointment.clientName} appointment at ${appointmentTime(appointment.startsAt)}`}
+          onClick={() => openReview(appointment)}
+          onKeyDown={(event) => {
+            if (event.key === "Enter" || event.key === " ") {
+              event.preventDefault();
+              openReview(appointment);
+            }
+          }}
+        >
           <td className="schedule-time">
             {view !== "day" && <span className="schedule-date-mini">{compactDate(appointment.startsAt)}</span>}
             <strong>{appointmentTime(appointment.startsAt)}</strong>
