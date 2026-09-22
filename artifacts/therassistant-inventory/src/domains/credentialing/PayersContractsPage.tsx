@@ -1,20 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "wouter";
 import { StatusBadge } from "../../components/status-badge";
-import { tenantSelect, referenceSelect } from "../../lib/tenant-data-client";
+import { tenantInsert, tenantSelect, referenceSelect } from "../../lib/tenant-data-client";
 import { shortDate } from "../../lib/format";
 
 type Row = Record<string, any>;
-
-async function apiJson(path: string, init: RequestInit) {
-  const response = await fetch(path, {
-    ...init,
-    headers: { Accept: "application/json", "Content-Type": "application/json", ...(init.headers ?? {}) },
-  });
-  const body = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(body.error || `Request failed (${response.status})`);
-  return body;
-}
 
 export function PayersContractsPage() {
   const [version, setVersion] = useState(0);
@@ -61,9 +51,11 @@ export function PayersContractsPage() {
     if (!newContractPayer || !contractName.trim()) return;
     setError(null);
     try {
-      await apiJson(`/api/payers/${newContractPayer.id}/contracts`, {
-        method: "POST",
-        body: JSON.stringify({ contract_name: contractName.trim(), status: "draft", effective_date: effectiveDate || null }),
+      await tenantInsert("payer_contracts", {
+        payer_id: newContractPayer.id,
+        contract_name: contractName.trim(),
+        status: "draft",
+        effective_date: effectiveDate || null,
       });
       setNewContractPayer(null);
       setContractName("");
@@ -78,9 +70,9 @@ export function PayersContractsPage() {
     <>
       <div className="thera-page-header split">
         <div>
-          <div className="thera-eyebrow">CONTRACT INTELLIGENCE</div>
+          <div className="thera-eyebrow">OPERATE · PAYER INTELLIGENCE</div>
           <h1>Payers & Contracts</h1>
-          <p>Payer plans, provider participation, contracts and fee schedules in one workspace.</p>
+          <p>Colorado payer profiles, plan products, provider participation, contracts, and reimbursement data used across eligibility, credentialing, claims, and payment workflows.</p>
         </div>
         <Link href="/credentialing" className="thera-action secondary">Credentialing</Link>
       </div>
