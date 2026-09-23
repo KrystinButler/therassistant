@@ -103,6 +103,11 @@ jobs:
       - name: Start isolated Supabase E2E stack
         shell: bash
         run: |
+          # Historical demo data was loaded outside the migration chain before this
+          # data-only migration was created. Exclude it from clean local replay and
+          # seed the isolated E2E dataset explicitly after schema migrations.
+          mv supabase/migrations/20260915040049_phase5_mailroom_demo_seed.sql /tmp/phase5_mailroom_demo_seed.sql
+
           pnpm dlx supabase@2.117.0 start
           pnpm dlx supabase@2.117.0 status -o env > /tmp/supabase.env
           set -a
