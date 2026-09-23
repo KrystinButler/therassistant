@@ -13,13 +13,18 @@ export type PayerIntelligenceContext =
 
 type PayerResource = Row & {
   id: string;
+  payer_plan_id?: string | null;
   resource_type: string;
   label: string;
   value?: string | null;
   url?: string | null;
+  source_url?: string | null;
   notes?: string | null;
   effective_date?: string | null;
   expiration_date?: string | null;
+  reviewed_at?: string | null;
+  review_due_at?: string | null;
+  verification_status?: string | null;
   sort_order?: number | null;
   created_at?: string | null;
 };
@@ -69,9 +74,9 @@ function phoneHref(value?: string | null) {
   return digitCount >= 7 ? `tel:${digits}` : null;
 }
 
-function dateSignal(expirationDate?: string | null) {
-  if (!expirationDate) return null;
-  const end = new Date(`${expirationDate.slice(0, 10)}T23:59:59`);
+function dateSignal(reviewDueAt?: string | null) {
+  if (!reviewDueAt) return null;
+  const end = new Date(`${reviewDueAt.slice(0, 10)}T23:59:59`);
   if (Number.isNaN(end.getTime())) return null;
   const days = Math.ceil((end.getTime() - Date.now()) / 86_400_000);
   if (days < 0) return "possibly_outdated";
@@ -107,7 +112,12 @@ export function PayerIntelligencePanel({
       .then((rows) => {
         if (!active) return;
         const allowed = new Set(resourceTypesByContext[context]);
-        setResources(rows.filter((row) => allowed.has(String(row.resource_type || ""))));
+        setResources(rows.filter((row) => {
+          if (!allowed.has(String(row.resource_type || ""))) return false;
+          const resourcePlanId = row.payer_plan_id ? String(row.payer_plan_id) : null;
+          if (!payerPlanId) return resourcePlanId === null;
+          return resourcePlanId === null || resourcePlanId === payerPlanId;
+        }));
       })
       .catch((err: unknown) => {
         if (!active) return;
@@ -120,7 +130,7 @@ export function PayerIntelligencePanel({
     return () => {
       active = false;
     };
-  }, [context, payerId]);
+  }, [context, payerId, payerPlanId]);
 
   async function copyValue(resource: PayerResource) {
     const value = String(resource.value || resource.url || "").trim();
@@ -177,13 +187,15 @@ export function PayerIntelligencePanel({
             <div className="thera-stack">
               {resources.map((resource) => {
                 const phone = resource.resource_type === "provider_services" ? phoneHref(resource.value) : null;
-                const signal = dateSignal(resource.expiration_date);
+                const signal = dateSignal(resource.review_due_at);
                 return (
                   <div className="thera-story" key={resource.id}>
                     <div className="thera-row-between">
                       <div>
                         <div className="thera-filter-row">
                           <StatusBadge value={resourceLabel(resource.resource_type)} />
+                          <StatusBadge value={resource.payer_plan_id ? "plan_specific" : "payer_wide"} />
+                          <StatusBadge value={resource.verification_status || "unverified"} />
                           {signal ? <StatusBadge value={signal} /> : null}
                         </div>
                         <strong>{resource.label || "Payer resource"}</strong>
@@ -197,6 +209,11 @@ export function PayerIntelligencePanel({
                             rel="noreferrer"
                           >
                             Open
+                          </a>
+                        ) : null}
+                        {resource.source_url && resource.source_url !== resource.url ? (
+                          <a className="thera-action secondary" href={resource.source_url} target="_blank" rel="noreferrer">
+                            Source
                           </a>
                         ) : null}
                         {phone ? (
@@ -219,9 +236,12 @@ export function PayerIntelligencePanel({
                     {resource.notes ? <div>{resource.notes}</div> : null}
                     {(resource.effective_date || resource.expiration_date) ? (
                       <div className="thera-table-subtext">
-                        Effective {shortDate(resource.effective_date)}
-                        {" · "}
-                        Review / expires {shortDate(resource.expiration_date)}
+                        Policy/effective period: {shortDate(resource.effective_date)} — {shortDate(resource.expiration_date)}
+                      </div>
+                    ) : null}
+                    {(resource.reviewed_at || resource.review_due_at) ? (
+                      <div className="thera-table-subtext">
+                        Source reviewed {shortDate(resource.reviewed_at)} · Next review {shortDate(resource.review_due_at)}
                       </div>
                     ) : null}
                   </div>

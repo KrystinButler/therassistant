@@ -69,6 +69,11 @@ export function PayerDetailPage() {
           notes: form.notes?.trim() || null,
           effective_date: form.effective_date || null,
           expiration_date: form.expiration_date || null,
+          payer_plan_id: form.payer_plan_id || null,
+          source_url: form.source_url?.trim() || null,
+          reviewed_at: form.reviewed_at || null,
+          review_due_at: form.review_due_at || null,
+          verification_status: form.verification_status || "unverified",
           updated_at: new Date().toISOString(),
         };
         if (form.id) await tenantUpdate("payer_resources", form.id, payload);
@@ -143,7 +148,7 @@ export function PayerDetailPage() {
           <p>{view.payer.payer_type || "Payer"} · Shared payer knowledge for eligibility, participation, claims, payment, credentialing, and reimbursement.</p>
         </div>
         <div className="thera-filter-row">
-          <button type="button" className="thera-action secondary" onClick={() => open("resource", { resource_type: "provider_services", label: "", value: "", url: "", notes: "", effective_date: "", expiration_date: "" })}>+ Payer Resource</button>
+          <button type="button" className="thera-action secondary" onClick={() => open("resource", { resource_type: "provider_services", label: "", value: "", url: "", source_url: "", notes: "", effective_date: "", expiration_date: "", payer_plan_id: "", reviewed_at: new Date().toISOString().slice(0, 10), review_due_at: "", verification_status: "unverified" })}>+ Payer Resource</button>
           <button type="button" className="thera-action secondary" onClick={() => open("contract", { contract_name: "", status: "draft", effective_date: "", notes: "" })}>+ Contract</button>
           <button type="button" className="thera-action secondary" onClick={() => open("schedule", { contract_id: view.contracts[0]?.id || "", name: "", status: "draft", effective_date: "" })}>+ Fee Schedule</button>
           <button type="button" className="thera-action" onClick={() => open("rate", { schedule_id: schedules[0]?.id || "", cpt_code: "", modifier: "", rate: "", unit_type: "service" })}>+ Rate</button>
@@ -188,34 +193,44 @@ export function PayerDetailPage() {
               <h2>Operational Resources</h2>
               <p>Contacts, portals, addresses, filing rules, credentialing links, directories, and payer-specific guidance reused across THERASSISTANT.</p>
             </div>
-            <button type="button" className="thera-action secondary" onClick={() => open("resource", { resource_type: "provider_services", label: "", value: "", url: "", notes: "", effective_date: "", expiration_date: "" })}>+ Resource</button>
+            <button type="button" className="thera-action secondary" onClick={() => open("resource", { resource_type: "provider_services", label: "", value: "", url: "", source_url: "", notes: "", effective_date: "", expiration_date: "", payer_plan_id: "", reviewed_at: new Date().toISOString().slice(0, 10), review_due_at: "", verification_status: "unverified" })}>+ Resource</button>
           </div>
           {resources.length === 0 ? (
             <div className="thera-empty">No payer resources have been captured yet.</div>
           ) : (
             <div className="thera-table-wrap">
               <table className="thera-table">
-                <thead><tr><th>Area</th><th>Resource</th><th>Value / Link</th><th>Operational Notes</th><th>Effective</th><th>Expires</th><th /></tr></thead>
+                <thead><tr><th>Area</th><th>Plan</th><th>Resource</th><th>Value / Link</th><th>Operational Notes</th><th>Verification</th><th>Reviewed</th><th>Next Review</th><th>Effective</th><th>Expires</th><th>Source</th><th /></tr></thead>
                 <tbody>
                   {resources.map((resource) => (
                     <tr key={resource.id}>
                       <td><StatusBadge value={resourceLabel(String(resource.resource_type ?? "other"))} /></td>
+                      <td>{view.plans.find((plan) => plan.id === resource.payer_plan_id)?.name || "All payer plans"}</td>
                       <td><strong>{String(resource.label ?? "Resource")}</strong></td>
                       <td>
                         {resource.url ? <a className="thera-link" href={String(resource.url)} target="_blank" rel="noreferrer">{resource.value || "Open resource"}</a> : String(resource.value ?? "—")}
                       </td>
                       <td>{String(resource.notes ?? "—")}</td>
+                      <td><StatusBadge value={String(resource.verification_status ?? "unverified")} /></td>
+                      <td>{shortDate(resource.reviewed_at)}</td>
+                      <td>{shortDate(resource.review_due_at)}</td>
                       <td>{shortDate(resource.effective_date)}</td>
                       <td>{shortDate(resource.expiration_date)}</td>
+                      <td>{resource.source_url ? <a className="thera-link" href={String(resource.source_url)} target="_blank" rel="noreferrer">Source</a> : "—"}</td>
                       <td><button type="button" className="thera-action secondary" onClick={() => open("resource", {
                         id: String(resource.id),
                         resource_type: String(resource.resource_type ?? "other"),
                         label: String(resource.label ?? ""),
                         value: String(resource.value ?? ""),
                         url: String(resource.url ?? ""),
+                        source_url: String(resource.source_url ?? ""),
                         notes: String(resource.notes ?? ""),
+                        payer_plan_id: String(resource.payer_plan_id ?? ""),
                         effective_date: String(resource.effective_date ?? "").slice(0, 10),
                         expiration_date: String(resource.expiration_date ?? "").slice(0, 10),
+                        reviewed_at: String(resource.reviewed_at ?? "").slice(0, 10),
+                        review_due_at: String(resource.review_due_at ?? "").slice(0, 10),
+                        verification_status: String(resource.verification_status ?? "unverified"),
                       })}>Edit</button></td>
                     </tr>
                   ))}
@@ -260,11 +275,20 @@ export function PayerDetailPage() {
             { value: "reimbursement", label: "Reimbursement Guidance" },
             { value: "other", label: "Other" },
           ]} onChange={(value) => setForm({ ...form, resource_type: value })} />
+          <Select label="Plan / Product (blank = payer-wide)" value={form.payer_plan_id || ""} options={view.plans.map((plan) => ({ value: plan.id, label: plan.name }))} onChange={(value) => setForm({ ...form, payer_plan_id: value })} />
           <Input label="Resource Name" value={form.label || ""} onChange={(value) => setForm({ ...form, label: value })} />
           <Input label="Value / Phone / Address" value={form.value || ""} onChange={(value) => setForm({ ...form, value })} />
-          <Input label="URL" value={form.url || ""} onChange={(value) => setForm({ ...form, url: value })} />
+          <Input label="Working URL" value={form.url || ""} onChange={(value) => setForm({ ...form, url: value })} />
+          <Input label="Authoritative Source URL" value={form.source_url || ""} onChange={(value) => setForm({ ...form, source_url: value })} />
+          <Select label="Verification" value={form.verification_status || "unverified"} options={[
+            { value: "verified", label: "Verified" },
+            { value: "needs_review", label: "Needs review" },
+            { value: "unverified", label: "Unverified" },
+          ]} onChange={(value) => setForm({ ...form, verification_status: value })} />
+          <Input label="Last Source Review" type="date" value={form.reviewed_at || ""} onChange={(value) => setForm({ ...form, reviewed_at: value })} />
+          <Input label="Next Review Due" type="date" value={form.review_due_at || ""} onChange={(value) => setForm({ ...form, review_due_at: value })} />
           <Input label="Effective Date" type="date" value={form.effective_date || ""} onChange={(value) => setForm({ ...form, effective_date: value })} />
-          <Input label="Expiration / Review Date" type="date" value={form.expiration_date || ""} onChange={(value) => setForm({ ...form, expiration_date: value })} />
+          <Input label="Expiration Date" type="date" value={form.expiration_date || ""} onChange={(value) => setForm({ ...form, expiration_date: value })} />
           <label style={{ gridColumn: "1 / -1" }}><div className="thera-field-label">Operational Notes</div><textarea className="thera-input" rows={4} value={form.notes || ""} onChange={(event) => setForm({ ...form, notes: event.target.value })} /></label>
         </Grid>}
         {modal === "contract" && <Grid><Input label="Contract Name" value={form.contract_name || ""} onChange={(value) => setForm({ ...form, contract_name: value })} /><Select label="Status" value={form.status || "draft"} options={["draft", "pending", "active"]} onChange={(value) => setForm({ ...form, status: value })} /><Input label="Effective Date" type="date" value={form.effective_date || ""} onChange={(value) => setForm({ ...form, effective_date: value })} /><Input label="Notes" value={form.notes || ""} onChange={(value) => setForm({ ...form, notes: value })} /></Grid>}
