@@ -10,6 +10,11 @@ import {
   normalizeForensicContext,
   type ForensicContext,
 } from "./forensic-context";
+import {
+  emptyPsychedelicContext,
+  normalizePsychedelicContext,
+  type PsychedelicContext,
+} from "./psychedelic-context";
 
 export type SmartPhraseScope = "built_in" | "user" | "practice";
 export type SmartPhrase = {
@@ -35,6 +40,7 @@ export type StructuredSelections = {
   templateType: DocumentationTemplate;
   clinicalTags: ClinicalTagId[];
   forensicContext: ForensicContext;
+  psychedelicContext: PsychedelicContext;
   timelineEvents: TimelineEvent[];
   similarityReviewAcknowledged: boolean;
   anxiety: Severity;
@@ -92,6 +98,7 @@ export function emptyStructuredSelections(): StructuredSelections {
     templateType: "standard_therapy",
     clinicalTags: [],
     forensicContext: emptyForensicContext(),
+    psychedelicContext: emptyPsychedelicContext(),
     timelineEvents: [],
     similarityReviewAcknowledged: false,
     anxiety: "",
@@ -128,6 +135,7 @@ export function normalizeStructuredSelections(value: unknown): StructuredSelecti
     templateType: normalizeDocumentationTemplate(source.templateType ?? source.template_type),
     clinicalTags: normalizeClinicalTags(source.clinicalTags ?? source.clinical_tags),
     forensicContext: normalizeForensicContext(source.forensicContext ?? source.forensic_context),
+    psychedelicContext: normalizePsychedelicContext(source.psychedelicContext ?? source.psychedelic_context),
     timelineEvents,
     similarityReviewAcknowledged: source.similarityReviewAcknowledged === true || source.similarity_review_acknowledged === true,
     anxiety: validSeverity.has(anxiety) ? anxiety as Severity : "",
