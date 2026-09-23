@@ -110,6 +110,7 @@ export const WORKSPACES: readonly WorkspaceDefinition[] = [
         visibility: visibleToAll,
       },
       { id: "mailroom", label: "Mailroom", href: "/mailroom", visibility: visibleToAll },
+      { id: "connected-operations", label: "Connected Operations", href: "/operations/connected", visibility: visibleToAll },
       {
         id: "imports",
         label: "Imports / Migration",
@@ -150,6 +151,7 @@ export const WORKSPACES: readonly WorkspaceDefinition[] = [
     visibility: visibleToAll,
     children: [
       { id: "administration", label: "Administration", href: "/administration", visibility: visibleToAll },
+      { id: "users-roles", label: "Users & Roles", href: "/administration/users", visibility: visibleToAll },
       {
         id: "database-inventory",
         label: "Database Inventory",
