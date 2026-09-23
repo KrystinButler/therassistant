@@ -181,7 +181,6 @@ await upsert("clients", [{
 await upsert("payers", [{
   id: IDS.payer,
   name: "Synthetic Commercial Payer",
-  normalized_name: "synthetic commercial payer",
   payer_type: "commercial",
   clearinghouse_payer_id: "60054",
 }]);
