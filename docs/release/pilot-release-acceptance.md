@@ -7,8 +7,9 @@ Bundle: `pilot-local-restore-rehearsal-2026-09-23`
 - GitHub: `KrystinButler/therassistant`
 - Supabase: `lpjwfdvaxobewxcklenl`
 - Vercel: `therassistant`
-- Accepted production baseline commit: `f786c6fa3e7769f17f71eed826fbbdc03f0d43b5`
-- Accepted production baseline deployment: `dpl_AK1hSTMwDpo8b4enc6gA6s9yfodv` — READY
+- Accepted functional production baseline commit: `4b87d84eb0eea9398693b6bc58ca71cdcb6f958f`
+- Accepted functional production baseline deployment: `dpl_2nwCjyNT8Fu4vYZHuePtgp7CgccR` — READY
+- Main Production CI: `35929415624` — SUCCESS (23/23 acceptance gates)
 - GitHub migrations: 135
 - Production Supabase migrations: 135
 - Migration drift: 0
