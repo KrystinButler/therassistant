@@ -1,5 +1,13 @@
-export const SUPABASE_URL = "https://lpjwfdvaxobewxcklenl.supabase.co";
-export const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_JaHqUqIU43A0EwuE5yPXEw_VZYIASqH";
+const DEFAULT_SUPABASE_URL = "https://lpjwfdvaxobewxcklenl.supabase.co";
+const DEFAULT_SUPABASE_PUBLISHABLE_KEY = "sb_publishable_JaHqUqIU43A0EwuE5yPXEw_VZYIASqH";
+
+const viteEnv = import.meta.env ?? {};
+
+export const SUPABASE_URL = (
+  viteEnv.VITE_SUPABASE_URL || DEFAULT_SUPABASE_URL
+).replace(/\/$/, "");
+export const SUPABASE_PUBLISHABLE_KEY =
+  viteEnv.VITE_SUPABASE_PUBLISHABLE_KEY || DEFAULT_SUPABASE_PUBLISHABLE_KEY;
 
 export type AuthUser = {
   id: string;

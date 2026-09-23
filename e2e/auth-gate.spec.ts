@@ -25,7 +25,11 @@ test("staff login exposes password recovery but no public signup control", async
 });
 
 test("Supabase recovery callback opens password update before tenant access", async ({ page }) => {
-  await page.route("https://lpjwfdvaxobewxcklenl.supabase.co/auth/v1/user", async (route) => {
+  const supabaseUrl =
+    process.env.E2E_SUPABASE_URL?.replace(/\/$/, "") ??
+    "https://lpjwfdvaxobewxcklenl.supabase.co";
+
+  await page.route(`${supabaseUrl}/auth/v1/user`, async (route) => {
     if (route.request().method() === "GET") {
       await route.fulfill({
         status: 200,

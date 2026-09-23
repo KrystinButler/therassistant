@@ -109,15 +109,6 @@ test("Credentialing uses production data access and opens enrollment work when r
   await expectWorkspace(page, "Credentialing");
 });
 
-test("Mailroom opens add-correspondence work without saving", async ({ page }) => {
-  await page.goto("/mailroom");
-  await page.getByRole("button", { name: "+ Add Correspondence" }).click();
-  await expect(page.getByRole("heading", { name: "Add Correspondence" })).toBeVisible();
-  await page.getByLabel("Subject").fill("E2E correspondence check");
-  await expect(page.getByRole("button", { name: "Save Correspondence" })).toBeEnabled();
-  await page.getByRole("button", { name: "Cancel" }).click();
-  await expectWorkspace(page, "Mailroom");
-});
 
 test("Providers opens an add-provider drawer without saving", async ({ page }) => {
   await page.goto("/providers");

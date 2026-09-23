@@ -3,6 +3,8 @@ import { defineConfig, devices } from "@playwright/test";
 const externalBaseURL = process.env.PLAYWRIGHT_BASE_URL;
 const localBaseURL = "http://127.0.0.1:4173";
 const staffStorageState = ".playwright/auth/staff.json";
+const providerStorageState = ".playwright/auth/provider.json";
+const patientStorageState = ".playwright/auth/patient.json";
 
 export default defineConfig({
   testDir: "./e2e",
@@ -31,11 +33,45 @@ export default defineConfig({
     },
     {
       name: "staff-chromium",
-      testIgnore: [/auth-gate\.spec\.ts/, /staff-auth\.setup\.ts/],
+      testIgnore: [
+        /auth-gate\.spec\.ts/,
+        /-auth\.setup\.ts$/,
+        /provider-role\.spec\.ts/,
+        /provider-clinical-flow\.spec\.ts/,
+        /patient-role\.spec\.ts/,
+      ],
       dependencies: ["staff-setup"],
       use: {
         ...devices["Desktop Chrome"],
         storageState: staffStorageState,
+      },
+    },
+    {
+      name: "provider-setup",
+      testMatch: /provider-auth\.setup\.ts/,
+      use: { ...devices["Desktop Chrome"] },
+    },
+    {
+      name: "provider-chromium",
+      testMatch: /provider-(?:role|clinical-flow)\.spec\.ts/,
+      dependencies: ["provider-setup"],
+      use: {
+        ...devices["Desktop Chrome"],
+        storageState: providerStorageState,
+      },
+    },
+    {
+      name: "patient-setup",
+      testMatch: /patient-auth\.setup\.ts/,
+      use: { ...devices["Desktop Chrome"] },
+    },
+    {
+      name: "patient-chromium",
+      testMatch: /patient-role\.spec\.ts/,
+      dependencies: ["patient-setup"],
+      use: {
+        ...devices["Desktop Chrome"],
+        storageState: patientStorageState,
       },
     },
   ],
@@ -50,4 +86,4 @@ export default defineConfig({
       },
 });
 
-export { staffStorageState };
+export { patientStorageState, providerStorageState, staffStorageState };
