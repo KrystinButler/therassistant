@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 
 import { StatusBadge } from "../../components/status-badge";
+import { OutcomeReviewPanel } from "./OutcomeReviewPanel";
 import { shortDate } from "../../lib/format";
 import type { PatientChart } from "../patients/types";
 import {
@@ -94,6 +95,7 @@ export function TreatmentPlanPanel({ chart, onChanged }: { chart: PatientChart; 
       const goals = Array.isArray(plan.goals) ? plan.goals : [];
       return <article className="thera-work-card" key={plan.id}><div className="thera-work-card-top"><div><strong>{String(plan.providerName ?? "Treatment Plan")}</strong><div className="thera-table-subtext">Effective {shortDate(String(plan.effective_date ?? ""))} · Review {shortDate(String(plan.review_due_date ?? ""))}</div></div><div><StatusBadge value={String(plan.status ?? "draft")} /> <StatusBadge value={alert.code} /></div></div><div className="thera-definition-grid"><Field label="Problem" value={String(plan.problem_statement ?? "—")} /><Field label="Plan" value={String(plan.plan_text ?? "—")} /><Field label="Interventions" value={String(plan.interventions ?? "—")} /><Field label="Review" value={alert.message} /></div><div style={{ marginTop: 14 }}><div className="thera-row-between"><strong>Goals & Objectives</strong><button type="button" className="thera-action secondary" onClick={() => beginGoal(plan.id)}>+ Add Goal</button></div>{goals.length ? <div className="thera-table-wrap"><table className="thera-table"><thead><tr><th>Goal</th><th>Objective</th><th>Status</th><th>Action</th></tr></thead><tbody>{goals.map((goal) => <tr key={goal.id}><td>{String(goal.goal_text ?? "—")}</td><td>{String(goal.objective_text ?? "—")}</td><td><StatusBadge value={String(goal.status ?? "active")} /></td><td><button type="button" className="thera-action secondary" onClick={() => beginGoal(plan.id, goal)}>Edit</button></td></tr>)}</tbody></table></div> : <div className="thera-empty">No goals added yet.</div>}</div><div className="thera-filter-row" style={{ marginTop: 12 }}><button type="button" className="thera-action secondary" onClick={() => editPlan(plan)}>Edit Plan</button></div></article>;
     })}</div> : <div className="thera-empty">No treatment plan exists. Add one to connect goals to encounters and clinical documentation.</div>}
+    <OutcomeReviewPanel chart={chart} />
   </section>;
 }
 
