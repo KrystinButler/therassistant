@@ -3,7 +3,7 @@ const DEFAULT_SUPABASE_PUBLISHABLE_KEY = "sb_publishable_JaHqUqIU43A0EwuE5yPXEw_
 
 export const SUPABASE_URL = (
   import.meta.env.VITE_SUPABASE_URL || DEFAULT_SUPABASE_URL
-).replace(/\\\/$/, "");
+).replace(/\/$/, "");
 export const SUPABASE_PUBLISHABLE_KEY =
   import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY || DEFAULT_SUPABASE_PUBLISHABLE_KEY;
 
