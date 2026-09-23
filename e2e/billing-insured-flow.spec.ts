@@ -1,5 +1,7 @@
 import { expect, test, type Dialog, type Page } from "@playwright/test";
 
+test.describe.configure({ retries: 0 });
+
 async function answerDialogs(
   page: Page,
   answers: Array<string | boolean>,
@@ -27,6 +29,14 @@ async function answerDialogs(
 }
 
 test("staff creates, archives, records and accepts the synthetic insured claim", async ({ page }) => {
+  const validationResponses: string[] = [];
+  page.on("response", async (response) => {
+    if (!response.url().includes("/rest/v1/rpc/rcm_validate_claim")) return;
+    let body = "";
+    try { body = await response.text(); } catch { body = "<unreadable>"; }
+    validationResponses.push(`${response.status()} ${body}`);
+  });
+
   await page.goto("/billing/charges");
   await expect(page.getByRole("heading", { name: "Charge Capture & Claim Submission" })).toBeVisible({ timeout: 15_000 });
 
@@ -42,7 +52,11 @@ test("staff creates, archives, records and accepts the synthetic insured claim",
     await expect.poll(async () => {
       if (await successMessage.isVisible().catch(() => false)) return "ready";
       if (await rejectionMessage.isVisible().catch(() => false)) {
-        return `rejected: ${await rejectionMessage.innerText()}`;
+        return `rejected: ${await rejectionMessage.innerText()} | validate=${validationResponses.join(" || ")}`;
+      }
+      const scrubFailure = page.getByText(/claim scrub could not complete/);
+      if (await scrubFailure.isVisible().catch(() => false)) {
+        return `scrub-error: ${await scrubFailure.innerText()} | validate=${validationResponses.join(" || ")}`;
       }
       const error = page.locator(".thera-state.error").first();
       if (await error.isVisible().catch(() => false)) return `error: ${await error.innerText()}`;

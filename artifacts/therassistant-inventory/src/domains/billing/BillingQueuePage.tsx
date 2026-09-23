@@ -132,10 +132,13 @@ export function BillingQueuePage() {
       const validation = await validateClaim(claimId);
       if (!validation.ok) {
         const validationDetails = validation.details?.length
-          ? ` ${validation.details.join(" ")}`
-          : "";
+          ? validation.details.join(" ")
+          : validation.message;
+        const disposition = validation.blocked
+          ? "was created and moved to Rejections for correction"
+          : "was created, but the claim scrub could not complete";
         setMessage(
-          `Claim ${String(created.value.claim.patient_control_number || "created")} was created and moved to Rejections for correction.${validationDetails}`,
+          `Claim ${String(created.value.claim.patient_control_number || "created")} ${disposition}. ${validationDetails}`,
         );
       } else {
         setMessage(`Claim ${String(created.value.claim.patient_control_number || "created")} passed scrub and is ready to batch.`);
