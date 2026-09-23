@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 
 import {
   createStorageClient,
+  resolveStorageSignedUrl,
   sanitizeStorageFileName,
 } from "../src/lib/storage-client.ts";
 
@@ -55,6 +56,46 @@ test("Mailroom upload reports Storage API failures", async () => {
     }),
     /Upload denied/i,
   );
+});
+
+test("relative Supabase Storage signed URLs are resolved through /storage/v1", () => {
+  assert.equal(
+    resolveStorageSignedUrl(
+      "/object/sign/claim-edis/tenant-1/outbound/837p/batch-1/file.837?token=signed-token",
+      "http://127.0.0.1:54321",
+    ),
+    "http://127.0.0.1:54321/storage/v1/object/sign/claim-edis/tenant-1/outbound/837p/batch-1/file.837?token=signed-token",
+  );
+
+  assert.equal(
+    resolveStorageSignedUrl(
+      "/storage/v1/object/sign/therassistant-documents/tenant-1/mailroom/item-1/file.pdf?token=signed-token",
+      "https://example.supabase.co",
+    ),
+    "https://example.supabase.co/storage/v1/object/sign/therassistant-documents/tenant-1/mailroom/item-1/file.pdf?token=signed-token",
+  );
+
+  assert.equal(
+    resolveStorageSignedUrl(
+      "https://cdn.example.test/object/sign/file?token=signed-token",
+      "https://example.supabase.co",
+    ),
+    "https://cdn.example.test/object/sign/file?token=signed-token",
+  );
+});
+
+test("claim EDI signed URL accepts Storage's /object/sign response form", async () => {
+  const storage = createStorageClient(async () => response({
+    signedURL: "/object/sign/claim-edis/tenant-1/outbound/837p/batch-1/file.837?token=signed-token",
+  }), token);
+
+  const signed = await storage.createSignedClaimEdiUrl(
+    "tenant-1/outbound/837p/batch-1/file.837",
+    60,
+  );
+
+  assert.match(signed, /\/storage\/v1\/object\/sign\/claim-edis\//);
+  assert.match(signed, /token=signed-token/);
 });
 
 test("private document open returns a short-lived signed URL", async () => {
