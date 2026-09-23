@@ -579,7 +579,7 @@ function SubmittedBatches({
   return <div className="thera-stack">{rows.map((batch) => {
     const submission = submissions.find((row) => String(row.batch_id ?? "") === batch.id);
     return <section className="thera-card" key={batch.id}>
-      <div className="thera-card-header split"><div><h2>{String(batch.batch_name || "Submitted Batch")}</h2><p>Submitted {dateTime(String(batch.submitted_at ?? submission?.submitted_at ?? ""))}</p></div><button type="button" className="thera-action secondary" disabled={savingId === `download-${batch.id}`} onClick={() => onDownload(batch.id)}>Download 837P</button></div>
+      <div className="thera-card-header split"><div><h2>{String(batch.batch_name || "Submitted Batch")}</h2><p>Submitted {dateTime(String(batch.submitted_at ?? submission?.submitted_at ?? ""))}</p></div><button type="button" className="thera-action secondary" title={batch.edi_archived_at ? "Download the immutable archived 837P." : "This historical submission predates 837P archival; Therassistant will not recreate a file and label it as the transmitted artifact."} disabled={!batch.edi_archived_at || savingId === `download-${batch.id}`} onClick={() => onDownload(batch.id)}>{batch.edi_archived_at ? "Download Archived 837P" : "No Archived 837P"}</button></div>
       <div className="thera-table-wrap"><table className="thera-table"><thead><tr><th>Claim</th><th>Patient</th><th>Status</th><th>Latest Acknowledgement</th><th>Actions</th></tr></thead><tbody>{batch.claimIds.map((claimId: string) => {
         const claim = claimsById.get(claimId);
         const response = submission?.responses
