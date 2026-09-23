@@ -70,3 +70,43 @@ begin
   end loop;
 end;
 $$;
+
+
+-- Replace the removed anonymous demo policies with the authenticated tenant policies
+-- used by the current staff application.
+do $$
+declare
+  t text;
+begin
+  foreach t in array array[
+    'mailroom_items',
+    'patient_payment_plans',
+    'portal_balance_exception_requests'
+  ]
+  loop
+    execute format('drop policy if exists %I on public.%I', t || '_tenant_select', t);
+    execute format(
+      'create policy %I on public.%I for select to authenticated using (private.has_tenant_read_access(tenant_id))',
+      t || '_tenant_select', t
+    );
+
+    execute format('drop policy if exists %I on public.%I', t || '_tenant_insert', t);
+    execute format(
+      'create policy %I on public.%I for insert to authenticated with check (private.has_tenant_write_access(tenant_id))',
+      t || '_tenant_insert', t
+    );
+
+    execute format('drop policy if exists %I on public.%I', t || '_tenant_update', t);
+    execute format(
+      'create policy %I on public.%I for update to authenticated using (private.has_tenant_write_access(tenant_id)) with check (private.has_tenant_write_access(tenant_id))',
+      t || '_tenant_update', t
+    );
+
+    execute format('drop policy if exists %I on public.%I', t || '_tenant_delete', t);
+    execute format(
+      'create policy %I on public.%I for delete to authenticated using (private.has_tenant_write_access(tenant_id))',
+      t || '_tenant_delete', t
+    );
+  end loop;
+end;
+$$;
