@@ -17,3 +17,18 @@ test("signing saves the current editable note before locking it", () => {
   assert.ok(saveCall > signStart, "Sign action must persist the current editor content.");
   assert.ok(signCall > saveCall, "The persisted current note must be saved before signature.");
 });
+
+
+test("diagnosis and service-line saves preserve an unsaved clinical draft", () => {
+  const helperStart = source.indexOf("async function withSave(");
+  const draftCapture = source.indexOf("const draft = preserveClinicalDraft", helperStart);
+  const draftRestore = source.indexOf("setNoteText(draft.noteText)", helperStart);
+  const diagnosisStart = source.indexOf("async function addDiagnosis()");
+  const serviceStart = source.indexOf("async function addServiceLine()");
+  const diagnosisEnd = source.indexOf("async function addServiceLine()", diagnosisStart);
+  const serviceEnd = source.indexOf("async function sign()", serviceStart);
+
+  assert.ok(helperStart >= 0 && draftCapture > helperStart && draftRestore > draftCapture);
+  assert.match(source.slice(diagnosisStart, diagnosisEnd), /"Diagnosis added to encounter\.",\s*true,/);
+  assert.match(source.slice(serviceStart, serviceEnd), /"Service line added to encounter\.",\s*true,/);
+});
