@@ -127,3 +127,15 @@ test("document history is visible from the audit workspace", () => {
   assert.match(audit, /Document History/);
   assert.match(audit, /View snapshot/);
 });
+
+
+test("import rollback verifies physical deletion under tenant-authorized security definer", () => {
+  const sql = migration("fix_import_rollback_enforcement");
+  assert.match(sql, /private\.rollback_import_batch_impl/i);
+  assert.match(sql, /security definer/i);
+  assert.match(sql, /has_tenant_write_access/i);
+  assert.match(sql, /get diagnostics v_deleted = row_count/i);
+  assert.match(sql, /Imported patient rollback did not delete its batch-owned target/i);
+  assert.match(sql, /Historical transaction rollback did not delete its target/i);
+  assert.match(sql, /public\.rollback_import_batch/i);
+});
