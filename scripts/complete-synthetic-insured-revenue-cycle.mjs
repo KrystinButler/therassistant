@@ -112,11 +112,13 @@ assert(submission.submission_method === "external_837p", "Synthetic insured subm
 
 const responses = await rows(
   "submission_responses",
-  `submission_id=eq.${submission.id}&claim_id=eq.${claim.id}&select=response_status,response_code,response_message,external_reference&order=created_at.desc&limit=1`,
+  `submission_id=eq.${submission.id}&claim_id=eq.${claim.id}&select=response_status,response_code,response_message,raw_response&order=created_at.desc&limit=1`,
 );
 const response = responses[0];
 assert(response?.response_status === "accepted", "Synthetic insured acknowledgement was not accepted.");
 assert(response?.response_code === "A1", "Synthetic insured acknowledgement code is incorrect.");
+assert(response?.raw_response?.external_reference === "E2E-ACK-001", "Synthetic insured acknowledgement reference is missing.");
+assert(response?.raw_response?.acknowledgement_type === "277CA", "Synthetic insured acknowledgement type is incorrect.");
 
 const paymentBody = {
   p_tenant_id: IDS.tenant,
