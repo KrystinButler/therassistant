@@ -79,6 +79,13 @@ const repository: EraImportRepository = {
       p_carc_code: input.carcCode ?? null,
     });
   },
+  async postDenialWriteoff(denialId) {
+    const tenantId = await getCurrentTenantId();
+    return tenantRpc<Record<string, unknown>>("post_denial_writeoff", {
+      p_tenant_id: tenantId,
+      p_denial_id: denialId,
+    });
+  },
   async getClaim(claimId) {
     return first(await tenantSelect<DataRow>("professional_claims", { id: `eq.${claimId}`, limit: "1" }));
   },
