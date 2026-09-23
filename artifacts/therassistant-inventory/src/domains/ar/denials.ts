@@ -8,6 +8,10 @@ function normalizeCarc(input: unknown) {
   return String(input ?? "").trim().toUpperCase().replace(/^(CO|PR|OA|PI)-/, "");
 }
 
+export function isAutoWriteoffCarc(carcCode?: unknown) {
+  return isAutoWriteoffCarc(carcCode);
+}
+
 export function classifyDenialPolicy(category: unknown, carcCode?: unknown): DenialPolicy {
   const value = String(category ?? "other");
   if (["credentialing", "contracting"].includes(value) || AUTO_WRITEOFF_CARCS.has(normalizeCarc(carcCode))) return "auto_writeoff";
