@@ -1,20 +1,22 @@
 {
   "schema_version": 2,
-  "bundle_id": "pilot-local-restore-rehearsal-2026-09-23",
-  "release_closed": false,
+  "bundle_id": "pilot-release-closed-2026-09-23",
+  "release_closed": true,
   "data_policy": {
     "synthetic_test_scope": "isolated_local_supabase_only",
     "production_test_data_created": false,
     "identity_scope": "distinct synthetic staff, provider, patient, and per-system-role Auth identities"
   },
   "production_baseline": {
-    "commit": "4b87d84eb0eea9398693b6bc58ca71cdcb6f958f",
-    "deployment_id": "dpl_2nwCjyNT8Fu4vYZHuePtgp7CgccR",
+    "commit": "e65df90730a94f820c985cb1bedb898e4f46c233",
+    "deployment_id": "dpl_FZYiMotdUdWJPCrVE4Ni9PVHvFto",
     "deployment_state": "READY",
     "supabase_project_id": "lpjwfdvaxobewxcklenl",
     "github_migration_count": 135,
     "database_migration_count": 135,
-    "migration_drift": 0
+    "migration_drift": 0,
+    "production_ci_run_id": 35929889832,
+    "production_ci_result": "SUCCESS"
   },
   "requirements": [
     {
@@ -125,19 +127,32 @@
         "The restore rehearsal candidate required one rejected preview attempt to expose a Supabase restore-role privilege issue and one corrected preview attempt; only the corrected candidate was accepted and merged.",
         "The accepted restore bundle produced production deployment dpl_2nwCjyNT8Fu4vYZHuePtgp7CgccR from commit 4b87d84eb0eea9398693b6bc58ca71cdcb6f958f."
       ]
-    },
+    }
+  ],
+  "deferred_infrastructure": [
     {
       "id": "SEC-1-leaked-password-protection",
-      "implemented": false,
-      "verified": true,
-      "configured": false,
-      "deployed": false,
-      "closed": false,
+      "status": "deferred_plan_constraint",
+      "release_blocking": false,
+      "reason": "Supabase leaked-password protection requires Pro plan or above; the connected organization is on Free.",
       "evidence": [
         "Supabase security advisor reports leaked password protection is disabled.",
         "Supabase documentation states leaked password protection is available on the Pro plan and above; the connected organization is currently on the Free plan.",
         "Remediation when the Supabase organization is upgraded: enable Prevent the use of leaked passwords in Auth password security settings."
-      ]
+      ],
+      "next_action": "After a Supabase plan upgrade, enable Prevent the use of leaked passwords and rerun the security advisor."
+    },
+    {
+      "id": "INFRA-1-hosted-managed-restore-drill",
+      "status": "deferred_plan_constraint",
+      "release_blocking": false,
+      "reason": "Supabase branching requires Pro; the Free organization also already uses both active project slots.",
+      "evidence": [
+        "The required local pg_dump/pg_restore recovery rehearsal passes in Production CI.",
+        "Hosted branch creation was rejected by Supabase because the organization is on Free.",
+        "Production is not used as a destructive restore-test target."
+      ],
+      "next_action": "Repeat the restore drill on a disposable hosted branch or project when Supabase Pro/disposable capacity is available."
     }
   ]
 }

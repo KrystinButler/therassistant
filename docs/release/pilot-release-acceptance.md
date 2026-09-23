@@ -1,15 +1,15 @@
 # THERASSISTANT Pilot & Release Acceptance
 
-Bundle: `pilot-local-restore-rehearsal-2026-09-23`
+Bundle: `pilot-release-closed-2026-09-23`
 
 ## Canonical production chain
 
 - GitHub: `KrystinButler/therassistant`
 - Supabase: `lpjwfdvaxobewxcklenl`
 - Vercel: `therassistant`
-- Accepted functional production baseline commit: `4b87d84eb0eea9398693b6bc58ca71cdcb6f958f`
-- Accepted functional production baseline deployment: `dpl_2nwCjyNT8Fu4vYZHuePtgp7CgccR` — READY
-- Main Production CI: `35929415624` — SUCCESS (23/23 acceptance gates)
+- Accepted production baseline commit: `e65df90730a94f820c985cb1bedb898e4f46c233`
+- Accepted production baseline deployment: `dpl_FZYiMotdUdWJPCrVE4Ni9PVHvFto` — READY
+- Main Production CI: `35929889832` — SUCCESS (23/23 acceptance gates)
 - GitHub migrations: 135
 - Production Supabase migrations: 135
 - Migration drift: 0
@@ -78,12 +78,17 @@ The no-cost restore rehearsal is executed in required CI against the isolated lo
 
 A hosted Supabase branch was separately attempted after explicit approval of the quoted $0.01344/hour cost. Supabase rejected the request because the organization is on the Free plan. The zero-cost duplicate-project fallback is also unavailable because the Free organization already has two active projects. Managed hosted restore/PITR rehearsal is therefore deferred infrastructure hardening, not a destructive production test.
 
-## Security item
+## Deferred infrastructure hardening
 
-Supabase currently reports **Leaked Password Protection disabled**. Supabase documents this protection as available on the Pro plan and above; the connected organization is currently on the Free plan. This remains the only open release-hardening item.
+Pilot release acceptance is complete. Two Supabase-managed controls remain intentionally deferred because the connected organization is on the Free plan:
+
+- **Leaked Password Protection** — Supabase's security advisor reports it disabled. Supabase documents this control as available on Pro and above. Enable it after a plan upgrade and rerun the security advisor.
+- **Hosted managed restore/PITR drill** — the executable local restore rehearsal passes in required CI, but Supabase branch creation is Pro-only and the Free organization already uses both active project slots. Repeat the drill on a disposable hosted branch or project when paid/disposable capacity is available.
+
+These are documented infrastructure-hardening items rather than unresolved pilot workflow failures. Production is not used for destructive restore testing.
 
 Reference: https://supabase.com/docs/guides/auth/password-security#password-strength-and-leaked-password-protection
 
 ## Closure rule
 
-`release_closed` stays false while any requirement is open. A requirement cannot be closed unless implemented, verified, configured, and deployed are all true.
+All #6 pilot/release requirements are implemented, verified, configured, deployed, and closed. `release_closed=true`. Deferred infrastructure items remain tracked separately and do not represent unverified application workflow acceptance.
