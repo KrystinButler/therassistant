@@ -143,7 +143,6 @@ await upsert("clients", [{
   client_status: "active",
   registration_status: "complete",
   billing_readiness_status: "ready",
-  search_name: "ellis jordan",
   metadata: { synthetic: true, e2e: true, billing_type: "self_pay" },
 }]);
 
