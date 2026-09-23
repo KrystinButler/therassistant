@@ -99,7 +99,7 @@ assert(ediBytes.byteLength === Number(batch.edi_byte_length), "Archived 837P len
 assert(ediText.includes("NM1*PR*2*Synthetic Commercial Payer*****PI*60054~"), "Archived 837P payer segment is missing.");
 assert(ediText.includes("HI*ABK:F411~"), "Archived 837P diagnosis segment is missing.");
 assert(ediText.includes("SV1*HC:90837*150.00*UN*1"), "Archived 837P service line is missing.");
-assert(ediText.includes(":02:B:1*Y*A*Y*Y~"), "Archived 837P generic telehealth POS 02 claim segment is missing.");
+assert(ediText.includes("***02:B:1*Y*A*Y*Y~"), "Archived 837P generic telehealth POS 02 claim segment is missing.");
 
 const submissions = await rows(
   "claim_submissions",
