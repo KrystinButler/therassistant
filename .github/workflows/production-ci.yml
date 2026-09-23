@@ -102,11 +102,62 @@ jobs:
             grep -q '<div id="root"' /tmp/therassistant-route.html
           done
 
+      - name: Start isolated Supabase E2E stack
+        shell: bash
+        run: |
+          # Historical demo data was loaded outside the migration chain before this
+          # data-only migration was created. Exclude it from clean local replay and
+          # seed the isolated E2E dataset explicitly after schema migrations.
+          mv supabase/migrations/20260915040049_phase5_mailroom_demo_seed.sql /tmp/phase5_mailroom_demo_seed.sql
+
+          pnpm dlx supabase@2.117.0 start
+          pnpm dlx supabase@2.117.0 status -o env > /tmp/supabase.env
+          set -a
+          source /tmp/supabase.env
+          set +a
+
+          PUBLISHABLE="${PUBLISHABLE_KEY:-${ANON_KEY:-}}"
+          SECRET="${SECRET_KEY:-${SERVICE_ROLE_KEY:-}}"
+
+          if [ -z "${API_URL:-}" ] || [ -z "${DB_URL:-}" ] || [ -z "$PUBLISHABLE" ] || [ -z "$SECRET" ]; then
+            echo "Local Supabase did not expose the required E2E connection values."
+            exit 1
+          fi
+
+          {
+            echo "E2E_SUPABASE_URL=$API_URL"
+            echo "VITE_SUPABASE_URL=$API_URL"
+            echo "VITE_SUPABASE_PUBLISHABLE_KEY=$PUBLISHABLE"
+            echo "SUPABASE_URL=$API_URL"
+            echo "SUPABASE_SECRET_KEY=$SECRET"
+            echo "DATABASE_URL=$DB_URL"
+            echo "E2E_STAFF_EMAIL=staff.e2e@example.test"
+            echo "E2E_PROVIDER_EMAIL=jamie.parker@example.test"
+            echo "E2E_PATIENT_EMAIL=jordan.ellis@example.test"
+          } >> "$GITHUB_ENV"
+
+          STAFF_PASSWORD="$(openssl rand -hex 32)"
+          PROVIDER_PASSWORD="$(openssl rand -hex 32)"
+          PATIENT_PASSWORD="$(openssl rand -hex 32)"
+
+          echo "::add-mask::$STAFF_PASSWORD"
+          echo "::add-mask::$PROVIDER_PASSWORD"
+          echo "::add-mask::$PATIENT_PASSWORD"
+
+          {
+            echo "E2E_STAFF_PASSWORD=$STAFF_PASSWORD"
+            echo "E2E_PROVIDER_PASSWORD=$PROVIDER_PASSWORD"
+            echo "E2E_PATIENT_PASSWORD=$PATIENT_PASSWORD"
+          } >> "$GITHUB_ENV"
+
+      - name: Seed isolated synthetic E2E data
+        run: node scripts/provision-synthetic-e2e-identities.mjs
+
+      - name: Verify isolated patient portal lifecycle
+        run: node scripts/test-synthetic-patient-portal-lifecycle.mjs
+
       - name: Install Playwright Chromium
         run: pnpm exec playwright install --with-deps chromium
 
       - name: Browser E2E
-        env:
-          E2E_STAFF_EMAIL: ${{ secrets.E2E_STAFF_EMAIL }}
-          E2E_STAFF_PASSWORD: ${{ secrets.E2E_STAFF_PASSWORD }}
         run: pnpm test:e2e
