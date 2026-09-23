@@ -79,6 +79,7 @@ export async function getFastChartingContext(clientId: string, encounterId: stri
       noteId: priorNote.id,
       serviceDate: priorNote.service_date ? String(priorNote.service_date) : null,
       goalAddressed: String(priorNote.goal_addressed ?? ""),
+      noteText: String(priorNote.note_text ?? ""),
       selections: normalizeStructuredSelections(structured?.selections),
     };
   }

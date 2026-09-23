@@ -13,7 +13,7 @@ import { buildPatientReviewCheckIn } from "../scheduling/patient-review-model";
 import { treatmentPlanAlert } from "../treatment-plans/workflow";
 import { FastChartingPanel } from "../clinical/FastChartingPanel";
 import { createSmartPhrase, getFastChartingContext, getSmartPhrases } from "../clinical/fast-charting-repository";
-import { emptyStructuredSelections, expandSmartPhraseAtCursor, synthesizeStructuredNarrative, type PriorStructuredContext, type SmartPhrase, type StructuredSelections } from "../clinical/fast-charting";
+import { clinicalNoteSimilarity, emptyStructuredSelections, expandSmartPhraseAtCursor, synthesizeStructuredNarrative, type PriorStructuredContext, type SmartPhrase, type StructuredSelections } from "../clinical/fast-charting";
 import { Icd10SearchInput } from "../coding/Icd10SearchInput";
 import { ProcedureCodeSearchInput } from "../coding/ProcedureCodeSearchInput";
 import { PlaceOfServiceSearchInput } from "../coding/PlaceOfServiceSearchInput";
@@ -124,6 +124,10 @@ export function EncounterPage() {
     [data],
   );
   const generatedNarrative = useMemo(() => synthesizeStructuredNarrative(structuredSelections), [structuredSelections]);
+  const noteSimilarity = useMemo(
+    () => clinicalNoteSimilarity(noteText, priorStructuredContext?.noteText ?? ""),
+    [noteText, priorStructuredContext?.noteText],
+  );
 
   async function withSave(
     action: () => Promise<unknown>,
@@ -294,6 +298,9 @@ export function EncounterPage() {
       return;
     }
     setNoteText(value);
+    if (structuredSelections.similarityReviewAcknowledged) {
+      setStructuredSelections((current) => ({ ...current, similarityReviewAcknowledged: false }));
+    }
     setShowSlashMenu(value.endsWith("/"));
   }
 
@@ -362,7 +369,11 @@ export function EncounterPage() {
 
   function carryForwardStructured() {
     if (signed || !priorStructuredContext) return;
-    setStructuredSelections(priorStructuredContext.selections);
+    setStructuredSelections({
+      ...priorStructuredContext.selections,
+      timelineEvents: [],
+      similarityReviewAcknowledged: false,
+    });
     if (!goalAddressed.trim() && priorStructuredContext.goalAddressed) setGoalAddressed(priorStructuredContext.goalAddressed);
     setCarryForwardContext({
       source_note_id: priorStructuredContext.noteId,
@@ -420,7 +431,7 @@ export function EncounterPage() {
             <label><div className="thera-field-label">Goal / Objective Addressed</div><input className="thera-input" value={goalAddressed} disabled={signed} onChange={(event) => setGoalAddressed(event.target.value)} placeholder="Goal or objective addressed" /></label>
           </div>
           <div className="encounter-editor-wrap"><label><div className="thera-field-label">Session / SOAP Note</div><textarea ref={noteRef} className="thera-input encounter-note-editor" value={noteText} disabled={signed} onChange={(event) => handleNoteChange(event.target.value, event.target.selectionStart)} placeholder="Document subjective/objective findings, assessment, interventions, response, plan, risk, and relevant clinical context. Type / for quick inserts." /></label>{showSlashMenu && !signed && <div className="encounter-slash-menu"><div>QUICK INSERTS</div><button type="button" onClick={() => injectQuickText("Risk Assessment: Client denies suicidal or homicidal ideation. No acute safety concerns reported.")}>Risk: Standard Negative</button><button type="button" onClick={() => injectQuickText("Mental Status: Alert and oriented x4. Appearance and behavior appropriate. Speech normal. Thought process linear and goal directed.")}>MSE: Within Normal Limits</button><button type="button" onClick={() => injectQuickText("Intervention: Supportive psychotherapy, reflective listening, validation, and collaborative problem solving were utilized.")}>Intervention: Supportive</button></div>}</div>
-          <FastChartingPanel signed={signed} phrases={smartPhrases} selections={structuredSelections} generatedNarrative={generatedNarrative} priorContext={priorStructuredContext} onSelectionsChange={setStructuredSelections} onInsertNarrative={() => injectIntoNote("\n" + generatedNarrative + "\n")} onInsertPhrase={injectIntoNote} onCarryForward={carryForwardStructured} onCreatePhrase={addSmartPhrase} />
+          <FastChartingPanel signed={signed} phrases={smartPhrases} selections={structuredSelections} generatedNarrative={generatedNarrative} priorContext={priorStructuredContext} noteSimilarity={noteSimilarity} onSelectionsChange={setStructuredSelections} onInsertNarrative={() => injectIntoNote("\n" + generatedNarrative + "\n")} onInsertPhrase={injectIntoNote} onCarryForward={carryForwardStructured} onCreatePhrase={addSmartPhrase} />
           {!signed && <div className="encounter-note-actions"><button type="button" className="thera-action" disabled={saving || !noteText.trim()} onClick={() => void saveNote()}>{saving ? "Saving..." : "Save Note"}</button><span>Saving does not sign or lock the clinical record.</span></div>}
           {signed && data.signatures[0] && <div className="thera-alert" style={{ marginTop: 12 }}>Signed {dateTime(String(data.signatures[0].signed_at ?? ""))} by {String(data.signatures[0].signature_text ?? "provider")}</div>}
         </section>
