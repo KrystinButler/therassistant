@@ -47,7 +47,7 @@ import { PayerDetailPage } from "./pages/payer-detail";
 import { PracticeConfigurationPage } from "./pages/practice-configuration";
 import { ProviderDetailPage } from "./pages/provider-detail";
 import { ProvidersPage } from "./pages/providers";
-import { ReportsPage } from "./pages/operational-workspaces";
+import { ReportsPage } from "./pages/ReportsPage";
 import { ConnectedOperationsPage } from "./pages/connected-operations";
 import { UserRolesPage } from "./pages/users-roles";
 import { GoldenThreadPage } from "./pages/restored-modules";
