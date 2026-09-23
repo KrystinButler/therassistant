@@ -2,7 +2,7 @@ import { expect, test } from "@playwright/test";
 
 const routes = [
   { path: "/clients", heading: "Patients" },
-  { path: "/schedule", heading: "Schedule & Pre-Session Review" },
+  { path: "/schedule", heading: "My Schedule" },
   { path: "/claims", heading: "Claims & A/R Follow-Up" },
   { path: "/payments", heading: "Payments, ERA & Reconciliation" },
   { path: "/eligibility", heading: "Eligibility" },
