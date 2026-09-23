@@ -1,6 +1,6 @@
 # THERASSISTANT Pilot & Release Acceptance
 
-Bundle: `pilot-report-production-acceptance-2026-09-23`
+Bundle: `pilot-local-restore-rehearsal-2026-09-23`
 
 ## Canonical production chain
 
@@ -73,11 +73,13 @@ Production report acceptance is complete. The production `/reports` route return
 4. Reconcile migrations, Auth-linked records, Storage availability, immutable claim artifacts, and integrations.
 5. Re-run tenant/patient isolation, role matrix, clinical workflow, claim/payment reconciliation, audit, and reporting checks before reopening writes.
 
-The restore drill must use a disposable Supabase branch or duplicate project. Production is not a restore-test target. Branch creation can incur cost, so the drill remains open until cost is explicitly approved.
+The no-cost restore rehearsal is executed in required CI against the isolated local Supabase stack after the full synthetic workflow has run. CI creates a database dump, restores it into a second disposable local database, compares critical Auth/tenant/patient/clinical/RCM/workqueue/migration row counts, and verifies RLS policy and tenant-access helper preservation before deleting the restored copy.
+
+A hosted Supabase branch was separately attempted after explicit approval of the quoted $0.01344/hour cost. Supabase rejected the request because the organization is on the Free plan. The zero-cost duplicate-project fallback is also unavailable because the Free organization already has two active projects. Managed hosted restore/PITR rehearsal is therefore deferred infrastructure hardening, not a destructive production test.
 
 ## Security item
 
-Supabase currently reports **Leaked Password Protection disabled**.
+Supabase currently reports **Leaked Password Protection disabled**. Supabase documents this protection as available on the Pro plan and above; the connected organization is currently on the Free plan. This remains the only open release-hardening item.
 
 Reference: https://supabase.com/docs/guides/auth/password-security#password-strength-and-leaked-password-protection
 
