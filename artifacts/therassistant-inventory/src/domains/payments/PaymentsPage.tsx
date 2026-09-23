@@ -44,6 +44,7 @@ export function PaymentsPage() {
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [posting, setPosting] = useState(false);
+  const [manualPaymentRequestKey, setManualPaymentRequestKey] = useState("");
   const [paymentDetail, setPaymentDetail] = useState<PaymentRow | null>(null);
   const [allocating, setAllocating] = useState<PaymentRow | null>(null);
   const [reversing, setReversing] = useState<PaymentRow | null>(null);
@@ -163,13 +164,19 @@ export function PaymentsPage() {
         clientId: form.clientId || String(selectedClaim?.client_id ?? ""),
         payerId: form.payerId || String(selectedClaim?.payer_id ?? ""),
         claimId: form.claimId || undefined,
-        allocationCents: form.claimId ? toCents(form.allocation || form.amount) : 0,
+        allocationCents: form.claimId
+          ? toCents(form.allocation || form.amount)
+          : source === "patient" && form.clientId
+            ? toCents(form.amount)
+            : 0,
         traceNumber: form.trace,
         checkNumber: form.check,
         notes: form.notes,
+        idempotencyKey: manualPaymentRequestKey,
       });
       setMessage(`${source === "insurance" ? "Insurance" : "Patient"} payment saved.`);
       setPosting(false);
+      setManualPaymentRequestKey("");
       setTab(source);
       await load();
     } catch (err) {
@@ -236,7 +243,7 @@ export function PaymentsPage() {
         <h1>Payments, ERA & Reconciliation</h1>
         <p>Post insurance and patient payments, import 835 remittance, reconcile allocations, and route underpayments, recoupments, and exceptions into follow-up work.</p>
       </div>
-      <button type="button" className="thera-action" onClick={() => setPosting(true)}>+ Post Payment</button>
+      <button type="button" className="thera-action" onClick={() => { setManualPaymentRequestKey(globalThis.crypto.randomUUID()); setPosting(true); }}>+ Post Payment</button>
     </div>
 
     <div className="thera-tabs" style={{ marginBottom: 16 }}>
@@ -270,7 +277,7 @@ export function PaymentsPage() {
     {!loading && exceptionData && tab === "underpayments" && <UnderpaymentsTable rows={exceptionData.variances} onOpen={setVarianceWork} />}
     {!loading && exceptionData && tab === "recovery" && <RecoveryTable rows={exceptionData.recovery} onOpen={setRecoveryWork} />}
 
-    {data && <PostPaymentDrawer open={posting} onOpenChange={setPosting} data={data} saving={savingId === "new-payment"} onSave={saveManual} />}
+    {data && <PostPaymentDrawer open={posting} onOpenChange={(open) => { setPosting(open); if (!open) setManualPaymentRequestKey(""); }} data={data} saving={savingId === "new-payment"} onSave={saveManual} />}
     {data && <PaymentDetailDrawer
       open={Boolean(paymentDetail)}
       onOpenChange={(open) => { if (!open) setPaymentDetail(null); }}

@@ -37,9 +37,9 @@ test("denial write-off is capped at the claim remaining balance", () => {
   assert.equal(capDenialWriteOffAmount(12000, 7000), 7000);
   assert.equal(capDenialWriteOffAmount(5000, 7000), 5000);
   assert.equal(capDenialWriteOffAmount(12000, 0), 0);
-  assert.match(denialRepositorySource, /payment_allocations/);
-  assert.match(denialRepositorySource, /calculateOpenBalance/);
-  assert.match(denialRepositorySource, /capDenialWriteOffAmount/);
+  assert.match(denialRepositorySource, /post_denial_writeoff/);
+  assert.match(denialRepositorySource, /tenantRpc/);
+  assert.doesNotMatch(denialRepositorySource, /tenantInsert<DataRow>\("adjustments"/);
 });
 
 test("claimless patient payment requires a patient owner", () => {

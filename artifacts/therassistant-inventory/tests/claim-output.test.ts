@@ -232,3 +232,62 @@ test("CMS-1500 preview creates continuation pages after six service lines", () =
   assert.match(html, /Page 1 of 2/);
   assert.match(html, /Page 2 of 2/);
 });
+
+
+test("one synthetic encounter stays identical through service, charge, CMS-1500 preview, and 837P", () => {
+  const encounterService = {
+    cpt_hcpcs_code: "90837",
+    modifier1: "95",
+    units: 1,
+    charge_amount_cents: 15000,
+    place_of_service_code: "10",
+    service_date: "2026-09-01",
+    diagnosis_code: "F41.1",
+  };
+  const charge = {
+    cpt_code: encounterService.cpt_hcpcs_code,
+    modifier1: encounterService.modifier1,
+    units: encounterService.units,
+    charge_amount_cents: encounterService.charge_amount_cents,
+    place_of_service: encounterService.place_of_service_code,
+    service_date: encounterService.service_date,
+    diagnosis_code: encounterService.diagnosis_code,
+  };
+  const claimLine = {
+    cpt_code: charge.cpt_code,
+    modifier1: charge.modifier1,
+    units: charge.units,
+    charge_amount_cents: charge.charge_amount_cents,
+    place_of_service: charge.place_of_service,
+    service_date: charge.service_date,
+    diagnosis_pointer: "1",
+  };
+  const item = {
+    ...sample.claims[0],
+    claim: { ...sample.claims[0].claim, total_charge_cents: charge.charge_amount_cents },
+    lines: [claimLine],
+    diagnoses: [{ diagnosis_code: charge.diagnosis_code, pointer_order: 1 }],
+  };
+  const batch = { ...sample, claims: [item] };
+
+  assert.equal(encounterService.cpt_hcpcs_code, charge.cpt_code);
+  assert.equal(charge.cpt_code, claimLine.cpt_code);
+  assert.equal(encounterService.units, charge.units);
+  assert.equal(charge.units, claimLine.units);
+  assert.equal(encounterService.charge_amount_cents, charge.charge_amount_cents);
+  assert.equal(charge.charge_amount_cents, claimLine.charge_amount_cents);
+  assert.equal(encounterService.place_of_service_code, charge.place_of_service);
+  assert.equal(charge.place_of_service, claimLine.place_of_service);
+
+  const cms = buildCms1500PreviewHtml(item, sample.edi);
+  assert.match(cms, /90837/);
+  assert.match(cms, />10</);
+  assert.match(cms, /150\.00/);
+  assert.match(cms, /F41\.1/);
+
+  const x12 = build837PText(batch, new Date("2026-09-20T15:30:00.000Z"));
+  assert.match(x12, /CLM\*TH-1001\*150\.00\*{3}10:B:1/);
+  assert.match(x12, /SV1\*HC:90837:95\*150\.00\*UN\*1\*{3}1~/);
+  assert.match(x12, /HI\*ABK:F411~/);
+  assert.match(x12, /DTP\*472\*D8\*20260901~/);
+});

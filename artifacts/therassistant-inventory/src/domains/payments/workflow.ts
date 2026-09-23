@@ -4,6 +4,7 @@ import {
   success,
   type WorkflowResult,
 } from "../shared/workflow-result";
+import { classifyDenialPolicy, isAutoWriteoffCarc } from "../ar/denials";
 import {
   claimAdjustmentTotalCents,
   claimContractualAdjustmentCents,
@@ -29,6 +30,7 @@ export type PaymentRepository = {
   updateClaim(claimId: string, values: Record<string, unknown>): Promise<PaymentRow>;
   createDenial(values: Record<string, unknown>): Promise<PaymentRow>;
   upsertWorkItem(values: Record<string, unknown>): Promise<PaymentRow>;
+  postDenialWriteoff?(denialId: string): Promise<Record<string, unknown>>;
 };
 
 export type EraImportRepository = PaymentRepository & {
@@ -723,14 +725,20 @@ export async function createDenialFromAdjudicationWorkflow(
   if (input.amountCents < 0) return blocked("invalid_denial_amount", "Denial amount cannot be negative.");
 
   try {
+    const policy = classifyDenialPolicy(input.category, input.carcCode);
+    const autoWriteoff = policy === "auto_writeoff";
+    const denialCategory = isAutoWriteoffCarc(input.carcCode)
+      ? "credentialing"
+      : input.category || "other";
+
     const denial = await repo.createDenial({
       claim_id: claim.id,
       client_id: claim.client_id || null,
       payer_id: claim.payer_id || null,
       denial_date: new Date().toISOString().slice(0, 10),
-      denial_status: "new",
-      denial_category: input.category || "other",
-      workability: input.workability || "needs_review",
+      denial_status: autoWriteoff ? "non_workable" : "new",
+      denial_category: denialCategory,
+      workability: autoWriteoff ? "auto_writeoff" : input.workability || policy,
       carc_code: input.carcCode || null,
       rarc_code: input.rarcCode || null,
       amount_cents: input.amountCents,
@@ -738,6 +746,19 @@ export async function createDenialFromAdjudicationWorkflow(
     });
 
     await repo.updateClaim(claim.id, { claim_status: "denied" });
+
+    if (autoWriteoff) {
+      if (!repo.postDenialWriteoff) {
+        throw new Error("Configured denial write-off posting is unavailable.");
+      }
+      const writeoff = await repo.postDenialWriteoff(denial.id);
+      const openBalance = Number(writeoff.open_balance_cents ?? 0);
+      return success({
+        denial,
+        claimStatus: openBalance === 0 ? "paid" : "partially_paid",
+      });
+    }
+
     await repo.upsertWorkItem({
       workqueue_type: "denial_followup",
       source_object_type: "denial",

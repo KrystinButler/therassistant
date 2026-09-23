@@ -79,6 +79,13 @@ const repository: EraImportRepository = {
       p_carc_code: input.carcCode ?? null,
     });
   },
+  async postDenialWriteoff(denialId) {
+    const tenantId = await getCurrentTenantId();
+    return tenantRpc<Record<string, unknown>>("post_denial_writeoff", {
+      p_tenant_id: tenantId,
+      p_denial_id: denialId,
+    });
+  },
   async getClaim(claimId) {
     return first(await tenantSelect<DataRow>("professional_claims", { id: `eq.${claimId}`, limit: "1" }));
   },
@@ -188,6 +195,7 @@ export async function postManualPayment(input: {
   traceNumber?: string;
   checkNumber?: string;
   notes?: string;
+  idempotencyKey?: string;
 }) {
   const draft = validatePaymentDraft({ amountCents: input.amountCents, source: input.source, method: input.method });
   const requestedAllocationCents = input.claimId ? Number(input.allocationCents ?? input.amountCents) : 0;
@@ -220,6 +228,7 @@ export async function postManualPayment(input: {
     p_trace_number: input.traceNumber?.trim() || null,
     p_check_number: input.checkNumber?.trim() || null,
     p_notes: input.notes?.trim() || null,
+    p_idempotency_key: input.idempotencyKey?.trim() || null,
   });
 }
 

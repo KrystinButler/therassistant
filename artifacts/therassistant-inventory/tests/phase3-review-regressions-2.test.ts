@@ -14,6 +14,10 @@ const workCenterRepositorySource = readFileSync(
   new URL("../src/domains/work-center/repository.ts", import.meta.url),
   "utf8",
 );
+const reconciliationMigrationSource = readFileSync(
+  new URL("../../../supabase/migrations/20260923090926_claims_payment_reconciliation_integrity.sql", import.meta.url),
+  "utf8",
+);
 
 test("manual allocation is capped at the claim open balance", () => {
   const capAllocationToOpenBalance = (
@@ -32,8 +36,10 @@ test("manual allocation is capped at the claim open balance", () => {
 
 test("credentialing or contracting write-off also closes the linked claim financial state", () => {
   const writeOffSection = denialRepositorySource.split("export async function writeOffDenial")[1] ?? "";
-  assert.match(writeOffSection, /tenantUpdate<DataRow>\("professional_claims"/);
-  assert.match(writeOffSection, /claim_status:\s*"paid"/);
+  assert.match(writeOffSection, /post_denial_writeoff/);
+  assert.match(reconciliationMigrationSource, /update public\.professional_claims/);
+  assert.match(reconciliationMigrationSource, /when coalesce\(v_after_open,0\) = 0 then 'paid'/);
+  assert.match(reconciliationMigrationSource, /else 'partially_paid'/);
 });
 
 test("active appeal dollars come from the linked denial amount", () => {

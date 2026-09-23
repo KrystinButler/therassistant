@@ -245,32 +245,54 @@ export function ReportsPage() {
 
   const data = state.data;
   const balanceByClaim = new Map((data?.balances ?? []).map((row) => [String(row.claim_id), row]));
-  const openClaims = (data?.claims ?? []).filter((claim) => {
+  const financialClaims = (data?.claims ?? []).filter(
+    (claim) =>
+      Number(claim.total_charge_cents ?? 0) > 0
+      && !["voided", "reversed"].includes(String(claim.claim_status ?? "")),
+  );
+  const missingBalanceClaims = financialClaims.filter(
+    (claim) => !balanceByClaim.has(String(claim.id)),
+  );
+  const reconciledClaims = financialClaims.filter(
+    (claim) => balanceByClaim.has(String(claim.id)),
+  );
+  const openClaims = reconciledClaims.filter((claim) => {
     const balance = balanceByClaim.get(String(claim.id));
-    return Number(balance?.open_balance_cents ?? claim.total_charge_cents ?? 0) > 0;
+    return Number(balance?.open_balance_cents ?? 0) > 0;
   });
   const openAr = openClaims.reduce((sum, claim) => {
     const balance = balanceByClaim.get(String(claim.id));
-    return sum + Number(balance?.open_balance_cents ?? claim.total_charge_cents ?? 0);
+    return sum + Number(balance?.open_balance_cents ?? 0);
   }, 0);
+  const now = Date.now();
   const arOver90 = openClaims.reduce((sum, claim) => {
-    const serviceDate = new Date(String(claim.service_date_from ?? ""));
+    const dos = String(claim.service_date_from ?? "");
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(dos)) return sum;
+    const serviceDate = new Date(`${dos}T00:00:00Z`);
     if (!Number.isFinite(serviceDate.getTime())) return sum;
-    const ageDays = Math.floor((Date.now() - serviceDate.getTime()) / 86_400_000);
+    const ageDays = Math.floor((now - serviceDate.getTime()) / 86_400_000);
     if (ageDays <= 90) return sum;
     const balance = balanceByClaim.get(String(claim.id));
-    return sum + Number(balance?.open_balance_cents ?? claim.total_charge_cents ?? 0);
+    return sum + Number(balance?.open_balance_cents ?? 0);
   }, 0);
+  const arOver90Percent = openAr > 0 ? (arOver90 / openAr) * 100 : 0;
   const claimAttention = (data?.claims ?? []).filter((claim) =>
     ["rejected", "denied", "validation_failed"].includes(String(claim.claim_status ?? "")),
   ).length;
   const openWork = (data?.work ?? []).filter((item) =>
     !["completed", "cancelled"].includes(String(item.workqueue_status ?? "")),
   ).length;
-  const postedPayments = (data?.payments ?? []).reduce(
+  const postedPaymentRows = (data?.payments ?? []).filter((payment) =>
+    ["posted", "partially_applied"].includes(String(payment.payment_status ?? ""))
+    && Boolean(payment.posted_at),
+  );
+  const postedPayments = postedPaymentRows.reduce(
     (sum, payment) => sum + Number(payment.amount_cents ?? 0),
     0,
   );
+  const reversedPayments = (data?.payments ?? []).filter(
+    (payment) => ["reversed", "voided"].includes(String(payment.payment_status ?? "")),
+  ).length;
 
   return (
     <>
@@ -291,6 +313,12 @@ export function ReportsPage() {
 
       {data && (
         <>
+          {missingBalanceClaims.length > 0 && (
+            <div className="thera-state error" style={{ marginBottom: 16 }}>
+              {missingBalanceClaims.length} financial claim(s) are missing a reconciled balance summary and are excluded from A/R totals until recalculated.
+            </div>
+          )}
+
           <div className="thera-metric-grid">
             <div className="thera-metric-card">
               <div className="thera-metric-label">Active Patients</div>
@@ -303,10 +331,17 @@ export function ReportsPage() {
             <div className="thera-metric-card">
               <div className="thera-metric-label">Open A/R</div>
               <div className="thera-metric-value">{money(openAr)}</div>
+              <div className="thera-table-subtext">Reconciled claim balances only</div>
             </div>
             <div className="thera-metric-card">
               <div className="thera-metric-label">A/R Over 90</div>
               <div className="thera-metric-value">{money(arOver90)}</div>
+              <div className="thera-table-subtext">{arOver90Percent.toFixed(1)}% of reconciled open A/R · 91+ days from DOS</div>
+            </div>
+            <div className="thera-metric-card">
+              <div className="thera-metric-label">Missing Balances</div>
+              <div className="thera-metric-value">{missingBalanceClaims.length}</div>
+              <div className="thera-table-subtext">Excluded from A/R denominator</div>
             </div>
             <div className="thera-metric-card">
               <div className="thera-metric-label">Claim Exceptions</div>
@@ -319,6 +354,12 @@ export function ReportsPage() {
             <div className="thera-metric-card">
               <div className="thera-metric-label">Posted Payments</div>
               <div className="thera-metric-value">{money(postedPayments)}</div>
+              <div className="thera-table-subtext">Posted or partially applied only · reversed/voided excluded</div>
+            </div>
+            <div className="thera-metric-card">
+              <div className="thera-metric-label">Reversed / Voided Payments</div>
+              <div className="thera-metric-value">{reversedPayments}</div>
+              <div className="thera-table-subtext">Excluded from posted-payment total</div>
             </div>
             <div className="thera-metric-card">
               <div className="thera-metric-label">Open Work</div>
@@ -330,7 +371,7 @@ export function ReportsPage() {
             <div className="thera-card-header">
               <div>
                 <h2>Management Follow-Up</h2>
-                <p>Use the linked operating workspace for the underlying records and next action.</p>
+                <p>A/R aging uses service date. The over-90 denominator is current reconciled open A/R; payment totals use posting status, not receipt/download activity.</p>
               </div>
             </div>
             <div className="thera-story-grid">
@@ -341,13 +382,13 @@ export function ReportsPage() {
               </div>
               <div className="thera-story">
                 <strong>Revenue recovery</strong>
-                <p>{money(arOver90)} of current open A/R is more than 90 days from service.</p>
+                <p>{money(arOver90)} of {money(openAr)} reconciled open A/R is 91+ days from service.</p>
                 <Link className="thera-link" href="/claims">Open A/R follow-up</Link>
               </div>
               <div className="thera-story">
-                <strong>Credentialing impact</strong>
-                <p>Provider participation and roster issues remain connected to billing readiness.</p>
-                <Link className="thera-link" href="/credentialing">Open Credentialing</Link>
+                <strong>Balance integrity</strong>
+                <p>{missingBalanceClaims.length === 0 ? "All financial claims included in this report have balance summaries." : `${missingBalanceClaims.length} financial claim(s) require balance recalculation before management totals are complete.`}</p>
+                <Link className="thera-link" href="/claims">Review claims</Link>
               </div>
               <div className="thera-story">
                 <strong>Audit readiness</strong>
