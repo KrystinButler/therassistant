@@ -1,14 +1,14 @@
 # THERASSISTANT Pilot & Release Acceptance
 
-Bundle: `pilot-acceptance-isolation-2026-09-23`
+Bundle: `pilot-role-matrix-2026-09-23`
 
 ## Canonical production chain
 
 - GitHub: `KrystinButler/therassistant`
 - Supabase: `lpjwfdvaxobewxcklenl`
 - Vercel: `therassistant`
-- Production commit: `e4bba95108cf0b5894e74928276f0879a38f819c`
-- Production deployment: `dpl_GHwfjJyyEVQoDXzqewhdg77i4nsd` — READY
+- Accepted production baseline commit: `20345439c259e28115ba06900a726a58b4b00838`
+- Accepted production baseline deployment: `dpl_dcqPcMzGgEBp2zsWiu3R83Led5hn` — READY
 - GitHub migrations: 135
 - Production Supabase migrations: 135
 - Migration drift: 0
@@ -17,21 +17,33 @@ Bundle: `pilot-acceptance-isolation-2026-09-23`
 
 Release tests do not create synthetic patients, users, claims, payments, or portal records in production. CI starts an isolated local Supabase stack, replays the canonical migration chain, provisions reserved-domain synthetic identities, runs acceptance, and discards the local stack.
 
-## Current isolation gate
+## Identity and isolation gates
 
-This bundle verifies the connected pilot identities: staff/practice administrator, clinician/provider, and patient portal.
+The connected pilot gate verifies distinct staff/practice-administrator, clinician/provider, and patient-portal identities. It proves own-tenant staff/provider visibility, cross-tenant denial, patient direct-table denial, linked-patient portal resolution, and same-tenant/cross-tenant appointment isolation.
 
-The gate requires:
+The full system-role matrix adds one distinct Auth identity for every value of `system_role_enum`:
 
-1. Three distinct Auth identities.
-2. Staff and clinician can see the pilot tenant's synthetic patients.
-3. Staff and clinician cannot read or update a second tenant's patient.
-4. Patient portal identity receives no staff-style direct access to the patients table.
-5. Patient portal resolves only its linked patient.
-6. Patient cannot submit pre-visit data for the insured synthetic patient in the same tenant.
-7. Patient cannot submit pre-visit data for a patient in another tenant.
+- `platform_admin`
+- `practice_admin`
+- `billing_company_admin`
+- `billing_manager`
+- `biller`
+- `clinician`
+- `front_desk`
+- `credentialing_specialist`
+- `read_only`
+- `client`
 
-The broader 10-role system matrix remains a separate open requirement.
+Against the canonical `clients` RLS path, the matrix requires:
+
+1. The eight operational/admin roles can read and update an own-tenant synthetic patient.
+2. `read_only` can read the own-tenant patient but cannot update it.
+3. `client` receives no staff-style direct read or update access to the `clients` table.
+4. Every one of the 10 identities is denied cross-tenant patient reads and updates.
+5. All 10 Auth user IDs are distinct.
+6. The role matrix runs only against the isolated local Supabase stack.
+
+Patient portal access remains separately validated through the dedicated portal lifecycle and linked-patient RPC tests.
 
 ## Connected workflow evidence already accepted
 
@@ -59,7 +71,7 @@ An authenticated live-production review of the management report remains open.
 2. Select the recovery point immediately before the bad event.
 3. Restore only through the project's supported backup/PITR path.
 4. Reconcile migrations, Auth-linked records, Storage availability, immutable claim artifacts, and integrations.
-5. Re-run tenant/patient isolation, clinical workflow, claim/payment reconciliation, audit, and reporting checks before reopening writes.
+5. Re-run tenant/patient isolation, role matrix, clinical workflow, claim/payment reconciliation, audit, and reporting checks before reopening writes.
 
 The restore drill must use a disposable Supabase branch or duplicate project. Production is not a restore-test target. Branch creation can incur cost, so the drill remains open until cost is explicitly approved.
 
