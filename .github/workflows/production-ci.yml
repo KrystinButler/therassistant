@@ -151,6 +151,9 @@ jobs:
       - name: Seed isolated synthetic E2E data
         run: node scripts/provision-synthetic-e2e-identities.mjs
 
+      - name: Verify isolated patient portal lifecycle
+        run: node scripts/test-synthetic-patient-portal-lifecycle.mjs
+
       - name: Install Playwright Chromium
         run: pnpm exec playwright install --with-deps chromium
 
