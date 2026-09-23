@@ -37,10 +37,16 @@ docker exec "$DB_CONTAINER" pg_dump \
   --no-acl \
   --file="$DUMP_PATH"
 
-echo "Restoring into disposable local database..."
+RESTORE_ROLE="$(docker exec "$DB_CONTAINER" psql -U postgres -d postgres -Atqc "select rolname from pg_roles where rolsuper order by case when rolname='supabase_admin' then 0 else 1 end, rolname limit 1;")"
+if [ -z "$RESTORE_ROLE" ]; then
+  echo "The isolated Supabase stack does not expose a superuser role for full-database restore."
+  exit 1
+fi
+
+echo "Restoring into disposable local database with $RESTORE_ROLE..."
 docker exec "$DB_CONTAINER" createdb -U postgres -T template0 "$RESTORE_DB"
 docker exec "$DB_CONTAINER" pg_restore \
-  -U postgres \
+  -U "$RESTORE_ROLE" \
   -d "$RESTORE_DB" \
   --no-owner \
   --no-acl \
