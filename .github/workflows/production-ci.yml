@@ -176,3 +176,6 @@ jobs:
 
       - name: Verify synthetic clinical-to-charge handoff
         run: node scripts/verify-synthetic-clinical-handoff.mjs
+
+      - name: Verify isolated database restore rehearsal
+        run: bash scripts/verify-local-restore-drill.sh

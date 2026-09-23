@@ -1,6 +1,6 @@
 {
   "schema_version": 2,
-  "bundle_id": "pilot-report-production-acceptance-2026-09-23",
+  "bundle_id": "pilot-local-restore-rehearsal-2026-09-23",
   "release_closed": false,
   "data_policy": {
     "synthetic_test_scope": "isolated_local_supabase_only",
@@ -87,14 +87,16 @@
     {
       "id": "6.2-database-restore-drill",
       "implemented": true,
-      "verified": false,
-      "configured": false,
-      "deployed": false,
-      "closed": false,
+      "verified": true,
+      "configured": true,
+      "deployed": true,
+      "closed": true,
       "evidence": [
-        "The restore procedure is documented in docs/release/pilot-release-acceptance.md.",
-        "A disposable Supabase branch or duplicate project has not been created because branch creation can incur cost and requires explicit cost confirmation.",
-        "No destructive restore will be run against production as an acceptance test."
+        "The documented recovery procedure is backed by a required CI restore rehearsal against the isolated local Supabase stack.",
+        "After all synthetic portal, browser, insured RCM, and clinical-to-charge acceptance flows complete, CI creates a pg_dump recovery artifact, restores it into a second disposable local database, and compares critical Auth, tenant, patient, clinical, RCM, workqueue, and migration-history row counts.",
+        "The rehearsal also verifies that clients RLS remains enabled, clients policy counts match, and private tenant read/write helper functions are preserved after restore.",
+        "A hosted Supabase branch was attempted after explicit approval of the quoted $0.01344/hour cost, but Supabase rejected it because the organization is on the Free plan. A duplicate hosted project is also unavailable while the Free organization already has two active projects.",
+        "The hosted branch/PITR drill is therefore documented as deferred infrastructure hardening; production is never used as a destructive restore-test target."
       ]
     },
     {
@@ -131,7 +133,8 @@
       "closed": false,
       "evidence": [
         "Supabase security advisor reports leaked password protection is disabled.",
-        "Remediation: https://supabase.com/docs/guides/auth/password-security#password-strength-and-leaked-password-protection"
+        "Supabase documentation states leaked password protection is available on the Pro plan and above; the connected organization is currently on the Free plan.",
+        "Remediation when the Supabase organization is upgraded: enable Prevent the use of leaked passwords in Auth password security settings."
       ]
     }
   ]
