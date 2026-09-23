@@ -159,6 +159,9 @@ jobs:
       - name: Verify isolated staff, provider, and patient boundaries
         run: node scripts/verify-synthetic-isolation.mjs
 
+      - name: Verify full system role matrix
+        run: node scripts/verify-system-role-matrix.mjs
+
       - name: Verify isolated patient portal lifecycle
         run: node scripts/test-synthetic-patient-portal-lifecycle.mjs
 

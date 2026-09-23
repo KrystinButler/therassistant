@@ -1,15 +1,15 @@
 {
   "schema_version": 2,
-  "bundle_id": "pilot-acceptance-isolation-2026-09-23",
+  "bundle_id": "pilot-role-matrix-2026-09-23",
   "release_closed": false,
   "data_policy": {
     "synthetic_test_scope": "isolated_local_supabase_only",
     "production_test_data_created": false,
-    "identity_scope": "distinct synthetic staff, provider, and patient Auth identities"
+    "identity_scope": "distinct synthetic staff, provider, patient, and per-system-role Auth identities"
   },
   "production_baseline": {
-    "commit": "e4bba95108cf0b5894e74928276f0879a38f819c",
-    "deployment_id": "dpl_GHwfjJyyEVQoDXzqewhdg77i4nsd",
+    "commit": "20345439c259e28115ba06900a726a58b4b00838",
+    "deployment_id": "dpl_dcqPcMzGgEBp2zsWiu3R83Led5hn",
     "deployment_state": "READY",
     "supabase_project_id": "lpjwfdvaxobewxcklenl",
     "github_migration_count": 135,
@@ -32,14 +32,16 @@
     },
     {
       "id": "6.1-full-system-role-matrix",
-      "implemented": false,
-      "verified": false,
-      "configured": false,
-      "deployed": false,
-      "closed": false,
+      "implemented": true,
+      "verified": true,
+      "configured": true,
+      "deployed": true,
+      "closed": true,
       "evidence": [
-        "The database defines 10 system roles: platform_admin, practice_admin, billing_company_admin, billing_manager, biller, clinician, front_desk, credentialing_specialist, read_only, and client.",
-        "This bundle intentionally validates the three identities required for the connected pilot path; the remaining role-by-role matrix is a separate acceptance item."
+        "Required CI provisions one reserved-domain Auth identity for every system_role_enum value against the isolated local Supabase stack.",
+        "The matrix verifies tenant-scoped read/write access for platform_admin, practice_admin, billing_company_admin, billing_manager, biller, clinician, front_desk, and credentialing_specialist.",
+        "The matrix verifies read_only can read tenant data but cannot update it, while client receives no staff-style direct clients-table read or write access.",
+        "All 10 role identities are required to be distinct and all 10 are denied cross-tenant patient reads and writes."
       ]
     },
     {
