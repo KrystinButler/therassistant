@@ -285,26 +285,26 @@ export function BillingQueuePage() {
   async function runDownload837(batchId: string) {
     setSavingId(`download-${batchId}`);
     setError(null);
+    setMessage(null);
     try {
-      const output = await getBatchExportData(batchId);
-      const text = build837PText(output);
-      const blob = new Blob([text], { type: "text/plain;charset=utf-8" });
+      const artifact = await archiveBatch837PArtifact(batchId);
+      const blob = new Blob([artifact.text], { type: "text/plain;charset=utf-8" });
       const url = URL.createObjectURL(blob);
       const anchor = document.createElement("a");
       anchor.href = url;
-      anchor.download = `therassistant-837p-${batchId}.txt`;
+      anchor.download = artifact.fileName;
       document.body.appendChild(anchor);
       anchor.click();
       anchor.remove();
       URL.revokeObjectURL(url);
-      setMessage("837P export downloaded. The batch remains unsubmitted until an actual external transmission is recorded.");
+      setMessage(`837P archived and verified (SHA-256 ${artifact.sha256.slice(0, 12)}…). The batch is transmission-ready but remains unsubmitted.`);
+      await load();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Unable to create 837P export.");
+      setError(err instanceof Error ? err.message : "Unable to archive and download the 837P.");
     } finally {
       setSavingId(null);
     }
   }
-
   async function runCms1500Preview(claimId: string, autoPrint = false) {
     const actionId = `${autoPrint ? "print" : "preview"}-${claimId}`;
     const previewWindow = window.open("", "_blank");
