@@ -52,7 +52,7 @@ export default defineConfig({
     },
     {
       name: "provider-chromium",
-      testMatch: /provider-role\.spec\.ts/,
+      testMatch: /provider-(?:role|clinical-flow)\.spec\.ts/,
       dependencies: ["provider-setup"],
       use: {
         ...devices["Desktop Chrome"],
