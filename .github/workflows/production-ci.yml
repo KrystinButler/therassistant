@@ -1,9 +1,9 @@
-name: Phase 4 CI
+name: Production CI
 
 on:
   push:
     branches:
-      - phase-4-credentialing-payers
+      - main
   pull_request:
     branches:
       - main
@@ -32,6 +32,12 @@ jobs:
 
       - name: Tests
         run: pnpm --filter ./scripts exec tsx --test ../artifacts/therassistant-inventory/tests/**/*.test.ts
+
+      - name: Production auth contract
+        run: node scripts/check-production-auth.mjs
+
+      - name: Patient chart TypeScript gate
+        run: pnpm --filter @workspace/therassistant-inventory run typecheck:phase2
 
       - name: Production TypeScript gate
         run: pnpm --filter @workspace/therassistant-inventory run typecheck:phase3
@@ -68,11 +74,24 @@ jobs:
           fi
 
           routes=(
+            "/"
+            "/clients"
+            "/eligibility"
+            "/schedule"
+            "/patient-portal/login"
+            "/patient-portal/activate"
+            "/billing"
             "/providers"
-            "/providers/00000000-0000-4000-8000-000000000001"
             "/credentialing"
             "/payers-contracts"
-            "/payers/00000000-0000-4000-8000-000000000001"
+            "/mailroom"
+            "/mailroom/75000000-0000-4000-8000-000000000001"
+            "/billing/charges"
+            "/rejections"
+            "/claims"
+            "/denials"
+            "/payments"
+            "/work-center"
           )
 
           for route in "${routes[@]}"; do
@@ -80,3 +99,12 @@ jobs:
             test "$code" = "200"
             grep -q '<div id="root"' /tmp/therassistant-route.html
           done
+
+      - name: Install Playwright Chromium
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Browser E2E
+        env:
+          E2E_STAFF_EMAIL: ${{ secrets.E2E_STAFF_EMAIL }}
+          E2E_STAFF_PASSWORD: ${{ secrets.E2E_STAFF_PASSWORD }}
+        run: pnpm test:e2e
