@@ -63,7 +63,6 @@ export const NAV_SECTIONS: readonly NavigationSection[] = [
     visibility: visibleToAll,
     children: [
       { id: "clinical", label: "Clinical Documentation", href: "/clinical", visibility: visibleToAll },
-      { id: "medicaid", label: "Colorado Medicaid", href: "/medicaid", visibility: visibleToAll },
     ],
     contextualPaths: ["/encounters", "/clinical/golden-thread"],
   },
@@ -116,7 +115,6 @@ export const NAV_SECTIONS: readonly NavigationSection[] = [
         matchPaths: ["/payers"],
         visibility: visibleToAll,
       },
-      { id: "mailroom", label: "Mailroom", href: "/mailroom", visibility: visibleToAll },
       { id: "reports", label: "Reports", href: "/reports", visibility: visibleToAll },
       {
         id: "imports",

@@ -469,18 +469,6 @@ export function AuthorizationsPage() {
   );
 }
 
-export function MedicaidPage() {
-  return (
-    <ModulePage
-      endpoint="/api/medicaid"
-      eyebrow="MEDICAID DECISION SUPPORT"
-      title="Medicaid Coding Helper"
-      description="Program, authorization, and coding information for the synthetic Therassistant demonstration."
-      warning="Demo rules are synthetic and are not current payer policy."
-    />
-  );
-}
-
 export function ChargesPage() {
   return (
     <ModulePage

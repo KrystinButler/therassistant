@@ -59,7 +59,7 @@ export const WORKSPACES: readonly WorkspaceDefinition[] = [
       { id: "clinical", label: "Clinical", href: "/clinical", visibility: visibleToAll },
       { id: "eligibility", label: "Eligibility & Benefits", href: "/eligibility", visibility: visibleToAll },
     ],
-    contextualPaths: ["/encounters", "/medicaid"],
+    contextualPaths: ["/encounters"],
   },
   {
     id: "revenue-cycle",
@@ -109,7 +109,6 @@ export const WORKSPACES: readonly WorkspaceDefinition[] = [
         matchPaths: ["/payers"],
         visibility: visibleToAll,
       },
-      { id: "mailroom", label: "Mailroom", href: "/mailroom", visibility: visibleToAll },
       { id: "connected-operations", label: "Connected Operations", href: "/operations/connected", visibility: visibleToAll },
       {
         id: "imports",

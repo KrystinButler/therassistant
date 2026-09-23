@@ -17,10 +17,8 @@ import { CredentialingPage } from "./domains/credentialing/CredentialingPage";
 import { ClinicalPage } from "./domains/clinical/ClinicalPage";
 import { PayersContractsPage } from "./domains/credentialing/PayersContractsPage";
 import { EncounterPage } from "./domains/encounters/EncounterPage";
-import { CorrespondencePage } from "./domains/mailroom/CorrespondencePage";
 import { JournalPage } from "./domains/journal/JournalPage";
 import { ImportsPage } from "./domains/imports/ImportsPage";
-import { MailroomPage } from "./domains/mailroom/MailroomPage";
 import { PaymentsPage } from "./domains/payments/PaymentsPage";
 import { EligibilityPage } from "./domains/payer-readiness/EligibilityPage";
 import { PatientChartPage } from "./domains/patients/PatientChartPage";
@@ -52,10 +50,7 @@ import { ProvidersPage } from "./pages/providers";
 import { ReportsPage } from "./pages/operational-workspaces";
 import { ConnectedOperationsPage } from "./pages/connected-operations";
 import { UserRolesPage } from "./pages/users-roles";
-import {
-  GoldenThreadPage,
-  MedicaidPage,
-} from "./pages/restored-modules";
+import { GoldenThreadPage } from "./pages/restored-modules";
 
 function Redirect({ to }: { to: string }) {
   const [, navigate] = useLocation();
@@ -84,7 +79,6 @@ function StaffRoutes() {
         <Route path="/claims/:id"><Claim360Page /></Route>
         <Route path="/providers/:id"><ProviderDetailPage /></Route>
         <Route path="/payers/:id"><PayerDetailPage /></Route>
-        <Route path="/mailroom/:id"><CorrespondencePage /></Route>
         <Route path="/billing/charges"><BillingQueuePage /></Route>
         <Route path="/rejections"><RejectionsPage /></Route>
         <Route path="/denials"><DenialsPage /></Route>
@@ -95,13 +89,11 @@ function StaffRoutes() {
         <Route path="/journal"><JournalPage /></Route>
         <Route path="/eligibility"><EligibilityPage /></Route>
         <Route path="/authorizations"><Redirect to="/eligibility" /></Route>
-        <Route path="/medicaid"><MedicaidPage /></Route>
         <Route path="/billing"><BillingHubPage /></Route>
         <Route path="/claims"><ClaimsPage /></Route>
         <Route path="/payments"><PaymentsPage /></Route>
         <Route path="/credentialing"><CredentialingPage /></Route>
         <Route path="/payers-contracts"><PayersContractsPage /></Route>
-        <Route path="/mailroom"><MailroomPage /></Route>
         <Route path="/operations/connected"><ConnectedOperationsPage /></Route>
         <Route path="/reports"><ReportsPage /></Route>
         <Route path="/administration/imports"><ImportsPage /></Route>
