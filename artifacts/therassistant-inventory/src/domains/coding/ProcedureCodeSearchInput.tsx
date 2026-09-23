@@ -1,6 +1,10 @@
 import { useEffect, useState } from "react";
 
-import { searchProcedureCodes, type ProcedureCodeSearchResult } from "./procedure-codes";
+import {
+  procedureCodeReferenceSummary,
+  searchProcedureCodes,
+  type ProcedureCodeSearchResult,
+} from "./procedure-codes";
 
 type Props = {
   code: string;
@@ -14,10 +18,39 @@ export function ProcedureCodeSearchInput({ code, disabled = false, serviceDate, 
   const [results, setResults] = useState<ProcedureCodeSearchResult[]>([]);
   const [searching, setSearching] = useState(false);
   const [open, setOpen] = useState(false);
+  const [selectedReference, setSelectedReference] = useState<ProcedureCodeSearchResult | null>(null);
+  const [referenceChecked, setReferenceChecked] = useState(false);
 
   useEffect(() => {
     setQuery(code);
   }, [code]);
+
+  useEffect(() => {
+    const exactCode = code.trim().toUpperCase();
+    if (exactCode.length < 4) {
+      setSelectedReference(null);
+      setReferenceChecked(false);
+      return;
+    }
+
+    const controller = new AbortController();
+    setReferenceChecked(false);
+    searchProcedureCodes(exactCode, serviceDate, controller.signal)
+      .then((next) => {
+        setSelectedReference(
+          next.find((result) => result.code.toUpperCase() === exactCode) ?? null,
+        );
+        setReferenceChecked(true);
+      })
+      .catch((error) => {
+        if ((error as Error).name !== "AbortError") {
+          setSelectedReference(null);
+          setReferenceChecked(true);
+        }
+      });
+
+    return () => controller.abort();
+  }, [code, serviceDate]);
 
   useEffect(() => {
     const value = query.trim();
@@ -52,6 +85,8 @@ export function ProcedureCodeSearchInput({ code, disabled = false, serviceDate, 
 
   function choose(result: ProcedureCodeSearchResult) {
     onSelect(result);
+    setSelectedReference(result);
+    setReferenceChecked(true);
     setQuery(result.code);
     setResults([]);
     setOpen(false);
@@ -71,14 +106,32 @@ export function ProcedureCodeSearchInput({ code, disabled = false, serviceDate, 
           const value = event.target.value.toUpperCase();
           setQuery(value);
           if (/^[A-Z0-9]{4,5}$/.test(value.trim())) {
-            onSelect({ code: value.trim(), name: "", system: "", descriptionSource: "" });
+            onSelect({
+              code: value.trim(),
+              name: "",
+              system: "",
+              version: "",
+              effectiveFrom: "",
+              effectiveTo: "",
+              descriptionSource: "",
+            });
           }
         }}
       />
       {searching ? <div className="thera-table-subtext" style={{ marginTop: 4 }}>Searching code library…</div> : null}
       {query.trim().length >= 2 && query.trim() !== code ? (
         <div className="thera-table-subtext" style={{ marginTop: 4 }}>
-          Pilot coverage: curated behavioral-health/outpatient CPT subset only; HCPCS Level II is not loaded. No match is not an invalid-code determination.
+          Date-of-service filtering is active. Results reflect only reference releases currently loaded in THERASSISTANT; no match is not an invalid-code determination.
+        </div>
+      ) : null}
+      {query.trim() === code.trim() && selectedReference ? (
+        <div className="thera-table-subtext" style={{ marginTop: 4 }}>
+          {procedureCodeReferenceSummary(selectedReference, serviceDate)}
+        </div>
+      ) : null}
+      {query.trim() === code.trim() && code.trim() && referenceChecked && !selectedReference ? (
+        <div className="thera-table-subtext" style={{ marginTop: 4 }}>
+          This code was not found in the currently loaded reference data{serviceDate ? ` for DOS ${serviceDate}` : ""}. Verify the current official or payer source before relying on it; this does not mean the code is invalid.
         </div>
       ) : null}
       {open && results.length ? (
@@ -123,6 +176,7 @@ export function ProcedureCodeSearchInput({ code, disabled = false, serviceDate, 
                 <small>{result.system}</small>
               </span>
               <span className="thera-table-subtext">{result.name}</span>
+              <span className="thera-table-subtext">{procedureCodeReferenceSummary(result, serviceDate)}</span>
             </button>
           ))}
         </div>
