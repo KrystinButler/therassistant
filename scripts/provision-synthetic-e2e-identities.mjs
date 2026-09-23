@@ -178,9 +178,25 @@ await upsert("tenant_user_roles", [
   { id: IDS.providerRole, tenant_id: IDS.tenant, user_id: providerUser.id, role: "clinician" },
 ]);
 
-await upsert("provider_user_links", [
-  { id: IDS.providerLink, tenant_id: IDS.tenant, provider_id: IDS.provider, user_id: providerUser.id, status: "active" },
-]);
+const providerSession = await request("/auth/v1/token?grant_type=password", {
+  method: "POST",
+  body: JSON.stringify({
+    email: identities.provider.email,
+    password: identities.provider.password,
+  }),
+});
+if (!providerSession?.access_token) {
+  throw new Error("Synthetic provider sign-in did not return an access token.");
+}
+
+const providerLink = await request("/rest/v1/rpc/link_current_user_to_provider", {
+  method: "POST",
+  headers: { Authorization: `Bearer ${providerSession.access_token}` },
+  body: JSON.stringify({ p_provider_id: IDS.provider }),
+});
+if (providerLink?.linked !== true || providerLink?.provider_id !== IDS.provider) {
+  throw new Error("Synthetic clinician could not link its own account to the provider record.");
+}
 
 await upsert("client_portal_access", [
   {
