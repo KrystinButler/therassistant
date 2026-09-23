@@ -162,5 +162,8 @@ jobs:
       - name: Browser E2E
         run: pnpm test:e2e
 
+      - name: Complete and verify synthetic insured revenue cycle
+        run: node scripts/complete-synthetic-insured-revenue-cycle.mjs
+
       - name: Verify synthetic clinical-to-charge handoff
         run: node scripts/verify-synthetic-clinical-handoff.mjs

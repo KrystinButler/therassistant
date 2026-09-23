@@ -70,7 +70,14 @@ const IDS = {
   location: "12000000-0000-4000-8000-000000000001",
   provider: "20000000-0000-4000-8000-000000000001",
   patient: "40000000-0000-4000-8000-000000000001",
+  insuredPatient: "40000000-0000-4000-8000-000000000002",
   appointment: "50000000-0000-4000-8000-000000000001",
+  insuredAppointment: "50000000-0000-4000-8000-000000000002",
+  payer: "30000000-0000-4000-8000-000000000001",
+  payerPlan: "31000000-0000-4000-8000-000000000001",
+  insurancePolicy: "41000000-0000-4000-8000-000000000001",
+  providerEnrollment: "21000000-0000-4000-8000-000000000001",
+  eligibility: "61000000-0000-4000-8000-000000000001",
   staffMembership: "e1000000-0000-4000-8000-000000000001",
   providerMembership: "e1000000-0000-4000-8000-000000000002",
   staffRole: "e2000000-0000-4000-8000-000000000001",
@@ -85,7 +92,32 @@ await upsert("tenants", [{
   tenant_type: "practice",
   status: "active",
   timezone: "America/Denver",
-  settings: { synthetic: true, e2e: true },
+  settings: {
+    synthetic: true,
+    e2e: true,
+    claims_837p: {
+      submitterName: "THERASSISTANT Synthetic E2E Practice",
+      submitterId: "SYNTHETIC001",
+      receiverName: "Synthetic Clearinghouse",
+      receiverId: "TESTCLEAR",
+      contactName: "E2E Billing",
+      contactPhone: "3035550199",
+      contactEmail: "billing@example.test",
+      billingProviderName: "THERASSISTANT Synthetic E2E Practice LLC",
+      billingProviderNpi: "1003000001",
+      billingProviderTaxId: "000000000",
+      billingProviderTaxonomy: "261QM0801X",
+      addressLine1: "100 Test Avenue",
+      addressLine2: "",
+      city: "Test City",
+      state: "CO",
+      postalCode: "80000",
+      usageIndicator: "T",
+      payerIds: { [IDS.payer]: "60054" },
+      claimFilingIndicators: { [IDS.payer]: "CI" },
+      eraPayerIdentifiers: { [IDS.payer]: "60054" },
+    },
+  },
 }]);
 
 await upsert("practice_entities", [{
@@ -146,6 +178,70 @@ await upsert("clients", [{
   metadata: { synthetic: true, e2e: true, billing_type: "self_pay" },
 }]);
 
+await upsert("payers", [{
+  id: IDS.payer,
+  name: "Synthetic Commercial Payer",
+  payer_type: "commercial",
+  clearinghouse_payer_id: "60054",
+}]);
+
+await upsert("payer_plans", [{
+  id: IDS.payerPlan,
+  payer_id: IDS.payer,
+  name: "Synthetic Commercial PPO",
+  plan_type: "PPO",
+}]);
+
+await upsert("clients", [{
+  id: IDS.insuredPatient,
+  tenant_id: IDS.tenant,
+  first_name: "Taylor",
+  last_name: "Morgan",
+  preferred_name: "Taylor",
+  date_of_birth: "1988-07-09",
+  email: "taylor.morgan@example.test",
+  phone: "303-555-0202",
+  address_line1: "200 Synthetic Lane",
+  city: "Test City",
+  state: "CO",
+  postal_code: "80000",
+  client_status: "active",
+  registration_status: "complete",
+  billing_readiness_status: "ready_for_charge",
+  metadata: { synthetic: true, e2e: true, billing_type: "insurance", sex: "F" },
+}]);
+
+await upsert("client_insurance_policies", [{
+  id: IDS.insurancePolicy,
+  tenant_id: IDS.tenant,
+  client_id: IDS.insuredPatient,
+  payer_id: IDS.payer,
+  payer_plan_id: IDS.payerPlan,
+  insurance_order: "primary",
+  status: "active",
+  member_id: "SYNTH12345",
+  group_number: "E2EGROUP",
+  subscriber_name: "Taylor Morgan",
+  subscriber_dob: "1988-07-09",
+  relationship_to_subscriber: "self",
+  effective_date: "2026-01-01",
+  metadata: { synthetic: true, e2e: true },
+}]);
+
+await upsert("provider_payer_enrollments", [{
+  id: IDS.providerEnrollment,
+  tenant_id: IDS.tenant,
+  provider_id: IDS.provider,
+  payer_id: IDS.payer,
+  payer_plan_id: IDS.payerPlan,
+  practice_entity_id: IDS.entity,
+  practice_location_id: IDS.location,
+  enrollment_status: "approved",
+  effective_date: "2026-01-01",
+  payer_provider_id: "SYNTH-PROVIDER-001",
+  notes: "Synthetic approved enrollment for isolated E2E only.",
+}]);
+
 const tomorrow = new Date(Date.now() + 24 * 60 * 60 * 1000);
 tomorrow.setUTCHours(16, 0, 0, 0);
 const appointmentEnd = new Date(tomorrow.getTime() + 53 * 60 * 1000);
@@ -162,6 +258,36 @@ await upsert("appointments", [{
   service_type: "Individual Therapy",
   cpt_code: "90837",
   notes: "Synthetic E2E appointment. No real patient data.",
+}]);
+
+const insuredStart = new Date(tomorrow.getTime() + 2 * 60 * 60 * 1000);
+const insuredEnd = new Date(insuredStart.getTime() + 53 * 60 * 1000);
+
+await upsert("appointments", [{
+  id: IDS.insuredAppointment,
+  tenant_id: IDS.tenant,
+  client_id: IDS.insuredPatient,
+  provider_id: IDS.provider,
+  starts_at: insuredStart.toISOString(),
+  ends_at: insuredEnd.toISOString(),
+  appointment_status: "scheduled",
+  location_type: "telehealth",
+  service_type: "Individual Therapy",
+  cpt_code: "90837",
+  notes: "Synthetic insured E2E appointment. No real patient data.",
+}]);
+
+await upsert("eligibility_checks", [{
+  id: IDS.eligibility,
+  tenant_id: IDS.tenant,
+  client_id: IDS.insuredPatient,
+  insurance_policy_id: IDS.insurancePolicy,
+  payer_id: IDS.payer,
+  service_date: insuredStart.toISOString().slice(0, 10),
+  eligibility_status: "active",
+  response_source: "synthetic_e2e_verified",
+  raw_response: { synthetic: true, e2e: true, benefits: { copay_cents: 0 } },
+  notes: "Synthetic verified eligibility for isolated E2E only.",
 }]);
 
 const staffUser = await ensureAuthUser(identities.staff.email, identities.staff.password, "staff");

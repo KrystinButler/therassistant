@@ -38,6 +38,8 @@ export default defineConfig({
         /-auth\.setup\.ts$/,
         /provider-role\.spec\.ts/,
         /provider-clinical-flow\.spec\.ts/,
+        /provider-insured-clinical-flow\.spec\.ts/,
+        /billing-insured-flow\.spec\.ts/,
         /patient-role\.spec\.ts/,
       ],
       dependencies: ["staff-setup"],
@@ -53,11 +55,20 @@ export default defineConfig({
     },
     {
       name: "provider-chromium",
-      testMatch: /provider-(?:role|clinical-flow)\.spec\.ts/,
+      testMatch: /provider-(?:role|clinical-flow|insured-clinical-flow)\.spec\.ts/,
       dependencies: ["provider-setup"],
       use: {
         ...devices["Desktop Chrome"],
         storageState: providerStorageState,
+      },
+    },
+    {
+      name: "billing-chromium",
+      testMatch: /billing-insured-flow\.spec\.ts/,
+      dependencies: ["staff-setup", "provider-chromium"],
+      use: {
+        ...devices["Desktop Chrome"],
+        storageState: staffStorageState,
       },
     },
     {

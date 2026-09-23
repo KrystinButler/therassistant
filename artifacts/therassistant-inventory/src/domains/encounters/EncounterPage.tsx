@@ -123,7 +123,21 @@ export function EncounterPage() {
   );
   const generatedNarrative = useMemo(() => synthesizeStructuredNarrative(structuredSelections), [structuredSelections]);
 
-  async function withSave(action: () => Promise<unknown>, successMessage: string) {
+  async function withSave(
+    action: () => Promise<unknown>,
+    successMessage: string,
+    preserveClinicalDraft = false,
+  ) {
+    const draft = preserveClinicalDraft
+      ? {
+          noteText,
+          noteType,
+          goalAddressed,
+          structuredSelections,
+          carryForwardContext,
+        }
+      : null;
+
     setSaving(true);
     setError(null);
     setMessage(null);
@@ -131,6 +145,13 @@ export function EncounterPage() {
       await action();
       setMessage(successMessage);
       await load();
+      if (draft) {
+        setNoteText(draft.noteText);
+        setNoteType(draft.noteType);
+        setGoalAddressed(draft.goalAddressed);
+        setStructuredSelections(draft.structuredSelections);
+        setCarryForwardContext(draft.carryForwardContext);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unable to save encounter changes.");
     } finally {
@@ -153,6 +174,7 @@ export function EncounterPage() {
         isPrimary: (data?.diagnoses.length ?? 0) === 0,
       }),
       "Diagnosis added to encounter.",
+      true,
     );
     setDiagnosisCode("");
     setDiagnosisDescription("");
@@ -169,6 +191,7 @@ export function EncounterPage() {
         placeOfService,
       }),
       "Service line added to encounter.",
+      true,
     );
     setModifier1("");
   }

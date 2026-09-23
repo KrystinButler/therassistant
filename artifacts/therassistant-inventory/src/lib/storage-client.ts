@@ -26,6 +26,19 @@ function errorMessage(body: Record<string, unknown> | null, fallback: string) {
   return String(body?.message ?? body?.error ?? body?.error_description ?? fallback);
 }
 
+export function resolveStorageSignedUrl(signedUrl: string, baseUrl = SUPABASE_URL) {
+  const signed = signedUrl.trim();
+  if (!signed) throw new Error("Supabase Storage returned an empty signed URL.");
+  if (/^https?:\/\//i.test(signed)) return signed;
+
+  const path = signed.startsWith("/") ? signed : `/${signed}`;
+  const storagePath = path.startsWith("/storage/v1/")
+    ? path
+    : `/storage/v1${path}`;
+
+  return new URL(storagePath, baseUrl.endsWith("/") ? baseUrl : `${baseUrl}/`).toString();
+}
+
 export function sanitizeStorageFileName(fileName: string) {
   const base = fileName.split(/[\\/]/).pop()?.trim() || "document";
   const dot = base.lastIndexOf(".");
@@ -117,7 +130,7 @@ export function createStorageClient(
     if (!response.ok) throw new Error(errorMessage(body, `Unable to create signed EDI URL (${response.status}).`));
     const signed = String(body?.signedURL ?? body?.signedUrl ?? "");
     if (!signed) throw new Error("Supabase Storage returned no signed EDI URL.");
-    return signed.startsWith("http") ? signed : new URL(signed, SUPABASE_URL).toString();
+    return resolveStorageSignedUrl(signed);
   }
 
   async function readClaimEdiArtifact(path: string) {
@@ -164,7 +177,7 @@ export function createStorageClient(
     if (!response.ok) throw new Error(errorMessage(body, `Unable to create signed document URL (${response.status}).`));
     const signed = String(body?.signedURL ?? body?.signedUrl ?? "");
     if (!signed) throw new Error("Supabase Storage returned no signed document URL.");
-    return signed.startsWith("http") ? signed : new URL(signed, SUPABASE_URL).toString();
+    return resolveStorageSignedUrl(signed);
   }
 
   async function deleteObject(path: string) {
