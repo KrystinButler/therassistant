@@ -142,7 +142,7 @@ await upsert("clients", [{
   postal_code: "80000",
   client_status: "active",
   registration_status: "complete",
-  billing_readiness_status: "ready",
+  billing_readiness_status: "ready_for_charge",
   metadata: { synthetic: true, e2e: true, billing_type: "self_pay" },
 }]);
 
