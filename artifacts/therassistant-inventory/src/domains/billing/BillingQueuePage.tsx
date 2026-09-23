@@ -131,7 +131,12 @@ export function BillingQueuePage() {
       const claimId = String(created.value.claim.id);
       const validation = await validateClaim(claimId);
       if (!validation.ok) {
-        setMessage(`Claim ${String(created.value.claim.patient_control_number || "created")} was created and moved to Rejections for correction.`);
+        const validationDetails = validation.details?.length
+          ? ` ${validation.details.join(" ")}`
+          : "";
+        setMessage(
+          `Claim ${String(created.value.claim.patient_control_number || "created")} was created and moved to Rejections for correction.${validationDetails}`,
+        );
       } else {
         setMessage(`Claim ${String(created.value.claim.patient_control_number || "created")} passed scrub and is ready to batch.`);
       }
