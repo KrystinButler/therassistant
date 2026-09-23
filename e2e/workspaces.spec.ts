@@ -7,7 +7,6 @@ const routes = [
   { path: "/payments", heading: "Payments, ERA & Reconciliation" },
   { path: "/eligibility", heading: "Eligibility" },
   { path: "/credentialing", heading: "Credentialing" },
-  { path: "/mailroom", heading: "Mailroom" },
   { path: "/providers", heading: "Providers" },
   { path: "/payers-contracts", heading: "Payers & Contracts" },
 ] as const;

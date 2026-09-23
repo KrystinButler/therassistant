@@ -6,7 +6,7 @@ test("provider completes a synthetic visit from schedule through signed note and
   await page.goto(`/schedule?appointment=${APPOINTMENT_ID}`);
 
   await expect(page.getByRole("heading", { name: "Patient Review" })).toBeVisible({ timeout: 15_000 });
-  await expect(page.getByText("Jordan Ellis", { exact: false })).toBeVisible();
+  await expect(page.getByRole("dialog").getByText("Jordan Ellis", { exact: true })).toBeVisible();
 
   await page.getByRole("button", { name: /Start Note|Resume Note/ }).click();
   await expect.poll(() => new URL(page.url()).pathname).toMatch(/^\/encounters\/[0-9a-f-]+$/i);
