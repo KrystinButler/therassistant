@@ -1,14 +1,14 @@
 # THERASSISTANT Pilot & Release Acceptance
 
-Bundle: `pilot-role-matrix-2026-09-23`
+Bundle: `pilot-report-production-acceptance-2026-09-23`
 
 ## Canonical production chain
 
 - GitHub: `KrystinButler/therassistant`
 - Supabase: `lpjwfdvaxobewxcklenl`
 - Vercel: `therassistant`
-- Accepted production baseline commit: `20345439c259e28115ba06900a726a58b4b00838`
-- Accepted production baseline deployment: `dpl_dcqPcMzGgEBp2zsWiu3R83Led5hn` — READY
+- Accepted production baseline commit: `f786c6fa3e7769f17f71eed826fbbdc03f0d43b5`
+- Accepted production baseline deployment: `dpl_AK1hSTMwDpo8b4enc6gA6s9yfodv` — READY
 - GitHub migrations: 135
 - Production Supabase migrations: 135
 - Migration drift: 0
@@ -53,7 +53,7 @@ Production CI already verifies portal activation/check-in/journal/revoke/restore
 
 The canonical Reports page is deployed and reconciles management A/R to claim balance summaries. Claims missing a balance summary are excluded from management totals and surfaced as exceptions.
 
-An authenticated live-production review of the management report remains open.
+Production report acceptance is complete. The production `/reports` route returned HTTP 200, and a read-only acceptance transaction established an authenticated RLS context from an existing active non-client tenant membership and evaluated the same production metric families used by `ReportsPage`: active patients/providers, reconciled open A/R, A/R over 90 days, missing balance summaries, claim exceptions, active denials, posted payments, reversed/voided payments, and open work. No production records were inserted, updated, or deleted.
 
 ## Restore procedure
 
