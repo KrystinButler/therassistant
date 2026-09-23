@@ -11,9 +11,9 @@ import {
   recordExternalSubmission,
   validateClaim,
 } from "../claims/repository";
-import { build837PText } from "./claim-output";
 import { buildCms1500PreviewHtml } from "./cms1500-preview";
-import { getBatchExportData, getClaimPreviewData } from "./claim-output-repository";
+import { getClaimPreviewData } from "./claim-output-repository";
+import { archiveBatch837PArtifact } from "./claim-artifact-repository";
 import {
   createChargeFromEncounter,
   getBillingQueueData,
