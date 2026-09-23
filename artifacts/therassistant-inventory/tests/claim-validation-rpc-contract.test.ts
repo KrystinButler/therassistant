@@ -4,7 +4,7 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
 const migration = readFileSync(
-  fileURLToPath(new URL("../../../supabase/migrations/20260923195000_restore_canonical_claim_validation.sql", import.meta.url)),
+  fileURLToPath(new URL("../../../supabase/migrations/20260923194822_restore_canonical_claim_validation.sql", import.meta.url)),
   "utf8",
 );
 
