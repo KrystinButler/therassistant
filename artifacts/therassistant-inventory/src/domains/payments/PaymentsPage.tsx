@@ -167,7 +167,7 @@ export function PaymentsPage() {
         allocationCents: form.claimId
           ? toCents(form.allocation || form.amount)
           : source === "patient" && form.clientId
-            ? toCents(form.amount)
+            ? toCents(form.allocation || form.amount)
             : 0,
         traceNumber: form.trace,
         checkNumber: form.check,

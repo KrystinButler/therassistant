@@ -198,7 +198,9 @@ export async function postManualPayment(input: {
   idempotencyKey?: string;
 }) {
   const draft = validatePaymentDraft({ amountCents: input.amountCents, source: input.source, method: input.method });
-  const requestedAllocationCents = input.claimId ? Number(input.allocationCents ?? input.amountCents) : 0;
+  const requestedAllocationCents = Number(
+    input.allocationCents ?? (input.claimId ? input.amountCents : 0),
+  );
   let claim: DataRow | null = null;
   let allocationCents = 0;
   if (input.claimId) {
@@ -206,6 +208,11 @@ export async function postManualPayment(input: {
     if (!claim) throw new Error("Selected claim was not found.");
     const financials = await getClaimFinancialState(claim);
     allocationCents = capAllocationToOpenBalance(requestedAllocationCents, financials.openBalanceCents);
+  } else if (draft.source === "patient" && input.clientId) {
+    // The database RPC caps this request to the patient's current A/R balance.
+    // Preserve the requested claimless allocation here so self-pay payments do not
+    // get silently converted to unapplied cash before reaching the RPC.
+    allocationCents = Math.max(0, requestedAllocationCents);
   }
   const plan = buildAllocationPlan(input.amountCents, allocationCents > 0 ? [allocationCents] : []);
   const ownership = resolvePaymentOwnership({
