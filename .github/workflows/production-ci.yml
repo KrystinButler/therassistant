@@ -149,14 +149,7 @@ jobs:
           } >> "$GITHUB_ENV"
 
       - name: Seed isolated synthetic E2E data
-        shell: bash
-        run: |
-          cp scripts/seed-therassistant-demo.mjs lib/db/.seed-therassistant-demo.mjs
-          cp scripts/seed-therassistant-patient-portal.mjs lib/db/.seed-therassistant-patient-portal.mjs
-          node lib/db/.seed-therassistant-demo.mjs
-          node lib/db/.seed-therassistant-patient-portal.mjs
-          rm lib/db/.seed-therassistant-demo.mjs lib/db/.seed-therassistant-patient-portal.mjs
-          node scripts/provision-synthetic-e2e-identities.mjs
+        run: node scripts/provision-synthetic-e2e-identities.mjs
 
       - name: Install Playwright Chromium
         run: pnpm exec playwright install --with-deps chromium
