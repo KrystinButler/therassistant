@@ -100,11 +100,52 @@ jobs:
             grep -q '<div id="root"' /tmp/therassistant-route.html
           done
 
+      - name: Start isolated Supabase E2E stack
+        shell: bash
+        run: |
+          pnpm dlx supabase@2.117.0 start
+          pnpm dlx supabase@2.117.0 status -o env > /tmp/supabase.env
+          set -a
+          source /tmp/supabase.env
+          set +a
+
+          PUBLISHABLE="${PUBLISHABLE_KEY:-${ANON_KEY:-}}"
+          SECRET="${SECRET_KEY:-${SERVICE_ROLE_KEY:-}}"
+
+          if [ -z "${API_URL:-}" ] || [ -z "${DB_URL:-}" ] || [ -z "$PUBLISHABLE" ] || [ -z "$SECRET" ]; then
+            echo "Local Supabase did not expose the required E2E connection values."
+            exit 1
+          fi
+
+          {
+            echo "E2E_SUPABASE_URL=$API_URL"
+            echo "VITE_SUPABASE_URL=$API_URL"
+            echo "VITE_SUPABASE_PUBLISHABLE_KEY=$PUBLISHABLE"
+            echo "SUPABASE_URL=$API_URL"
+            echo "SUPABASE_SECRET_KEY=$SECRET"
+            echo "DATABASE_URL=$DB_URL"
+            echo "E2E_STAFF_EMAIL=staff.e2e@example.test"
+            echo "E2E_PROVIDER_EMAIL=jamie.parker@example.test"
+            echo "E2E_PATIENT_EMAIL=jordan.ellis@example.test"
+          } >> "$GITHUB_ENV"
+
+          python - <<'PY'
+          import os
+          import secrets
+          with open(os.environ["GITHUB_ENV"], "a", encoding="utf-8") as env:
+              env.write(f"E2E_STAFF_PASSWORD={secrets.token_urlsafe(32)}\n")
+              env.write(f"E2E_PROVIDER_PASSWORD={secrets.token_urlsafe(32)}\n")
+              env.write(f"E2E_PATIENT_PASSWORD={secrets.token_urlsafe(32)}\n")
+          PY
+
+      - name: Seed isolated synthetic E2E data
+        run: |
+          node scripts/seed-therassistant-demo.mjs
+          node scripts/seed-therassistant-patient-portal.mjs
+          node scripts/provision-synthetic-e2e-identities.mjs
+
       - name: Install Playwright Chromium
         run: pnpm exec playwright install --with-deps chromium
 
       - name: Browser E2E
-        env:
-          E2E_STAFF_EMAIL: ${{ secrets.E2E_STAFF_EMAIL }}
-          E2E_STAFF_PASSWORD: ${{ secrets.E2E_STAFF_PASSWORD }}
         run: pnpm test:e2e
