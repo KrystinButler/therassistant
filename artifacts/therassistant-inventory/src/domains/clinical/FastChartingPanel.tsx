@@ -6,6 +6,7 @@ import {
   type SmartPhrase,
   type StructuredSelections,
 } from "./fast-charting";
+import { ForensicSpecialtyPanel } from "./ForensicSpecialtyPanel";
 import {
   CLINICAL_TAG_OPTIONS,
   DOCUMENTATION_TEMPLATES,
@@ -159,6 +160,15 @@ export function FastChartingPanel(props: Props) {
         </div>
       </div>
     </div>
+
+    {props.selections.templateType === "forensic" && (
+      <ForensicSpecialtyPanel
+        signed={props.signed}
+        value={props.selections.forensicContext}
+        onChange={(forensicContext) => props.onSelectionsChange({ ...props.selections, forensicContext })}
+        onInsertIntoNote={props.onInsertPhrase}
+      />
+    )}
 
     <div className="thera-card" style={{ padding: 12 }}>
       <div className="thera-filter-row" style={{ justifyContent: "space-between" }}>

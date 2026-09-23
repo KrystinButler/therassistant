@@ -47,6 +47,7 @@ test("documentation context defaults safely and preserves only known clinical ta
   const defaults = emptyStructuredSelections();
   assert.equal(defaults.templateType, "standard_therapy");
   assert.deepEqual(defaults.clinicalTags, []);
+  assert.equal(defaults.forensicContext.framework, "none");
 });
 
 test("timeline events normalize safely and format into signed-note text", () => {
@@ -74,4 +75,32 @@ test("note similarity flags near-cloned long notes but ignores short text", () =
   assert.ok(clinicalNoteSimilarity(clone, prior) > 0.85);
   assert.ok(clinicalNoteSimilarity(different, prior) < 0.3);
   assert.equal(clinicalNoteSimilarity("brief note", prior), 0);
+});
+
+test("forensic context is normalized without calculating a risk score", async () => {
+  const { normalizeStructuredSelections } = await import("../src/domains/clinical/fast-charting");
+  const normalized = normalizeStructuredSelections({
+    template_type: "forensic",
+    forensic_context: {
+      framework: "dvomb_adult",
+      referral_source: "Probation",
+      standards_reviewed_on: "2026-09-23",
+      progress: {
+        attendance: "improving",
+        engagement: "stable",
+        accountability: "needs_attention",
+        responsivity: "not_assessed",
+        skill_application: "improving",
+      },
+      assessment_references: [
+        { name: "Provider assessment reference", date: "2026-09-20", result_summary: "Filed in chart." },
+      ],
+    },
+  });
+
+  assert.equal(normalized.forensicContext.framework, "dvomb_adult");
+  assert.equal(normalized.forensicContext.referralSource, "Probation");
+  assert.equal(normalized.forensicContext.progress.accountability, "needs_attention");
+  assert.equal(normalized.forensicContext.assessmentReferences.length, 1);
+  assert.equal("riskScore" in normalized.forensicContext, false);
 });

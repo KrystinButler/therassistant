@@ -5,6 +5,11 @@ import {
   type DocumentationTemplate,
 } from "./clinical-context";
 import type { Row } from "../../lib/tenant-data-client";
+import {
+  emptyForensicContext,
+  normalizeForensicContext,
+  type ForensicContext,
+} from "./forensic-context";
 
 export type SmartPhraseScope = "built_in" | "user" | "practice";
 export type SmartPhrase = {
@@ -29,6 +34,7 @@ export type TimelineEvent = {
 export type StructuredSelections = {
   templateType: DocumentationTemplate;
   clinicalTags: ClinicalTagId[];
+  forensicContext: ForensicContext;
   timelineEvents: TimelineEvent[];
   similarityReviewAcknowledged: boolean;
   anxiety: Severity;
@@ -85,6 +91,7 @@ export function emptyStructuredSelections(): StructuredSelections {
   return {
     templateType: "standard_therapy",
     clinicalTags: [],
+    forensicContext: emptyForensicContext(),
     timelineEvents: [],
     similarityReviewAcknowledged: false,
     anxiety: "",
@@ -120,6 +127,7 @@ export function normalizeStructuredSelections(value: unknown): StructuredSelecti
   return {
     templateType: normalizeDocumentationTemplate(source.templateType ?? source.template_type),
     clinicalTags: normalizeClinicalTags(source.clinicalTags ?? source.clinical_tags),
+    forensicContext: normalizeForensicContext(source.forensicContext ?? source.forensic_context),
     timelineEvents,
     similarityReviewAcknowledged: source.similarityReviewAcknowledged === true || source.similarity_review_acknowledged === true,
     anxiety: validSeverity.has(anxiety) ? anxiety as Severity : "",
