@@ -188,6 +188,7 @@ export async function postManualPayment(input: {
   traceNumber?: string;
   checkNumber?: string;
   notes?: string;
+  idempotencyKey?: string;
 }) {
   const draft = validatePaymentDraft({ amountCents: input.amountCents, source: input.source, method: input.method });
   const requestedAllocationCents = input.claimId ? Number(input.allocationCents ?? input.amountCents) : 0;
@@ -220,6 +221,7 @@ export async function postManualPayment(input: {
     p_trace_number: input.traceNumber?.trim() || null,
     p_check_number: input.checkNumber?.trim() || null,
     p_notes: input.notes?.trim() || null,
+    p_idempotency_key: input.idempotencyKey?.trim() || null,
   });
 }
 
