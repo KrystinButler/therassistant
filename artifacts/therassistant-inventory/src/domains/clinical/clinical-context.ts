@@ -2,6 +2,9 @@ export type DocumentationTemplate =
   | "standard_therapy"
   | "intake"
   | "forensic"
+  | "pat_preparation"
+  | "kap_medicine_session"
+  | "pat_integration"
   | "extended_session"
   | "integration";
 
@@ -40,6 +43,24 @@ export const DOCUMENTATION_TEMPLATES: Array<{
     label: "Forensic / Justice-Involved",
     description: "Optional forensic treatment context without changing the core clinical record.",
     prompts: ["Treatment focus", "Behavior / accountability", "Response", "Risk / protective context", "Plan"],
+  },
+  {
+    id: "pat_preparation",
+    label: "PAT/KAP Preparation",
+    description: "Preparation and readiness documentation before a medicine-assisted or psychedelic-assisted session.",
+    prompts: ["Readiness / screening", "Intention", "Support plan", "Safety / logistics", "Plan"],
+  },
+  {
+    id: "kap_medicine_session",
+    label: "KAP Medicine Session",
+    description: "Extended medicine-assisted session documentation using provider-entered observations and the session timeline.",
+    prompts: ["Medicine / administration context", "Monitoring / observations", "Altered-state phenomena", "Grounding / recovery", "Plan"],
+  },
+  {
+    id: "pat_integration",
+    label: "PAT/KAP Integration",
+    description: "Post-experience integration documentation that connects themes back to function, treatment goals, and plan.",
+    prompts: ["Experience reviewed", "Meaning / themes", "Functional impact", "Integration intervention", "Plan"],
   },
   {
     id: "extended_session",

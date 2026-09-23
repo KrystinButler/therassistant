@@ -7,6 +7,11 @@ import {
   type StructuredSelections,
 } from "./fast-charting";
 import { ForensicSpecialtyPanel } from "./ForensicSpecialtyPanel";
+import { PsychedelicSpecialtyPanel } from "./PsychedelicSpecialtyPanel";
+import {
+  isPsychedelicTemplate,
+  psychedelicPhaseForTemplate,
+} from "./psychedelic-context";
 import {
   CLINICAL_TAG_OPTIONS,
   DOCUMENTATION_TEMPLATES,
@@ -67,7 +72,13 @@ export function FastChartingPanel(props: Props) {
   }
 
   function setTemplate(value: DocumentationTemplate) {
-    props.onSelectionsChange({ ...props.selections, templateType: value });
+    props.onSelectionsChange({
+      ...props.selections,
+      templateType: value,
+      psychedelicContext: isPsychedelicTemplate(value)
+        ? { ...props.selections.psychedelicContext, phase: psychedelicPhaseForTemplate(value) }
+        : props.selections.psychedelicContext,
+    });
   }
 
   function toggleClinicalTag(value: ClinicalTagId) {
@@ -170,6 +181,16 @@ export function FastChartingPanel(props: Props) {
       />
     )}
 
+    {isPsychedelicTemplate(props.selections.templateType) && (
+      <PsychedelicSpecialtyPanel
+        signed={props.signed}
+        templateType={props.selections.templateType}
+        value={props.selections.psychedelicContext}
+        onChange={(psychedelicContext) => props.onSelectionsChange({ ...props.selections, psychedelicContext })}
+        onInsertIntoNote={props.onInsertPhrase}
+      />
+    )}
+
     <div className="thera-card" style={{ padding: 12 }}>
       <div className="thera-filter-row" style={{ justifyContent: "space-between" }}>
         <div><strong>SmartPhrases</strong><div className="thera-table-subtext">Type a shortcut then press space, or click one to insert it.</div></div>
@@ -195,6 +216,11 @@ export function FastChartingPanel(props: Props) {
           <div className="thera-table-subtext">Timestamp important events during any complex or extended encounter. Insert the timeline into the note before signing so it becomes part of the locked clinical record.</div>
         </div>
       </div>
+      {!props.signed && props.selections.templateType === "kap_medicine_session" && <div className="thera-filter-row" style={{ marginTop: 8, flexWrap: "wrap" }}>
+        {["Administration context", "Monitoring observation", "Somatic / emotional response", "Grounding / return"].map((preset) => (
+          <button type="button" className="thera-action secondary" key={preset} onClick={() => setTimelineLabel(preset)}>{preset}</button>
+        ))}
+      </div>}
       {!props.signed && <div className="thera-form-grid" style={{ marginTop: 10 }}>
         <label>Time<input className="thera-input" type="time" value={timelineTime} onChange={(event) => setTimelineTime(event.target.value)} /></label>
         <label>Event<input className="thera-input" value={timelineLabel} onChange={(event) => setTimelineLabel(event.target.value)} placeholder="e.g., Grounding intervention" /></label>
