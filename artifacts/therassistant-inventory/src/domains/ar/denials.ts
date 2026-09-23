@@ -9,12 +9,12 @@ function normalizeCarc(input: unknown) {
 }
 
 export function isAutoWriteoffCarc(carcCode?: unknown) {
-  return isAutoWriteoffCarc(carcCode);
+  return AUTO_WRITEOFF_CARCS.has(normalizeCarc(carcCode));
 }
 
 export function classifyDenialPolicy(category: unknown, carcCode?: unknown): DenialPolicy {
   const value = String(category ?? "other");
-  if (["credentialing", "contracting"].includes(value) || AUTO_WRITEOFF_CARCS.has(normalizeCarc(carcCode))) return "auto_writeoff";
+  if (["credentialing", "contracting"].includes(value) || isAutoWriteoffCarc(carcCode)) return "auto_writeoff";
   if (["authorization", "eligibility", "coding", "documentation", "timely_filing", "medical_necessity", "coordination_of_benefits", "duplicate", "benefit_limit", "payer_processing_error"].includes(value)) return "workable";
   return "needs_review";
 }
