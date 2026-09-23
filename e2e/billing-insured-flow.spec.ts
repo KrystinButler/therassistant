@@ -1,0 +1,66 @@
+import { expect, test, type Dialog, type Page } from "@playwright/test";
+
+async function answerDialogs(
+  page: Page,
+  answers: Array<string | boolean>,
+  action: () => Promise<unknown>,
+) {
+  let index = 0;
+  const handler = async (dialog: Dialog) => {
+    const answer = answers[index++];
+    if (dialog.type() === "prompt") {
+      await dialog.accept(typeof answer === "string" ? answer : "");
+    } else if (dialog.type() === "confirm") {
+      if (answer === false) await dialog.dismiss();
+      else await dialog.accept();
+    } else {
+      await dialog.accept();
+    }
+  };
+  page.on("dialog", handler);
+  try {
+    await action();
+    await expect.poll(() => index).toBe(answers.length);
+  } finally {
+    page.off("dialog", handler);
+  }
+}
+
+test("staff creates, archives, records and accepts the synthetic insured claim", async ({ page }) => {
+  await page.goto("/billing/charges");
+  await expect(page.getByRole("heading", { name: "Charge Capture & Claim Submission" })).toBeVisible({ timeout: 15_000 });
+
+  await page.getByRole("button", { name: /Claim Prep/ }).click();
+  const chargeCard = page.locator("section.thera-card").filter({ hasText: "Taylor Morgan" }).first();
+  await expect(chargeCard).toContainText("Synthetic Commercial Payer");
+  await chargeCard.getByRole("button", { name: "Create & Scrub Claim" }).click();
+  await expect(page.getByText(/passed scrub and is ready to batch/)).toBeVisible({ timeout: 15_000 });
+
+  const payerCard = page.locator("section.thera-card").filter({ hasText: "Synthetic Commercial Payer" }).last();
+  const batchButton = payerCard.getByRole("button", { name: /Batch by Payer \(1\)/ });
+  await expect(batchButton).toBeEnabled({ timeout: 15_000 });
+  await batchButton.click();
+  await expect(page.getByText("Payer batch created with 1 claim(s).")).toBeVisible({ timeout: 15_000 });
+
+  const archiveButton = page.getByRole("button", { name: "Archive & Download 837P" });
+  await expect(archiveButton).toBeEnabled({ timeout: 15_000 });
+  const downloadPromise = page.waitForEvent("download");
+  await archiveButton.click();
+  const download = await downloadPromise;
+  expect(download.suggestedFilename()).toMatch(/^batch_[0-9a-f-]+\.837$/i);
+  await expect(page.getByText(/837P archived and verified/)).toBeVisible({ timeout: 15_000 });
+
+  const submissionButton = page.getByRole("button", { name: "Record External Submission" });
+  await expect(submissionButton).toBeEnabled({ timeout: 15_000 });
+  await answerDialogs(page, ["E2E-837P-SUBMISSION-001", true], () => submissionButton.click());
+  await expect(page.getByText("External 837P submission recorded for 1 claim(s).")).toBeVisible({ timeout: 15_000 });
+
+  const acceptedButton = page.getByRole("button", { name: "Record Accepted" });
+  await expect(acceptedButton).toBeEnabled({ timeout: 15_000 });
+  await answerDialogs(
+    page,
+    ["277CA", "A1", "Accepted for processing", "E2E-ACK-001"],
+    () => acceptedButton.click(),
+  );
+  await expect(page.getByText(/277CA accepted acknowledgement recorded\. Submission status: accepted\./)).toBeVisible({ timeout: 15_000 });
+});
