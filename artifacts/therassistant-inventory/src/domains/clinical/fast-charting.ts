@@ -20,9 +20,17 @@ export type Severity = "" | "none" | "mild" | "moderate" | "severe";
 export type PatientResponse = "" | "engaged" | "receptive" | "mixed" | "limited";
 export type RiskSelection = "" | "denies_si_hi" | "passive_si_no_plan" | "safety_plan_reviewed";
 
+export type TimelineEvent = {
+  time: string;
+  label: string;
+  detail: string;
+};
+
 export type StructuredSelections = {
   templateType: DocumentationTemplate;
   clinicalTags: ClinicalTagId[];
+  timelineEvents: TimelineEvent[];
+  similarityReviewAcknowledged: boolean;
   anxiety: Severity;
   depression: Severity;
   interventions: string[];
@@ -34,6 +42,7 @@ export type PriorStructuredContext = {
   noteId: string;
   serviceDate: string | null;
   goalAddressed: string;
+  noteText: string;
   selections: StructuredSelections;
 };
 
@@ -76,6 +85,8 @@ export function emptyStructuredSelections(): StructuredSelections {
   return {
     templateType: "standard_therapy",
     clinicalTags: [],
+    timelineEvents: [],
+    similarityReviewAcknowledged: false,
     anxiety: "",
     depression: "",
     interventions: [],
@@ -93,9 +104,23 @@ export function normalizeStructuredSelections(value: unknown): StructuredSelecti
   const depression = String(source.depression ?? "");
   const response = String(source.response ?? "");
   const risk = String(source.risk ?? "");
+  const timelineEvents = Array.isArray(source.timelineEvents ?? source.timeline_events)
+    ? (source.timelineEvents ?? source.timeline_events as unknown[]).slice(0, 50).flatMap((item) => {
+        if (!item || typeof item !== "object" || Array.isArray(item)) return [];
+        const row = item as Row;
+        const time = String(row.time ?? "").trim();
+        const label = String(row.label ?? "").trim();
+        const detail = String(row.detail ?? "").trim();
+        if (!/^([01]\\d|2[0-3]):[0-5]\\d$/.test(time) || !label) return [];
+        return [{ time, label: label.slice(0, 120), detail: detail.slice(0, 500) }];
+      })
+    : [];
+
   return {
     templateType: normalizeDocumentationTemplate(source.templateType ?? source.template_type),
     clinicalTags: normalizeClinicalTags(source.clinicalTags ?? source.clinical_tags),
+    timelineEvents,
+    similarityReviewAcknowledged: source.similarityReviewAcknowledged === true || source.similarity_review_acknowledged === true,
     anxiety: validSeverity.has(anxiety) ? anxiety as Severity : "",
     depression: validSeverity.has(depression) ? depression as Severity : "",
     interventions: Array.isArray(source.interventions) ? source.interventions.map(String) : [],
@@ -155,4 +180,48 @@ export function synthesizeStructuredNarrative(selections: StructuredSelections) 
   };
   if (selections.risk) parts.push(riskLabels[selections.risk]);
   return parts.join(" ");
+}
+
+export const NOTE_SIMILARITY_REVIEW_THRESHOLD = 0.85;
+
+function noteTokens(value: string) {
+  return value
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, " ")
+    .split(/\s+/)
+    .filter((token) => token.length > 1);
+}
+
+function shingles(tokens: string[], size: number) {
+  const result = new Set<string>();
+  for (let index = 0; index <= tokens.length - size; index += 1) {
+    result.add(tokens.slice(index, index + size).join(" "));
+  }
+  return result;
+}
+
+export function clinicalNoteSimilarity(current: string, prior: string) {
+  const currentTokens = noteTokens(current);
+  const priorTokens = noteTokens(prior);
+  if (currentTokens.length < 30 || priorTokens.length < 30) return 0;
+
+  const currentShingles = shingles(currentTokens, 5);
+  const priorShingles = shingles(priorTokens, 5);
+  if (!currentShingles.size || !priorShingles.size) return 0;
+
+  let overlap = 0;
+  for (const item of currentShingles) {
+    if (priorShingles.has(item)) overlap += 1;
+  }
+  return (2 * overlap) / (currentShingles.size + priorShingles.size);
+}
+
+export function formatTimelineForNote(events: TimelineEvent[]) {
+  if (!events.length) return "";
+  return [
+    "SESSION TIMELINE",
+    ...events.map((event) =>
+      `[${event.time}] ${event.label}${event.detail ? ` — ${event.detail}` : ""}`
+    ),
+  ].join("\n");
 }

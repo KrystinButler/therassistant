@@ -2,8 +2,10 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   DEFAULT_SMART_PHRASES,
+  clinicalNoteSimilarity,
   emptyStructuredSelections,
   expandSmartPhraseAtCursor,
+  formatTimelineForNote,
   normalizeStructuredSelections,
   synthesizeStructuredNarrative,
 } from "../src/domains/clinical/fast-charting";
@@ -45,4 +47,31 @@ test("documentation context defaults safely and preserves only known clinical ta
   const defaults = emptyStructuredSelections();
   assert.equal(defaults.templateType, "standard_therapy");
   assert.deepEqual(defaults.clinicalTags, []);
+});
+
+test("timeline events normalize safely and format into signed-note text", () => {
+  const normalized = normalizeStructuredSelections({
+    timeline_events: [
+      { time: "14:05", label: "Grounding intervention", detail: "Patient reported reduced distress." },
+      { time: "99:99", label: "Invalid event", detail: "" },
+    ],
+  });
+  assert.deepEqual(normalized.timelineEvents, [
+    { time: "14:05", label: "Grounding intervention", detail: "Patient reported reduced distress." },
+  ]);
+  assert.match(formatTimelineForNote(normalized.timelineEvents), /\[14:05\] Grounding intervention/);
+});
+
+test("note similarity flags near-cloned long notes but ignores short text", () => {
+  const prior = Array.from({ length: 12 }, (_, index) =>
+    `Session segment ${index} reviewed anxiety symptoms coping skills treatment progress and patient response.`
+  ).join(" ");
+  const clone = prior + " Plan updated for the next visit.";
+  const different = Array.from({ length: 12 }, (_, index) =>
+    `Distinct topic ${index} addressed sleep routine vocational goals family communication medication questions and scheduling.`
+  ).join(" ");
+
+  assert.ok(clinicalNoteSimilarity(clone, prior) > 0.85);
+  assert.ok(clinicalNoteSimilarity(different, prior) < 0.3);
+  assert.equal(clinicalNoteSimilarity("brief note", prior), 0);
 });
