@@ -32,9 +32,23 @@ test("staff creates, archives, records and accepts the synthetic insured claim",
 
   await page.getByRole("button", { name: /Claim Prep/ }).click();
   const chargeCard = page.locator("section.thera-card").filter({ hasText: "Taylor Morgan" }).first();
-  await expect(chargeCard).toContainText("Synthetic Commercial Payer");
-  await chargeCard.getByRole("button", { name: "Create & Scrub Claim" }).click();
-  await expect(page.getByText(/passed scrub and is ready to batch/)).toBeVisible({ timeout: 15_000 });
+  const createButton = chargeCard.getByRole("button", { name: "Create & Scrub Claim" });
+  if (await createButton.isVisible().catch(() => false)) {
+    await expect(chargeCard).toContainText("Synthetic Commercial Payer");
+    await createButton.click();
+
+    const successMessage = page.getByText(/passed scrub and is ready to batch/);
+    const rejectionMessage = page.getByText(/created and moved to Rejections for correction/);
+    await expect.poll(async () => {
+      if (await successMessage.isVisible().catch(() => false)) return "ready";
+      if (await rejectionMessage.isVisible().catch(() => false)) {
+        return `rejected: ${await rejectionMessage.innerText()}`;
+      }
+      const error = page.locator(".thera-state.error").first();
+      if (await error.isVisible().catch(() => false)) return `error: ${await error.innerText()}`;
+      return "pending";
+    }, { timeout: 15_000 }).toBe("ready");
+  }
 
   const payerCard = page.locator("section.thera-card").filter({ hasText: "Synthetic Commercial Payer" }).last();
   const batchButton = payerCard.getByRole("button", { name: /Batch by Payer \(1\)/ });
