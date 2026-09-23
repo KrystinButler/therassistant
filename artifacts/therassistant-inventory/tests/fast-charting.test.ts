@@ -4,6 +4,7 @@ import {
   DEFAULT_SMART_PHRASES,
   emptyStructuredSelections,
   expandSmartPhraseAtCursor,
+  normalizeStructuredSelections,
   synthesizeStructuredNarrative,
 } from "../src/domains/clinical/fast-charting";
 
@@ -30,4 +31,18 @@ test("structured narrative contains only clinician-selected content", () => {
   assert.match(narrative, /cognitive reframing/);
   assert.match(narrative, /receptive/);
   assert.equal(narrative.includes("suicidal"), false);
+});
+
+test("documentation context defaults safely and preserves only known clinical tags", () => {
+  const normalized = normalizeStructuredSelections({
+    template_type: "forensic",
+    clinical_tags: ["anxiety", "legal_forensic_context", "not-a-real-tag"],
+  });
+
+  assert.equal(normalized.templateType, "forensic");
+  assert.deepEqual(normalized.clinicalTags, ["anxiety", "legal_forensic_context"]);
+
+  const defaults = emptyStructuredSelections();
+  assert.equal(defaults.templateType, "standard_therapy");
+  assert.deepEqual(defaults.clinicalTags, []);
 });

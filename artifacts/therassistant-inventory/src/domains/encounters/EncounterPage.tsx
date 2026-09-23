@@ -19,9 +19,11 @@ import { ProcedureCodeSearchInput } from "../coding/ProcedureCodeSearchInput";
 import { PlaceOfServiceSearchInput } from "../coding/PlaceOfServiceSearchInput";
 import {
   appendClinicalSource,
+  buildClinicalSourceProvenance,
   buildJournalNoteInsert,
   buildPreVisitNoteInsert,
   latestSharedJournalEntry,
+  withClinicalSourceImport,
 } from "./clinical-source-context";
 import { getEncounterDetail } from "./repository";
 import "./encounter-page.css";
@@ -328,16 +330,28 @@ export function EncounterPage() {
   function importPreVisit() {
     if (signed || !preVisitInsert) return;
     setNoteText((current) => appendClinicalSource(current, preVisitInsert));
+    setCarryForwardContext((current) =>
+      withClinicalSourceImport(
+        current,
+        buildClinicalSourceProvenance("pre_visit_checkin", currentCheckin),
+      ),
+    );
     if (!goalAddressed.trim() && preVisit.treatmentGoal) {
       setGoalAddressed(preVisit.treatmentGoal);
     }
-    setMessage("Patient-reported check-in content was inserted as labeled source material for provider review. It remains editable until signature.");
+    setMessage("Patient-reported check-in content was inserted with source provenance for provider review. It remains editable until signature.");
   }
 
   function importJournal() {
     if (signed || !journalInsert) return;
     setNoteText((current) => appendClinicalSource(current, journalInsert));
-    setMessage("Patient-shared journal content was inserted as labeled source material for provider review. It remains editable until signature.");
+    setCarryForwardContext((current) =>
+      withClinicalSourceImport(
+        current,
+        buildClinicalSourceProvenance("journal_entry", sharedJournal),
+      ),
+    );
+    setMessage("Patient-shared journal content was inserted with source provenance for provider review. It remains editable until signature.");
   }
 
   async function addSmartPhrase(input: { shortcut: string; label: string; content: string; scope: "user" | "practice" }) {

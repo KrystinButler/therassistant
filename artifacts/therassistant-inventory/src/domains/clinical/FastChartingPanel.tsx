@@ -4,6 +4,13 @@ import {
   type SmartPhrase,
   type StructuredSelections,
 } from "./fast-charting";
+import {
+  CLINICAL_TAG_OPTIONS,
+  DOCUMENTATION_TEMPLATES,
+  documentationTemplateById,
+  type ClinicalTagId,
+  type DocumentationTemplate,
+} from "./clinical-context";
 
 type Props = {
   signed: boolean;
@@ -52,6 +59,20 @@ export function FastChartingPanel(props: Props) {
     });
   }
 
+  function setTemplate(value: DocumentationTemplate) {
+    props.onSelectionsChange({ ...props.selections, templateType: value });
+  }
+
+  function toggleClinicalTag(value: ClinicalTagId) {
+    const has = props.selections.clinicalTags.includes(value);
+    props.onSelectionsChange({
+      ...props.selections,
+      clinicalTags: has
+        ? props.selections.clinicalTags.filter((item) => item !== value)
+        : [...props.selections.clinicalTags, value],
+    });
+  }
+
   async function savePhrase() {
     setSaving(true);
     setError(null);
@@ -68,7 +89,49 @@ export function FastChartingPanel(props: Props) {
     }
   }
 
+  const template = documentationTemplateById(props.selections.templateType);
+
   return <div style={{ display: "grid", gap: 12, marginTop: 12 }}>
+    <div className="thera-card" style={{ padding: 12 }}>
+      <div className="thera-filter-row" style={{ justifyContent: "space-between", alignItems: "flex-start" }}>
+        <div>
+          <strong>Documentation Context</strong>
+          <div className="thera-table-subtext">Template context changes the prompts shown here. It does not change billing, diagnosis, or signing rules.</div>
+        </div>
+      </div>
+      <div className="thera-form-grid" style={{ marginTop: 10 }}>
+        <label>
+          Documentation Template
+          <select
+            className="thera-input"
+            disabled={props.signed}
+            value={props.selections.templateType}
+            onChange={(event) => setTemplate(event.target.value as DocumentationTemplate)}
+          >
+            {DOCUMENTATION_TEMPLATES.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}
+          </select>
+        </label>
+        <div>
+          <div className="thera-field-label">Template Guidance</div>
+          <div className="thera-field-value">{template.description}</div>
+          <div className="thera-table-subtext" style={{ marginTop: 4 }}>{template.prompts.join(" · ")}</div>
+        </div>
+      </div>
+      <div style={{ marginTop: 12 }}>
+        <div className="thera-field-label">Clinical Tags</div>
+        <div className="thera-table-subtext">Clinician-selected chart context only. Tags do not automatically assign diagnoses or billing codes.</div>
+        <div className="thera-filter-row" style={{ marginTop: 8, flexWrap: "wrap" }}>
+          {CLINICAL_TAG_OPTIONS.map((tag) => <ChoiceButton
+            key={tag.id}
+            active={props.selections.clinicalTags.includes(tag.id)}
+            disabled={props.signed}
+            label={tag.label}
+            onClick={() => toggleClinicalTag(tag.id)}
+          />)}
+        </div>
+      </div>
+    </div>
+
     <div className="thera-card" style={{ padding: 12 }}>
       <div className="thera-filter-row" style={{ justifyContent: "space-between" }}>
         <div><strong>SmartPhrases</strong><div className="thera-table-subtext">Type a shortcut then press space, or click one to insert it.</div></div>
