@@ -28,6 +28,13 @@ drop function if exists public.create_client_profile(
   uuid,text,text,date,text,text,text,text,text,text,text,text,text,
   public.registration_status_enum,public.client_status_enum,jsonb
 ) restrict;
+
+drop function if exists public.create_denial_from_claim(uuid,text,text,integer,text) restrict;
+drop function if exists public.update_client_profile(
+  uuid,text,text,date,text,text,text,text,text,text,text,text,text,
+  public.registration_status_enum,public.client_status_enum,jsonb
+) restrict;
+
 drop function if exists public.create_client_appointment(
   uuid,uuid,uuid,timestamptz,timestamptz,text,text,public.appointment_location_type_enum,text
 ) restrict;
