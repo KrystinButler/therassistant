@@ -14,7 +14,21 @@ export function AdministrationPage() {
       description:
         "Tenant users, role assignments, and access control.",
       href: "/administration/users",
-      available: false,
+      available: true,
+    },
+    {
+      name: "Imports & Migration",
+      description:
+        "Stage, validate, reconcile, resume, and rollback legacy practice data.",
+      href: "/administration/imports",
+      available: true,
+    },
+    {
+      name: "Connected Operations",
+      description:
+        "Reminders, referral-out, records requests, and compliance screening.",
+      href: "/operations/connected",
+      available: true,
     },
     {
       name: "Audit & PHI Access",

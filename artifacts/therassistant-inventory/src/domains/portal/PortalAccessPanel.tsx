@@ -4,13 +4,14 @@ import {
   getClientPortalAccess,
   invitePatientPortal,
   revokeClientPortalAccess,
+  restoreClientPortalAccess,
   type ClientPortalAccess,
 } from "./staff-portal-access";
 
 export function PortalAccessPanel({ clientId }: { clientId: string }) {
   const [access, setAccess] = useState<ClientPortalAccess | null>(null);
   const [loading, setLoading] = useState(true);
-  const [working, setWorking] = useState<"invite" | "revoke" | null>(null);
+  const [working, setWorking] = useState<"invite" | "revoke" | "restore" | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
 
@@ -62,6 +63,23 @@ export function PortalAccessPanel({ clientId }: { clientId: string }) {
     } catch (err) {
       setError(
         err instanceof Error ? err.message : "Unable to revoke portal access.",
+      );
+    } finally {
+      setWorking(null);
+    }
+  }
+
+  async function restore() {
+    setWorking("restore");
+    setError(null);
+    setNotice(null);
+    try {
+      await restoreClientPortalAccess(clientId);
+      setNotice("Patient portal access restored.");
+      await load();
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : "Unable to restore portal access.",
       );
     } finally {
       setWorking(null);
@@ -149,9 +167,17 @@ export function PortalAccessPanel({ clientId }: { clientId: string }) {
         <>
           <p><strong>Status:</strong> Revoked</p>
           <p>
-            Portal access was revoked. Automatic relinking is not available in
-            this release.
+            The existing patient identity remains linked but cannot access portal
+            data until staff restores access.
           </p>
+          <button
+            className="thera-action"
+            type="button"
+            disabled={working !== null}
+            onClick={() => void restore()}
+          >
+            {working === "restore" ? "Restoring..." : "Restore Portal Access"}
+          </button>
         </>
       ) : null}
     </section>

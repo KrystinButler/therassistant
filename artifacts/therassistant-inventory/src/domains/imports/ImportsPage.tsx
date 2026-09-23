@@ -3,7 +3,6 @@ import { useEffect, useMemo, useState } from "react";
 import { StatusBadge } from "../../components/status-badge";
 import { dateTime } from "../../lib/format";
 import {
-  getCurrentTenantId,
   referenceSelect,
   tenantInsert,
   tenantRpc,
@@ -13,11 +12,17 @@ import {
 } from "../../lib/tenant-data-client";
 
 type DataRow = Row & { id: string };
+type ImportType = "patients" | "historical_transactions";
 
 type ImportBatch = DataRow & {
   import_name?: string | null;
   import_status?: string | null;
+  import_type?: ImportType | null;
   source_system?: string | null;
+  source_file_hash?: string | null;
+  mapping_profile?: Record<string, unknown> | null;
+  reconciliation?: Record<string, unknown> | null;
+  rollback_status?: string | null;
   created_at?: string | null;
 };
 
@@ -27,6 +32,13 @@ type ImportRow = DataRow & {
   raw_data?: Record<string, unknown> | null;
   mapped_data?: Record<string, unknown> | null;
   row_status?: string | null;
+  source_key?: string | null;
+  target_type?: string | null;
+  target_id?: string | null;
+  attempt_count?: number | null;
+  error_message?: string | null;
+  rollback_status?: string | null;
+  rollback_error?: string | null;
 };
 
 type ImportError = DataRow & {
@@ -39,47 +51,21 @@ type ImportError = DataRow & {
 
 type Payer = DataRow & { name?: string | null };
 
-type StagedPatient = {
-  first_name: string;
-  last_name: string;
-  preferred_name: string;
-  date_of_birth: string;
-  sex: string;
-  address_line1: string;
-  phone: string;
-  email: string;
-  primary_payer: string;
-  primary_payer_id: string;
-  primary_member_id: string;
-  primary_group_number: string;
-  relationship_to_subscriber: string;
-  subscriber_first_name: string;
-  subscriber_last_name: string;
-  subscriber_dob: string;
-};
-
-const REQUIRED_HEADERS = [
-  "first_name",
-  "last_name",
-  "date_of_birth",
-  "sex",
-  "address_line1",
-  "phone",
-  "email",
-  "primary_payer",
-  "primary_member_id",
-  "relationship_to_subscriber",
-] as const;
-
-const TEMPLATE_HEADERS = [
+const PATIENT_TEMPLATE_HEADERS = [
+  "source_key",
   "first_name",
   "last_name",
   "preferred_name",
   "date_of_birth",
   "sex",
   "address_line1",
+  "address_line2",
+  "city",
+  "state",
+  "postal_code",
   "phone",
   "email",
+  "billing_type",
   "primary_payer",
   "primary_member_id",
   "primary_group_number",
@@ -87,7 +73,47 @@ const TEMPLATE_HEADERS = [
   "subscriber_first_name",
   "subscriber_last_name",
   "subscriber_dob",
+  "subscriber_sex",
+  "subscriber_address_line1",
+  "subscriber_city",
+  "subscriber_state",
+  "subscriber_postal_code",
 ] as const;
+
+const PATIENT_REQUIRED = [
+  "first_name",
+  "last_name",
+  "date_of_birth",
+  "sex",
+  "address_line1",
+  "city",
+  "state",
+  "postal_code",
+  "phone",
+  "email",
+  "billing_type",
+] as const;
+
+const HISTORICAL_TEMPLATE_HEADERS = [
+  "source_key",
+  "client_source_key",
+  "client_id",
+  "transaction_type",
+  "transaction_date",
+  "amount",
+  "payer",
+  "description",
+] as const;
+
+const HISTORICAL_TYPES = new Set([
+  "payment",
+  "adjustment",
+  "opening_balance",
+  "credit",
+  "refund",
+  "transfer",
+  "correction",
+]);
 
 function normalizeHeader(value: string) {
   return value.trim().toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "");
@@ -156,6 +182,24 @@ function csvEscape(value: unknown) {
   return /[",\n\r]/.test(text) ? `"${text.replaceAll('"', '""')}"` : text;
 }
 
+async function sha256(value: string | ArrayBuffer) {
+  const input = typeof value === "string" ? new TextEncoder().encode(value) : value;
+  const digest = await crypto.subtle.digest("SHA-256", input);
+  return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+
+function recordOf(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : {};
+}
+
+function requiredIssue(raw: Record<string, string>, field: string) {
+  return !String(raw[field] ?? "").trim()
+    ? { field, message: `${field.replaceAll("_", " ")} is required.` }
+    : null;
+}
+
 export function ImportsPage() {
   const [batches, setBatches] = useState<ImportBatch[]>([]);
   const [rows, setRows] = useState<ImportRow[]>([]);
@@ -163,10 +207,11 @@ export function ImportsPage() {
   const [payers, setPayers] = useState<Payer[]>([]);
   const [clients, setClients] = useState<DataRow[]>([]);
   const [selectedBatchId, setSelectedBatchId] = useState("");
-  const [sourceSystem, setSourceSystem] = useState("CSV");
+  const [sourceSystem, setSourceSystem] = useState("Legacy EHR");
+  const [importType, setImportType] = useState<ImportType>("patients");
   const [loading, setLoading] = useState(true);
   const [staging, setStaging] = useState(false);
-  const [importing, setImporting] = useState(false);
+  const [working, setWorking] = useState<"import" | "reconcile" | "rollback" | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
 
@@ -176,10 +221,10 @@ export function ImportsPage() {
     try {
       const [batchRows, importRows, validationRows, payerRows, clientRows] = await Promise.all([
         tenantSelect<ImportBatch>("import_batches", { order: "created_at.desc" }),
-        tenantSelect<ImportRow>("import_rows", { order: "created_at.desc" }),
-        tenantSelect<ImportError>("import_validation_errors", { order: "created_at.desc" }),
+        tenantSelect<ImportRow>("import_rows", { order: "created_at.asc" }),
+        tenantSelect<ImportError>("import_validation_errors", { order: "created_at.asc" }),
         referenceSelect<Payer>("payers", { order: "name.asc" }),
-        tenantSelect<DataRow>("clients"),
+        tenantSelect<DataRow>("clients", { deleted_at: "is.null" }),
       ]);
       setBatches(batchRows);
       setRows(importRows);
@@ -203,9 +248,7 @@ export function ImportsPage() {
     .filter((row) => row.import_batch_id === selectedBatchId)
     .sort((a, b) => Number(a.row_number ?? 0) - Number(b.row_number ?? 0));
   const selectedErrors = errors.filter((row) => row.import_batch_id === selectedBatchId);
-  const selectedValid = selectedRows.filter((row) => row.row_status === "valid");
-  const selectedImported = selectedRows.filter((row) => row.row_status === "imported");
-  const selectedFailed = selectedRows.filter((row) => row.row_status === "error" || row.row_status === "failed");
+  const retryableRows = selectedRows.filter((row) => ["valid", "failed"].includes(String(row.row_status ?? "")));
 
   const payerByName = useMemo(() => {
     const map = new Map<string, Payer>();
@@ -225,31 +268,244 @@ export function ImportsPage() {
     [clients],
   );
 
+  const clientByLegacyKey = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const client of clients) {
+      const key = String(recordOf(client.metadata).legacy_source_key ?? "").trim();
+      if (key) map.set(key, client.id);
+    }
+    return map;
+  }, [clients]);
+
   function downloadTemplate() {
-    const example = [
-      "Jane",
-      "Doe",
-      "Jane",
-      "1990-01-15",
-      "F",
-      "123 Main St",
-      "3035551212",
-      "jane@example.com",
-      payers[0]?.name ?? "Payer Name",
-      "ABC123456",
-      "GROUP1",
-      "self",
-      "Jane",
-      "Doe",
-      "1990-01-15",
-    ];
-    const csv = [TEMPLATE_HEADERS.join(","), example.map(csvEscape).join(",")].join("\n");
+    const headers = importType === "patients" ? PATIENT_TEMPLATE_HEADERS : HISTORICAL_TEMPLATE_HEADERS;
+    const example = importType === "patients"
+      ? [
+          "PT-1001", "Jane", "Doe", "Jane", "1990-01-15", "F",
+          "123 Main St", "", "Denver", "CO", "80202", "3035551212",
+          "jane@example.com", "self_pay", "", "", "", "", "", "", "", "", "", "", "", "",
+        ]
+      : [
+          "TX-1001", "PT-1001", "", "opening_balance", "2026-01-01", "125.00", "", "Legacy opening balance",
+        ];
+    const csv = [headers.join(","), example.map(csvEscape).join(",")].join("\n");
     const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
     const anchor = document.createElement("a");
     anchor.href = url;
-    anchor.download = "therassistant-patient-import-template.csv";
+    anchor.download = importType === "patients"
+      ? "therassistant-patient-import-template.csv"
+      : "therassistant-historical-transactions-template.csv";
     anchor.click();
     URL.revokeObjectURL(url);
+  }
+
+  async function addValidationIssue(batchId: string, rowId: string, field: string | null, issue: string) {
+    await tenantInsert<ImportError>("import_validation_errors", {
+      import_batch_id: batchId,
+      import_row_id: rowId,
+      severity: "error",
+      field_name: field,
+      message: issue,
+    });
+  }
+
+  async function stagePatientRows(
+    batch: ImportBatch,
+    headers: string[],
+    parsed: string[][],
+  ) {
+    const missingHeaders = PATIENT_REQUIRED.filter((header) => !headers.includes(header));
+    if (missingHeaders.length) {
+      throw new Error(`Missing required patient CSV columns: ${missingHeaders.join(", ")}.`);
+    }
+
+    const withinFile = new Set<string>();
+    let validCount = 0;
+    let errorCount = 0;
+
+    for (let index = 1; index < parsed.length; index += 1) {
+      const raw = recordFromCsv(headers, parsed[index]);
+      const issues: Array<{ field: string | null; message: string }> = [];
+      for (const field of PATIENT_REQUIRED) {
+        const issue = requiredIssue(raw, field);
+        if (issue) issues.push(issue);
+      }
+
+      const billingType = (raw.billing_type ?? "").trim().toLowerCase();
+      const first = raw.first_name ?? "";
+      const last = raw.last_name ?? "";
+      const dob = raw.date_of_birth ?? "";
+      const sex = (raw.sex ?? "").toUpperCase();
+      const payerName = raw.primary_payer ?? "";
+      const payer = payerByName.get(payerName.trim().toLowerCase()) ?? null;
+      const relationship = (raw.relationship_to_subscriber ?? "").trim().toLowerCase();
+
+      if (!["insurance", "self_pay"].includes(billingType)) {
+        issues.push({ field: "billing_type", message: "Billing type must be insurance or self_pay." });
+      }
+      if (dob && !validDate(dob)) issues.push({ field: "date_of_birth", message: "Date of birth must use YYYY-MM-DD." });
+      if (sex && !["M", "F"].includes(sex)) issues.push({ field: "sex", message: "Sex must be M or F." });
+      if (raw.state && raw.state.length !== 2) issues.push({ field: "state", message: "State must be a two-letter code." });
+      if (raw.postal_code && !/^\d{5}(-?\d{4})?$/.test(raw.postal_code)) {
+        issues.push({ field: "postal_code", message: "ZIP code must be 5 or 9 digits." });
+      }
+
+      if (billingType === "insurance") {
+        for (const field of ["primary_payer", "primary_member_id", "relationship_to_subscriber"]) {
+          const issue = requiredIssue(raw, field);
+          if (issue) issues.push(issue);
+        }
+        if (payerName && !payer) {
+          issues.push({ field: "primary_payer", message: `Payer "${payerName}" was not found in Therassistant.` });
+        }
+        if (relationship && !["self", "spouse", "child", "parent", "other"].includes(relationship)) {
+          issues.push({ field: "relationship_to_subscriber", message: "Relationship must be self, spouse, child, parent, or other." });
+        }
+        if (relationship && relationship !== "self") {
+          for (const field of [
+            "subscriber_first_name", "subscriber_last_name", "subscriber_dob", "subscriber_sex",
+            "subscriber_address_line1", "subscriber_city", "subscriber_state", "subscriber_postal_code",
+          ]) {
+            const issue = requiredIssue(raw, field);
+            if (issue) issues.push(issue);
+          }
+        }
+      }
+
+      const key = personKey(first, last, dob);
+      if (first && last && dob && existingPatientKeys.has(key)) {
+        issues.push({ field: null, message: "Possible duplicate: a patient with the same name and DOB already exists." });
+      }
+      if (first && last && dob && withinFile.has(key)) {
+        issues.push({ field: null, message: "Duplicate patient appears more than once in this CSV." });
+      }
+      if (first && last && dob) withinFile.add(key);
+
+      const self = relationship === "self";
+      const mapped = {
+        source_key: raw.source_key || null,
+        first_name: first,
+        last_name: last,
+        preferred_name: raw.preferred_name ?? "",
+        date_of_birth: dob,
+        sex,
+        address_line1: raw.address_line1 ?? "",
+        address_line2: raw.address_line2 ?? "",
+        city: raw.city ?? "",
+        state: (raw.state ?? "").toUpperCase(),
+        postal_code: raw.postal_code ?? "",
+        phone: raw.phone ?? "",
+        email: raw.email ?? "",
+        billing_type: billingType,
+        primary_payer: payerName,
+        primary_payer_id: billingType === "insurance" ? payer?.id ?? "" : "",
+        primary_member_id: billingType === "insurance" ? raw.primary_member_id ?? "" : "",
+        primary_group_number: billingType === "insurance" ? raw.primary_group_number ?? "" : "",
+        relationship_to_subscriber: billingType === "insurance" ? relationship : "",
+        subscriber_first_name: billingType === "insurance" ? raw.subscriber_first_name || (self ? first : "") : "",
+        subscriber_last_name: billingType === "insurance" ? raw.subscriber_last_name || (self ? last : "") : "",
+        subscriber_dob: billingType === "insurance" ? raw.subscriber_dob || (self ? dob : "") : "",
+        subscriber_sex: billingType === "insurance" ? raw.subscriber_sex || (self ? sex : "") : "",
+        subscriber_address_line1: billingType === "insurance" ? raw.subscriber_address_line1 || (self ? raw.address_line1 : "") : "",
+        subscriber_city: billingType === "insurance" ? raw.subscriber_city || (self ? raw.city : "") : "",
+        subscriber_state: billingType === "insurance" ? raw.subscriber_state || (self ? raw.state : "") : "",
+        subscriber_postal_code: billingType === "insurance" ? raw.subscriber_postal_code || (self ? raw.postal_code : "") : "",
+      };
+      const fingerprint = await sha256(JSON.stringify(mapped));
+
+      const importRow = await tenantInsert<ImportRow>("import_rows", {
+        import_batch_id: batch.id,
+        row_number: index,
+        source_key: raw.source_key || null,
+        row_fingerprint: fingerprint,
+        raw_data: raw,
+        mapped_data: mapped,
+        row_status: issues.length ? "error" : "valid",
+      });
+
+      for (const issue of issues) {
+        await addValidationIssue(batch.id, importRow.id, issue.field, issue.message);
+      }
+
+      if (issues.length) errorCount += 1;
+      else validCount += 1;
+    }
+    return { validCount, errorCount };
+  }
+
+  async function stageHistoricalRows(
+    batch: ImportBatch,
+    headers: string[],
+    parsed: string[][],
+  ) {
+    for (const required of ["source_key", "transaction_type", "transaction_date", "amount"]) {
+      if (!headers.includes(required)) throw new Error(`Missing required historical transaction column: ${required}.`);
+    }
+    if (!headers.includes("client_source_key") && !headers.includes("client_id")) {
+      throw new Error("Historical transactions require client_source_key or client_id.");
+    }
+
+    let validCount = 0;
+    let errorCount = 0;
+    for (let index = 1; index < parsed.length; index += 1) {
+      const raw = recordFromCsv(headers, parsed[index]);
+      const issues: Array<{ field: string | null; message: string }> = [];
+      for (const field of ["source_key", "transaction_type", "transaction_date", "amount"]) {
+        const issue = requiredIssue(raw, field);
+        if (issue) issues.push(issue);
+      }
+
+      const transactionType = (raw.transaction_type ?? "").trim().toLowerCase();
+      const amount = Number(raw.amount);
+      const payerName = (raw.payer ?? "").trim();
+      const payer = payerName ? payerByName.get(payerName.toLowerCase()) ?? null : null;
+      const mappedClientId = raw.client_id || clientByLegacyKey.get(raw.client_source_key ?? "") || "";
+
+      if (transactionType && !HISTORICAL_TYPES.has(transactionType)) {
+        issues.push({ field: "transaction_type", message: "Unsupported historical transaction type." });
+      }
+      if (raw.transaction_date && !validDate(raw.transaction_date)) {
+        issues.push({ field: "transaction_date", message: "Transaction date must use YYYY-MM-DD." });
+      }
+      if (!Number.isFinite(amount)) {
+        issues.push({ field: "amount", message: "Amount must be numeric." });
+      }
+      if (!raw.client_source_key && !raw.client_id) {
+        issues.push({ field: "client_source_key", message: "A patient mapping is required." });
+      }
+      if (payerName && !payer) {
+        issues.push({ field: "payer", message: `Payer "${payerName}" was not found in Therassistant.` });
+      }
+
+      const mapped = {
+        source_key: raw.source_key,
+        client_source_key: raw.client_source_key || null,
+        client_id: mappedClientId || null,
+        transaction_type: transactionType,
+        transaction_date: raw.transaction_date,
+        amount_cents: Number.isFinite(amount) ? Math.round(amount * 100) : null,
+        payer_id: payer?.id ?? null,
+        description: raw.description || null,
+      };
+      const fingerprint = await sha256(JSON.stringify(mapped));
+
+      const importRow = await tenantInsert<ImportRow>("import_rows", {
+        import_batch_id: batch.id,
+        row_number: index,
+        source_key: raw.source_key,
+        row_fingerprint: fingerprint,
+        raw_data: raw,
+        mapped_data: mapped,
+        row_status: issues.length ? "error" : "valid",
+      });
+
+      for (const issue of issues) {
+        await addValidationIssue(batch.id, importRow.id, issue.field, issue.message);
+      }
+      if (issues.length) errorCount += 1;
+      else validCount += 1;
+    }
+    return { validCount, errorCount };
   }
 
   async function stageFile(file: File) {
@@ -259,106 +515,44 @@ export function ImportsPage() {
 
     try {
       if (!file.name.toLowerCase().endsWith(".csv")) throw new Error("Upload a CSV file.");
-      const parsed = parseCsv(await file.text());
-      if (parsed.length < 2) throw new Error("The CSV must include a header row and at least one patient row.");
+      const buffer = await file.arrayBuffer();
+      const text = new TextDecoder().decode(buffer);
+      const parsed = parseCsv(text);
+      if (parsed.length < 2) throw new Error("The CSV must include a header row and at least one data row.");
 
-      const headers = parsed[0].map(normalizeHeader);
-      const missingHeaders = REQUIRED_HEADERS.filter((header) => !headers.includes(header));
-      if (missingHeaders.length) {
-        throw new Error(`Missing required CSV columns: ${missingHeaders.join(", ")}.`);
-      }
+      const originalHeaders = parsed[0].map((header) => header.trim());
+      const headers = originalHeaders.map(normalizeHeader);
+      const fileHash = await sha256(buffer);
+      const mappingProfile = Object.fromEntries(originalHeaders.map((header, index) => [header, headers[index]]));
 
-      const tenantId = await getCurrentTenantId();
-      const batch = await tenantInsert<ImportBatch>("import_batches", {
-        import_name: file.name,
-        import_status: "validating",
-        source_system: sourceSystem.trim() || "CSV",
-      });
-
-      const withinFile = new Set<string>();
-      let validCount = 0;
-      let errorCount = 0;
-
-      for (let index = 1; index < parsed.length; index += 1) {
-        const raw = recordFromCsv(headers, parsed[index]);
-        const rowErrors: Array<{ field: string | null; message: string }> = [];
-        const first = raw.first_name ?? "";
-        const last = raw.last_name ?? "";
-        const dob = raw.date_of_birth ?? "";
-        const sex = (raw.sex ?? "").toUpperCase();
-        const payerName = raw.primary_payer ?? "";
-        const payer = payerByName.get(payerName.trim().toLowerCase()) ?? null;
-        const relationship = (raw.relationship_to_subscriber ?? "").trim().toLowerCase();
-
-        for (const field of REQUIRED_HEADERS) {
-          if (!String(raw[field] ?? "").trim()) {
-            rowErrors.push({ field, message: `${field.replaceAll("_", " ")} is required.` });
-          }
-        }
-        if (dob && !validDate(dob)) rowErrors.push({ field: "date_of_birth", message: "Date of birth must use YYYY-MM-DD." });
-        if (sex && !["M", "F"].includes(sex)) rowErrors.push({ field: "sex", message: "Sex must be M or F." });
-        if (payerName && !payer) rowErrors.push({ field: "primary_payer", message: `Payer "${payerName}" was not found in Therassistant.` });
-        if (relationship && !["self", "spouse", "child", "parent", "other"].includes(relationship)) {
-          rowErrors.push({ field: "relationship_to_subscriber", message: "Relationship must be self, spouse, child, parent, or other." });
-        }
-
-        const key = personKey(first, last, dob);
-        if (first && last && dob && existingPatientKeys.has(key)) {
-          rowErrors.push({ field: null, message: "Possible duplicate: a patient with the same name and DOB already exists." });
-        }
-        if (first && last && dob && withinFile.has(key)) {
-          rowErrors.push({ field: null, message: "Duplicate patient appears more than once in this CSV." });
-        }
-        if (first && last && dob) withinFile.add(key);
-
-        const self = relationship === "self";
-        const mapped: StagedPatient = {
-          first_name: first,
-          last_name: last,
-          preferred_name: raw.preferred_name ?? "",
-          date_of_birth: dob,
-          sex,
-          address_line1: raw.address_line1 ?? "",
-          phone: raw.phone ?? "",
-          email: raw.email ?? "",
-          primary_payer: payerName,
-          primary_payer_id: payer?.id ?? "",
-          primary_member_id: raw.primary_member_id ?? "",
-          primary_group_number: raw.primary_group_number ?? "",
-          relationship_to_subscriber: relationship,
-          subscriber_first_name: raw.subscriber_first_name || (self ? first : ""),
-          subscriber_last_name: raw.subscriber_last_name || (self ? last : ""),
-          subscriber_dob: raw.subscriber_dob || (self ? dob : ""),
-        };
-
-        const importRow = await tenantInsert<ImportRow>("import_rows", {
-          import_batch_id: batch.id,
-          row_number: index,
-          raw_data: raw,
-          mapped_data: mapped,
-          row_status: rowErrors.length ? "error" : "valid",
+      let batch: ImportBatch;
+      try {
+        batch = await tenantInsert<ImportBatch>("import_batches", {
+          import_name: file.name,
+          import_status: "validating",
+          import_type: importType,
+          source_system: sourceSystem.trim() || "CSV",
+          source_file_hash: fileHash,
+          mapping_profile: mappingProfile,
         });
-
-        for (const issue of rowErrors) {
-          await tenantInsert<ImportError>("import_validation_errors", {
-            import_batch_id: batch.id,
-            import_row_id: importRow.id,
-            severity: "error",
-            field_name: issue.field,
-            message: issue.message,
-          });
+      } catch (err) {
+        const messageText = err instanceof Error ? err.message : "";
+        if (messageText.includes("import_batches_active_source_hash_uq")) {
+          throw new Error("This source file has already been staged for this import type. Resume the existing batch instead of importing it again.");
         }
-
-        if (rowErrors.length) errorCount += 1;
-        else validCount += 1;
+        throw err;
       }
+
+      const result = importType === "patients"
+        ? await stagePatientRows(batch, headers, parsed)
+        : await stageHistoricalRows(batch, headers, parsed);
 
       await tenantUpdate<ImportBatch>("import_batches", batch.id, {
-        import_status: errorCount ? "needs_review" : "ready",
+        import_status: result.errorCount ? "needs_review" : "ready",
       });
 
       setSelectedBatchId(batch.id);
-      setMessage(`Staged ${validCount + errorCount} row(s): ${validCount} valid, ${errorCount} requiring review. No patient records were created yet.`);
+      setMessage(`Staged ${result.validCount + result.errorCount} row(s): ${result.validCount} valid, ${result.errorCount} requiring review. No production records were created during staging.`);
       await load();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unable to stage CSV.");
@@ -367,76 +561,69 @@ export function ImportsPage() {
     }
   }
 
-  async function commitValidRows() {
-    if (!selectedBatch || selectedValid.length === 0) return;
-    setImporting(true);
+  async function commitRows() {
+    if (!selectedBatch || retryableRows.length === 0) return;
+    setWorking("import");
     setError(null);
     setMessage(null);
-
     let imported = 0;
+    let duplicate = 0;
     let failed = 0;
 
     try {
-      const tenantId = await getCurrentTenantId();
-      await tenantUpdate<ImportBatch>("import_batches", selectedBatch.id, { import_status: "importing" });
+      const rpc = selectedBatch.import_type === "historical_transactions"
+        ? "commit_historical_import_row"
+        : "commit_patient_import_row";
 
-      for (const row of selectedValid) {
-        const patient = (row.mapped_data ?? {}) as unknown as StagedPatient;
-        try {
-          const subscriberName = [patient.subscriber_first_name, patient.subscriber_last_name].filter(Boolean).join(" ");
-          await tenantRpc("create_patient_intake", {
-            p_tenant_id: tenantId,
-            p_patient: {
-              first_name: patient.first_name,
-              last_name: patient.last_name,
-              preferred_name: patient.preferred_name || null,
-              date_of_birth: patient.date_of_birth,
-              sex: patient.sex,
-              email: patient.email,
-              phone: patient.phone,
-              address_line1: patient.address_line1,
-              client_status: "active",
-              registration_status: "complete",
-            },
-            p_emergency_contact: null,
-            p_primary_insurance: {
-              payer_id: patient.primary_payer_id,
-              payer_plan_id: null,
-              member_id: patient.primary_member_id,
-              group_number: patient.primary_group_number || null,
-              subscriber_name: subscriberName || null,
-              subscriber_dob: patient.subscriber_dob || null,
-              relationship_to_subscriber: patient.relationship_to_subscriber,
-              metadata: { imported_from_batch: selectedBatch.id },
-            },
-            p_secondary_insurance: null,
-            p_portal_enrolled: false,
-          });
-          await tenantUpdate<ImportRow>("import_rows", row.id, { row_status: "imported" });
-          imported += 1;
-        } catch (rowError) {
-          const messageText = rowError instanceof Error ? rowError.message : "Patient import failed.";
-          await tenantUpdate<ImportRow>("import_rows", row.id, { row_status: "failed" });
-          await tenantInsert<ImportError>("import_validation_errors", {
-            import_batch_id: selectedBatch.id,
-            import_row_id: row.id,
-            severity: "error",
-            field_name: null,
-            message: messageText,
-          });
-          failed += 1;
-        }
+      for (const row of retryableRows) {
+        const result = await tenantRpc<Record<string, unknown>>(rpc, { p_import_row_id: row.id });
+        const status = String(result.status ?? "");
+        if (status === "imported") imported += 1;
+        else if (status === "duplicate") duplicate += 1;
+        else failed += 1;
       }
-
-      await tenantUpdate<ImportBatch>("import_batches", selectedBatch.id, {
-        import_status: failed ? "partial" : "completed",
-      });
-      setMessage(`Import complete: ${imported} patient(s) created${failed ? `, ${failed} failed and remain for review` : ""}.`);
+      setMessage(`Import pass complete: ${imported} imported, ${duplicate} duplicate, ${failed} failed. Completed rows are idempotent and will not be created twice on retry.`);
       await load();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Unable to import valid rows.");
+      setError(err instanceof Error ? err.message : "Unable to import staged rows.");
     } finally {
-      setImporting(false);
+      setWorking(null);
+    }
+  }
+
+  async function reconcile() {
+    if (!selectedBatch) return;
+    setWorking("reconcile");
+    setError(null);
+    try {
+      const result = await tenantRpc<Record<string, unknown>>("reconcile_import_batch", {
+        p_batch_id: selectedBatch.id,
+      });
+      setMessage(`Reconciliation refreshed: ${JSON.stringify(result)}`);
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to reconcile import.");
+    } finally {
+      setWorking(null);
+    }
+  }
+
+  async function rollback() {
+    if (!selectedBatch) return;
+    if (!window.confirm("Rollback records created by this import batch? Records with downstream dependencies will be preserved and reported as blocked.")) return;
+
+    setWorking("rollback");
+    setError(null);
+    try {
+      const result = await tenantRpc<Record<string, unknown>>("rollback_import_batch", {
+        p_batch_id: selectedBatch.id,
+      });
+      setMessage(`Rollback result: ${JSON.stringify(result)}`);
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to rollback import.");
+    } finally {
+      setWorking(null);
     }
   }
 
@@ -444,11 +631,11 @@ export function ImportsPage() {
     <>
       <div className="thera-page-header split">
         <div>
-          <div className="thera-eyebrow">DATA QUALITY</div>
-          <h1>Patient Imports</h1>
-          <p>Stage CSV data, validate demographics and insurance, review exceptions, then commit only valid patients.</p>
+          <div className="thera-eyebrow">DATA MIGRATION · CONTROLLED CUTOVER</div>
+          <h1>Imports & Migration</h1>
+          <p>Stage, validate, deduplicate, import, reconcile, resume, and rollback practice data without maintaining a parallel tracker.</p>
         </div>
-        <button type="button" className="thera-action secondary" onClick={downloadTemplate}>Download CSV Template</button>
+        <button type="button" className="thera-action secondary" onClick={downloadTemplate}>Download Template</button>
       </div>
 
       {error && <div className="thera-state error" style={{ marginBottom: 12 }}>{error}</div>}
@@ -457,14 +644,21 @@ export function ImportsPage() {
       <section className="thera-card" style={{ marginBottom: 16 }}>
         <div className="thera-card-header">
           <div>
-            <h2>Stage Patient CSV</h2>
-            <p>Staging never creates patients. Rows are validated first and retained with an audit trail.</p>
+            <h2>Stage source data</h2>
+            <p>A SHA-256 file fingerprint prevents accidental duplicate imports. Header mappings and every source row remain attached to the batch.</p>
           </div>
         </div>
         <div className="thera-form-grid">
           <label className="thera-field">
+            <span className="thera-field-label">Import Type</span>
+            <select className="thera-input" value={importType} onChange={(event) => setImportType(event.target.value as ImportType)}>
+              <option value="patients">Patients</option>
+              <option value="historical_transactions">Historical Transactions</option>
+            </select>
+          </label>
+          <label className="thera-field">
             <span className="thera-field-label">Source System</span>
-            <input className="thera-input" value={sourceSystem} onChange={(event) => setSourceSystem(event.target.value)} placeholder="Legacy EHR, billing system, CSV export..." />
+            <input className="thera-input" value={sourceSystem} onChange={(event) => setSourceSystem(event.target.value)} placeholder="Legacy EHR, billing system..." />
           </label>
           <label className="thera-field">
             <span className="thera-field-label">CSV File</span>
@@ -482,9 +676,9 @@ export function ImportsPage() {
           </label>
         </div>
         <div className="thera-table-subtext" style={{ marginTop: 10 }}>
-          Required: first name, last name, DOB, sex, address, phone, email, primary payer, member ID, and subscriber relationship. Payer names must match an existing payer.
+          Patient imports support <strong>insurance</strong> and <strong>self_pay</strong>. Historical transactions map to imported patients by source key and preserve opening balances, payments, adjustments, credits, refunds, transfers, and corrections.
         </div>
-        {staging && <div className="thera-state">Validating and staging CSV...</div>}
+        {staging && <div className="thera-state">Hashing, validating, and staging source rows...</div>}
       </section>
 
       <div className="thera-detail-grid">
@@ -508,8 +702,9 @@ export function ImportsPage() {
                       <strong>{String(batch.import_name ?? "Import")}</strong>
                       <StatusBadge value={String(batch.import_status ?? "unknown")} />
                     </div>
-                    <div>{String(batch.source_system ?? "CSV")} · {batchRows.length} row{batchRows.length === 1 ? "" : "s"}</div>
+                    <div>{String(batch.import_type ?? "patients").replaceAll("_", " ")} · {String(batch.source_system ?? "CSV")} · {batchRows.length} rows</div>
                     <div className="thera-table-subtext">{batch.created_at ? dateTime(String(batch.created_at)) : "—"}</div>
+                    {batch.rollback_status && batch.rollback_status !== "not_requested" && <div className="thera-table-subtext">Rollback: {batch.rollback_status}</div>}
                   </button>
                 );
               })}
@@ -521,54 +716,65 @@ export function ImportsPage() {
           <div className="thera-card-header split">
             <div>
               <h2>{selectedBatch ? String(selectedBatch.import_name ?? "Selected Batch") : "Batch Review"}</h2>
-              <p>{selectedBatch ? "Review validation results before creating patients." : "Select an import batch."}</p>
+              <p>{selectedBatch ? "Review source mappings and row outcomes before cutover." : "Select an import batch."}</p>
             </div>
-            {selectedBatch && selectedValid.length > 0 && (
-              <button type="button" className="thera-action" disabled={importing} onClick={() => void commitValidRows()}>
-                {importing ? "Importing..." : `Import Valid Rows (${selectedValid.length})`}
-              </button>
-            )}
           </div>
 
           {selectedBatch && (
             <>
               <div className="thera-metric-grid" style={{ marginBottom: 14 }}>
                 <Metric label="Rows" value={selectedRows.length} />
-                <Metric label="Valid" value={selectedValid.length} />
-                <Metric label="Imported" value={selectedImported.length} />
-                <Metric label="Errors / Failed" value={selectedFailed.length} />
+                <Metric label="Ready / Retry" value={retryableRows.length} />
+                <Metric label="Imported" value={selectedRows.filter((row) => row.row_status === "imported").length} />
+                <Metric label="Duplicates" value={selectedRows.filter((row) => row.row_status === "duplicate").length} />
+                <Metric label="Errors" value={selectedRows.filter((row) => ["error", "failed"].includes(String(row.row_status ?? ""))).length} />
               </div>
 
-              {selectedErrors.length > 0 && (
-                <div className="thera-alert" style={{ marginBottom: 12 }}>
-                  {selectedErrors.length} validation error{selectedErrors.length === 1 ? "" : "s"} must be corrected in the source file and restaged, or the valid rows can be imported separately.
-                </div>
-              )}
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 14 }}>
+                <button type="button" className="thera-action" disabled={working !== null || retryableRows.length === 0} onClick={() => void commitRows()}>
+                  {working === "import" ? "Importing..." : `Import / Resume (${retryableRows.length})`}
+                </button>
+                <button type="button" className="thera-action secondary" disabled={working !== null} onClick={() => void reconcile()}>
+                  {working === "reconcile" ? "Reconciling..." : "Reconcile"}
+                </button>
+                <button type="button" className="thera-action secondary" disabled={working !== null || selectedBatch.rollback_status === "rolled_back"} onClick={() => void rollback()}>
+                  {working === "rollback" ? "Rolling back..." : "Rollback Batch"}
+                </button>
+              </div>
 
-              {selectedRows.length ? (
-                <div className="thera-table-wrap">
-                  <table className="thera-table">
-                    <thead><tr><th>Row</th><th>Patient</th><th>DOB</th><th>Payer</th><th>Member ID</th><th>Status</th><th>Validation</th></tr></thead>
-                    <tbody>
-                      {selectedRows.map((row) => {
-                        const mapped = (row.mapped_data ?? {}) as unknown as Partial<StagedPatient>;
-                        const rowErrors = selectedErrors.filter((issue) => issue.import_row_id === row.id);
-                        return (
-                          <tr key={row.id}>
-                            <td>{row.row_number ?? "—"}</td>
-                            <td>{[mapped.first_name, mapped.last_name].filter(Boolean).join(" ") || "—"}</td>
-                            <td>{mapped.date_of_birth || "—"}</td>
-                            <td>{mapped.primary_payer || "—"}</td>
-                            <td>{mapped.primary_member_id || "—"}</td>
-                            <td><StatusBadge value={String(row.row_status ?? "unknown")} /></td>
-                            <td>{rowErrors.length ? rowErrors.map((issue) => String(issue.message ?? "")).join(" · ") : "Passed"}</td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-              ) : <div className="thera-empty">This batch has no staged rows.</div>}
+              <div className="thera-alert" style={{ marginBottom: 14 }}>
+                <strong>Source fingerprint:</strong> {String(selectedBatch.source_file_hash ?? "not recorded").slice(0, 24)}
+                <br />
+                <strong>Reconciliation:</strong> {JSON.stringify(selectedBatch.reconciliation ?? {})}
+              </div>
+
+              <div className="thera-table-wrap">
+                <table className="thera-table">
+                  <thead>
+                    <tr>
+                      <th>Row</th><th>Source Key</th><th>Status</th><th>Target</th><th>Attempts</th><th>Issue</th><th>Rollback</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {selectedRows.map((row) => (
+                      <tr key={row.id}>
+                        <td>{String(row.row_number ?? "—")}</td>
+                        <td>{String(row.source_key ?? "—")}</td>
+                        <td><StatusBadge value={String(row.row_status ?? "pending")} /></td>
+                        <td>{row.target_id ? `${String(row.target_type ?? "record")}: ${row.target_id.slice(0, 8)}…` : "—"}</td>
+                        <td>{String(row.attempt_count ?? 0)}</td>
+                        <td>{String(row.error_message ?? selectedErrors.find((issue) => issue.import_row_id === row.id)?.message ?? "—")}</td>
+                        <td>{String(row.rollback_error ?? row.rollback_status ?? "—")}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              <details style={{ marginTop: 14 }}>
+                <summary>Saved source mapping</summary>
+                <pre style={{ whiteSpace: "pre-wrap" }}>{JSON.stringify(selectedBatch.mapping_profile ?? {}, null, 2)}</pre>
+              </details>
             </>
           )}
         </section>
@@ -578,5 +784,10 @@ export function ImportsPage() {
 }
 
 function Metric({ label, value }: { label: string; value: number }) {
-  return <div className="thera-metric-card"><div className="thera-metric-label">{label}</div><div className="thera-metric-value">{value}</div></div>;
+  return (
+    <div className="thera-metric-card">
+      <div className="thera-metric-label">{label}</div>
+      <div className="thera-metric-value small">{value}</div>
+    </div>
+  );
 }

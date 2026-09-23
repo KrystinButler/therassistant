@@ -48,3 +48,9 @@ export function revokeClientPortalAccess(clientId: string) {
     p_client_id: clientId,
   });
 }
+
+export function restoreClientPortalAccess(clientId: string) {
+  return tenantRpc<Record<string, unknown>>("restore_client_portal_access", {
+    p_client_id: clientId,
+  });
+}

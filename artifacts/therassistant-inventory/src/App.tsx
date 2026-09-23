@@ -50,6 +50,8 @@ import { PracticeConfigurationPage } from "./pages/practice-configuration";
 import { ProviderDetailPage } from "./pages/provider-detail";
 import { ProvidersPage } from "./pages/providers";
 import { ReportsPage } from "./pages/operational-workspaces";
+import { ConnectedOperationsPage } from "./pages/connected-operations";
+import { UserRolesPage } from "./pages/users-roles";
 import {
   GoldenThreadPage,
   MedicaidPage,
@@ -100,8 +102,10 @@ function StaffRoutes() {
         <Route path="/credentialing"><CredentialingPage /></Route>
         <Route path="/payers-contracts"><PayersContractsPage /></Route>
         <Route path="/mailroom"><MailroomPage /></Route>
+        <Route path="/operations/connected"><ConnectedOperationsPage /></Route>
         <Route path="/reports"><ReportsPage /></Route>
         <Route path="/administration/imports"><ImportsPage /></Route>
+        <Route path="/administration/users"><UserRolesPage /></Route>
         <Route path="/administration/audit"><AuditPage /></Route>
         <Route path="/administration/practices"><PracticeConfigurationPage /></Route>
         <Route path="/administration"><AdministrationPage /></Route>
