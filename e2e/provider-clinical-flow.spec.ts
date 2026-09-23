@@ -32,7 +32,9 @@ test("provider completes a synthetic visit from schedule through signed note and
   }
 
   await page.getByPlaceholder("Provider signature").fill("Jamie Parker, LCSW");
-  await page.getByRole("button", { name: "Sign & Lock Note" }).click();
+  const signButton = page.getByRole("button", { name: "Sign & Lock Note" });
+  await expect(signButton).toBeEnabled({ timeout: 15_000 });
+  await signButton.click();
 
   await expect(
     page.getByText(

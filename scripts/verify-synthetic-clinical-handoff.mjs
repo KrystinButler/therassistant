@@ -69,7 +69,7 @@ const serviceLines = await rows(
 const line = serviceLines.find((row) => row.cpt_hcpcs_code === "90837" && Number(row.charge_amount_cents) === 15000);
 assert(line, "Expected synthetic 90837 service line for $150.00 was not created.");
 assert(Number(line.units) === 1, "Synthetic service line units are incorrect.");
-assert(String(line.place_of_service_code) === "10", "Synthetic telehealth place of service is not 10.");
+assert(String(line.place_of_service_code) === "02", "Generic synthetic telehealth visit should default to place of service 02.");
 
 const charges = await rows(
   "charge_capture_items",
