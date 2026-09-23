@@ -3,6 +3,15 @@ import { useEffect, useMemo, useState } from "react";
 import { dateTime } from "../lib/format";
 import { tenantSelect, type Row } from "../lib/tenant-data-client";
 
+type DocumentHistoryRow = Row & {
+  id: string;
+  document_id?: string | null;
+  event_type?: string | null;
+  snapshot?: Row | null;
+  actor_id?: string | null;
+  created_at?: string | null;
+};
+
 type AuditRow = Row & {
   id: string;
   actor_id?: string | null;
@@ -22,6 +31,7 @@ function pretty(value: unknown) {
 
 export function AuditPage() {
   const [rows, setRows] = useState<AuditRow[]>([]);
+  const [documentHistory, setDocumentHistory] = useState<DocumentHistoryRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
@@ -32,9 +42,15 @@ export function AuditPage() {
     let active = true;
     setLoading(true);
     setError(null);
-    tenantSelect<AuditRow>("audit_logs", { order: "created_at.desc" })
-      .then((result) => {
-        if (active) setRows(result);
+    Promise.all([
+      tenantSelect<AuditRow>("audit_logs", { order: "created_at.desc" }),
+      tenantSelect<DocumentHistoryRow>("document_history", { order: "created_at.desc" }),
+    ])
+      .then(([result, documentRows]) => {
+        if (active) {
+          setRows(result);
+          setDocumentHistory(documentRows);
+        }
       })
       .catch((err: unknown) => {
         if (active) setError(err instanceof Error ? err.message : "Unable to load audit history.");
@@ -117,6 +133,7 @@ export function AuditPage() {
       {error && <div className="thera-state error">{error}</div>}
 
       {!loading && !error && (
+        <>
         <section className="thera-card">
           <div className="thera-table-wrap">
             <table className="thera-table">
@@ -166,6 +183,38 @@ export function AuditPage() {
             </table>
           </div>
         </section>
+
+        <section className="thera-card" style={{ marginTop: 16 }}>
+          <div className="thera-card-header">
+            <div>
+              <h2>Document History</h2>
+              <p>Append-only snapshots preserve document creation, edits, status changes, archive, and void events.</p>
+            </div>
+          </div>
+          <div className="thera-table-wrap">
+            <table className="thera-table">
+              <thead><tr><th>When</th><th>Event</th><th>Document</th><th>Actor</th><th>Snapshot</th></tr></thead>
+              <tbody>
+                {documentHistory.map((row) => (
+                  <tr key={row.id}>
+                    <td>{row.created_at ? dateTime(String(row.created_at)) : "—"}</td>
+                    <td>{String(row.event_type ?? "—").replaceAll("_", " ")}</td>
+                    <td className="thera-table-subtext">{String(row.document_id ?? "—")}</td>
+                    <td className="thera-table-subtext">{String(row.actor_id ?? "System")}</td>
+                    <td>
+                      <details>
+                        <summary className="thera-link" style={{ cursor: "pointer" }}>View snapshot</summary>
+                        <pre style={{ whiteSpace: "pre-wrap", fontSize: 11 }}>{pretty(row.snapshot)}</pre>
+                      </details>
+                    </td>
+                  </tr>
+                ))}
+                {documentHistory.length === 0 && <tr><td colSpan={5}><div className="thera-empty">No document history yet.</div></td></tr>}
+              </tbody>
+            </table>
+          </div>
+        </section>
+        </>
       )}
     </>
   );
