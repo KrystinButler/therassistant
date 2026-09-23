@@ -62,7 +62,6 @@ test("primary routes map to the owning workspace", () => {
     ["/providers", "operations"],
     ["/credentialing", "operations"],
     ["/payers-contracts", "operations"],
-    ["/mailroom", "operations"],
     ["/administration/imports", "operations"],
     ["/reports", "insights"],
     ["/journal", "client-experience"],
@@ -79,7 +78,6 @@ test("contextual record routes keep their owning workspace active", () => {
     ["/schedule/22222222-2222-4222-8222-222222222222", "care-delivery"],
     ["/encounters/33333333-3333-4333-8333-333333333333", "care-delivery"],
     ["/clinical/golden-thread/44444444-4444-4444-8444-444444444444", "care-delivery"],
-    ["/medicaid", "care-delivery"],
     ["/claims/55555555-5555-4555-8555-555555555555", "revenue-cycle"],
     ["/providers/66666666-6666-4666-8666-666666666666", "operations"],
     ["/payers/77777777-7777-4777-8777-777777777777", "operations"],
@@ -127,7 +125,7 @@ test("accordion toggle allows at most one expanded workspace", () => {
 });
 
 test("unmapped and retired paths fail soft instead of inventing an owner", () => {
-  for (const path of ["/not-a-real-route", "/authorizations"]) {
+  for (const path of ["/not-a-real-route", "/authorizations", "/medicaid", "/mailroom"]) {
     const context = getWorkspaceContext(path);
     assert.equal(context.workspace, undefined, path);
     assert.equal(context.child, undefined, path);

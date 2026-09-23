@@ -37,6 +37,7 @@ export default defineConfig({
         /auth-gate\.spec\.ts/,
         /-auth\.setup\.ts$/,
         /provider-role\.spec\.ts/,
+        /provider-clinical-flow\.spec\.ts/,
         /patient-role\.spec\.ts/,
       ],
       dependencies: ["staff-setup"],
