@@ -1,0 +1,1 @@
+create index if not exists payer_resources_payer_plan_id_idx on public.payer_resources (payer_plan_id);
