@@ -81,7 +81,7 @@ export function FastChartingPanel(props: Props) {
 
   function addTimelineEvent() {
     const label = timelineLabel.trim();
-    if (!label || !/^([01]\\d|2[0-3]):[0-5]\\d$/.test(timelineTime)) return;
+    if (!label || !/^([01]\d|2[0-3]):[0-5]\d$/.test(timelineTime)) return;
     props.onSelectionsChange({
       ...props.selections,
       timelineEvents: [
