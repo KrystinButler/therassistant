@@ -104,8 +104,9 @@ export function normalizeStructuredSelections(value: unknown): StructuredSelecti
   const depression = String(source.depression ?? "");
   const response = String(source.response ?? "");
   const risk = String(source.risk ?? "");
-  const timelineEvents = Array.isArray(source.timelineEvents ?? source.timeline_events)
-    ? (source.timelineEvents ?? source.timeline_events as unknown[]).slice(0, 50).flatMap((item) => {
+  const rawTimeline = source.timelineEvents ?? source.timeline_events;
+  const timelineEvents = Array.isArray(rawTimeline)
+    ? rawTimeline.slice(0, 50).flatMap((item) => {
         if (!item || typeof item !== "object" || Array.isArray(item)) return [];
         const row = item as Row;
         const time = String(row.time ?? "").trim();
