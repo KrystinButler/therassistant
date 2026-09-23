@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import {
   getClientPortalAccess,
   invitePatientPortal,
+  restorePatientPortalAccess,
   revokeClientPortalAccess,
   type ClientPortalAccess,
 } from "./staff-portal-access";
@@ -10,7 +11,7 @@ import {
 export function PortalAccessPanel({ clientId }: { clientId: string }) {
   const [access, setAccess] = useState<ClientPortalAccess | null>(null);
   const [loading, setLoading] = useState(true);
-  const [working, setWorking] = useState<"invite" | "revoke" | null>(null);
+  const [working, setWorking] = useState<"invite" | "restore" | "revoke" | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
 
@@ -45,6 +46,28 @@ export function PortalAccessPanel({ clientId }: { clientId: string }) {
         err instanceof Error
           ? err.message
           : "Unable to send portal invitation.",
+      );
+    } finally {
+      setWorking(null);
+    }
+  }
+
+  async function restore() {
+    const confirmed = window.confirm(
+      `Restore portal access for ${access?.invited_email ?? "this patient"}? This restores the existing linked portal identity; it does not create a new account.`,
+    );
+    if (!confirmed) return;
+
+    setWorking("restore");
+    setError(null);
+    setNotice(null);
+    try {
+      await restorePatientPortalAccess(clientId);
+      setNotice("Patient portal access restored.");
+      await load();
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : "Unable to restore portal access.",
       );
     } finally {
       setWorking(null);
@@ -149,9 +172,17 @@ export function PortalAccessPanel({ clientId }: { clientId: string }) {
         <>
           <p><strong>Status:</strong> Revoked</p>
           <p>
-            Portal access was revoked. Automatic relinking is not available in
-            this release.
+            The linked portal identity is preserved for <strong>{access.invited_email}</strong>.
+            Restore access only when this remains the correct patient email.
           </p>
+          <button
+            className="thera-action"
+            type="button"
+            disabled={working !== null}
+            onClick={() => void restore()}
+          >
+            {working === "restore" ? "Restoring..." : "Restore Portal Access"}
+          </button>
         </>
       ) : null}
     </section>

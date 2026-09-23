@@ -95,8 +95,9 @@ Deno.serve(async (req: Request) => {
   }
 
   let clientId: string;
+  let restoreRevoked = false;
   try {
-    ({ clientId } = normalizeInviteRequest(await req.json()));
+    ({ clientId, restoreRevoked } = normalizeInviteRequest(await req.json()));
   } catch (error) {
     return json(
       {
@@ -138,7 +139,7 @@ Deno.serve(async (req: Request) => {
   const context = contextData as InviteContext;
   const accessStatus = (context.access_status ?? null) as ExistingAccessStatus;
   const email = String(context.email ?? "").trim().toLowerCase();
-  const inviteAction = decideInviteAction(accessStatus);
+  const inviteAction = decideInviteAction(accessStatus, restoreRevoked);
 
   if (inviteAction === "return-existing") {
     return json(
@@ -156,7 +157,7 @@ Deno.serve(async (req: Request) => {
     return json(
       {
         error:
-          "Patient portal access was revoked. Automatic re-enrollment is not supported in this release.",
+          "Patient portal access is revoked. Use the explicit restore action to restore the existing portal identity.",
       },
       409,
     );
@@ -176,6 +177,84 @@ Deno.serve(async (req: Request) => {
       detectSessionInUrl: false,
     },
   });
+
+  if (inviteAction === "restore-revoked") {
+    const accessId = String(context.access_id ?? "").trim();
+    const accessUserId = String(context.access_user_id ?? "").trim();
+    const invitedEmail = String(context.access_invited_email ?? "").trim().toLowerCase();
+
+    if (!accessId || !accessUserId || !invitedEmail) {
+      return json(
+        { error: "The revoked portal identity is incomplete and cannot be restored automatically." },
+        409,
+      );
+    }
+
+    if (email !== invitedEmail) {
+      return json(
+        {
+          error:
+            "The patient email no longer matches the established portal identity. Update the portal identity through an administrator workflow instead of relinking automatically.",
+        },
+        409,
+      );
+    }
+
+    const { data: linkedUser, error: linkedUserError } =
+      await admin.auth.admin.getUserById(accessUserId);
+
+    if (linkedUserError || !linkedUser.user) {
+      return json(
+        {
+          error:
+            "The original portal Auth identity no longer exists. Administrator action is required before restoring access.",
+        },
+        409,
+      );
+    }
+
+    if (String(linkedUser.user.email ?? "").trim().toLowerCase() !== invitedEmail) {
+      return json(
+        {
+          error:
+            "The stored portal email does not match the linked Auth identity. Access was not restored.",
+        },
+        409,
+      );
+    }
+
+    const restoredAt = new Date().toISOString();
+    const { data: restored, error: restoreError } = await admin
+      .from("client_portal_access")
+      .update({
+        status: "active",
+        revoked_at: null,
+        updated_at: restoredAt,
+      })
+      .eq("id", accessId)
+      .eq("client_id", clientId)
+      .eq("user_id", accessUserId)
+      .eq("status", "revoked")
+      .select("client_id,status,invited_email,activated_at")
+      .single();
+
+    if (restoreError || !restored) {
+      return json(
+        { error: "Portal access could not be restored. No access change was made." },
+        409,
+      );
+    }
+
+    return json(
+      {
+        client_id: clientId,
+        status: "active",
+        invited_email: invitedEmail,
+        restored_at: restoredAt,
+      },
+      200,
+    );
+  }
 
   const redirectTo = `${PORTAL_BASE_URL}/patient-portal/activate`;
   const { data: invited, error: inviteError } =

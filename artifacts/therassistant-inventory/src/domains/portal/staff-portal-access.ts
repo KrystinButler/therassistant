@@ -43,6 +43,28 @@ export async function invitePatientPortal(clientId: string) {
   return payload;
 }
 
+export async function restorePatientPortalAccess(clientId: string) {
+  const response = await authenticatedFetch(
+    `${SUPABASE_URL}/functions/v1/invite-patient-portal`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        client_id: clientId,
+        restore_revoked: true,
+      }),
+    },
+  );
+
+  const payload = (await response.json().catch(() => ({}))) as Record<string, unknown>;
+  if (!response.ok) {
+    throw new Error(
+      String(payload.error ?? "Unable to restore patient portal access."),
+    );
+  }
+  return payload;
+}
+
 export function revokeClientPortalAccess(clientId: string) {
   return tenantRpc<Record<string, unknown>>("revoke_client_portal_access", {
     p_client_id: clientId,
