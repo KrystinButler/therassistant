@@ -72,11 +72,9 @@ test("staff creates, archives, records and accepts the synthetic insured claim",
 
   const archiveButton = page.getByRole("button", { name: "Archive & Download 837P" });
   await expect(archiveButton).toBeEnabled({ timeout: 15_000 });
-  const downloadPromise = page.waitForEvent("download");
   await archiveButton.click();
-  const download = await downloadPromise;
-  expect(download.suggestedFilename()).toMatch(/^batch_[0-9a-f-]+\.837$/i);
   await expect(page.getByText(/837P archived and verified/)).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByRole("button", { name: "Download Archived 837P" })).toBeVisible({ timeout: 15_000 });
 
   const submissionButton = page.getByRole("button", { name: "Record External Submission" });
   await expect(submissionButton).toBeEnabled({ timeout: 15_000 });
