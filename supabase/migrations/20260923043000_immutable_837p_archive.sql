@@ -64,12 +64,15 @@ on storage.objects for select
 to authenticated
 using (
   bucket_id='claim-edis'
+  and (storage.foldername(name))[2]='outbound'
+  and (storage.foldername(name))[3]='837p'
+  and private.has_tenant_read_access(((storage.foldername(name))[1])::uuid)
   and exists (
     select 1
-    from public.tenant_users tu
-    where tu.user_id=(select auth.uid())
-      and tu.status='active'::public.user_status_enum
-      and tu.tenant_id::text=(storage.foldername(name))[1]
+    from public.claim_batches cb
+    where cb.tenant_id=((storage.foldername(name))[1])::uuid
+      and cb.id=((storage.foldername(name))[4])::uuid
+      and cb.edi_storage_path=storage.objects.name
   )
 );
 
@@ -79,12 +82,16 @@ on storage.objects for insert
 to authenticated
 with check (
   bucket_id='claim-edis'
+  and (storage.foldername(name))[2]='outbound'
+  and (storage.foldername(name))[3]='837p'
+  and private.has_tenant_write_access(((storage.foldername(name))[1])::uuid)
   and exists (
     select 1
-    from public.tenant_users tu
-    where tu.user_id=(select auth.uid())
-      and tu.status='active'::public.user_status_enum
-      and tu.tenant_id::text=(storage.foldername(name))[1]
+    from public.claim_batches cb
+    where cb.tenant_id=((storage.foldername(name))[1])::uuid
+      and cb.id=((storage.foldername(name))[4])::uuid
+      and cb.edi_storage_path=storage.objects.name
+      and cb.batch_status in ('ready'::public.claim_batch_status_enum,'downloaded'::public.claim_batch_status_enum)
   )
 );
 
