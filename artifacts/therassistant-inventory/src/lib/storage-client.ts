@@ -6,6 +6,7 @@ import {
 import type { FetchLike } from "./tenant-data-client";
 
 const MAILROOM_BUCKET = "therassistant-documents";
+const CLAIM_EDI_BUCKET = "claim-edis";
 
 function encodeStoragePath(path: string) {
   return path.split("/").map((part) => encodeURIComponent(part)).join("/");
@@ -105,6 +106,53 @@ export function createStorageClient(
     return { path };
   }
 
+  async function createSignedClaimEdiUrl(path: string, expiresIn = 300) {
+    const url = `${SUPABASE_URL}/storage/v1/object/sign/${CLAIM_EDI_BUCKET}/${encodeStoragePath(path)}`;
+    const response = await authFetch(url, {
+      method: "POST",
+      headers: { Accept: "application/json", "Content-Type": "application/json" },
+      body: JSON.stringify({ expiresIn }),
+    });
+    const body = await responseBody(response);
+    if (!response.ok) throw new Error(errorMessage(body, `Unable to create signed EDI URL (${response.status}).`));
+    const signed = String(body?.signedURL ?? body?.signedUrl ?? "");
+    if (!signed) throw new Error("Supabase Storage returned no signed EDI URL.");
+    return signed.startsWith("http") ? signed : new URL(signed, SUPABASE_URL).toString();
+  }
+
+  async function readClaimEdiArtifact(path: string) {
+    const signedUrl = await createSignedClaimEdiUrl(path, 60);
+    const response = await fetchImpl(signedUrl);
+    if (!response.ok) throw new Error(`Unable to read archived EDI artifact (${response.status}).`);
+    return response.text();
+  }
+
+  async function uploadClaimEdiArtifact(input: {
+    tenantId: string;
+    batchId: string;
+    fileName: string;
+    text: string;
+  }) {
+    const safeFileName = input.fileName.replace(/[^A-Za-z0-9._-]+/g, "");
+    if (!safeFileName || safeFileName !== input.fileName) throw new Error("Reserved EDI filename is invalid.");
+    const expectedPath = `${input.tenantId}/outbound/837p/${input.batchId}/${safeFileName}`;
+    const url = `${SUPABASE_URL}/storage/v1/object/${CLAIM_EDI_BUCKET}/${encodeStoragePath(expectedPath)}`;
+    const response = await authFetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "text/plain", "x-upsert": "false" },
+      body: input.text,
+    });
+    const body = await responseBody(response);
+    if (!response.ok) {
+      const message = errorMessage(body, `EDI archive upload failed (${response.status}).`);
+      const duplicate = response.status === 409 || /duplicate|already exists|resource exists/i.test(message);
+      if (!duplicate) throw new Error(message);
+      const existing = await readClaimEdiArtifact(expectedPath);
+      if (existing !== input.text) throw new Error("An immutable EDI artifact already exists for this batch but its contents differ.");
+      return { path: expectedPath, existed: true };
+    }
+    return { path: expectedPath, existed: false };
+  }
   async function createSignedDocumentUrl(path: string, expiresIn = 300) {
     const url = `${SUPABASE_URL}/storage/v1/object/sign/${MAILROOM_BUCKET}/${encodeStoragePath(path)}`;
     const response = await authFetch(url, {
@@ -130,7 +178,7 @@ export function createStorageClient(
     if (!response.ok) throw new Error(errorMessage(body, `Storage cleanup failed (${response.status}).`));
   }
 
-  return { uploadMailroomFile, uploadCredentialingFile, createSignedDocumentUrl, deleteObject };
+  return { uploadMailroomFile, uploadCredentialingFile, uploadClaimEdiArtifact, readClaimEdiArtifact, createSignedClaimEdiUrl, createSignedDocumentUrl, deleteObject };
 }
 
 export const storageClient = createStorageClient();

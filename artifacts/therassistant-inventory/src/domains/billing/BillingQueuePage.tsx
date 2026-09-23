@@ -11,9 +11,9 @@ import {
   recordExternalSubmission,
   validateClaim,
 } from "../claims/repository";
-import { build837PText } from "./claim-output";
 import { buildCms1500PreviewHtml } from "./cms1500-preview";
-import { getBatchExportData, getClaimPreviewData } from "./claim-output-repository";
+import { getClaimPreviewData } from "./claim-output-repository";
+import { archiveBatch837PArtifact } from "./claim-artifact-repository";
 import {
   createChargeFromEncounter,
   getBillingQueueData,
@@ -285,26 +285,26 @@ export function BillingQueuePage() {
   async function runDownload837(batchId: string) {
     setSavingId(`download-${batchId}`);
     setError(null);
+    setMessage(null);
     try {
-      const output = await getBatchExportData(batchId);
-      const text = build837PText(output);
-      const blob = new Blob([text], { type: "text/plain;charset=utf-8" });
+      const artifact = await archiveBatch837PArtifact(batchId);
+      const blob = new Blob([artifact.text], { type: "text/plain;charset=utf-8" });
       const url = URL.createObjectURL(blob);
       const anchor = document.createElement("a");
       anchor.href = url;
-      anchor.download = `therassistant-837p-${batchId}.txt`;
+      anchor.download = artifact.fileName;
       document.body.appendChild(anchor);
       anchor.click();
       anchor.remove();
       URL.revokeObjectURL(url);
-      setMessage("837P export downloaded. The batch remains unsubmitted until an actual external transmission is recorded.");
+      setMessage(`837P archived and verified (SHA-256 ${artifact.sha256.slice(0, 12)}…). The batch is transmission-ready but remains unsubmitted.`);
+      await load();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Unable to create 837P export.");
+      setError(err instanceof Error ? err.message : "Unable to archive and download the 837P.");
     } finally {
       setSavingId(null);
     }
   }
-
   async function runCms1500Preview(claimId: string, autoPrint = false) {
     const actionId = `${autoPrint ? "print" : "preview"}-${claimId}`;
     const previewWindow = window.open("", "_blank");
@@ -547,7 +547,7 @@ function BatchCards({
   if (!rows.length) return <section className="thera-card"><div className="thera-empty">No payer batches are ready.</div></section>;
 
   return <div className="thera-stack">{rows.map((batch) => <section className="thera-card" key={batch.id}>
-    <div className="thera-card-header split"><div><h2>{String(batch.batch_name || "Payer Batch")}</h2><p>{batch.claimIds.length} claim(s) · {money(Number(batch.total_charge_cents ?? 0))}</p></div><div className="thera-filter-row"><Link className="thera-action secondary" href="/administration/practices">837P Configuration</Link><button type="button" className="thera-action secondary" disabled={savingId === `download-${batch.id}`} onClick={() => onDownload(batch.id)}>Download 837P</button>{batch.batch_status === "ready" && <button type="button" className="thera-action" disabled={savingId === batch.id} onClick={() => onRecordSubmission(batch.id)}>Record External Submission</button>}</div></div>
+    <div className="thera-card-header split"><div><h2>{String(batch.batch_name || "Payer Batch")}</h2><p>{batch.claimIds.length} claim(s) · {money(Number(batch.total_charge_cents ?? 0))}{batch.edi_archived_at ? ` · 837P archived ${dateTime(String(batch.edi_archived_at))}` : " · 837P not archived"}</p></div><div className="thera-filter-row"><Link className="thera-action secondary" href="/administration/practices">837P Configuration</Link><button type="button" className="thera-action secondary" disabled={savingId === `download-${batch.id}`} onClick={() => onDownload(batch.id)}>{batch.edi_archived_at ? "Download Archived 837P" : "Archive & Download 837P"}</button>{batch.batch_status === "ready" && <button type="button" className="thera-action" title={batch.edi_archived_at ? "Record a confirmed external transmission." : "Archive and verify the 837P before submission."} disabled={savingId === batch.id || !batch.edi_archived_at} onClick={() => onRecordSubmission(batch.id)}>Record External Submission</button>}</div></div>
     <div className="thera-table-wrap"><table className="thera-table"><thead><tr><th>Claim</th><th>Patient</th><th>Payer</th><th>Charge</th><th>CMS-1500</th></tr></thead><tbody>{batch.claimIds.map((claimId: string) => { const claim = claimsById.get(claimId); return <tr key={claimId}><td>{claim ? <Link className="thera-table-link" href={`/claims/${claim.id}`}>{String(claim.patient_control_number || "Open")}</Link> : claimId}</td><td>{claim?.clientName ?? "—"}</td><td>{claim?.payerName ?? "—"}</td><td>{money(Number(claim?.total_charge_cents ?? 0))}</td><td><button type="button" className="thera-action secondary" disabled={!claim || savingId === `print-${claimId}`} onClick={() => claim && onPrint(batch.id, claim.id)}>Print CMS-1500</button></td></tr>; })}</tbody></table></div>
   </section>)}</div>;
 }
@@ -579,7 +579,7 @@ function SubmittedBatches({
   return <div className="thera-stack">{rows.map((batch) => {
     const submission = submissions.find((row) => String(row.batch_id ?? "") === batch.id);
     return <section className="thera-card" key={batch.id}>
-      <div className="thera-card-header split"><div><h2>{String(batch.batch_name || "Submitted Batch")}</h2><p>Submitted {dateTime(String(batch.submitted_at ?? submission?.submitted_at ?? ""))}</p></div><button type="button" className="thera-action secondary" disabled={savingId === `download-${batch.id}`} onClick={() => onDownload(batch.id)}>Download 837P</button></div>
+      <div className="thera-card-header split"><div><h2>{String(batch.batch_name || "Submitted Batch")}</h2><p>Submitted {dateTime(String(batch.submitted_at ?? submission?.submitted_at ?? ""))}</p></div><button type="button" className="thera-action secondary" title={batch.edi_archived_at ? "Download the immutable archived 837P." : "This historical submission predates 837P archival; Therassistant will not recreate a file and label it as the transmitted artifact."} disabled={!batch.edi_archived_at || savingId === `download-${batch.id}`} onClick={() => onDownload(batch.id)}>{batch.edi_archived_at ? "Download Archived 837P" : "No Archived 837P"}</button></div>
       <div className="thera-table-wrap"><table className="thera-table"><thead><tr><th>Claim</th><th>Patient</th><th>Status</th><th>Latest Acknowledgement</th><th>Actions</th></tr></thead><tbody>{batch.claimIds.map((claimId: string) => {
         const claim = claimsById.get(claimId);
         const response = submission?.responses
