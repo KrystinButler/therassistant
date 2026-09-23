@@ -1,8 +1,3 @@
--- Remove Collections CRM from the EHR Supabase project.
--- The CRM now lives in its own Supabase project: krwwsvvwxefwrbrscndz.
--- Preserve Payment Desk users/transactions and Square environment tracking.
--- Applied to the EHR production Supabase project on 2026-09-21.
-
 set local storage.allow_delete_query = 'true';
 
 drop function if exists public.crm_allocate_production_payment_atomic(uuid,uuid,integer,extensions.citext,uuid);

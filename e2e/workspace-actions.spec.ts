@@ -40,12 +40,12 @@ test("Schedule opens a new-appointment drawer and returns to the schedule", asyn
   page,
 }) => {
   await page.goto("/schedule");
-  await page.getByRole("button", { name: "+ New Appointment" }).click();
+  await page.getByRole("button", { name: "+ Appointment" }).click();
   await expect(page.getByRole("heading", { name: "New Appointment" })).toBeVisible();
   await expect(page.getByLabel("Patient")).toBeVisible();
   await expect(page.getByLabel("Provider")).toBeVisible();
   await page.getByRole("button", { name: "Cancel" }).click();
-  await expectWorkspace(page, "Schedule");
+  await expectWorkspace(page, "My Schedule");
   expect(new URL(page.url()).pathname).toBe("/schedule");
 });
 

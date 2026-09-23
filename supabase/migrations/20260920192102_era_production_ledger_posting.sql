@@ -1,3 +1,4 @@
+
 begin;
 
 create or replace function public.post_era_payment_receipt(

@@ -30,7 +30,7 @@ test("ERA import uses production ledger RPCs instead of direct payment writes", 
 
 test("ERA ledger migration preserves 835 payment date and contractual adjustment ledger", () => {
   const migration = readFileSync(
-    fileURLToPath(new URL("../../../supabase/migrations/20260920131800_era_production_ledger_posting.sql", import.meta.url)),
+    fileURLToPath(new URL("../../../supabase/migrations/20260920192102_era_production_ledger_posting.sql", import.meta.url)),
     "utf8",
   );
 
