@@ -76,6 +76,11 @@ export function ProcedureCodeSearchInput({ code, disabled = false, serviceDate, 
         }}
       />
       {searching ? <div className="thera-table-subtext" style={{ marginTop: 4 }}>Searching code library…</div> : null}
+      {query.trim().length >= 2 && query.trim() !== code ? (
+        <div className="thera-table-subtext" style={{ marginTop: 4 }}>
+          Pilot coverage: curated behavioral-health/outpatient CPT subset only; HCPCS Level II is not loaded. No match is not an invalid-code determination.
+        </div>
+      ) : null}
       {open && results.length ? (
         <div
           role="listbox"
