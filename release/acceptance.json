@@ -1,6 +1,6 @@
 {
   "schema_version": 2,
-  "bundle_id": "pilot-role-matrix-2026-09-23",
+  "bundle_id": "pilot-report-production-acceptance-2026-09-23",
   "release_closed": false,
   "data_policy": {
     "synthetic_test_scope": "isolated_local_supabase_only",
@@ -8,8 +8,8 @@
     "identity_scope": "distinct synthetic staff, provider, patient, and per-system-role Auth identities"
   },
   "production_baseline": {
-    "commit": "20345439c259e28115ba06900a726a58b4b00838",
-    "deployment_id": "dpl_dcqPcMzGgEBp2zsWiu3R83Led5hn",
+    "commit": "f786c6fa3e7769f17f71eed826fbbdc03f0d43b5",
+    "deployment_id": "dpl_AK1hSTMwDpo8b4enc6gA6s9yfodv",
     "deployment_state": "READY",
     "supabase_project_id": "lpjwfdvaxobewxcklenl",
     "github_migration_count": 135,
@@ -73,13 +73,15 @@
     {
       "id": "6.2-management-report-live-acceptance",
       "implemented": true,
-      "verified": false,
+      "verified": true,
       "configured": true,
       "deployed": true,
-      "closed": false,
+      "closed": true,
       "evidence": [
-        "The canonical Reports page reconciles A/R to claim_balance_summaries and surfaces claims missing balance summaries.",
-        "Repository reconciliation tests and Production CI pass; an authenticated live-production review of the management report has not yet been recorded."
+        "The canonical Reports page reconciles A/R to claim_balance_summaries, excludes financial claims without balance summaries from A/R totals, and surfaces them as exceptions.",
+        "Production /reports returned HTTP 200 from the READY Vercel production deployment dpl_AK1hSTMwDpo8b4enc6gA6s9yfodv.",
+        "A read-only production acceptance transaction established an authenticated Postgres/RLS context from an existing active non-client tenant membership and successfully evaluated the same report metric families used by ReportsPage without creating or modifying production records.",
+        "Production CI run 35925411343 completed successfully after the full 10-role matrix bundle, including browser E2E, insured revenue-cycle verification, and clinical-to-charge verification."
       ]
     },
     {
