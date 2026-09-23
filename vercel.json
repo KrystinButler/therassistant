@@ -8,7 +8,7 @@
   },
   "ignoreCommand": "git log -1 --pretty=%B | grep -q '\\[skip-vercel\\]'",
   "installCommand": "pnpm install --frozen-lockfile",
-  "buildCommand": "pnpm --filter ./scripts exec tsx --test ../artifacts/therassistant-inventory/tests/**/*.test.ts && pnpm --filter @workspace/therassistant-inventory run typecheck:phase3 && pnpm --filter @workspace/therassistant-inventory run build",
+  "buildCommand": "pnpm verify:release-acceptance && pnpm --filter ./scripts exec tsx --test ../artifacts/therassistant-inventory/tests/**/*.test.ts && pnpm --filter @workspace/therassistant-inventory run typecheck:phase3 && pnpm --filter @workspace/therassistant-inventory run build",
   "outputDirectory": "artifacts/therassistant-inventory/dist/public",
   "rewrites": [
     {

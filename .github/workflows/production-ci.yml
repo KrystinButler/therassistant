@@ -33,6 +33,9 @@ jobs:
       - name: Tests
         run: pnpm --filter ./scripts exec tsx --test ../artifacts/therassistant-inventory/tests/**/*.test.ts
 
+      - name: Release acceptance evidence integrity
+        run: pnpm verify:release-acceptance
+
       - name: Production auth contract
         run: node scripts/check-production-auth.mjs
 

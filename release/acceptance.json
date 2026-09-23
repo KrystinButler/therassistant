@@ -1,0 +1,102 @@
+{
+  "schema_version": 1,
+  "bundle_id": "pilot-release-acceptance-2026-09-23",
+  "release_closed": false,
+  "production_baseline": {
+    "commit": "951fd76fb0e07c3fa95f36d46ce2a582b4e1dc85",
+    "deployment_id": "dpl_Fv4hB41xS9gbQFFcgh4S1pNVrUdo",
+    "deployment_state": "READY"
+  },
+  "requirements": [
+    {
+      "id": "6.1-role-and-tenant-isolation",
+      "implemented": true,
+      "verified": true,
+      "configured": true,
+      "deployed": true,
+      "closed": true,
+      "evidence": [
+        "2026-09-23 production synthetic run exercised all 10 system roles with distinct auth identities.",
+        "Nine staff roles read two same-tenant patients and zero cross-tenant patients; cross-tenant updates affected zero rows.",
+        "read_only accepted reads and rejected writes.",
+        "client resolved only its own patient through the secured portal RPC and rejected a second patient's check-in."
+      ]
+    },
+    {
+      "id": "6.2-persistence-retry-and-audit",
+      "implemented": true,
+      "verified": true,
+      "configured": true,
+      "deployed": true,
+      "closed": true,
+      "evidence": [
+        "Three synthetic patients persisted across separate database requests.",
+        "Eight permitted staff audit events persisted across requests.",
+        "Two identical patient check-in retries produced one persisted check-in row.",
+        "Cross-patient check-in attempt produced zero rows.",
+        "Synthetic users, patients, and audit evidence were removed after the test and cleanup was verified at zero."
+      ]
+    },
+    {
+      "id": "6.2-operational-reports",
+      "implemented": true,
+      "verified": false,
+      "configured": true,
+      "deployed": true,
+      "closed": false,
+      "evidence": [
+        "Credentialing report summaries and CSV exports are implemented from normalized operational records and covered by repository tests.",
+        "A production-data acceptance pass for the complete management/financial reporting surface has not yet been recorded."
+      ]
+    },
+    {
+      "id": "6.2-frontend-rollback",
+      "implemented": true,
+      "verified": true,
+      "configured": true,
+      "deployed": true,
+      "closed": true,
+      "evidence": [
+        "Vercel production deployment dpl_Fv4hB41xS9gbQFFcgh4S1pNVrUdo is READY and marked as a rollback candidate.",
+        "No error or fatal runtime logs were returned for that production deployment during the inspected 24-hour window."
+      ]
+    },
+    {
+      "id": "6.2-database-restore-drill",
+      "implemented": true,
+      "verified": false,
+      "configured": false,
+      "deployed": false,
+      "closed": false,
+      "evidence": [
+        "Restore runbook is defined in docs/release/pilot-release-acceptance.md.",
+        "Supabase currently reports only the main branch; no disposable restore-drill branch exists.",
+        "A database restore was intentionally not executed against production."
+      ]
+    },
+    {
+      "id": "6.3-evidence-state-tracking",
+      "implemented": true,
+      "verified": true,
+      "configured": true,
+      "deployed": false,
+      "closed": false,
+      "evidence": [
+        "release/acceptance.json records implemented, verified, configured, deployed, and closed independently.",
+        "scripts/verify-release-acceptance.mjs rejects unsupported closure and missing evidence."
+      ]
+    },
+    {
+      "id": "6.4-one-preview-one-production-bundle",
+      "implemented": true,
+      "verified": false,
+      "configured": true,
+      "deployed": false,
+      "closed": false,
+      "evidence": [
+        "This bundle will be created as a single Git commit before its branch is created, preventing intermediate preview deployments.",
+        "Preview and production deployment IDs are recorded only after observable READY states."
+      ]
+    }
+  ]
+}
