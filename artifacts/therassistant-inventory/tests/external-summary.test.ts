@@ -73,3 +73,34 @@ test("sensitive external summary sections appear only when explicitly enabled", 
   assert.match(summary, /Legal \/ forensic context/);
   assert.match(summary, /SESSION TIMELINE/);
 });
+
+test("forensic progress is excluded from external summary unless explicitly enabled", () => {
+  const selections = emptyStructuredSelections();
+  selections.forensicContext = {
+    ...selections.forensicContext,
+    framework: "dvomb_adult",
+    providerNarrative: "Patient-specific progress observation.",
+    progress: { ...selections.forensicContext.progress, engagement: "improving" },
+  };
+
+  const input = {
+    patientName: "Synthetic Patient",
+    providerName: "Synthetic Provider",
+    serviceDate: "2026-09-23",
+    serviceType: "Individual Therapy",
+    attendanceStatus: "completed",
+    goalAddressed: "Treatment goal",
+    selections,
+    diagnoses: [],
+  };
+
+  const defaultSummary = buildExternalTreatmentSummary(input, DEFAULT_EXTERNAL_SUMMARY_OPTIONS);
+  assert.equal(defaultSummary.includes("Patient-specific progress observation"), false);
+
+  const included = buildExternalTreatmentSummary(input, {
+    ...DEFAULT_EXTERNAL_SUMMARY_OPTIONS,
+    includeForensicProgress: true,
+  });
+  assert.match(included, /Forensic \/ justice-involved treatment progress/);
+  assert.match(included, /Patient-specific progress observation/);
+});

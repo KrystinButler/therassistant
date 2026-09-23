@@ -15,6 +15,7 @@ import { ExternalSummaryPanel } from "../clinical/ExternalSummaryPanel";
 import { FastChartingPanel } from "../clinical/FastChartingPanel";
 import { createSmartPhrase, getFastChartingContext, getSmartPhrases } from "../clinical/fast-charting-repository";
 import { clinicalNoteSimilarity, emptyStructuredSelections, expandSmartPhraseAtCursor, synthesizeStructuredNarrative, type PriorStructuredContext, type SmartPhrase, type StructuredSelections } from "../clinical/fast-charting";
+import { forensicContextForCarryForward } from "../clinical/forensic-context";
 import { Icd10SearchInput } from "../coding/Icd10SearchInput";
 import { ProcedureCodeSearchInput } from "../coding/ProcedureCodeSearchInput";
 import { PlaceOfServiceSearchInput } from "../coding/PlaceOfServiceSearchInput";
@@ -372,6 +373,7 @@ export function EncounterPage() {
     if (signed || !priorStructuredContext) return;
     setStructuredSelections({
       ...priorStructuredContext.selections,
+      forensicContext: forensicContextForCarryForward(priorStructuredContext.selections.forensicContext),
       timelineEvents: [],
       similarityReviewAcknowledged: false,
     });

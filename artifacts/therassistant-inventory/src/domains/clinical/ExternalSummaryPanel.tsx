@@ -70,7 +70,7 @@ export function ExternalSummaryPanel({ input }: Props) {
           <div className="thera-field-label">Default disclosure scope</div>
           <div className="thera-table-subtext">
             Treatment focus, participation/response, and interventions are included.
-            Diagnosis, risk, clinical tags, and timeline are off by default.
+            Diagnosis, risk, clinical tags, timeline, and forensic progress are off by default.
           </div>
         </div>
       </div>
@@ -83,6 +83,7 @@ export function ExternalSummaryPanel({ input }: Props) {
         <Toggle checked={options.includeRisk} label="Risk / safety" onChange={() => toggle("includeRisk")} />
         <Toggle checked={options.includeClinicalTags} label="Clinical tags" onChange={() => toggle("includeClinicalTags")} />
         <Toggle checked={options.includeTimeline} label="Session timeline" onChange={() => toggle("includeTimeline")} />
+        <Toggle checked={options.includeForensicProgress} label="Forensic progress" onChange={() => toggle("includeForensicProgress")} />
       </div>
 
       <label style={{ display: "block", marginTop: 12 }}>

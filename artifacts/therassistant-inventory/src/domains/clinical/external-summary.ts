@@ -1,5 +1,6 @@
 import { CLINICAL_TAG_OPTIONS } from "./clinical-context";
 import { formatTimelineForNote, type StructuredSelections } from "./fast-charting";
+import { formatForensicContextForExternalSummary } from "./forensic-context";
 
 export type ExternalSummaryAudience = "court_supervision" | "authorized_external";
 
@@ -12,6 +13,7 @@ export type ExternalSummaryOptions = {
   includeRisk: boolean;
   includeClinicalTags: boolean;
   includeTimeline: boolean;
+  includeForensicProgress: boolean;
 };
 
 export type ExternalSummaryDiagnosis = {
@@ -39,6 +41,7 @@ export const DEFAULT_EXTERNAL_SUMMARY_OPTIONS: ExternalSummaryOptions = {
   includeRisk: false,
   includeClinicalTags: false,
   includeTimeline: false,
+  includeForensicProgress: false,
 };
 
 const interventionLabels: Record<string, string> = {
@@ -130,6 +133,11 @@ export function buildExternalTreatmentSummary(
 
   if (options.includeTimeline && input.selections.timelineEvents.length) {
     lines.push("", formatTimelineForNote(input.selections.timelineEvents));
+  }
+
+  if (options.includeForensicProgress) {
+    const forensic = formatForensicContextForExternalSummary(input.selections.forensicContext);
+    if (forensic) lines.push("", forensic);
   }
 
   lines.push(
