@@ -57,3 +57,53 @@ export function appendClinicalSource(current: string, block: string) {
     ? `${current.trim()}\n\n${trimmed}`
     : trimmed;
 }
+
+export type ClinicalSourceProvenance = {
+  source_type: "pre_visit_checkin" | "journal_entry";
+  source_id: string;
+  source_date: string | null;
+  patient_authored: true;
+};
+
+export function buildClinicalSourceProvenance(
+  sourceType: ClinicalSourceProvenance["source_type"],
+  row: Row | null | undefined,
+): ClinicalSourceProvenance | null {
+  const sourceId = String(row?.id ?? "").trim();
+  if (!sourceId) return null;
+  const date = String(
+    row?.submitted_at ??
+    row?.entry_date ??
+    row?.completed_at ??
+    row?.created_at ??
+    "",
+  ).slice(0, 10);
+  return {
+    source_type: sourceType,
+    source_id: sourceId,
+    source_date: date || null,
+    patient_authored: true,
+  };
+}
+
+export function withClinicalSourceImport(
+  context: Row,
+  provenance: ClinicalSourceProvenance | null,
+) {
+  if (!provenance) return context;
+  const current = Array.isArray(context.source_imports)
+    ? context.source_imports.filter(
+        (item): item is ClinicalSourceProvenance =>
+          Boolean(item && typeof item === "object" && !Array.isArray(item)),
+      )
+    : [];
+  const exists = current.some(
+    (item) =>
+      item.source_type === provenance.source_type &&
+      item.source_id === provenance.source_id,
+  );
+  return {
+    ...context,
+    source_imports: exists ? current : [...current, provenance],
+  };
+}

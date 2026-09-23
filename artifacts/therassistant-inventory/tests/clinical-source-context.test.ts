@@ -3,9 +3,11 @@ import assert from "node:assert/strict";
 
 import {
   appendClinicalSource,
+  buildClinicalSourceProvenance,
   buildJournalNoteInsert,
   buildPreVisitNoteInsert,
   latestSharedJournalEntry,
+  withClinicalSourceImport,
 } from "../src/domains/encounters/clinical-source-context.ts";
 
 test("only submitted provider-shared journal entries are eligible for clinical import", () => {
@@ -73,4 +75,22 @@ test("clinical source append does not duplicate the same patient-provided block"
 
   assert.equal(twice, once);
   assert.match(once, /Provider note\n\nPATIENT-REPORTED/);
+});
+
+test("patient narrative provenance is recorded once per imported source", () => {
+  const provenance = buildClinicalSourceProvenance("journal_entry", {
+    id: "journal-1",
+    entry_date: "2026-09-23",
+  });
+  assert.deepEqual(provenance, {
+    source_type: "journal_entry",
+    source_id: "journal-1",
+    source_date: "2026-09-23",
+    patient_authored: true,
+  });
+
+  const once = withClinicalSourceImport({}, provenance);
+  const twice = withClinicalSourceImport(once, provenance);
+  assert.equal(Array.isArray(twice.source_imports), true);
+  assert.equal((twice.source_imports as unknown[]).length, 1);
 });

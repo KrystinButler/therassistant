@@ -1,3 +1,9 @@
+import {
+  normalizeClinicalTags,
+  normalizeDocumentationTemplate,
+  type ClinicalTagId,
+  type DocumentationTemplate,
+} from "./clinical-context";
 import type { Row } from "../../lib/tenant-data-client";
 
 export type SmartPhraseScope = "built_in" | "user" | "practice";
@@ -15,6 +21,8 @@ export type PatientResponse = "" | "engaged" | "receptive" | "mixed" | "limited"
 export type RiskSelection = "" | "denies_si_hi" | "passive_si_no_plan" | "safety_plan_reviewed";
 
 export type StructuredSelections = {
+  templateType: DocumentationTemplate;
+  clinicalTags: ClinicalTagId[];
   anxiety: Severity;
   depression: Severity;
   interventions: string[];
@@ -65,7 +73,15 @@ export const DEFAULT_SMART_PHRASES: SmartPhrase[] = [
 ];
 
 export function emptyStructuredSelections(): StructuredSelections {
-  return { anxiety: "", depression: "", interventions: [], response: "", risk: "" };
+  return {
+    templateType: "standard_therapy",
+    clinicalTags: [],
+    anxiety: "",
+    depression: "",
+    interventions: [],
+    response: "",
+    risk: "",
+  };
 }
 
 export function normalizeStructuredSelections(value: unknown): StructuredSelections {
@@ -78,6 +94,8 @@ export function normalizeStructuredSelections(value: unknown): StructuredSelecti
   const response = String(source.response ?? "");
   const risk = String(source.risk ?? "");
   return {
+    templateType: normalizeDocumentationTemplate(source.templateType ?? source.template_type),
+    clinicalTags: normalizeClinicalTags(source.clinicalTags ?? source.clinical_tags),
     anxiety: validSeverity.has(anxiety) ? anxiety as Severity : "",
     depression: validSeverity.has(depression) ? depression as Severity : "",
     interventions: Array.isArray(source.interventions) ? source.interventions.map(String) : [],
