@@ -16,7 +16,7 @@ const archiveRepository = readFileSync(
   "utf8",
 );
 const reportsPage = readFileSync(
-  join(here, "../src/pages/operational-workspaces.tsx"),
+  join(here, "../src/pages/ReportsPage.tsx"),
   "utf8",
 );
 
