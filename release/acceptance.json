@@ -1,0 +1,134 @@
+{
+  "schema_version": 2,
+  "bundle_id": "pilot-acceptance-isolation-2026-09-23",
+  "release_closed": false,
+  "data_policy": {
+    "synthetic_test_scope": "isolated_local_supabase_only",
+    "production_test_data_created": false,
+    "identity_scope": "distinct synthetic staff, provider, and patient Auth identities"
+  },
+  "production_baseline": {
+    "commit": "e4bba95108cf0b5894e74928276f0879a38f819c",
+    "deployment_id": "dpl_GHwfjJyyEVQoDXzqewhdg77i4nsd",
+    "deployment_state": "READY",
+    "supabase_project_id": "lpjwfdvaxobewxcklenl",
+    "github_migration_count": 135,
+    "database_migration_count": 135,
+    "migration_drift": 0
+  },
+  "requirements": [
+    {
+      "id": "6.1-distinct-identity-and-isolation",
+      "implemented": true,
+      "verified": true,
+      "configured": true,
+      "deployed": true,
+      "closed": true,
+      "evidence": [
+        "Production RLS already scopes canonical patient and appointment tables through private.has_tenant_read_access/private.has_tenant_write_access.",
+        "Required CI now uses distinct staff, clinician, and patient identities against a clean isolated replay of the production migration chain.",
+        "The gate proves staff/clinician own-tenant visibility, cross-tenant patient read/write denial, patient direct-table denial, linked-patient portal resolution, and same-tenant/cross-tenant appointment denial."
+      ]
+    },
+    {
+      "id": "6.1-full-system-role-matrix",
+      "implemented": false,
+      "verified": false,
+      "configured": false,
+      "deployed": false,
+      "closed": false,
+      "evidence": [
+        "The database defines 10 system roles: platform_admin, practice_admin, billing_company_admin, billing_manager, biller, clinician, front_desk, credentialing_specialist, read_only, and client.",
+        "This bundle intentionally validates the three identities required for the connected pilot path; the remaining role-by-role matrix is a separate acceptance item."
+      ]
+    },
+    {
+      "id": "6.2-connected-workflow-persistence-and-retry",
+      "implemented": true,
+      "verified": true,
+      "configured": true,
+      "deployed": true,
+      "closed": true,
+      "evidence": [
+        "Production CI run 35919734201 passed isolated patient portal lifecycle, browser E2E, insured revenue-cycle completion, and clinical-to-charge verification.",
+        "Portal acceptance covers activation, check-in, journaling, revoke/restore, recovery, and distinct patient/staff identities.",
+        "Insured acceptance verifies claim archive/acknowledgement, payment posting, reconciliation, and retry-safe behavior without production test data."
+      ]
+    },
+    {
+      "id": "6.2-obsolete-workflow-cleanup",
+      "implemented": true,
+      "verified": true,
+      "configured": true,
+      "deployed": true,
+      "closed": true,
+      "evidence": [
+        "Mailroom and Medicaid are absent from current EHR navigation, and Authorizations is not an active EHR module.",
+        "PR #98 removed the legacy catch-all operational-workspaces module and retained a canonical Reports page.",
+        "Production deployment dpl_GHwfjJyyEVQoDXzqewhdg77i4nsd is READY and no runtime errors were observed after deployment."
+      ]
+    },
+    {
+      "id": "6.2-management-report-live-acceptance",
+      "implemented": true,
+      "verified": false,
+      "configured": true,
+      "deployed": true,
+      "closed": false,
+      "evidence": [
+        "The canonical Reports page reconciles A/R to claim_balance_summaries and surfaces claims missing balance summaries.",
+        "Repository reconciliation tests and Production CI pass; an authenticated live-production review of the management report has not yet been recorded."
+      ]
+    },
+    {
+      "id": "6.2-database-restore-drill",
+      "implemented": true,
+      "verified": false,
+      "configured": false,
+      "deployed": false,
+      "closed": false,
+      "evidence": [
+        "The restore procedure is documented in docs/release/pilot-release-acceptance.md.",
+        "A disposable Supabase branch or duplicate project has not been created because branch creation can incur cost and requires explicit cost confirmation.",
+        "No destructive restore will be run against production as an acceptance test."
+      ]
+    },
+    {
+      "id": "6.3-evidence-state-tracking",
+      "implemented": true,
+      "verified": true,
+      "configured": true,
+      "deployed": true,
+      "closed": true,
+      "evidence": [
+        "release/acceptance.json tracks implemented, verified, configured, deployed, and closed independently.",
+        "scripts/verify-release-acceptance.mjs rejects unsupported closure, missing evidence, migration drift, or production synthetic-test scope.",
+        "Production CI runs the evidence integrity gate before release build and E2E acceptance."
+      ]
+    },
+    {
+      "id": "6.4-one-preview-one-production-protocol",
+      "implemented": true,
+      "verified": true,
+      "configured": true,
+      "deployed": true,
+      "closed": true,
+      "evidence": [
+        "The previous accepted cleanup bundle used one preview deployment dpl_7AczSsouRPk2Txw1up8a2oJYv7hZ and one production deployment dpl_GHwfjJyyEVQoDXzqewhdg77i4nsd.",
+        "This candidate is assembled as one commit before its branch is created so intermediate edits do not create extra previews."
+      ]
+    },
+    {
+      "id": "SEC-1-leaked-password-protection",
+      "implemented": false,
+      "verified": true,
+      "configured": false,
+      "deployed": false,
+      "closed": false,
+      "evidence": [
+        "Supabase security advisor reports leaked password protection is disabled.",
+        "Remediation: https://supabase.com/docs/guides/auth/password-security#password-strength-and-leaked-password-protection"
+      ]
+    }
+  ]
+}

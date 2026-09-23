@@ -33,6 +33,9 @@ jobs:
       - name: Tests
         run: pnpm --filter ./scripts exec tsx --test ../artifacts/therassistant-inventory/tests/**/*.test.ts
 
+      - name: Release acceptance evidence integrity
+        run: pnpm verify:release-acceptance
+
       - name: Production auth contract
         run: node scripts/check-production-auth.mjs
 
@@ -152,6 +155,9 @@ jobs:
 
       - name: Seed isolated synthetic E2E data
         run: node scripts/provision-synthetic-e2e-identities.mjs
+
+      - name: Verify isolated staff, provider, and patient boundaries
+        run: node scripts/verify-synthetic-isolation.mjs
 
       - name: Verify isolated patient portal lifecycle
         run: node scripts/test-synthetic-patient-portal-lifecycle.mjs
