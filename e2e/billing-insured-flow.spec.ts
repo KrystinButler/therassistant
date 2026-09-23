@@ -30,11 +30,20 @@ async function answerDialogs(
 
 test("staff creates, archives, records and accepts the synthetic insured claim", async ({ page }) => {
   const validationResponses: string[] = [];
+  const archiveResponses: string[] = [];
   page.on("response", async (response) => {
-    if (!response.url().includes("/rest/v1/rpc/rcm_validate_claim")) return;
+    const url = response.url();
+    const isValidation = url.includes("/rest/v1/rpc/rcm_validate_claim");
+    const isArchive =
+      url.includes("/rest/v1/rpc/prepare_claim_edi_artifact") ||
+      url.includes("/rest/v1/rpc/finalize_claim_edi_artifact") ||
+      url.includes("/storage/v1/");
+    if (!isValidation && !isArchive) return;
     let body = "";
-    try { body = await response.text(); } catch { body = "<unreadable>"; }
-    validationResponses.push(`${response.status()} ${body}`);
+    try { body = await response.text(); } catch { body = "<binary-or-unreadable>"; }
+    const line = `${response.status()} ${url} ${body.slice(0, 1200)}`;
+    if (isValidation) validationResponses.push(line);
+    if (isArchive) archiveResponses.push(line);
   });
 
   await page.goto("/billing/charges");
@@ -73,7 +82,15 @@ test("staff creates, archives, records and accepts the synthetic insured claim",
   const archiveButton = page.getByRole("button", { name: "Archive & Download 837P" });
   await expect(archiveButton).toBeEnabled({ timeout: 15_000 });
   await archiveButton.click();
-  await expect(page.getByText(/837P archived and verified/)).toBeVisible({ timeout: 15_000 });
+  const archiveSuccess = page.getByText(/837P archived and verified/);
+  await expect.poll(async () => {
+    if (await archiveSuccess.isVisible().catch(() => false)) return "archived";
+    const error = page.locator(".thera-state.error").first();
+    if (await error.isVisible().catch(() => false)) {
+      return `archive-error: ${await error.innerText()} | responses=${archiveResponses.join(" || ")}`;
+    }
+    return "pending";
+  }, { timeout: 15_000 }).toBe("archived");
   await expect(page.getByRole("button", { name: "Download Archived 837P" })).toBeVisible({ timeout: 15_000 });
 
   const submissionButton = page.getByRole("button", { name: "Record External Submission" });
