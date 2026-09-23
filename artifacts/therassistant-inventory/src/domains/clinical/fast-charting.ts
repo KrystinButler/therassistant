@@ -111,7 +111,7 @@ export function normalizeStructuredSelections(value: unknown): StructuredSelecti
         const time = String(row.time ?? "").trim();
         const label = String(row.label ?? "").trim();
         const detail = String(row.detail ?? "").trim();
-        if (!/^([01]\\d|2[0-3]):[0-5]\\d$/.test(time) || !label) return [];
+        if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(time) || !label) return [];
         return [{ time, label: label.slice(0, 120), detail: detail.slice(0, 500) }];
       })
     : [];
