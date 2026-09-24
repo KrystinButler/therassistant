@@ -45,7 +45,7 @@ async function getBillingContext(encounterId: string): Promise<BillingReadinessI
   );
   if (!encounter) throw new Error("Encounter not found.");
 
-  const [clients, notes, diagnoses, serviceLines, eligibilityRows, enrollmentRows] = await Promise.all([
+  const [clients, notes, diagnoses, serviceLines, eligibilityRows, enrollmentRows, providerRows, appointmentRows] = await Promise.all([
     tenantSelect<DataRow>("clients", { id: `eq.${String(encounter.client_id)}`, limit: "1" }),
     tenantSelect<DataRow>("clinical_notes", { encounter_id: `eq.${encounterId}`, order: "created_at.desc", limit: "1" }),
     tenantSelect<DataRow>("encounter_diagnoses", { encounter_id: `eq.${encounterId}`, order: "sequence_number.asc" }),
@@ -63,6 +63,12 @@ async function getBillingContext(encounterId: string): Promise<BillingReadinessI
           order: "created_at.desc",
           limit: "1",
         })
+      : Promise.resolve([]),
+    encounter.provider_id
+      ? tenantSelect<DataRow>("providers", { id: `eq.${String(encounter.provider_id)}`, limit: "1" })
+      : Promise.resolve([]),
+    encounter.appointment_id
+      ? tenantSelect<DataRow>("appointments", { id: `eq.${String(encounter.appointment_id)}`, limit: "1" })
       : Promise.resolve([]),
   ]);
 
@@ -86,6 +92,15 @@ async function getBillingContext(encounterId: string): Promise<BillingReadinessI
     providerEnrollmentStatus: first(enrollmentRows)
       ? String(first(enrollmentRows)?.enrollment_status ?? "unknown")
       : null,
+    providerEnrollmentEffectiveDate: first(enrollmentRows)?.effective_date
+      ? String(first(enrollmentRows)?.effective_date)
+      : null,
+    providerEnrollmentTerminationDate: first(enrollmentRows)?.termination_date
+      ? String(first(enrollmentRows)?.termination_date)
+      : null,
+    provider: first(providerRows),
+    providerRecordChecked: true,
+    appointment: first(appointmentRows),
   };
 }
 
