@@ -14,6 +14,7 @@ import {
 import { buildCms1500PreviewHtml } from "./cms1500-preview";
 import { getPrivatePaySuperbillData } from "./superbill-repository";
 import { buildSuperbillHtml } from "./superbill";
+import { billingCorrectionLink, billingCorrectionLinks, type BillingCorrectionLink } from "./billing-correction-links";
 import { getClaimPreviewData } from "./claim-output-repository";
 import { archiveBatch837PArtifact } from "./claim-artifact-repository";
 import {
@@ -32,11 +33,13 @@ export function BillingQueuePage() {
   const [loading, setLoading] = useState(true);
   const [savingId, setSavingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [correctionLinks, setCorrectionLinks] = useState<BillingCorrectionLink[]>([]);
   const [message, setMessage] = useState<string | null>(null);
 
   async function load() {
     setLoading(true);
     setError(null);
+    setCorrectionLinks([]);
     try {
       const [billing, claims] = await Promise.all([
         getBillingQueueData(),
@@ -96,10 +99,13 @@ export function BillingQueuePage() {
   async function runEncounterAction(id: string, action: "audit" | "charge") {
     setSavingId(id);
     setError(null);
+    setCorrectionLinks([]);
     setMessage(null);
     try {
       const result = await createChargeFromEncounter(id);
       if (!result.ok) {
+        const encounter = data?.billing.encounters.find((row) => row.id === id);
+        setCorrectionLinks(billingCorrectionLinks([...(encounter?.blockingChecks ?? []), { message: result.message }, ...(result.details ?? []).map((message) => ({ message }))], id, String(encounter?.client_id ?? "")));
         setError(result.details?.length ? `${result.message} ${result.details.join(" ")}` : result.message);
         return;
       }
@@ -128,6 +134,7 @@ export function BillingQueuePage() {
     setMessage(null);
     let created = 0;
     const failures: string[] = [];
+    const batchCorrectionLinks: BillingCorrectionLink[] = [];
     try {
       // Process serially so each encounter is independently validated and failures
       // do not create duplicate charges or stop the remaining selected work.
@@ -135,14 +142,20 @@ export function BillingQueuePage() {
         try {
           const result = await createChargeFromEncounter(row.id);
           if (result.ok) created += 1;
-          else failures.push(`${row.clientName}: ${result.message}`);
+          else {
+            failures.push(`${row.clientName}: ${result.message}`);
+            batchCorrectionLinks.push(...billingCorrectionLinks([...row.blockingChecks, { message: result.message }], row.id, String(row.client_id ?? "")));
+          }
         } catch (err) {
           failures.push(`${row.clientName}: ${err instanceof Error ? err.message : "Unable to create charge."}`);
         }
       }
       await load();
       setMessage(`${created} of ${eligible.length} selected encounters had charges created.`);
-      if (failures.length) setError(`${failures.length} encounter(s) require review: ${failures.join(" · ")}`);
+      if (failures.length) {
+        setError(`${failures.length} encounter(s) require review: ${failures.join(" · ")}`);
+        setCorrectionLinks([...new Map(batchCorrectionLinks.map((link) => [link.href, link])).values()]);
+      }
     } finally {
       setSavingId(null);
     }
@@ -165,6 +178,8 @@ export function BillingQueuePage() {
     try {
       const created = await createClaimFromCharges(chargeIds);
       if (!created.ok) {
+        const encounter = data.billing.encounters.find((row) => row.id === encounterId);
+        setCorrectionLinks(billingCorrectionLinks([{ message: created.message }, ...(created.details ?? []).map((message) => ({ message }))], encounterId, String(encounter?.client_id ?? "")));
         setError(created.details?.length ? `${created.message} ${created.details.join(" ")}` : created.message);
         return;
       }
@@ -186,6 +201,7 @@ export function BillingQueuePage() {
       }
       setTab("unbatched");
       await load();
+      if (!validation.ok) setCorrectionLinks([{ href: "/rejections?claim=" + encodeURIComponent(claimId), label: "Correct this claim in Rejections" }]);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unable to create claim.");
     } finally {
@@ -205,6 +221,7 @@ export function BillingQueuePage() {
         setMessage("Claim scrub passed and the claim is ready to batch.");
       }
       await load();
+      if (!result.ok) setCorrectionLinks([{ href: "/rejections?claim=" + encodeURIComponent(claimId), label: "Open this claim’s editable fields" }]);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unable to validate claim.");
     } finally {
@@ -431,8 +448,8 @@ export function BillingQueuePage() {
         <Tab active={tab === "submitted"} onClick={() => setTab("submitted")} label={`Submitted / Responses (${groups.submittedBatches.length})`} />
       </div>
 
-      {error && <div className="thera-state error" style={{ marginBottom: 12 }}>{error}</div>}
-      {message && <div className="thera-alert" style={{ marginBottom: 12 }}>{message}</div>}
+      {error && <div className="thera-state error" style={{ marginBottom: 12 }}>{error}{correctionLinks.length > 0 && <BillingCorrectionActions links={correctionLinks} />}</div>}
+      {message && <div className="thera-alert" style={{ marginBottom: 12 }}>{message}{!error && correctionLinks.length > 0 && <BillingCorrectionActions links={correctionLinks} />}</div>}
       {loading && <div className="thera-state">Loading Charges...</div>}
 
       {!loading && data && tab === "ready" && (
@@ -516,6 +533,12 @@ export function BillingQueuePage() {
   );
 }
 
+function BillingCorrectionActions({ links }: { links: BillingCorrectionLink[] }) {
+  return <div className="thera-filter-row" role="group" aria-label="Correct source fields" style={{ marginTop: 9, flexWrap: "wrap", gap: 6 }}>
+    {links.map((link) => <Link className="thera-action secondary" key={link.href} href={link.href}>{link.label} →</Link>)}
+  </div>;
+}
+
 function Tab({ active, label, title, onClick }: { active: boolean; label: string; title?: string; onClick: () => void }) {
   return <button type="button" className={active ? "thera-tab active" : "thera-tab"} title={title} onClick={onClick}>{label}</button>;
 }
@@ -578,7 +601,7 @@ function EncounterTable({
                 <td>{row.payerName}</td>
                 <td><StatusBadge value={String(row.encounter_status)} /></td>
                 <td><StatusBadge value={String(row.billing_status)} /></td>
-                <td>{row.blockingChecks.length ? <><StatusBadge value="blocked" /><div className="thera-table-subtext">{row.blockingChecks.map((check) => String(check.message)).join(" · ")}</div></> : "—"}</td>
+                <td>{row.blockingChecks.length ? <><StatusBadge value="blocked" /><div className="thera-table-subtext">{row.blockingChecks.map((check, index) => { const link = billingCorrectionLink(check, row.id, String(row.client_id ?? "")); return <div key={String(check.id ?? index)} style={{ marginTop: 4 }}>{String(check.message)} {link && <Link className="thera-link" href={link.href}>{link.label} →</Link>}</div>; })}</div></> : "—"}</td>
                 <td>{row.advisoryChecks.length ? <><StatusBadge value="needs_review" /><div className="thera-table-subtext">{row.advisoryChecks.map((check) => String(check.message)).join(" · ")}</div></> : "—"}</td>
                 <td><div className="thera-filter-row"><Link className="thera-action secondary" href={`/encounters/${row.id}`}>Open Encounter</Link><button type="button" className="thera-action secondary" disabled={Boolean(savingId)} onClick={() => onAudit(row.id)}>Run Audit</button>{canCharge && <button type="button" className="thera-action" disabled={Boolean(savingId)} onClick={() => onCharge(row.id)}>Create Charge</button>}</div></td>
               </tr>;

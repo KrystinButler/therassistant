@@ -164,6 +164,15 @@ export function RejectionsPage() {
   }, [categories, category]);
 
   const visible = payerItems.filter((item) => !category || item.categories.includes(category));
+  useEffect(() => {
+    const requested = new URLSearchParams(window.location.search).get("claim");
+    if (!requested) return;
+    const selected = items.find((item) => item.claim.id === requested);
+    if (!selected) return;
+    setPayerId(String(selected.claim.payer_id ?? "unassigned"));
+    setCategory(selected.categories[0] ?? "");
+    setActiveClaimId(selected.claim.id);
+  }, [items]);
   const activeIndex = visible.findIndex((item) => item.claim.id === activeClaimId);
   const activeItem = activeIndex >= 0 ? visible[activeIndex] : null;
 
@@ -255,6 +264,8 @@ export function RejectionsPage() {
         onOpenChange={(open) => {
           if (!open) {
             setActiveClaimId(null);
+            const url = new URL(window.location.href);
+            if (url.searchParams.has("claim")) { url.searchParams.delete("claim"); window.history.replaceState(null, "", url.pathname + url.search + url.hash); }
             void load();
           }
         }}

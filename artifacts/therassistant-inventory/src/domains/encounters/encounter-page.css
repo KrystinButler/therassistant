@@ -637,3 +637,7 @@
   .encounter-editor-surface .encounter-note-editor{min-height:300px;font-size:.86rem}
   .encounter-editor-footer{padding:10px}
 }
+
+/* Highlight editable encounter sections opened from charge-validation correction links. */
+#encounter-signature,#encounter-diagnoses,#encounter-coding-service,#encounter-billing-source,#encounter-session-time,#encounter-progress-note-editor{scroll-margin-top:85px}
+#encounter-signature:target,#encounter-diagnoses:target,#encounter-coding-service:target,#encounter-billing-source:target{outline:2px solid var(--thera-sage);outline-offset:3px}
