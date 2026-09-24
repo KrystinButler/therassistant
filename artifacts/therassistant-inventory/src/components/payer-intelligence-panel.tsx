@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 
 import { shortDate } from "../lib/format";
-import { tenantSelect, type Row } from "../lib/tenant-data-client";
+import { referenceSelect, tenantSelect, type Row } from "../lib/tenant-data-client";
+import { getColoradoReferenceResources } from "../domains/credentialing/colorado-payer-reference";
 import { StatusBadge } from "./status-badge";
 
 export type PayerIntelligenceContext =
@@ -106,19 +107,26 @@ export function PayerIntelligencePanel({
     setLoading(true);
     setError(null);
 
-    void tenantSelect<PayerResource>("payer_resources", {
-      payer_id: `eq.${payerId}`,
-      order: "sort_order.asc,resource_type.asc,created_at.asc",
-    })
-      .then((rows) => {
+    void Promise.all([
+      tenantSelect<PayerResource>("payer_resources", {
+        payer_id: `eq.${payerId}`,
+        order: "sort_order.asc,resource_type.asc,created_at.asc",
+      }),
+      referenceSelect<{ id: string; name: string }>("payers", { id: `eq.${payerId}`, limit: "1" }),
+    ])
+      .then(([rows, payerRows]) => {
         if (!active) return;
         const allowed = new Set(resourceTypesByContext[context]);
-        setResources(rows.filter((row) => {
+        const applies = (row: PayerResource) => {
           if (!allowed.has(String(row.resource_type || ""))) return false;
-          const resourcePlanId = row.payer_plan_id ? String(row.payer_plan_id) : null;
-          if (!payerPlanId) return resourcePlanId === null;
-          return resourcePlanId === null || resourcePlanId === payerPlanId;
-        }));
+          const planId = row.payer_plan_id ? String(row.payer_plan_id) : null;
+          return payerPlanId ? planId === null || planId === payerPlanId : planId === null;
+        };
+        const saved = rows.filter(applies);
+        const defaults = getColoradoReferenceResources(payerId, String(payerRows[0]?.name ?? ""))
+          .filter((row) => applies(row as PayerResource))
+          .filter((item) => !saved.some((row) => row.resource_type === item.resource_type && String(row.url ?? "") === item.url));
+        setResources([...saved, ...defaults]);
       })
       .catch((err: unknown) => {
         if (!active) return;
@@ -181,7 +189,7 @@ export function PayerIntelligencePanel({
           {error ? <div className="thera-state error">{error}</div> : null}
           {!loading && !error && resources.length === 0 ? (
             <div className="thera-state">
-              No matching payer instructions have been captured yet. Add them once in Payer 360 and they will appear here automatically.
+              No reviewed Colorado reference is available for this exact payer or product. Escalate the missing central reference rather than entering unverified rules.
             </div>
           ) : null}
           {!loading && resources.length > 0 ? (

@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link, useRoute } from "wouter";
 import { StatusBadge } from "../components/status-badge";
 import { buildPayer360View } from "../domains/credentialing/payer-360";
+import { getColoradoReferenceResources } from "../domains/credentialing/colorado-payer-reference";
 import { parsePayerRuleConfig } from "../domains/billing/payer-billing-rules";
 import { tenantInsert, tenantSelect, tenantUpdate, referenceSelect } from "../lib/tenant-data-client";
 import { money, shortDate } from "../lib/format";
@@ -174,6 +175,8 @@ export function PayerDetailPage() {
   if (!view) return <div className="thera-state error">Payer not found.</div>;
 
   const schedules = view.contracts.flatMap((contract) => contract.feeSchedules);
+  const bundledReferences = getColoradoReferenceResources(payerId, String(view.payer.name));
+  const displayResources: Row[] = [...resources, ...bundledReferences.filter((item) => !resources.some((row) => row.resource_type === item.resource_type && String(row.url ?? "") === item.url))];
 
   return (
     <>
@@ -196,7 +199,7 @@ export function PayerDetailPage() {
       {error && <div className="thera-state error">{error}</div>}
 
       <div className="thera-metric-grid">
-        <div className="thera-metric-card"><div className="thera-metric-label">Resources</div><div className="thera-metric-value">{resources.length}</div></div>
+        <div className="thera-metric-card"><div className="thera-metric-label">Resources</div><div className="thera-metric-value">{displayResources.length}</div></div>
         <div className="thera-metric-card"><div className="thera-metric-label">Plans</div><div className="thera-metric-value">{view.plans.length}</div></div>
         <div className="thera-metric-card"><div className="thera-metric-label">Enrolled Providers</div><div className="thera-metric-value">{view.enrolledProviders.length}</div></div>
         <div className="thera-metric-card"><div className="thera-metric-label">Contracts</div><div className="thera-metric-value">{view.contracts.length}</div></div>
@@ -228,19 +231,19 @@ export function PayerDetailPage() {
           <div className="thera-card-header">
             <div>
               <div className="thera-eyebrow">SHARED PAYER KNOWLEDGE</div>
-              <h2>Operational Resources</h2>
+              <h2>Operational Resources & Colorado References</h2>
               <p>Contacts, portals, addresses, filing rules, credentialing links, directories, and payer-specific guidance reused across THERASSISTANT.</p>
             </div>
             <button type="button" className="thera-action secondary" onClick={() => open("resource", { resource_type: "provider_services", label: "", value: "", url: "", source_url: "", notes: "", effective_date: "", expiration_date: "", payer_plan_id: "", reviewed_at: new Date().toISOString().slice(0, 10), review_due_at: "", verification_status: "unverified" })}>+ Resource</button>
           </div>
-          {resources.length === 0 ? (
+          {displayResources.length === 0 ? (
             <div className="thera-empty">No payer resources have been captured yet.</div>
           ) : (
             <div className="thera-table-wrap">
               <table className="thera-table">
                 <thead><tr><th>Area</th><th>Plan</th><th>Resource</th><th>Value / Link</th><th>Operational Notes</th><th>Verification</th><th>Reviewed</th><th>Next Review</th><th>Effective</th><th>Expires</th><th>Source</th><th /></tr></thead>
                 <tbody>
-                  {resources.map((resource) => (
+                  {displayResources.map((resource) => (
                     <tr key={resource.id}>
                       <td><StatusBadge value={resourceLabel(String(resource.resource_type ?? "other"))} /></td>
                       <td>{view.plans.find((plan) => plan.id === resource.payer_plan_id)?.name || "All payer plans"}</td>
@@ -255,7 +258,7 @@ export function PayerDetailPage() {
                       <td>{shortDate(resource.effective_date)}</td>
                       <td>{shortDate(resource.expiration_date)}</td>
                       <td>{resource.source_url ? <a className="thera-link" href={String(resource.source_url)} target="_blank" rel="noreferrer">Source</a> : "—"}</td>
-                      <td><button type="button" className="thera-action secondary" onClick={() => open(resource.resource_type === "billing_rule" ? "billing_rule" : "resource", {
+                      <td>{String(resource.id).startsWith("co-reference:") ? <span className="thera-table-subtext">Preloaded reference</span> : <button type="button" className="thera-action secondary" onClick={() => open(resource.resource_type === "billing_rule" ? "billing_rule" : "resource", {
                         id: String(resource.id),
                         procedure_code: String(resource.rule_config?.procedure_code ?? ""),
                         max_units: String(resource.rule_config?.max_units ?? ""),
@@ -273,7 +276,7 @@ export function PayerDetailPage() {
                         reviewed_at: String(resource.reviewed_at ?? "").slice(0, 10),
                         review_due_at: String(resource.review_due_at ?? "").slice(0, 10),
                         verification_status: String(resource.verification_status ?? "unverified"),
-                      })}>Edit</button></td>
+                      })}>Edit</button>}</td>
                     </tr>
                   ))}
                 </tbody>
