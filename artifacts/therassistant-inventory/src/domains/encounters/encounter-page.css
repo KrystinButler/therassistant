@@ -656,3 +656,16 @@
 .encounter-sign-guidance span{font-size:.71rem;color:var(--thera-muted);flex:1;min-width:180px}
 .encounter-sign-guidance .thera-action{white-space:nowrap}
 .encounter-sign-block .encounter-sign-row{margin-top:0}
+
+/* Scheduled psychotherapy time is calculated automatically; corrections stay optional. */
+.encounter-scheduled-time{display:grid;gap:8px;min-width:0;padding:11px 12px;border:1px solid #d4e4d8;border-radius:8px;background:#f1f7f1}
+.encounter-time-summary{display:grid;gap:5px;min-width:0}
+.encounter-time-summary strong{display:block;color:var(--thera-navy);font-size:1rem;letter-spacing:-.02em}
+.encounter-time-summary>span{font-size:.66rem;color:var(--thera-sage-dark)}
+.encounter-scheduled-time>button{justify-self:start;font-size:.68rem}
+.encounter-scheduled-time>small{font-size:.63rem;color:var(--thera-muted);line-height:1.4}
+.encounter-time-adjustment{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;padding-top:8px;border-top:1px solid var(--thera-border)}
+.encounter-time-adjustment label{display:grid;gap:4px;font-size:.68rem;font-weight:650;color:var(--thera-navy)}
+.encounter-time-adjustment>span{grid-column:1/-1;font-size:.65rem;color:var(--thera-muted)}
+.encounter-time-adjustment>button{grid-column:1/-1;justify-self:start}
+@media(max-width:600px){.encounter-scheduled-time{padding:10px}.encounter-time-adjustment{grid-template-columns:minmax(0,1fr)}}

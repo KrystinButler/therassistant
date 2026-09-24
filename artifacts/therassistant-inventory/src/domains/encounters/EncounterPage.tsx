@@ -41,6 +41,7 @@ import {
   withClinicalSourceImport,
 } from "./clinical-source-context";
 import { getEncounterDetail, updateEncounter } from "./repository";
+import { scheduledSessionTime } from "./scheduled-session-time";
 import "./encounter-page.css";
 
 type EncounterDetail = Awaited<ReturnType<typeof getEncounterDetail>>;
@@ -80,10 +81,7 @@ function defaultPos(location?: string | null) {
 }
 
 function appointmentDuration(appointment?: Record<string, any> | null) {
-  const start = new Date(String(appointment?.starts_at ?? "")).getTime();
-  const end = new Date(String(appointment?.ends_at ?? "")).getTime();
-  if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) return 0;
-  return Math.round((end - start) / 60000);
+  return scheduledSessionTime(appointment)?.minutes ?? 0;
 }
 
 function displayText(row: Record<string, any> | null | undefined, keys: string[], fallback = "—") {
@@ -113,6 +111,7 @@ export function EncounterPage() {
   const [noteType, setNoteType] = useState("psychotherapy");
   const [psychStart, setPsychStart] = useState("");
   const [psychStop, setPsychStop] = useState("");
+  const [showTimeAdjustment, setShowTimeAdjustment] = useState(false);
   const [goalAddressed, setGoalAddressed] = useState("");
   const [diagnosisCode, setDiagnosisCode] = useState("");
   const [diagnosisDescription, setDiagnosisDescription] = useState("");
@@ -144,7 +143,15 @@ export function EncounterPage() {
       const note = result.notes[0];
       const fastCharting = await getFastChartingContext(String(result.encounter.client_id ?? ""), encounterId, note?.id ? String(note.id) : undefined);
       setSmartPhrases(fastCharting.phrases);
-      setStructuredSelections(fastCharting.current?.selections ?? emptyStructuredSelections());
+      const initialSelections = fastCharting.current?.selections ?? emptyStructuredSelections();
+      const plannedSession = scheduledSessionTime(result.appointment);
+      const noteIsSigned = ["signed", "locked", "amended"].includes(String(note?.note_status ?? ""));
+      setStructuredSelections(initialSelections.psychotherapyMinutes == null && plannedSession && !noteIsSigned
+        ? { ...initialSelections, psychotherapyMinutes: plannedSession.minutes }
+        : initialSelections);
+      setPsychStart(plannedSession?.start ?? "");
+      setPsychStop(plannedSession?.end ?? "");
+      setShowTimeAdjustment(false);
       setCarryForwardContext(fastCharting.current?.carryForwardContext ?? {});
       setPriorStructuredContext(fastCharting.prior);
       setNoteText(String(note?.note_text ?? ""));
@@ -416,7 +423,9 @@ export function EncounterPage() {
   const noteLayout = noteLayouts[noteType] ?? noteLayouts.other;
   const noteWordCount = noteText.trim() ? noteText.trim().split(/\s+/).length : 0;
   const noteHasUnsavedText = noteText !== String(note?.note_text ?? "");
-  const calculatedMinutes = sessionMinutes(psychStart, psychStop);
+  const scheduleTime = scheduledSessionTime(data.appointment);
+  const calculatedMinutes = structuredSelections.psychotherapyMinutes ?? scheduleTime?.minutes ?? null;
+  const minutesWereAdjusted = calculatedMinutes !== null && Boolean(scheduleTime) && calculatedMinutes !== scheduleTime?.minutes;
   function updateSessionTime(start: string, stop: string) {
     setPsychStart(start); setPsychStop(stop);
     setStructuredSelections((current) => ({ ...current, psychotherapyMinutes: sessionMinutes(start, stop) }));
@@ -608,7 +617,24 @@ export function EncounterPage() {
             {note && <StatusBadge value={String(note.note_status)} />}
           </div>
           <div className="encounter-note-controls">
-            {noteType === "psychotherapy" && <div className="encounter-session-time" id="encounter-session-time"><label>Psychotherapy start<input type="time" className="thera-input" value={psychStart} disabled={signed} onChange={(event) => updateSessionTime(event.target.value, psychStop)} /></label><label>Psychotherapy stop<input type="time" className="thera-input" value={psychStop} disabled={signed} onChange={(event) => updateSessionTime(psychStart, event.target.value)} /></label><span aria-live="polite">Actual psychotherapy: {calculatedMinutes === null ? "Enter start and stop" : calculatedMinutes + " minutes (calculated)"}</span></div>}
+            {noteType === "psychotherapy" && <div className="encounter-session-time encounter-scheduled-time" id="encounter-session-time">
+              <div className="encounter-time-summary">
+                <div><div className="thera-field-label">Psychotherapy time</div><strong aria-live="polite">{calculatedMinutes === null ? "Not recorded" : calculatedMinutes + " minutes"}</strong></div>
+                <span>{minutesWereAdjusted ? "Adjusted to documented actual time" : scheduleTime ? "Calculated automatically from scheduled visit" : "No scheduled time available"}</span>
+              </div>
+              {!signed && <button type="button" className="thera-action secondary" aria-expanded={showTimeAdjustment} aria-controls="encounter-time-adjustment"
+                onClick={() => setShowTimeAdjustment((open) => !open)}>{showTimeAdjustment ? "Hide time adjustment" : scheduleTime ? "Adjust if actual time differed" : "Enter actual session times"}</button>}
+              {showTimeAdjustment && !signed && <div className="encounter-time-adjustment" id="encounter-time-adjustment">
+                <label>Actual start<input type="time" className="thera-input" value={psychStart} onChange={(event) => updateSessionTime(event.target.value, psychStop)} /></label>
+                <label>Actual stop<input type="time" className="thera-input" value={psychStop} onChange={(event) => updateSessionTime(psychStart, event.target.value)} /></label>
+                <span>Duration recalculates when actual times change.</span>
+                {scheduleTime && <button type="button" className="thera-action secondary" onClick={() => {
+                  setPsychStart(scheduleTime.start); setPsychStop(scheduleTime.end);
+                  setStructuredSelections((current) => ({ ...current, psychotherapyMinutes: scheduleTime.minutes }));
+                }}>Reset to scheduled time</button>}
+              </div>}
+              {!signed && scheduleTime && <small>Confirm that the scheduled time reflects the psychotherapy actually delivered before signing.</small>}
+            </div>}
             <label><div className="thera-field-label">Note Type</div><select className="thera-input" value={noteType} disabled={signed} onChange={(event) => changeNoteType(event.target.value)}><option value="psychotherapy">Psychotherapy</option><option value="assessment">Assessment</option><option value="intake">Intake</option><option value="crisis">Crisis</option><option value="case_management">Case Management</option><option value="medication_management">Medication Management</option><option value="other">Other</option></select></label>
             <label><div className="thera-field-label">Treatment Plan — Goal / Objective</div><select className="thera-input" value={goalAddressed} disabled={signed} onChange={(event) => setGoalAddressed(event.target.value)}><option value="">Select a goal</option>{activeGoals.map((goal) => { const label = displayText(goal, ["goal_text", "description", "goal", "title"], "Goal"); return <option key={goal.id} value={label}>{label}</option>; })}{goalAddressed && !activeGoals.some((goal) => displayText(goal, ["goal_text", "description", "goal", "title"], "Goal") === goalAddressed) && <option value={goalAddressed}>{goalAddressed} (previous selection)</option>}</select>{activeGoals.length === 0 && <small>No linked treatment-plan goals. Add a goal in the patient's treatment plan.</small>}</label>
           </div>
