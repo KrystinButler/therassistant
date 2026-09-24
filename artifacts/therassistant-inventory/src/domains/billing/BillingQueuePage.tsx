@@ -111,6 +111,41 @@ export function BillingQueuePage() {
     }
   }
 
+  async function runBatchCreateCharges(ids: string[]) {
+    if (!data || !ids.length || savingId) return;
+    const eligible = groups.ready.filter((row) =>
+      ids.includes(row.id) && row.billing_status === "ready" &&
+      !row.blockingChecks.length && !(data.billing.chargesByEncounter.get(row.id)?.length),
+    );
+    if (!eligible.length) {
+      setError("Select encounters that are ready for billing and have no existing charges.");
+      return;
+    }
+    setSavingId("batch-charges");
+    setError(null);
+    setMessage(null);
+    let created = 0;
+    const failures: string[] = [];
+    try {
+      // Process serially so each encounter is independently validated and failures
+      // do not create duplicate charges or stop the remaining selected work.
+      for (const row of eligible) {
+        try {
+          const result = await createChargeFromEncounter(row.id);
+          if (result.ok) created += 1;
+          else failures.push(`${row.clientName}: ${result.message}`);
+        } catch (err) {
+          failures.push(`${row.clientName}: ${err instanceof Error ? err.message : "Unable to create charge."}`);
+        }
+      }
+      await load();
+      setMessage(`${created} of ${eligible.length} selected encounters had charges created.`);
+      if (failures.length) setError(`${failures.length} encounter(s) require review: ${failures.join(" · ")}`);
+    } finally {
+      setSavingId(null);
+    }
+  }
+
   async function runCreateClaim(encounterId: string) {
     if (!data) return;
     const chargeIds = (data.billing.chargesByEncounter.get(encounterId) ?? [])
@@ -381,6 +416,8 @@ export function BillingQueuePage() {
           savingId={savingId}
           onAudit={(id) => void runEncounterAction(id, "audit")}
           onCharge={(id) => void runEncounterAction(id, "charge")}
+          enableBatch
+          onBatchCharge={(ids) => void runBatchCreateCharges(ids)}
         />
       )}
 
@@ -461,24 +498,52 @@ function EncounterTable({
   savingId,
   onAudit,
   onCharge,
+  enableBatch = false,
+  onBatchCharge,
 }: {
   rows: BillingData["encounters"];
   data: BillingData;
   savingId: string | null;
   onAudit: (id: string) => void;
   onCharge: (id: string) => void;
+  enableBatch?: boolean;
+  onBatchCharge?: (ids: string[]) => void;
 }) {
-  if (!rows.length) return <section className="thera-card"><div className="thera-empty">No encounters in this queue.</div></section>;
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  useEffect(() => { setSelectedIds(new Set()); }, [rows, enableBatch]);
+  const eligible = rows.filter((row) =>
+    row.billing_status === "ready" && !row.blockingChecks.length &&
+    !(data.chargesByEncounter.get(row.id)?.length),
+  );
+  const eligibleIds = eligible.map((row) => row.id);
+  const selectedEligible = eligibleIds.filter((id) => selectedIds.has(id));
+  const allSelected = eligibleIds.length > 0 && selectedEligible.length === eligibleIds.length;
 
+  if (!rows.length) return <section className="thera-card"><div className="thera-empty">No encounters in this queue.</div></section>;
   return (
     <section className="thera-card">
+      {enableBatch && <div className="thera-card-header split">
+        <div><h2>Ready encounters</h2><p>Select eligible encounters to create charges in one operation. Held or already-charged visits cannot be selected.</p></div>
+        <button type="button" className="thera-action" disabled={!selectedEligible.length || Boolean(savingId)} onClick={() => onBatchCharge?.(selectedEligible)}>
+          {savingId === "batch-charges" ? "Creating charges..." : `Create selected charges (${selectedEligible.length})`}
+        </button>
+      </div>}
       <div className="thera-table-wrap">
         <table className="thera-table">
-          <thead><tr><th>DOS</th><th>Patient</th><th>Provider</th><th>Funding / Payer</th><th>Encounter</th><th>Billing</th><th>Blocking Issues</th><th>Advisories</th><th>Actions</th></tr></thead>
+          <thead><tr>
+            {enableBatch && <th><input type="checkbox" aria-label="Select all eligible encounters" checked={allSelected} disabled={!eligibleIds.length || Boolean(savingId)} onChange={(event) => setSelectedIds(event.target.checked ? new Set(eligibleIds) : new Set())} /></th>}
+            <th>DOS</th><th>Patient</th><th>Provider</th><th>Funding / Payer</th><th>Encounter</th><th>Billing</th><th>Blocking Issues</th><th>Advisories</th><th>Actions</th>
+          </tr></thead>
           <tbody>
             {rows.map((row) => {
               const charges = data.chargesByEncounter.get(row.id) ?? [];
+              const canCharge = row.billing_status === "ready" && !row.blockingChecks.length && !charges.length;
               return <tr key={row.id}>
+                {enableBatch && <td><input type="checkbox" aria-label={`Select ${row.clientName} encounter`} checked={canCharge && selectedIds.has(row.id)} disabled={!canCharge || Boolean(savingId)} onChange={(event) => setSelectedIds((current) => {
+                  const next = new Set(current);
+                  if (event.target.checked) next.add(row.id); else next.delete(row.id);
+                  return next;
+                })} /></td>}
                 <td>{shortDate(String(row.started_at ?? ""))}</td>
                 <td>{row.clientName}</td>
                 <td>{row.providerName}</td>
@@ -487,7 +552,7 @@ function EncounterTable({
                 <td><StatusBadge value={String(row.billing_status)} /></td>
                 <td>{row.blockingChecks.length ? <><StatusBadge value="blocked" /><div className="thera-table-subtext">{row.blockingChecks.map((check) => String(check.message)).join(" · ")}</div></> : "—"}</td>
                 <td>{row.advisoryChecks.length ? <><StatusBadge value="needs_review" /><div className="thera-table-subtext">{row.advisoryChecks.map((check) => String(check.message)).join(" · ")}</div></> : "—"}</td>
-                <td><div className="thera-filter-row"><Link className="thera-action secondary" href={`/encounters/${row.id}`}>Open Encounter</Link><button type="button" className="thera-action secondary" disabled={savingId === row.id} onClick={() => onAudit(row.id)}>Run Audit</button>{row.billing_status === "ready" && charges.length === 0 && <button type="button" className="thera-action" disabled={savingId === row.id} onClick={() => onCharge(row.id)}>Create Charge</button>}</div></td>
+                <td><div className="thera-filter-row"><Link className="thera-action secondary" href={`/encounters/${row.id}`}>Open Encounter</Link><button type="button" className="thera-action secondary" disabled={Boolean(savingId)} onClick={() => onAudit(row.id)}>Run Audit</button>{canCharge && <button type="button" className="thera-action" disabled={Boolean(savingId)} onClick={() => onCharge(row.id)}>Create Charge</button>}</div></td>
               </tr>;
             })}
           </tbody>
@@ -496,7 +561,6 @@ function EncounterTable({
     </section>
   );
 }
-
 
 function FundingCharges({
   rows,
