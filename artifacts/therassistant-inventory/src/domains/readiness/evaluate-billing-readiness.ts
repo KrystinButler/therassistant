@@ -1,4 +1,5 @@
 import type { ReadinessCheck } from "./types";
+import { evaluateFundingGuardrails } from "../billing/billing-guardrails";
 
 export type BillingReadinessInput = {
   encounter: Record<string, any>;
@@ -36,6 +37,7 @@ export function evaluateBillingReadiness(input: BillingReadinessInput): BillingR
     input.billingPath ||
     (input.billingType === "self_pay" ? "private_pay" : "insurance_claim");
   const insuranceClaim = billingPath === "insurance_claim";
+  checks.push(...evaluateFundingGuardrails(input));
 
   if (!input.note || !["signed", "locked"].includes(String(input.note.note_status))) {
     checks.push(result("note_unsigned", "Clinical Note", "fail", true, "The clinical note is not signed.", "Complete and sign the encounter note."));

@@ -134,13 +134,13 @@ export async function createChargeFromEncounterWorkflow(
     const blockingMessages = readiness.checks
       .filter((check) => check.blocking)
       .map((check) => check.message);
-    const chargeStatus = selfPay
-      ? "patient_responsibility"
-      : programBilling
-        ? "program_billing"
-        : readiness.ready
-          ? "ready_for_claim"
-          : "blocked";
+    const chargeStatus = !readiness.ready
+      ? "blocked"
+      : selfPay
+        ? "patient_responsibility"
+        : programBilling
+          ? "program_billing"
+          : "ready_for_claim";
     const blockReason = readiness.ready ? null : blockingMessages.join(" ");
 
     const primaryDiagnosis =
