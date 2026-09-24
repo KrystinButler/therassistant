@@ -72,7 +72,7 @@ export function evaluateServiceGuardrails(input: ServiceGuardrailInput): Readine
       "The selected provider record could not be confirmed in this billing review.",
       "Verify rendering provider identity, NPI, credentials, and applicable payer requirements.",
     ));
-  } else if (input.provider && !String(input.provider.npi ?? "").trim()) {
+  } else if (input.provider && !String(input.provider.individual_npi ?? input.provider.npi ?? "").trim()) {
     checks.push(check(
       "billing_provider_npi_missing", "Billing Provider", "warn", false,
       "The rendering provider record has no NPI available for review.",
@@ -90,6 +90,16 @@ export function evaluateServiceGuardrails(input: ServiceGuardrailInput): Readine
     const range = psychotherapyMinutes[code];
     if (!range) continue;
 
+    if (psychotherapyAddOns.has(code) && input.provider) {
+      const credentials = String(input.provider.credentials ?? "").toUpperCase();
+      if (/\\b(LPC|LCSW|LMFT|LAC|PSYD|PSYCHOLOGIST)\\b/.test(credentials)) {
+        checks.push(check(
+          `psychotherapy_em_provider_review_${i}`, "Psychotherapy / Provider Role", "warn", false,
+          `The recorded provider credentials (${credentials}) require review before using psychotherapy with an E/M add-on.`,
+          "Verify the rendering clinician's actual license, prescribing/E&M scope, and the applicable payer requirements; credentials alone are not a final eligibility determination.",
+        ));
+      }
+    }
     if (psychotherapyAddOns.has(code) && !hasEandM) {
       checks.push(check(
         `psychotherapy_em_missing_${i}`, "Psychotherapy / E&M", "fail", true,
