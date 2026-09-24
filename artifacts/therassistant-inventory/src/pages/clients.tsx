@@ -1,6 +1,7 @@
-import { useEffect, useMemo, useState } from "react";
+import { useContext, useEffect, useMemo, useState } from "react";
 import { Link, useLocation } from "wouter";
 import { StatusBadge } from "../components/status-badge";
+import { ClientSearchContext } from "../navigation/client-search-context";
 import { WorkDrawer } from "../components/work-drawer";
 import { createPatientWithOptionalPortal } from "../domains/patients/create-patient-with-portal";
 import { getPatientCreationPrerequisites, type PatientCreationPrerequisites } from "../domains/patients/setup-prerequisites";
@@ -317,7 +318,11 @@ function coveragePayload(plans: PayerPlanRow[], coverage: InsuranceForm, patient
 
 export function ClientsPage() {
   const [, navigate] = useLocation();
-  const [search, setSearch] = useState("");
+  const clientSearchRequest = useContext(ClientSearchContext);
+  const [search, setSearch] = useState(() => clientSearchRequest?.term ?? "");
+  useEffect(() => {
+    if (clientSearchRequest?.revision) setSearch(clientSearchRequest.term);
+  }, [clientSearchRequest?.revision]);
   const [version, setVersion] = useState(0);
   const [form, setForm] = useState<FormState | null>(null);
   const [baseline, setBaseline] = useState<FormState | null>(null);
