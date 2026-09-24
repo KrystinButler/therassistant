@@ -1,4 +1,4 @@
-type AppointmentTime = { starts_at?: unknown; ends_at?: unknown } | null | undefined;
+type AppointmentTime = { [key: string]: unknown; starts_at?: unknown; ends_at?: unknown } | null | undefined;
 export type ScheduledSessionTime = { start: string; end: string; minutes: number };
 /** Calculate scheduled duration from timestamps (DST-safe); return local clock times for optional adjustment. */
 export function scheduledSessionTime(appointment: AppointmentTime): ScheduledSessionTime | null {
