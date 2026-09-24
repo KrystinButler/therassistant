@@ -1,0 +1,138 @@
+/* Shared THERASSISTANT visual language: compact Inter, forest and sage. */
+:root {
+  --app-font-sans: Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+  --app-font-serif: Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+  --thera-navy:#173927;--thera-navy-deep:#143021;--thera-blue:#50785b;
+  --thera-blue-soft:#eff4ee;--thera-sage:#a4b6a6;--thera-sage-dark:#587763;
+  --thera-cream:#f7f5ef;--thera-paper:#fff;--thera-border:#e0e7df;
+  --thera-text:#253b31;--thera-muted:#63766a;
+  --pj-navy:#173927;--pj-slate:#4c6555;--pj-teal:#668b75;
+  --pj-sage:#a4b6a6;--pj-mist:#eff4ee;--pj-border:#e0e7df;--pj-bg:#f7f5ef;
+  --background:45 31% 97%;--foreground:145 33% 20%;--border:130 14% 89%;
+  --primary:145 33% 20%;--primary-foreground:0 0% 100%;
+  --secondary:130 17% 88%;--secondary-foreground:145 33% 20%;
+  --muted:45 22% 95%;--muted-foreground:145 10% 42%;
+  --accent:135 14% 67%;--accent-foreground:145 33% 20%;--ring:135 14% 50%;
+}
+html{font-size:14px;-webkit-text-size-adjust:100%;text-size-adjust:100%}
+body{font-family:var(--app-font-sans);font-size:13px;line-height:1.5;background:var(--thera-cream);color:var(--thera-text)}
+body,button,input,select,textarea{font-family:var(--app-font-sans)!important}
+h1,h2,h3,h4,h5,h6,.font-display,.cw-dashboard-heading h1,.cw-panel-header h2,.cw-summary-number,.cw-wordmark-type strong{font-family:var(--app-font-sans)!important;letter-spacing:-.025em}
+h1,.thera-page-header h1,.schedule-header h1,.cw-dashboard-heading h1{font-size:clamp(20px,2vw,25px);line-height:1.3}
+h2,.thera-card h2,.cw-panel-header h2{font-size:16px;line-height:1.35}
+h3,.thera-card h3{font-size:14px}
+:where(.thera-content,.cw-content,.pj-main,.pci-main){min-width:0}
+:where(.thera-app,.cw-app) :where(.thera-card,.thera-metric-card,.cw-panel,.cw-summary-card,.schedule-card,.encounter-focus-banner,.pci-appointment-card){border-color:#e0e7df;box-shadow:0 2px 10px #1739270a}
+:where(.thera-app,.cw-app) :where(.thera-page-header p,.thera-card p,.cw-dashboard-heading p){font-size:12px;color:#63766a}
+:where(.thera-app,.cw-app) :where(.thera-action,.cw-panel-link,.thera-link){font-size:12px}
+:where(.thera-app,.cw-app) :where(.thera-table,.cw-table,.schedule-table){font-size:11px}
+:where(.thera-app,.cw-app) :where(.thera-table th,.cw-table th,.schedule-table th){background:#f4f6f1;color:#395b45}
+:where(.thera-app,.cw-app) :where(.thera-table td,.cw-table td,.schedule-table td){border-bottom-color:#e9eee7}
+:where(.thera-app,.cw-app) :where(.thera-badge,.thera-eyebrow,.cw-nav-heading){font-size:10px;letter-spacing:.035em}
+:where(.thera-app,.cw-app) :where(.thera-metric-value,.cw-summary-number){font-size:24px;color:#173927}
+:where(.thera-app,.cw-app) :where(.thera-input,select,textarea){border-color:#dce5dc}
+:where(.thera-app,.cw-app) :where(button,input,select,textarea,a):focus-visible{outline:2px solid #789b7c;outline-offset:2px}
+.cw-app{background:#f7f5ef;grid-template-columns:236px minmax(0,1fr);grid-template-rows:67px minmax(calc(100vh - 67px),auto)}
+.cw-global-header{height:67px;grid-template-columns:236px minmax(220px,1fr) auto}
+.cw-sidebar{top:67px;height:calc(100vh - 67px);background:#19392c}
+.cw-nav-link{min-height:43px;gap:13px;font-size:12px;padding:0 16px}
+.cw-nav-link svg{width:17px;height:17px}
+.cw-nav-link.active{background:#a4b6a6;color:#153325}
+.cw-nav-link.active svg{color:#153325}
+.cw-wordmark-type strong{font-size:12px;letter-spacing:.11em;font-weight:750}
+.cw-wordmark-type small{font-size:9px;letter-spacing:.22em}
+.cw-brand-emblem{width:36px;height:36px;flex:0 0 36px;object-fit:contain;border-radius:4px;mix-blend-mode:multiply}
+.cw-global-search{height:36px;max-width:430px}
+.cw-global-search input{font-size:12px}
+.cw-search-submit{display:grid;place-items:center;border:0;background:transparent;color:#375a42;padding:3px;cursor:pointer}
+.cw-avatar{background:#19392c;width:35px;height:35px;font-size:12px}
+.cw-profile-copy strong{font-size:11px}.cw-profile-copy small{font-size:10px}
+.cw-content{padding:20px 23px 46px}
+.cw-dashboard{gap:13px}
+.cw-dashboard-heading{position:relative;isolation:isolate;overflow:hidden;padding:7px 4px 14px;border-bottom:1px solid #e2e9dd}
+.cw-dashboard-heading::before{content:"";position:absolute;z-index:-1;pointer-events:none;width:280px;height:132px;right:-15px;top:-25px;background:url("/brand/background-pattern.webp") center/contain no-repeat;opacity:.18}
+.cw-dashboard-heading h1{font-size:clamp(21px,2vw,26px);color:#173927}
+.cw-dashboard-heading p{font-size:12px}.cw-dashboard-date{font-size:11px}
+.cw-summary-grid{gap:11px}.cw-summary-card{min-height:99px;gap:10px;padding:15px 13px}
+.cw-summary-label{font-size:11px}.cw-summary-number{font-size:25px}
+.cw-summary-icon{width:45px;height:45px;flex-basis:45px;color:#173927}
+.cw-summary-icon svg{width:23px;height:23px}
+.cw-summary-copy small{font-size:10px}.cw-summary-arrow{width:15px;right:9px}
+.cw-panel{padding:14px 13px}.cw-panel-header{margin-bottom:10px}
+.cw-panel-header h2{font-size:15px;color:#173927}.cw-panel-link{font-size:11px;color:#375a42}
+.cw-table{font-size:11px}.cw-table th{font-size:10px}.cw-table td{height:40px;padding:7px}
+.cw-task-row{min-height:51px}.cw-alert-row{min-height:48px}
+.cw-task-copy strong,.cw-alert-copy strong{font-size:11px}
+.cw-task-copy small,.cw-alert-copy small{font-size:10px}
+.schedule-header h1,.schedule-row td:nth-child(2) strong,.schedule-time{color:#173927!important}
+.schedule-header p,.schedule-row td:nth-child(2) span{color:#63766a}
+.schedule-card,.schedule-date-controls{border-color:#dce5da}
+.schedule-date-controls,.schedule-date-controls button{color:#355943}
+.schedule-view-tabs button.active{background:#355943}
+.schedule-table th{background:#f4f6f1;color:#395b45}
+.encounter-focus-banner{background:linear-gradient(135deg,#fff,#f1f5ed)}
+.encounter-focus-banner strong{font-size:13px;color:#234e32}
+.encounter-focus-banner span{font-size:11px;color:#657767}
+.encounter-journal-preview,.encounter-coding-summary{background:#fbfcf8}
+.pci-main,.pj-main{background:#f7f5ef}
+.pci-appointment-card{border-color:#dce5da}
+.pci-appointment-block>svg{color:#50785b}
+.pci-progress button>span.current,.pci-status-dot.current{background:#355943;border-color:#355943}
+:where(.pci-main,.pj-main) :where(h1,h2,h3){color:#173927}
+.cw-mobile-search-toggle{display:none}
+:where(.thera-content,.cw-content,.pci-main,.pj-main) :where(.thera-table-wrap,.schedule-table-wrap,.cw-table-scroll,[role="tablist"]){max-width:100%;overflow-x:auto;-webkit-overflow-scrolling:touch}
+:where(.thera-content,.cw-content) :where(.thera-page-header.split,.schedule-header,.schedule-toolbar){flex-wrap:wrap}
+@media(max-width:1100px){
+.cw-app{grid-template-columns:215px minmax(0,1fr)}
+.cw-global-header{grid-template-columns:215px minmax(160px,1fr) auto;gap:12px}
+.cw-content{padding:17px 16px 36px}
+.cw-dashboard-columns{grid-template-columns:minmax(0,1fr)}
+}
+@media(max-width:900px){
+.cw-app{grid-template-columns:minmax(0,1fr);grid-template-areas:"header" "main"}
+.cw-global-header{grid-template-columns:auto minmax(0,1fr) auto;padding:0 12px}
+.cw-sidebar{top:67px;width:min(268px,84vw);height:calc(100vh - 67px)}
+.cw-backdrop{inset:67px 0 0}
+.cw-mobile-menu{min-width:36px;min-height:40px}
+.thera-metric-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+.thera-detail-grid,.thera-dashboard-grid,.encounter-workspace,.encounter-focus-banner{grid-template-columns:minmax(0,1fr)}
+.encounter-focus-goal{border-left:0;padding-left:0}
+.schedule-header,.schedule-toolbar,.schedule-toolbar-right{flex-wrap:wrap}
+}
+@media(max-width:680px){
+.cw-app{grid-template-rows:58px minmax(calc(100dvh - 58px),auto)}
+.cw-global-header{height:58px;grid-template-columns:minmax(0,1fr) auto;gap:6px}
+.cw-brand-emblem{width:32px;height:32px;flex-basis:32px}
+.cw-wordmark-type strong{font-size:11px;letter-spacing:.05em}
+.cw-wordmark-type small{font-size:8px;letter-spacing:.17em}
+.cw-global-search{display:none}
+.cw-global-search.mobile-search-open{display:flex;position:absolute;left:8px;right:8px;top:62px;z-index:82;width:auto;max-width:none;height:45px;border:1px solid #a3bca6;background:#fff;border-radius:9px;box-shadow:0 10px 26px #14302120}
+.cw-global-search.mobile-search-open input{font-size:16px}
+.cw-mobile-search-toggle{display:grid;place-items:center;width:42px;height:42px;background:transparent;border:0;color:#173927}
+.cw-header-actions{gap:1px;padding:0}
+.cw-alert-link,.cw-profile-trigger{min-width:38px;min-height:42px}
+.cw-sidebar{top:58px;height:calc(100dvh - 58px)}.cw-backdrop{inset:58px 0 0}
+.cw-content{padding:13px 11px 30px}
+.cw-dashboard-heading{gap:5px;padding:4px 3px 12px}
+.cw-dashboard-heading h1{font-size:20px}
+.cw-dashboard-heading::before{width:165px;opacity:.1}
+.cw-summary-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.cw-summary-card{min-height:111px;padding:12px 9px}
+.cw-summary-number{font-size:23px}.cw-summary-label{font-size:11px}
+.cw-summary-card .cw-summary-arrow{top:17px;right:9px;width:13px}
+.cw-panel{padding:12px 10px}.cw-panel-header h2{font-size:14px}
+:where(.thera-content,.cw-content) :where(.thera-page-header h1,.schedule-header h1){font-size:20px}
+:where(.thera-content,.cw-content) :where(.thera-filter-row,.thera-page-header.split,.schedule-toolbar-right,.thera-card-header,.encounter-note-actions){flex-wrap:wrap}
+:where(.thera-content,.cw-content) :where(.thera-detail-grid,.thera-dashboard-grid,.thera-metric-grid,.encounter-workspace,.encounter-note-controls,.encounter-service-form,.encounter-readiness-grid){grid-template-columns:minmax(0,1fr)}
+:where(.thera-content,.cw-content,.pj-main,.pci-main) :where(input,textarea,select){font-size:16px!important}
+:where(.thera-content,.cw-content,.pj-main,.pci-main) :where(button,[role="button"]){min-height:40px}
+.cw-table{min-width:490px}
+.schedule-date-controls div{min-width:0}
+.pci-main{padding:14px 10px 24px}
+.pci-appointment-card{grid-template-columns:minmax(0,1fr)}
+.pci-appointment-block{border-left:0;border-top:1px solid #e6ece4}
+.pci-appointment-block:first-child{border-top:0}
+.pci-progress{margin-inline:0}.thera-card{padding:13px}
+}
+@media(max-width:360px){.cw-wordmark-type strong{font-size:10px}.cw-mobile-menu{margin-right:1px}.cw-header-actions{gap:0}.cw-alert-link{width:34px}.cw-avatar{width:30px;height:30px}}
+@media(prefers-reduced-motion:reduce){.cw-sidebar,.cw-summary-card{transition:none}}
