@@ -95,6 +95,18 @@ export async function tenantUpdateExact<T extends Row>(table: string, id: string
   return rows[0];
 }
 
+export async function tenantDelete(table: string, id: string) {
+  const tenantId = requireActiveTenantId();
+  const url = withFilters(new URL(`${SUPABASE_URL}/rest/v1/${table}`), {
+    id: `eq.${id}`,
+    tenant_id: `eq.${tenantId}`,
+  });
+  await request<void>(table, url, {
+    method: "DELETE",
+    headers: { Prefer: "return=minimal" },
+  });
+}
+
 export async function tenantRpc<T>(functionName: string, args: Row = {}) {
   return request<T>(`rpc/${functionName}`, new URL(`${SUPABASE_URL}/rest/v1/rpc/${functionName}`), {
     method: "POST",
