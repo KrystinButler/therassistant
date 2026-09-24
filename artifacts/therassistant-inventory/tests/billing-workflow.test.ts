@@ -280,3 +280,46 @@ test("program-funded encounter creates a program-billing charge and never marks 
   assert.equal(repo.serviceLineUpdates[0].values.ready_for_claim, false);
   assert.equal(repo.encounterUpdate.billing_status, "charged");
 });
+
+
+test("two billable lines on the same appointment create two distinct charges", async () => {
+  const repo = fakeRepo({
+    ...cleanContext,
+    serviceLines: [
+      cleanContext.serviceLines[0],
+      { ...cleanContext.serviceLines[0], id: "line-2", cpt_hcpcs_code: "90840", charge_amount_cents: 6500 },
+    ],
+  });
+  const result = await createChargeFromEncounterWorkflow(repo, "enc-1");
+  assert.equal(result.ok, true);
+  assert.equal(repo.charges.length, 2);
+  assert.deepEqual(repo.charges.map((charge) => charge.service_line_id), ["line-1", "line-2"]);
+  assert.deepEqual(repo.charges.map((charge) => charge.appointment_id), ["appt-1", "appt-1"]);
+});
+
+test("retrying charge generation never duplicates an existing service line", async () => {
+  const repo = fakeRepo();
+  const first = await createChargeFromEncounterWorkflow(repo, "enc-1");
+  const second = await createChargeFromEncounterWorkflow(repo, "enc-1");
+  assert.equal(first.ok, true);
+  assert.equal(second.ok, true);
+  assert.equal(repo.charges.length, 1);
+  assert.equal(repo.charges[0].id, "charge-1");
+});
+
+test("a claimed charge is preserved on repeated charge generation", async () => {
+  const repo = fakeRepo(cleanContext, [{
+    id: "charge-claimed",
+    encounter_id: "enc-1",
+    service_line_id: "line-1",
+    appointment_id: "appt-1",
+    charge_status: "claim_created",
+    charge_amount_cents: 17500,
+  }]);
+  const result = await createChargeFromEncounterWorkflow(repo, "enc-1");
+  assert.equal(result.ok, true);
+  assert.equal(repo.charges.length, 1);
+  assert.equal(repo.charges[0].id, "charge-claimed");
+  assert.equal(repo.charges[0].charge_status, "claim_created");
+  assert.equal(repo.charges[0].charge_amount_cents, 17500);
+});
