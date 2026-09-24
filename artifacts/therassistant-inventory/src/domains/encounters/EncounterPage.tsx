@@ -98,6 +98,7 @@ export function EncounterPage() {
   const [contextOpen, setContextOpen] = useState(true);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [showSlashMenu, setShowSlashMenu] = useState(false);
+  const [showPhraseMenu, setShowPhraseMenu] = useState(false);
   const noteRef = useRef<HTMLTextAreaElement>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -332,6 +333,8 @@ export function EncounterPage() {
   const duration = appointmentDuration(data.appointment);
   const activeGoalText = displayText(activeGoal, ["goal_text", "description", "goal", "title"], "");
   const noteLayout = noteLayouts[noteType] ?? noteLayouts.other;
+  const noteWordCount = noteText.trim() ? noteText.trim().split(/\s+/).length : 0;
+  const noteHasUnsavedText = noteText !== String(note?.note_text ?? "");
   const calculatedMinutes = sessionMinutes(psychStart, psychStop);
   function updateSessionTime(start: string, stop: string) {
     setPsychStart(start); setPsychStop(stop);
@@ -385,6 +388,17 @@ export function EncounterPage() {
       setStructuredSelections((current) => ({ ...current, similarityReviewAcknowledged: false }));
     }
     setShowSlashMenu(value.endsWith("/"));
+  }
+
+  function insertNoteSection(section: string) {
+    if (signed) return;
+    injectIntoNote(`${noteText.trim() ? "\n\n" : ""}${section}:\n`);
+  }
+
+  function insertEditorPhrase(content: string) {
+    if (signed) return;
+    injectIntoNote(content);
+    setShowPhraseMenu(false);
   }
 
   function injectQuickText(text: string) {
@@ -517,9 +531,41 @@ export function EncounterPage() {
             <label><div className="thera-field-label">Note Type</div><select className="thera-input" value={noteType} disabled={signed} onChange={(event) => changeNoteType(event.target.value)}><option value="psychotherapy">Psychotherapy</option><option value="assessment">Assessment</option><option value="intake">Intake</option><option value="crisis">Crisis</option><option value="case_management">Case Management</option><option value="medication_management">Medication Management</option><option value="other">Other</option></select></label>
             <label><div className="thera-field-label">Treatment Plan — Goal / Objective</div><select className="thera-input" value={goalAddressed} disabled={signed} onChange={(event) => setGoalAddressed(event.target.value)}><option value="">Select a goal</option>{activeGoals.map((goal) => { const label = displayText(goal, ["goal_text", "description", "goal", "title"], "Goal"); return <option key={goal.id} value={label}>{label}</option>; })}{goalAddressed && !activeGoals.some((goal) => displayText(goal, ["goal_text", "description", "goal", "title"], "Goal") === goalAddressed) && <option value={goalAddressed}>{goalAddressed} (previous selection)</option>}</select>{activeGoals.length === 0 && <small>No linked treatment-plan goals. Add a goal in the patient's treatment plan.</small>}</label>
           </div>
-          <div className="encounter-note-guidance"><strong>{noteLayout.title} — documentation sections</strong><span>{noteLayout.sections.join(" · ")}</span></div><div className="encounter-editor-wrap"><label><div className="thera-field-label">{noteLayout.title}</div><textarea ref={noteRef} className="thera-input encounter-note-editor" value={noteText} disabled={signed} onChange={(event) => handleNoteChange(event.target.value, event.target.selectionStart)} placeholder={noteLayout.sections.join(" · ") + ". Type / for quick inserts."} /></label>{showSlashMenu && !signed && <div className="encounter-slash-menu"><div>QUICK INSERTS</div><button type="button" onClick={() => injectQuickText("Risk Assessment: Client denies suicidal or homicidal ideation. No acute safety concerns reported.")}>Risk: Standard Negative</button><button type="button" onClick={() => injectQuickText("Mental Status: Alert and oriented x4. Appearance and behavior appropriate. Speech normal. Thought process linear and goal directed.")}>MSE: Within Normal Limits</button><button type="button" onClick={() => injectQuickText("Intervention: Supportive psychotherapy, reflective listening, validation, and collaborative problem solving were utilized.")}>Intervention: Supportive</button></div>}</div>
+          <div className="encounter-editor-surface">
+            <div className="encounter-editor-heading">
+              <div><div className="thera-eyebrow">CLINICAL DOCUMENTATION</div><label htmlFor="encounter-progress-note-editor">{noteLayout.title}</label></div>
+              <span className={signed ? "encounter-editor-status signed" : noteHasUnsavedText ? "encounter-editor-status unsaved" : "encounter-editor-status"}>
+                {signed ? "Signed · Read only" : noteHasUnsavedText ? "Unsaved changes" : "Draft"}
+              </span>
+            </div>
+            <div className="encounter-editor-toolbar" role="toolbar" aria-label="Progress note writing tools">
+              <div className="encounter-section-tools">
+                <span className="encounter-tool-label">Insert section</span>
+                <div className="encounter-section-buttons">
+                  {noteLayout.sections.map((section) => <button type="button" key={section} className="encounter-insert-chip" disabled={signed} onClick={() => insertNoteSection(section)} title={`Insert ${section} heading at the cursor`}>{section}</button>)}
+                </div>
+              </div>
+              <div className="encounter-phrase-control">
+                <button type="button" className="encounter-phrase-trigger" disabled={signed} aria-expanded={showPhraseMenu} aria-controls="encounter-smartphrase-quick-menu" onClick={() => setShowPhraseMenu((open) => !open)}>
+                  SmartPhrases <span>{smartPhrases.length}</span> <span aria-hidden="true">▾</span>
+                </button>
+                {showPhraseMenu && !signed && <div id="encounter-smartphrase-quick-menu" className="encounter-phrase-menu" role="group" aria-label="Insert a SmartPhrase">
+                  <div className="encounter-phrase-menu-heading">Insert at cursor</div>
+                  {smartPhrases.length ? smartPhrases.map((phrase) => <button type="button" key={phrase.id} title={phrase.label} onClick={() => insertEditorPhrase(phrase.content)}><strong>{phrase.label}</strong><span>{phrase.shortcut}</span></button>) : <p>No SmartPhrases available. Create one in the library below.</p>}
+                </div>}
+              </div>
+            </div>
+            <div className="encounter-editor-wrap">
+              <textarea id="encounter-progress-note-editor" ref={noteRef} className="thera-input encounter-note-editor" value={noteText} disabled={signed} aria-describedby="encounter-progress-note-hint" onChange={(event) => handleNoteChange(event.target.value, event.target.selectionStart)} onKeyDown={(event) => { if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "s") { event.preventDefault(); if (!saving && !signed && noteText.trim()) void saveNote(); } }} placeholder={`Document the ${noteLayout.title.toLowerCase()} here. Use Insert section to structure your note.`} spellCheck />
+              {showSlashMenu && !signed && <div className="encounter-slash-menu"><div>QUICK INSERTS</div><button type="button" onClick={() => injectQuickText("Risk Assessment: Client denies suicidal or homicidal ideation. No acute safety concerns reported.")}>Risk: Standard Negative</button><button type="button" onClick={() => injectQuickText("Mental Status: Alert and oriented x4. Appearance and behavior appropriate. Speech normal. Thought process linear and goal directed.")}>MSE: Within Normal Limits</button><button type="button" onClick={() => injectQuickText("Intervention: Supportive psychotherapy, reflective listening, validation, and collaborative problem solving were utilized.")}>Intervention: Supportive</button></div>}
+            </div>
+            <div className="encounter-editor-footer">
+              <div id="encounter-progress-note-hint" className="encounter-editor-meta"><strong>{noteWordCount} words</strong><span aria-hidden="true">·</span><span>Type / for quick inserts</span><span aria-hidden="true">·</span><span>{signed ? "Signed note is locked" : "Save to keep your draft"}</span></div>
+              {!signed && <button type="button" className="thera-action encounter-editor-save" disabled={saving || !noteText.trim()} onClick={() => void saveNote()}>{saving ? "Saving..." : "Save Note"}</button>}
+            </div>
+          </div>
           <FastChartingPanel signed={signed} phrases={smartPhrases} selections={structuredSelections} generatedNarrative={generatedNarrative} priorContext={priorStructuredContext} noteSimilarity={noteSimilarity} onSelectionsChange={setStructuredSelections} onInsertNarrative={() => injectIntoNote("\n" + generatedNarrative + "\n")} onInsertPhrase={injectIntoNote} onCarryForward={carryForwardStructured} onCreatePhrase={addSmartPhrase} />
-          {!signed && <div className="encounter-note-actions"><button type="button" className="thera-action" disabled={saving || !noteText.trim()} onClick={() => void saveNote()}>{saving ? "Saving..." : "Save Note"}</button><span>Saving does not sign or lock the clinical record.</span></div>}
+          
           {signed && data.signatures[0] && <div className="thera-alert" style={{ marginTop: 12 }}>Signed {dateTime(String(data.signatures[0].signed_at ?? ""))} by {String(data.signatures[0].signature_text ?? "provider")}</div>}
         </section>
         <aside className={contextOpen ? "encounter-context-rail open" : "encounter-context-rail"}>
