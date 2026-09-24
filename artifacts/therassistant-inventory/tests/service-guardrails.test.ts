@@ -100,3 +100,24 @@ test("service checks never change clinical signing status", () => {
   assert.equal(result.ready, false);
   assert.ok(result.checks.some(c => c.code === "note_unsigned"));
 });
+
+test("stored structured clinical-note duration takes precedence over unavailable legacy note fields", () => {
+  const result = evaluateBillingReadiness({
+    ...base,
+    note: { note_status: "signed" },
+    documentedPsychotherapyMinutes: 45,
+  });
+  assert.equal(result.ready, true);
+  assert.equal(result.checks.some(c => c.code.startsWith("psychotherapy_duration_unverified")), false);
+});
+
+test("stored structured psychotherapy time inconsistency is held in billing", () => {
+  const result = evaluateBillingReadiness({
+    ...base,
+    note: { note_status: "signed" },
+    documentedPsychotherapyMinutes: 45,
+    serviceLines: [{ ...base.serviceLines[0], cpt_hcpcs_code: "90837" }],
+  });
+  assert.equal(result.ready, false);
+  assert.ok(result.checks.some(c => c.code === "psychotherapy_duration_conflict_0" && c.blocking));
+});
