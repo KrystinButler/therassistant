@@ -6,6 +6,7 @@ import {
   type Row,
 } from "../../lib/tenant-data-client";
 import { getPreSessionData } from "../scheduling/repository";
+import { buildDirectDocumentationDraft, type DirectDocumentationInput } from "./direct-documentation";
 import {
   billingPathForFundingSource,
   legacyFundingSourceType,
@@ -75,6 +76,18 @@ const repository: EncounterRepository = {
 
 export function startEncounter(appointmentId: string) {
   return startEncounterWorkflow(repository, appointmentId);
+}
+
+/** Create an actual tenant-scoped clinical encounter without a fabricated appointment. */
+export async function createUnscheduledEncounter(input: DirectDocumentationInput): Promise<EncounterRecord> {
+  const values = buildDirectDocumentationDraft(input);
+  const [clients, providers] = await Promise.all([
+    tenantSelect<DataRow>("clients", { id: `eq.${values.client_id}`, limit: "1" }),
+    tenantSelect<DataRow>("providers", { id: `eq.${values.provider_id}`, limit: "1" }),
+  ]);
+  if (!clients.length) throw new Error("Selected patient is not available in this practice.");
+  if (!providers.length) throw new Error("Selected provider is not available in this practice.");
+  return tenantInsert<EncounterRecord>("encounters", values);
 }
 
 export async function getEncounterDetail(encounterId: string) {
