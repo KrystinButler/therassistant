@@ -17,7 +17,7 @@
 html{font-size:14px;-webkit-text-size-adjust:100%;text-size-adjust:100%}
 body{font-family:var(--app-font-sans);font-size:13px;line-height:1.5;background:var(--thera-cream);color:var(--thera-text)}
 body,button,input,select,textarea{font-family:var(--app-font-sans)!important}
-h1,h2,h3,h4,h5,h6,.font-display,.cw-dashboard-heading h1,.cw-panel-header h2,.cw-summary-number,.cw-wordmark-type strong{font-family:var(--app-font-sans)!important;letter-spacing:-.025em}
+h1,h2,h3,h4,h5,h6,.font-display,.cw-dashboard-heading h1,.cw-panel-header h2,.cw-summary-number,.cw-wordmark-type strong,.cw-avatar{font-family:var(--app-font-sans)!important;letter-spacing:-.025em}
 h1,.thera-page-header h1,.schedule-header h1,.cw-dashboard-heading h1{font-size:clamp(20px,2vw,25px);line-height:1.3}
 h2,.thera-card h2,.cw-panel-header h2{font-size:16px;line-height:1.35}
 h3,.thera-card h3{font-size:14px}
@@ -136,3 +136,6 @@ h3,.thera-card h3{font-size:14px}
 }
 @media(max-width:360px){.cw-wordmark-type strong{font-size:10px}.cw-mobile-menu{margin-right:1px}.cw-header-actions{gap:0}.cw-alert-link{width:34px}.cw-avatar{width:30px;height:30px}}
 @media(prefers-reduced-motion:reduce){.cw-sidebar,.cw-summary-card{transition:none}}
+
+/* Extend the shared typeface to every app shell, including patient-facing pages. */
+.thera-app,.cw-app,.pj-main,.pci-main{font-family:var(--app-font-sans)}
