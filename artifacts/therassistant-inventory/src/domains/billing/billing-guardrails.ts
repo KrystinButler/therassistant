@@ -4,6 +4,7 @@ type FundingInput = {
   encounter: Record<string, any>;
   fundingSourceType?: string | null;
   billingPath?: string | null;
+  billingType?: string | null;
   fundingContext?: Record<string, unknown>;
 };
 
@@ -34,7 +35,7 @@ export function evaluateFundingGuardrails(input: FundingInput): ReadinessCheck[]
     });
   }
 
-  const resolvedPath = path || expected || "insurance_claim";
+  const resolvedPath = path || expected || (input.billingType === "self_pay" ? "private_pay" : "insurance_claim");
   if (resolvedPath === "insurance_claim" && !input.encounter.payer_id) {
     checks.push({
       code: "insurance_payer_missing",
