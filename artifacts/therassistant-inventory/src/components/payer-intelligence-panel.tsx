@@ -42,7 +42,7 @@ type Props = {
 
 const resourceTypesByContext: Record<PayerIntelligenceContext, string[]> = {
   credentialing: ["credentialing", "portal", "provider_services", "directory"],
-  claim: ["claims", "corrected_claim", "timely_filing", "mailing_address", "portal"],
+  claim: ["claims", "billing_rule", "corrected_claim", "timely_filing", "mailing_address", "portal"],
   follow_up: ["provider_services", "claims", "portal", "timely_filing", "corrected_claim"],
   appeal: ["appeals", "mailing_address", "portal", "timely_filing", "provider_services"],
   eligibility: ["eligibility", "portal", "provider_services"],
@@ -60,6 +60,7 @@ const resourceLabels: Record<string, string> = {
   timely_filing: "Timely Filing",
   corrected_claim: "Corrected Claim",
   reimbursement: "Reimbursement",
+  billing_rule: "Billing Rule",
   other: "Other",
 };
 
@@ -234,6 +235,7 @@ export function PayerIntelligencePanel({
                     </div>
                     {resource.value ? <div>{resource.value}</div> : null}
                     {resource.notes ? <div>{resource.notes}</div> : null}
+                    {resource.resource_type === "billing_rule" ? <div className="thera-table-subtext">Only currently verified, source-linked payer billing rules can hold billing. Other rules require manual review.</div> : null}
                     {(resource.effective_date || resource.expiration_date) ? (
                       <div className="thera-table-subtext">
                         Policy/effective period: {shortDate(resource.effective_date)} — {shortDate(resource.expiration_date)}

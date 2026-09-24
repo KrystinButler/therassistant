@@ -27,6 +27,7 @@ type BillingQueueEncounter = DataRow & {
   providerName: string;
   payerName: string;
   blockingChecks: DataRow[];
+  advisoryChecks: DataRow[];
 };
 
 function first<T>(rows: T[]) {
@@ -89,6 +90,17 @@ async function getBillingContext(encounterId: string): Promise<BillingReadinessI
   const legacyBillingType = String(metadata(client).billing_type ?? "insurance");
   const funding = resolveEncounterFunding(encounter, legacyBillingType);
   const billingType = funding.billingPath === "private_pay" ? "self_pay" : "insurance";
+  const policy = encounter.insurance_policy_id && funding.billingPath === "insurance_claim"
+    ? first(await tenantSelect<DataRow>("client_insurance_policies", {
+        id: `eq.${String(encounter.insurance_policy_id)}`, limit: "1",
+      })) : null;
+  const policyPayerMatches = policy && String(policy.payer_id ?? "") === String(encounter.payer_id ?? "");
+  const payerPlanId = policyPayerMatches && policy?.payer_plan_id ? String(policy.payer_plan_id) : null;
+  const payerBillingRules = funding.billingPath === "insurance_claim" && encounter.payer_id
+    ? await tenantSelect<DataRow>("payer_resources", {
+        payer_id: `eq.${String(encounter.payer_id)}`, resource_type: "eq.billing_rule",
+      }) : [];
+  const serviceDate = String(first(notes)?.service_date ?? encounter.started_at ?? "").slice(0,10);
   return {
     encounter,
     billingType,
@@ -102,6 +114,10 @@ async function getBillingContext(encounterId: string): Promise<BillingReadinessI
     provider: first(providerRows),
     appointment: first(appointmentRows),
     documentedPsychotherapyMinutes,
+    payerId: encounter.payer_id ? String(encounter.payer_id) : null,
+    payerPlanId,
+    payerBillingRules: payerBillingRules as BillingReadinessInput["payerBillingRules"],
+    serviceDate,
     eligibilityStatus: first(eligibilityRows)
       ? String(first(eligibilityRows)?.eligibility_status ?? "")
       : null,
@@ -194,8 +210,27 @@ const repository: BillingRepository = {
     });
   },
 
-  createCharge(values) {
-    return tenantInsert<DataRow>("charge_capture_items", values);
+  async createCharge(values) {
+    try {
+      return await tenantInsert<DataRow>("charge_capture_items", values);
+    } catch (error) {
+      // Two concurrent requests can read the same empty service line. Return
+      // the already-created charge only for this exact uniqueness conflict;
+      // never overwrite a charge that may already have entered claim processing.
+      const message = error instanceof Error ? error.message : "";
+      if (!message.includes('"23505"') ||
+          !message.includes("uq_charge_capture_active_service_line") ||
+          !values.service_line_id) throw error;
+      const existing = await tenantSelect<DataRow>("charge_capture_items", {
+        service_line_id: `eq.${String(values.service_line_id)}`,
+        charge_status: "neq.voided",
+        limit: "1",
+      });
+      if (!existing[0] || String(existing[0].encounter_id) !== String(values.encounter_id)) {
+        throw error;
+      }
+      return existing[0];
+    }
   },
 
   updateCharge(id, values) {
@@ -256,6 +291,9 @@ export async function getBillingQueueData() {
       payerName,
       blockingChecks: readinessChecks.filter(
         (check) => check.encounter_id === encounter.id && check.blocking === true,
+      ),
+      advisoryChecks: readinessChecks.filter(
+        (check) => check.encounter_id === encounter.id && check.check_status === "warn",
       ),
     };
   });
