@@ -72,6 +72,19 @@ async function getBillingContext(encounterId: string): Promise<BillingReadinessI
       : Promise.resolve([]),
   ]);
 
+  const structuredRows = notes[0]
+    ? await tenantSelect<DataRow>("clinical_note_structured_data", {
+        clinical_note_id: `eq.${notes[0].id}`,
+        limit: "1",
+      })
+    : [];
+  const rawSelections = structuredRows[0]?.selections;
+  const selections = rawSelections && typeof rawSelections === "object" && !Array.isArray(rawSelections)
+    ? rawSelections as Record<string, unknown> : {};
+  const minutes = selections.psychotherapyMinutes;
+  const documentedPsychotherapyMinutes = typeof minutes === "number" && Number.isInteger(minutes) && minutes > 0 && minutes <= 1440
+    ? minutes : null;
+
   const client = first(clients);
   const legacyBillingType = String(metadata(client).billing_type ?? "insurance");
   const funding = resolveEncounterFunding(encounter, legacyBillingType);
@@ -88,6 +101,7 @@ async function getBillingContext(encounterId: string): Promise<BillingReadinessI
     serviceLines,
     provider: first(providerRows),
     appointment: first(appointmentRows),
+    documentedPsychotherapyMinutes,
     eligibilityStatus: first(eligibilityRows)
       ? String(first(eligibilityRows)?.eligibility_status ?? "")
       : null,
