@@ -264,13 +264,13 @@ assert(patientJournalDirect.payload?.length === 0,
   "Patient portal principal bypassed its restricted journal RPC by directly reading staff tables.");
 
 // Exercise an actual private Storage upload/download, not a metadata-only document.
-const proofText = "Synthetic document bytes for private storage verification.";
-const proofFile = new Blob([proofText], { type: "text/plain" });
-const objectPath = [primaryTenant, IDS.insuredPatient, crypto.randomUUID(), "e2e-proof.txt"].join("/");
+const proofText = "%PDF-1.4\n1 0 obj\n<< /Type /Catalog >>\nendobj\ntrailer\n<< /Root 1 0 R >>\n%%EOF";
+const proofFile = new Blob([proofText], { type: "application/pdf" });
+const objectPath = [primaryTenant, IDS.insuredPatient, crypto.randomUUID(), "e2e-proof.pdf"].join("/");
 const storageHeaders = {
   apikey: PUBLISHABLE_KEY,
   Authorization: "Bearer " + staff.token,
-  "Content-Type": "text/plain",
+  "Content-Type": "application/pdf",
   "x-upsert": "false",
 };
 const uploaded = await fetch(SUPABASE_URL + "/storage/v1/object/therassistant-documents/" + objectPath, {
@@ -289,9 +289,9 @@ const indexed = await request("/rest/v1/documents?select=id,storage_path", {
     client_id: IDS.insuredPatient,
     document_type: "other",
     document_status: "uploaded",
-    file_name: "e2e-proof.txt",
+    file_name: "e2e-proof.pdf",
     storage_path: objectPath,
-    mime_type: "text/plain",
+    mime_type: "application/pdf",
     file_size_bytes: proofFile.size,
     uploaded_by: staff.userId,
   },
