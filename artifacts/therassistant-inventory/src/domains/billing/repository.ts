@@ -27,6 +27,7 @@ type BillingQueueEncounter = DataRow & {
   providerName: string;
   payerName: string;
   blockingChecks: DataRow[];
+  advisoryChecks: DataRow[];
 };
 
 function first<T>(rows: T[]) {
@@ -271,6 +272,9 @@ export async function getBillingQueueData() {
       payerName,
       blockingChecks: readinessChecks.filter(
         (check) => check.encounter_id === encounter.id && check.blocking === true,
+      ),
+      advisoryChecks: readinessChecks.filter(
+        (check) => check.encounter_id === encounter.id && check.check_status === "warn",
       ),
     };
   });
