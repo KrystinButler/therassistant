@@ -19,7 +19,7 @@ test("provider completes a synthetic visit from schedule through signed note and
     return;
   }
 
-  await page.getByLabel("Session / SOAP Note").fill(
+  await page.locator("#encounter-progress-note-editor").fill(
     "Synthetic psychotherapy progress note. Client participated in supportive psychotherapy and collaborative problem solving. No acute safety concerns were reported. Continue current treatment plan and reassess at next visit.",
   );
 
