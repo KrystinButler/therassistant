@@ -15,6 +15,9 @@ alter table public.payer_resources
   );
 
 alter table public.payer_resources
+  drop constraint if exists payer_resources_billing_rule_shape_check;
+
+alter table public.payer_resources
   add constraint payer_resources_billing_rule_shape_check check (
     resource_type <> 'billing_rule'
     or (
