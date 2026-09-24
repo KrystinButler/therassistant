@@ -66,8 +66,8 @@ export function PayerDetailPage() {
         });
         if (!parsed) throw new Error("Enter a valid CPT/HCPCS code, integer maximum units, two-character modifier, and two-digit excluded place-of-service codes.");
         if (!form.label?.trim()) throw new Error("Give the payer rule a descriptive name.");
-        if (form.verification_status === "verified" && (!form.source_url?.trim() || !form.reviewed_at || !form.review_due_at)) {
-          throw new Error("A verified billing rule requires an authoritative source URL, review date, and next review date.");
+        if (form.verification_status === "verified" && (!/^https:\/\/[^\s]+$/i.test(form.source_url?.trim() || "") || !form.effective_date || !form.reviewed_at || !form.review_due_at)) {
+          throw new Error("A verified billing rule requires an HTTPS authoritative source, effective date, review date, and next review date.");
         }
         const payload = {
           payer_id: payerId,
@@ -320,7 +320,7 @@ export function PayerDetailPage() {
           <Input label="Effective From" type="date" value={form.effective_date || ""} onChange={(value) => setForm({ ...form, effective_date: value })} />
           <Input label="Effective Through" type="date" value={form.expiration_date || ""} onChange={(value) => setForm({ ...form, expiration_date: value })} />
           <label style={{ gridColumn: "1 / -1" }}><div className="thera-field-label">Contract / Coverage Evidence</div><textarea className="thera-input" rows={3} value={form.notes || ""} onChange={(event) => setForm({ ...form, notes: event.target.value })} /></label>
-          <p style={{ gridColumn: "1 / -1" }}>Only verified, source-linked rules within their review and effective periods can hold insurance billing. Unverified rules produce advisory warnings.</p>
+          <p style={{ gridColumn: "1 / -1" }}>Only verified rules with an HTTPS source, effective date and current review can hold insurance billing. Other rules produce advisory warnings.</p>
         </Grid>}
         {modal === "resource" && <Grid>
           <Select label="Area" value={form.resource_type || "other"} options={[
