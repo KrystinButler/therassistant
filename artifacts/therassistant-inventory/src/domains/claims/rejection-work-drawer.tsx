@@ -243,7 +243,8 @@ export function RejectionWorkDrawer({
     }, 0);
   }
 
-  const rejectedResponses = (workData?.responses ?? []).filter(
+  const isValidationHold = String(workData?.claim?.claim_status ?? activeClaim.claimStatus) === "validation_failed";
+  const rejectedResponses = isValidationHold ? [] : (workData?.responses ?? []).filter(
     (row) => String(row.response_status ?? "").toLowerCase() === "rejected",
   );
   const rejectionIssues = rejectedResponses.slice(0, 1).flatMap((row) =>
@@ -258,7 +259,7 @@ export function RejectionWorkDrawer({
         }),
       })),
   );
-  const validationMessages = String(workData?.claim?.claim_status ?? "") === "validation_failed" && workData
+  const validationMessages = isValidationHold && workData
     ? deriveClaimValidationIssues(workData.claim, workData.lines, workData.diagnoses)
     : [];
   for (const message of [...validationMessages, ...messages]) {
@@ -336,8 +337,8 @@ export function RejectionWorkDrawer({
           <section className="thera-card">
             <div className="thera-card-header">
               <div>
-                <h2>Clearinghouse rejection</h2>
-                <p>Fix the claim field identified by the rejection, then revalidate before resubmission.</p>
+                <h2>{isValidationHold ? "Claim validation hold" : "Clearinghouse rejection"}</h2>
+                <p>{isValidationHold ? "Correct the current validation errors before preparing this claim." : "Fix the field identified by the clearinghouse, then revalidate before resubmission."}</p>
               </div>
             </div>
 
@@ -345,7 +346,7 @@ export function RejectionWorkDrawer({
               {rejectionIssues.map(({ message, code, issue }, index) => (
                 <div key={`${code}-${message}-${index}`} className="thera-card">
                   <div className="thera-filter-row" style={{ justifyContent: "space-between" }}>
-                    <strong>{code ? `Rejection ${code}` : "Rejection"}</strong>
+                    <strong>{code ? `Rejection ${code}` : isValidationHold ? "Validation issue" : "Rejection"}</strong>
                     {issue?.acknowledgementType ? (
                       <span className="thera-table-subtext">{issue.acknowledgementType}</span>
                     ) : null}
@@ -354,7 +355,7 @@ export function RejectionWorkDrawer({
 
                   {issue ? (
                     <>
-                      <div className="thera-table-subtext" style={{ marginTop: 8 }}>Why it rejected</div>
+                      <div className="thera-table-subtext" style={{ marginTop: 8 }}>Why it matters</div>
                       <div>{issue.whyItMatters}</div>
                       <div className="thera-table-subtext" style={{ marginTop: 8 }}>Correction needed</div>
                       <div>{issue.correction}</div>
