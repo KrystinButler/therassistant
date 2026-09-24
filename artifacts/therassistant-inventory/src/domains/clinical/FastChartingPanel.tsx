@@ -1,4 +1,5 @@
 import { useState } from "react";
+import "./fast-charting-panel.css";
 import {
   NOTE_SIMILARITY_REVIEW_THRESHOLD,
   formatTimelineForNote,
@@ -44,7 +45,7 @@ const interventions = [
 ] as const;
 
 function ChoiceButton({ active, label, onClick, disabled }: { active: boolean; label: string; onClick: () => void; disabled: boolean }) {
-  return <button type="button" className={active ? "thera-action" : "thera-action secondary"} disabled={disabled} onClick={onClick}>{label}</button>;
+  return <button type="button" className="fast-chart-choice" aria-pressed={active} disabled={disabled} onClick={onClick}>{label}</button>;
 }
 
 export function FastChartingPanel(props: Props) {
@@ -254,22 +255,64 @@ export function FastChartingPanel(props: Props) {
       </div>
     </div>}
 
-    <div className="thera-card" style={{ padding: 12 }}>
-      <div className="thera-filter-row" style={{ justifyContent: "space-between", alignItems: "flex-start" }}>
-        <div><strong>Clinical Findings & Interventions</strong><div className="thera-table-subtext">Only selections you make are synthesized into narrative.</div></div>
-        {props.priorContext && !props.signed && <button type="button" className="thera-action secondary" onClick={props.onCarryForward}>Carry Forward Structured Context</button>}
-      </div>
-      <div style={{ display: "grid", gap: 10, marginTop: 10 }}>
-        <div><div className="thera-field-label">Anxiety</div><div className="thera-filter-row" style={{ flexWrap: "wrap" }}>{severities.map((value) => <ChoiceButton key={value} active={props.selections.anxiety === value} disabled={props.signed} label={value} onClick={() => setSeverity("anxiety", value)} />)}</div></div>
-        <div><div className="thera-field-label">Depressive Symptoms</div><div className="thera-filter-row" style={{ flexWrap: "wrap" }}>{severities.map((value) => <ChoiceButton key={value} active={props.selections.depression === value} disabled={props.signed} label={value} onClick={() => setSeverity("depression", value)} />)}</div></div>
-        <div><div className="thera-field-label">Interventions</div><div className="thera-filter-row" style={{ flexWrap: "wrap" }}>{interventions.map(([value, text]) => <ChoiceButton key={value} active={props.selections.interventions.includes(value)} disabled={props.signed} label={text} onClick={() => toggleIntervention(value)} />)}</div></div>
-        <div className="thera-form-grid">
-          <label>Patient Response<select className="thera-input" disabled={props.signed} value={props.selections.response} onChange={(e) => props.onSelectionsChange({ ...props.selections, response: e.target.value as StructuredSelections["response"] })}><option value="">Not selected</option><option value="engaged">Engaged</option><option value="receptive">Receptive</option><option value="mixed">Mixed</option><option value="limited">Limited</option></select></label>
-          <label>Risk / Safety<select className="thera-input" disabled={props.signed} value={props.selections.risk} onChange={(e) => props.onSelectionsChange({ ...props.selections, risk: e.target.value as StructuredSelections["risk"] })}><option value="">Not selected</option><option value="denies_si_hi">Denies SI/HI</option><option value="passive_si_no_plan">Passive SI, no plan/intent</option><option value="safety_plan_reviewed">Safety plan reviewed</option></select></label>
+    <section className="thera-card fast-chart-findings" aria-labelledby="fast-chart-findings-heading">
+      <div className="fast-chart-findings-header">
+        <div>
+          <div className="thera-eyebrow">STRUCTURED CLINICAL OBSERVATIONS</div>
+          <h3 id="fast-chart-findings-heading">Findings & Interventions</h3>
+          <p>Record only what you assessed or provided during this encounter.</p>
         </div>
-        {props.generatedNarrative ? <div className="thera-alert"><strong>Generated narrative</strong><div style={{ marginTop: 4 }}>{props.generatedNarrative}</div>{!props.signed && <button type="button" className="thera-action secondary" style={{ marginTop: 8 }} onClick={props.onInsertNarrative}>Insert into Note</button>}</div> : <div className="thera-table-subtext">Choose structured findings or interventions to generate a narrative block.</div>}
-        {props.priorContext && <div className="thera-table-subtext">Prior structured context available from {props.priorContext.serviceDate || "a previous signed note"}. Carry-forward never copies prior narrative text.</div>}
+        {props.priorContext && !props.signed &&
+          <button type="button" className="thera-action secondary" onClick={props.onCarryForward}>Use Prior Selections</button>}
       </div>
-    </div>
+      <div className="fast-chart-findings-grid">
+        <fieldset className="fast-chart-fieldset">
+          <legend>Symptoms</legend>
+          <div className="fast-chart-symptom">
+            <div className="fast-chart-row-title"><strong>Anxiety</strong><span>{props.selections.anxiety || "Not assessed"}</span></div>
+            <div className="fast-chart-choice-list" role="group" aria-label="Anxiety severity">
+              {severities.map((value) => <ChoiceButton key={value} active={props.selections.anxiety === value} disabled={props.signed} label={value} onClick={() => setSeverity("anxiety", value)} />)}
+            </div>
+          </div>
+          <div className="fast-chart-symptom">
+            <div className="fast-chart-row-title"><strong>Depressive symptoms</strong><span>{props.selections.depression || "Not assessed"}</span></div>
+            <div className="fast-chart-choice-list" role="group" aria-label="Depression severity">
+              {severities.map((value) => <ChoiceButton key={value} active={props.selections.depression === value} disabled={props.signed} label={value} onClick={() => setSeverity("depression", value)} />)}
+            </div>
+          </div>
+        </fieldset>
+        <fieldset className="fast-chart-fieldset fast-chart-interventions">
+          <legend>Interventions</legend>
+          <div className="fast-chart-fieldset-caption">Select each intervention provided.</div>
+          <div className="fast-chart-choice-list" role="group" aria-label="Interventions provided">
+            {interventions.map(([value, label]) => <ChoiceButton key={value} active={props.selections.interventions.includes(value)} disabled={props.signed} label={label} onClick={() => toggleIntervention(value)} />)}
+          </div>
+          <div className="fast-chart-fieldset-caption fast-chart-selection-count">
+            {props.selections.interventions.length ? `${props.selections.interventions.length} selected` : "No interventions selected"}
+          </div>
+        </fieldset>
+        <section className="fast-chart-evaluation" aria-label="Response and safety">
+          <label>Patient response
+            <select className="thera-input" disabled={props.signed} value={props.selections.response} onChange={(event) => props.onSelectionsChange({ ...props.selections, response: event.target.value as StructuredSelections["response"] })}>
+              <option value="">Not assessed</option><option value="engaged">Engaged</option><option value="receptive">Receptive</option><option value="mixed">Mixed</option><option value="limited">Limited</option>
+            </select>
+          </label>
+          <label>Risk / safety
+            <select className="thera-input" disabled={props.signed} value={props.selections.risk} onChange={(event) => props.onSelectionsChange({ ...props.selections, risk: event.target.value as StructuredSelections["risk"] })}>
+              <option value="">Not assessed</option><option value="denies_si_hi">Denies SI/HI</option><option value="passive_si_no_plan">Passive SI, no plan/intent</option><option value="safety_plan_reviewed">Safety plan reviewed</option>
+            </select>
+          </label>
+        </section>
+      </div>
+      {props.generatedNarrative ? (
+        <div className="fast-chart-narrative">
+          <div><div className="thera-eyebrow">REVIEW BEFORE INSERTING</div><h4>Draft from your selections</h4><p>{props.generatedNarrative}</p></div>
+          {!props.signed && <button type="button" className="thera-action" onClick={props.onInsertNarrative}>Insert into Note</button>}
+        </div>
+      ) : (
+        <div className="fast-chart-empty">Selected findings and interventions will appear here as a draft for your review before insertion.</div>
+      )}
+      {props.priorContext && <p className="fast-chart-prior">Prior structured selections from {props.priorContext.serviceDate || "a previous signed note"} are available. Narrative text is never copied automatically.</p>}
+    </section>
   </div>;
 }
