@@ -92,7 +92,7 @@ export function evaluateServiceGuardrails(input: ServiceGuardrailInput): Readine
 
     if (psychotherapyAddOns.has(code) && input.provider) {
       const credentials = String(input.provider.credentials ?? "").toUpperCase();
-      if (/\\b(LPC|LCSW|LMFT|LAC|PSYD|PSYCHOLOGIST)\\b/.test(credentials)) {
+      if (/\b(LPC|LCSW|LMFT|LAC|PSYD|PSYCHOLOGIST)\b/.test(credentials)) {
         checks.push(check(
           `psychotherapy_em_provider_review_${i}`, "Psychotherapy / Provider Role", "warn", false,
           `The recorded provider credentials (${credentials}) require review before using psychotherapy with an E/M add-on.`,
