@@ -21,6 +21,14 @@ import { Icd10SearchInput } from "../coding/Icd10SearchInput";
 import { ProcedureCodeSearchInput } from "../coding/ProcedureCodeSearchInput";
 import { PlaceOfServiceSearchInput } from "../coding/PlaceOfServiceSearchInput";
 import {
+  FUNDING_SOURCE_OPTIONS,
+  billingPathForFundingSource,
+  billingPathLabel,
+  fundingSubtypeOptions,
+  resolveEncounterFunding,
+  type FundingSourceType,
+} from "../billing/funding-source";
+import {
   appendClinicalSource,
   buildClinicalSourceProvenance,
   buildJournalNoteInsert,
@@ -28,7 +36,7 @@ import {
   latestSharedJournalEntry,
   withClinicalSourceImport,
 } from "./clinical-source-context";
-import { getEncounterDetail } from "./repository";
+import { getEncounterDetail, updateEncounter } from "./repository";
 import "./encounter-page.css";
 
 type EncounterDetail = Awaited<ReturnType<typeof getEncounterDetail>>;
@@ -82,6 +90,11 @@ export function EncounterPage() {
   const [chargeDollars, setChargeDollars] = useState("");
   const [placeOfService, setPlaceOfService] = useState("11");
   const [signatureText, setSignatureText] = useState("");
+  const [fundingSourceType, setFundingSourceType] = useState<FundingSourceType>("insurance");
+  const [fundingSourceSubtype, setFundingSourceSubtype] = useState("");
+  const [fundingResponsibleEntity, setFundingResponsibleEntity] = useState("");
+  const [fundingReference, setFundingReference] = useState("");
+  const [fundingNotes, setFundingNotes] = useState("");
   const [smartPhrases, setSmartPhrases] = useState<SmartPhrase[]>([]);
   const [structuredSelections, setStructuredSelections] = useState<StructuredSelections>(() => emptyStructuredSelections());
   const [carryForwardContext, setCarryForwardContext] = useState<Record<string, unknown>>({});
@@ -103,6 +116,19 @@ export function EncounterPage() {
       setNoteText(String(note?.note_text ?? ""));
       setNoteType(String(note?.note_type ?? "psychotherapy"));
       setGoalAddressed(String(note?.goal_addressed ?? ""));
+      const clientMetadata =
+        result.client?.metadata && typeof result.client.metadata === "object"
+          ? result.client.metadata as Record<string, unknown>
+          : {};
+      const funding = resolveEncounterFunding(
+        result.encounter,
+        String(clientMetadata.billing_type ?? "insurance"),
+      );
+      setFundingSourceType(funding.sourceType);
+      setFundingSourceSubtype(funding.sourceSubtype);
+      setFundingResponsibleEntity(String(funding.context.responsible_entity ?? ""));
+      setFundingReference(String(funding.context.reference ?? ""));
+      setFundingNotes(String(funding.context.notes ?? ""));
       setServiceCode((current) => current || String(result.appointment?.cpt_code ?? "90837"));
       setPlaceOfService(defaultPos(String(result.encounter.location_type ?? "")));
       setSignatureText((current) => {
@@ -203,6 +229,24 @@ export function EncounterPage() {
       true,
     );
     setModifier1("");
+  }
+
+  async function saveFundingPath() {
+    const billingPath = billingPathForFundingSource(fundingSourceType);
+    await withSave(
+      () => updateEncounter(encounterId, {
+        funding_source_type: fundingSourceType,
+        funding_source_subtype: fundingSourceSubtype || null,
+        billing_path: billingPath,
+        funding_context: {
+          responsible_entity: fundingResponsibleEntity.trim() || null,
+          reference: fundingReference.trim() || null,
+          notes: fundingNotes.trim() || null,
+        },
+      }),
+      `Funding source saved. New billing routing: ${billingPathLabel(billingPath)}.`,
+      true,
+    );
   }
 
   async function sign() {
@@ -458,6 +502,60 @@ export function EncounterPage() {
       </div>
 
       <div className="encounter-lower-grid">
+        <section className="thera-card thera-span-2">
+          <div className="thera-card-header">
+            <div>
+              <div className="thera-eyebrow">FUNDING → BILLING PATH</div>
+              <h2>Funding Source</h2>
+              <p>Set who is financially responsible for this encounter. This routing is separate from the signed clinical note and never starts a claim by itself.</p>
+            </div>
+            <StatusBadge value={String(encounter.billing_path ?? billingPathForFundingSource(fundingSourceType))} />
+          </div>
+          <div className="thera-form-grid">
+            <label>
+              Funding source
+              <select className="thera-input" value={fundingSourceType} onChange={(event) => { setFundingSourceType(event.target.value as FundingSourceType); setFundingSourceSubtype(""); }}>
+                {FUNDING_SOURCE_OPTIONS.map((option) => <option key={option.id} value={option.id}>{option.label}</option>)}
+              </select>
+            </label>
+            <label>
+              Funding subtype
+              <select className="thera-input" value={fundingSourceSubtype} onChange={(event) => setFundingSourceSubtype(event.target.value)}>
+                <option value="">Not specified</option>
+                {fundingSubtypeOptions(fundingSourceType).map((option) => <option key={option.id} value={option.id}>{option.label}</option>)}
+              </select>
+            </label>
+            <div>
+              <div className="thera-field-label">Billing path</div>
+              <div className="thera-field-value">{billingPathLabel(billingPathForFundingSource(fundingSourceType))}</div>
+              <div className="thera-table-subtext">Insurance creates claim-ready charges only after billing validation. Program funding is kept out of CMS-1500/837P claim creation. Private pay routes to patient/private responsibility.</div>
+            </div>
+            {fundingSourceType === "insurance" ? (
+              <div>
+                <div className="thera-field-label">Current payer</div>
+                <div className="thera-field-value">{String(data.payer?.name ?? "No payer selected")}</div>
+                <div className="thera-table-subtext">{String(data.plan?.name ?? data.policy?.member_id ?? "")}</div>
+              </div>
+            ) : (
+              <label>
+                Responsible entity / party
+                <input className="thera-input" value={fundingResponsibleEntity} onChange={(event) => setFundingResponsibleEntity(event.target.value)} placeholder={fundingSourceType === "government_program" ? "Agency, court, program, or contractor" : "Patient, family member, attorney, or law firm"} />
+              </label>
+            )}
+            {fundingSourceType !== "insurance" && <label>
+              Contract / voucher / reference
+              <input className="thera-input" value={fundingReference} onChange={(event) => setFundingReference(event.target.value)} />
+            </label>}
+            <label style={{ gridColumn: "1 / -1" }}>
+              Funding notes
+              <input className="thera-input" value={fundingNotes} onChange={(event) => setFundingNotes(event.target.value)} placeholder="Optional billing-routing context; do not place clinical narrative here." />
+            </label>
+          </div>
+          <div className="thera-filter-row" style={{ marginTop: 10, justifyContent: "space-between", alignItems: "center" }}>
+            <span className="thera-table-subtext">Saving a funding path affects future charge routing only; it does not silently rewrite an existing charge, claim, code, or signed note.</span>
+            <button type="button" className="thera-action" disabled={saving} onClick={() => void saveFundingPath()}>Save Funding Path</button>
+          </div>
+        </section>
         <section className="thera-card"><div className="thera-card-header"><div><div className="thera-eyebrow">CLINICAL CONTEXT</div><h2>Diagnoses</h2></div></div>{data.diagnoses.length > 0 && <div className="thera-table-wrap"><table className="thera-table"><thead><tr><th>Code</th><th>Description</th><th>Primary</th></tr></thead><tbody>{data.diagnoses.map((diagnosis) => <tr key={diagnosis.id}><td><strong>{String(diagnosis.diagnosis_code)}</strong></td><td>{String(diagnosis.diagnosis_description ?? "—")}</td><td>{diagnosis.is_primary ? "Yes" : "No"}</td></tr>)}</tbody></table></div>}{!signed && <div className="encounter-compact-form"><Icd10SearchInput code={diagnosisCode} description={diagnosisDescription} serviceDate={serviceDate} onSelect={(result) => { setDiagnosisCode(result.code); if (result.name) setDiagnosisDescription(result.name); }} /><input className="thera-input" placeholder="Diagnosis description" value={diagnosisDescription} onChange={(event) => setDiagnosisDescription(event.target.value)} /><button type="button" className="thera-action secondary" disabled={saving || !diagnosisCode.trim()} onClick={() => void addDiagnosis()}>+ Add Diagnosis</button></div>}</section>
         <section className="thera-card"><div className="thera-card-header"><div><div className="thera-eyebrow">CODE</div><h2>Coding & Service</h2></div></div><div className="encounter-coding-summary"><Field label="Scheduled Time" value={duration ? `${duration} minutes` : "Not available"} /><Field label="Visit Location" value={String(encounter.location_type ?? "—").replaceAll("_", " ")} /><Field label="Current POS" value={placeOfService || "—"} /><Field label="Payer" value={String(data.payer?.name ?? "—")} /></div>{!signed && <div className="encounter-service-form"><ProcedureCodeSearchInput code={serviceCode} serviceDate={serviceDate} onSelect={(result) => setServiceCode(result.code)} /><input className="thera-input" placeholder="Modifier" value={modifier1} onChange={(event) => setModifier1(event.target.value.toUpperCase())} /><input className="thera-input" type="number" min={1} value={units} onChange={(event) => setUnits(Number(event.target.value))} /><PlaceOfServiceSearchInput code={placeOfService} onSelect={(result) => setPlaceOfService(result.code)} /><input className="thera-input" type="number" step="0.01" min="0" placeholder="Charge $" value={chargeDollars} onChange={(event) => setChargeDollars(event.target.value)} /><button type="button" className="thera-action secondary" disabled={saving || !serviceCode.trim()} onClick={() => void addServiceLine()}>+ Add Service Line</button></div>}</section>
         <section className="thera-card thera-span-2 encounter-sign-card"><div className="thera-card-header"><div><div className="thera-eyebrow">REVIEW → SIGN</div><h2>Documentation Readiness & Signature</h2><p>Billing follow-up never prevents completion of the clinical record.</p></div><StatusBadge value={billingFollowUpCount ? "billing_follow_up" : "ready"} /></div><div className="encounter-readiness-grid">{completionChecks.map((check) => <div className="encounter-readiness-item" key={check.label}><StatusBadge value={check.status} /><div><strong>{check.label}</strong><span>{check.detail}</span></div></div>)}</div><div className="encounter-nonblocking-note">{billingFollowUpCount ? `${billingFollowUpCount} item(s) still need billing/coding follow-up. You may still sign the clinical note; THERASSISTANT will route those issues outside the clinical workflow.` : "The clinical record and current billing details are ready for handoff."}</div>{signed ? <div className="encounter-signed-handoff"><div><strong>Signed clinical record → Charge Capture</strong><span>The note is locked. Billing/coding corrections can continue without changing provider documentation.</span></div><Link href="/billing/charges" className="thera-action">Open Charge Capture</Link></div> : <div className="encounter-sign-row"><label><div className="thera-field-label">Provider Signature</div><input className="thera-input" value={signatureText} onChange={(event) => setSignatureText(event.target.value)} placeholder="Provider signature" /></label><button type="button" className="thera-action" disabled={saving || !noteText.trim() || !signatureText.trim()} onClick={() => void sign()}>{saving ? "Signing..." : "Sign & Lock Note"}</button></div>}</section>
