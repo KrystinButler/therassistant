@@ -2,13 +2,14 @@ import { useEffect, useState } from "react";
 import { Link, useRoute } from "wouter";
 import { StatusBadge } from "../components/status-badge";
 import { buildPayer360View } from "../domains/credentialing/payer-360";
+import { parsePayerRuleConfig } from "../domains/billing/payer-billing-rules";
 import { tenantInsert, tenantSelect, tenantUpdate, referenceSelect } from "../lib/tenant-data-client";
 import { money, shortDate } from "../lib/format";
 
 type Row = Record<string, any>;
 type View = ReturnType<typeof buildPayer360View>;
 
-type ModalKind = "resource" | "contract" | "schedule" | "rate" | null;
+type ModalKind = "resource" | "billing_rule" | "contract" | "schedule" | "rate" | null;
 
 export function PayerDetailPage() {
   const [, params] = useRoute<{ id: string }>("/payers/:id");
@@ -55,7 +56,43 @@ export function PayerDetailPage() {
     if (!view || !modal) return;
     setError(null);
     try {
-      if (modal === "resource") {
+      if (modal === "billing_rule") {
+        const parsed = parsePayerRuleConfig({
+          procedure_code: form.procedure_code,
+          max_units: form.max_units?.trim() ? Number(form.max_units) : undefined,
+          required_modifier: form.required_modifier?.trim() || undefined,
+          excluded_pos_codes: form.excluded_pos_codes?.trim()
+            ? form.excluded_pos_codes.split(",").map((value) => value.trim()) : undefined,
+        });
+        if (!parsed) throw new Error("Enter a valid CPT/HCPCS code, integer maximum units, two-character modifier, and two-digit excluded place-of-service codes.");
+        if (!form.label?.trim()) throw new Error("Give the payer rule a descriptive name.");
+        if (form.verification_status === "verified" && (!form.source_url?.trim() || !form.reviewed_at || !form.review_due_at)) {
+          throw new Error("A verified billing rule requires an authoritative source URL, review date, and next review date.");
+        }
+        const payload = {
+          payer_id: payerId,
+          payer_plan_id: form.payer_plan_id || null,
+          resource_type: "billing_rule",
+          label: form.label.trim(),
+          value: [
+            parsed.procedure_code,
+            parsed.max_units ? "max " + parsed.max_units + " units" : "",
+            parsed.required_modifier ? "requires " + parsed.required_modifier : "",
+            parsed.excluded_pos_codes?.length ? "excluded POS " + parsed.excluded_pos_codes.join(", ") : "",
+          ].filter(Boolean).join(" · "),
+          rule_config: parsed,
+          source_url: form.source_url?.trim() || null,
+          notes: form.notes?.trim() || null,
+          effective_date: form.effective_date || null,
+          expiration_date: form.expiration_date || null,
+          reviewed_at: form.reviewed_at || null,
+          review_due_at: form.review_due_at || null,
+          verification_status: form.verification_status || "unverified",
+          updated_at: new Date().toISOString(),
+        };
+        if (form.id) await tenantUpdate("payer_resources", form.id, payload);
+        else await tenantInsert("payer_resources", payload);
+      } else if (modal === "resource") {
         if (!form.label?.trim()) return;
         if (!form.value?.trim() && !form.url?.trim() && !form.notes?.trim()) {
           throw new Error("Add a value, URL, or operational note.");
@@ -148,6 +185,7 @@ export function PayerDetailPage() {
           <p>{view.payer.payer_type || "Payer"} · Shared payer knowledge for eligibility, participation, claims, payment, credentialing, and reimbursement.</p>
         </div>
         <div className="thera-filter-row">
+          <button type="button" className="thera-action secondary" onClick={() => open("billing_rule", { verification_status: "unverified" })}>+ Billing Rule</button>
           <button type="button" className="thera-action secondary" onClick={() => open("resource", { resource_type: "provider_services", label: "", value: "", url: "", source_url: "", notes: "", effective_date: "", expiration_date: "", payer_plan_id: "", reviewed_at: new Date().toISOString().slice(0, 10), review_due_at: "", verification_status: "unverified" })}>+ Payer Resource</button>
           <button type="button" className="thera-action secondary" onClick={() => open("contract", { contract_name: "", status: "draft", effective_date: "", notes: "" })}>+ Contract</button>
           <button type="button" className="thera-action secondary" onClick={() => open("schedule", { contract_id: view.contracts[0]?.id || "", name: "", status: "draft", effective_date: "" })}>+ Fee Schedule</button>
@@ -217,8 +255,12 @@ export function PayerDetailPage() {
                       <td>{shortDate(resource.effective_date)}</td>
                       <td>{shortDate(resource.expiration_date)}</td>
                       <td>{resource.source_url ? <a className="thera-link" href={String(resource.source_url)} target="_blank" rel="noreferrer">Source</a> : "—"}</td>
-                      <td><button type="button" className="thera-action secondary" onClick={() => open("resource", {
+                      <td><button type="button" className="thera-action secondary" onClick={() => open(resource.resource_type === "billing_rule" ? "billing_rule" : "resource", {
                         id: String(resource.id),
+                        procedure_code: String(resource.rule_config?.procedure_code ?? ""),
+                        max_units: String(resource.rule_config?.max_units ?? ""),
+                        required_modifier: String(resource.rule_config?.required_modifier ?? ""),
+                        excluded_pos_codes: Array.isArray(resource.rule_config?.excluded_pos_codes) ? resource.rule_config.excluded_pos_codes.join(", ") : "",
                         resource_type: String(resource.resource_type ?? "other"),
                         label: String(resource.label ?? ""),
                         value: String(resource.value ?? ""),
@@ -260,6 +302,26 @@ export function PayerDetailPage() {
       </div>
 
       {modal && <Modal title={modalTitle(modal)} onClose={() => setModal(null)}>
+        {modal === "billing_rule" && <Grid>
+          <Select label="Plan / Product (blank = payer-wide)" value={form.payer_plan_id || ""} options={view.plans.map((plan) => ({ value: plan.id, label: plan.name }))} onChange={(value) => setForm({ ...form, payer_plan_id: value })} />
+          <Input label="Rule Name" value={form.label || ""} onChange={(value) => setForm({ ...form, label: value })} />
+          <Input label="CPT / HCPCS" value={form.procedure_code || ""} onChange={(value) => setForm({ ...form, procedure_code: value })} />
+          <Input label="Maximum Units (optional)" type="number" value={form.max_units || ""} onChange={(value) => setForm({ ...form, max_units: value })} />
+          <Input label="Required Modifier (optional)" value={form.required_modifier || ""} onChange={(value) => setForm({ ...form, required_modifier: value })} />
+          <Input label="Excluded POS Codes (comma separated)" value={form.excluded_pos_codes || ""} onChange={(value) => setForm({ ...form, excluded_pos_codes: value })} />
+          <Input label="Authoritative Source URL" value={form.source_url || ""} onChange={(value) => setForm({ ...form, source_url: value })} />
+          <Select label="Verification" value={form.verification_status || "unverified"} options={[
+            { value: "unverified", label: "Unverified (advisory)" },
+            { value: "needs_review", label: "Needs review (advisory)" },
+            { value: "verified", label: "Verified (billing rule can hold charges)" },
+          ]} onChange={(value) => setForm({ ...form, verification_status: value })} />
+          <Input label="Reviewed On" type="date" value={form.reviewed_at || ""} onChange={(value) => setForm({ ...form, reviewed_at: value })} />
+          <Input label="Review Due" type="date" value={form.review_due_at || ""} onChange={(value) => setForm({ ...form, review_due_at: value })} />
+          <Input label="Effective From" type="date" value={form.effective_date || ""} onChange={(value) => setForm({ ...form, effective_date: value })} />
+          <Input label="Effective Through" type="date" value={form.expiration_date || ""} onChange={(value) => setForm({ ...form, expiration_date: value })} />
+          <label style={{ gridColumn: "1 / -1" }}><div className="thera-field-label">Contract / Coverage Evidence</div><textarea className="thera-input" rows={3} value={form.notes || ""} onChange={(event) => setForm({ ...form, notes: event.target.value })} /></label>
+          <p style={{ gridColumn: "1 / -1" }}>Only verified, source-linked rules within their review and effective periods can hold insurance billing. Unverified rules produce advisory warnings.</p>
+        </Grid>}
         {modal === "resource" && <Grid>
           <Select label="Area" value={form.resource_type || "other"} options={[
             { value: "provider_services", label: "Provider Services / Contact" },
@@ -333,6 +395,7 @@ function resourceLabel(value: string) {
     timely_filing: "Timely Filing",
     corrected_claim: "Corrected Claim",
     reimbursement: "Reimbursement",
+    billing_rule: "Billing Rule",
     other: "Other",
   };
   return labels[value] || value.replaceAll("_", " ");
@@ -340,6 +403,7 @@ function resourceLabel(value: string) {
 
 function modalTitle(kind: Exclude<ModalKind, null>) {
   if (kind === "resource") return "Payer Intelligence Resource";
+  if (kind === "billing_rule") return "Payer Billing Rule";
   if (kind === "contract") return "Add Contract";
   if (kind === "schedule") return "Add Fee Schedule";
   return "Add Fee Schedule Rate";
