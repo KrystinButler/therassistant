@@ -102,3 +102,16 @@ test("same-code, same-modifier duplicate billing lines get review, not automatic
   });
   assert.ok(result.checks.some(c=>c.code==="duplicate_service_line_review"&&c.status==="warn"&&!c.blocking));
 });
+
+test("dated rules cannot hold billing when service date is missing", () => {
+  const checks = evaluatePayerBillingRules({
+    ...base, serviceDate: null, serviceLines:[{...line,units:3}],
+  });
+  assert.ok(checks.some(c=>c.code==="payer_rule_dos_unknown_verified-rule"&&!c.blocking));
+  assert.equal(checks.some(c=>c.blocking),false);
+});
+test("unknown plan does not warn for unrelated procedure codes", () => {
+  assert.deepEqual(evaluatePayerBillingRules({
+    ...base, payerPlanId:null, serviceLines:[{...line,cpt_hcpcs_code:"H0004"}],
+  }),[]);
+});
