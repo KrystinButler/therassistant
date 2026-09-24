@@ -317,7 +317,7 @@ function coveragePayload(plans: PayerPlanRow[], coverage: InsuranceForm, patient
 
 export function ClientsPage() {
   const [, navigate] = useLocation();
-  const [search, setSearch] = useState("");
+  const [search, setSearch] = useState(() => new URLSearchParams(window.location.search).get("search") ?? "");
   const [version, setVersion] = useState(0);
   const [form, setForm] = useState<FormState | null>(null);
   const [baseline, setBaseline] = useState<FormState | null>(null);
