@@ -24,10 +24,6 @@ const cleanContext = {
     charge_amount_cents: 17500,
     place_of_service_code: "02",
   }],
-  fundingSourceType: "insurance",
-  fundingSourceSubtype: "commercial",
-  billingPath: "insurance_claim",
-  fundingContext: {},
   eligibilityStatus: "active",
   providerEnrollmentStatus: "approved",
 };
