@@ -115,3 +115,37 @@ test("unknown plan does not warn for unrelated procedure codes", () => {
     ...base, payerPlanId:null, serviceLines:[{...line,cpt_hcpcs_code:"H0004"}],
   }),[]);
 });
+
+test("plan-specific modifier does not erase payer-wide unit limit", () => {
+  const wide: PayerRuleResource = {
+    ...verified, id: "payer-wide-units", payer_plan_id: null,
+    rule_config: { procedure_code: "90834", max_units: 1 },
+  };
+  const plan: PayerRuleResource = {
+    ...verified, id: "plan-modifier",
+    rule_config: { procedure_code: "90834", required_modifier: "95" },
+  };
+  const checks = evaluatePayerBillingRules({
+    ...base, payerBillingRules: [wide, plan],
+    serviceLines: [{ ...line, units: 2, modifier1: null }],
+  });
+  assert.deepEqual(checks.filter(c => c.blocking).map(c => c.code).sort(), [
+    "payer_rule_payer-wide-units_0_units", "payer_rule_plan-modifier_0_modifier",
+  ]);
+});
+
+test("verified status alone cannot hold claims without an effective date or HTTPS source", () => {
+  const exceptions = [
+    { effective_date: null },
+    { source_url: "http://untrusted.example.test/rule" },
+    { reviewed_at: "2026-09-24" },
+  ];
+  for (const change of exceptions) {
+    const checks = evaluatePayerBillingRules({
+      ...base, payerBillingRules: [{ ...verified, ...change }],
+      serviceLines: [{ ...line, units: 2 }],
+    });
+    assert.equal(checks.some(c => c.blocking), false);
+    assert.ok(checks.some(c => c.code === "payer_rule_unverified_verified-rule"));
+  }
+});
