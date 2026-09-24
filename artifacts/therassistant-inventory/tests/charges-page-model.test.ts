@@ -4,9 +4,11 @@ import { readFileSync } from "node:fs";
 
 const source = readFileSync(new URL("../src/domains/billing/BillingQueuePage.tsx", import.meta.url), "utf8");
 
-test("Charge Capture and Claim Submission owns validation, batching, submission and claim outputs", () => {
-  assert.match(source, /<h1>Charge Capture & Claim Submission<\/h1>/);
-  assert.match(source, /Ready for Claim/);
+test("Charge Capture and Billing Routing owns funding queues, claim validation, batching, submission and claim outputs", () => {
+  assert.match(source, /<h1>Charge Capture & Billing Routing<\/h1>/);
+  assert.match(source, /Ready for Billing/);
+  assert.match(source, /Program Billing/);
+  assert.match(source, /Private Pay/);
   assert.match(source, /Validation Hold/);
   assert.match(source, /837P Batches/);
   assert.match(source, /validateClaim/);
