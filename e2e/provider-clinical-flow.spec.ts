@@ -25,7 +25,7 @@ test("provider completes a synthetic visit from schedule through signed note and
 
   const serviceLineComplete = page.getByText(/\d+ service line\(s\) connected\./);
   if (!(await serviceLineComplete.isVisible().catch(() => false))) {
-    await page.getByPlaceholder("Charge $").fill("150.00");
+    await page.getByRole("spinbutton", { name: "Service charge" }).fill("150.00");
     await page.getByRole("button", { name: "+ Add Service Line" }).click();
     await expect(page.getByText("Unbilled service line added.")).toBeVisible({ timeout: 15_000 });
     await expect(page.getByText(/1 service line\(s\) connected\./)).toBeVisible();
