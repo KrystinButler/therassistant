@@ -24,6 +24,10 @@ const cleanContext = {
     charge_amount_cents: 17500,
     place_of_service_code: "02",
   }],
+  fundingSourceType: "insurance",
+  fundingSourceSubtype: "commercial",
+  billingPath: "insurance_claim",
+  fundingContext: {},
   eligibilityStatus: "active",
   providerEnrollmentStatus: "approved",
 };
@@ -231,4 +235,52 @@ test("self-pay encounter creates patient-responsibility charge instead of claim-
   assert.equal(repo.charges[0].payer_id, null);
   assert.equal(repo.encounterUpdate.billing_status, "charged");
   assert.equal(repo.serviceLineUpdates[0].values.ready_for_claim, false);
+});
+
+
+test("program-funded encounter bypasses payer prerequisites and keeps missing diagnosis advisory", () => {
+  const result = evaluateBillingReadiness({
+    ...cleanContext,
+    fundingSourceType: "government_program",
+    fundingSourceSubtype: "judicial",
+    billingPath: "program_invoice_voucher",
+    fundingContext: { responsible_entity: "Synthetic Court Program", reference: "V-100" },
+    diagnoses: [],
+    eligibilityStatus: null,
+    providerEnrollmentStatus: null,
+    encounter: { ...cleanContext.encounter, payer_id: null },
+  });
+  assert.equal(result.ready, true);
+  assert.ok(result.checks.some((check) => check.code === "program_billing" && !check.blocking));
+  assert.ok(result.checks.some((check) => check.code === "diagnosis_not_recorded" && check.status === "warn" && !check.blocking));
+  assert.equal(result.checks.some((check) => check.code === "eligibility_not_active"), false);
+  assert.equal(result.checks.some((check) => check.code === "provider_enrollment"), false);
+});
+
+test("program-funded encounter creates a program-billing charge and never marks the service line claim-ready", async () => {
+  const repo = fakeRepo({
+    ...cleanContext,
+    fundingSourceType: "government_program",
+    fundingSourceSubtype: "probation_parole",
+    billingPath: "program_invoice_voucher",
+    fundingContext: { responsible_entity: "Synthetic Program", reference: "VOUCHER-1" },
+    eligibilityStatus: null,
+    providerEnrollmentStatus: null,
+    encounter: {
+      ...cleanContext.encounter,
+      payer_id: null,
+      funding_source_type: "government_program",
+      funding_source_subtype: "probation_parole",
+      billing_path: "program_invoice_voucher",
+      funding_context: { responsible_entity: "Synthetic Program", reference: "VOUCHER-1" },
+    },
+  });
+  const result = await createChargeFromEncounterWorkflow(repo, "enc-1");
+  assert.equal(result.ok, true);
+  assert.equal(repo.charges[0].charge_status, "program_billing");
+  assert.equal(repo.charges[0].payer_id, null);
+  assert.equal(repo.charges[0].billing_path, "program_invoice_voucher");
+  assert.equal(repo.charges[0].funding_source_type, "government_program");
+  assert.equal(repo.serviceLineUpdates[0].values.ready_for_claim, false);
+  assert.equal(repo.encounterUpdate.billing_status, "charged");
 });
