@@ -649,3 +649,10 @@
 .encounter-service-editor .encounter-service-form{margin-top:10px}
 .encounter-service-editor .encounter-service-form label{display:grid;gap:5px;font-size:.7rem;font-weight:650;color:var(--thera-navy)}
 .encounter-service-submit{display:flex;align-items:flex-end}.encounter-service-submit button{width:100%;justify-content:center}
+
+.encounter-sign-block{display:grid;gap:11px;margin-top:13px}
+.encounter-sign-guidance{display:flex;align-items:center;flex-wrap:wrap;gap:8px 12px;padding:10px 12px;border:1px solid var(--thera-border);border-left:3px solid var(--thera-sage);border-radius:7px;background:var(--thera-cream)}
+.encounter-sign-guidance strong{font-size:.76rem;color:var(--thera-navy)}
+.encounter-sign-guidance span{font-size:.71rem;color:var(--thera-muted);flex:1;min-width:180px}
+.encounter-sign-guidance .thera-action{white-space:nowrap}
+.encounter-sign-block .encounter-sign-row{margin-top:0}

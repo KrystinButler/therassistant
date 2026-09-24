@@ -35,3 +35,14 @@ test("diagnosis and service-line saves preserve an unsaved clinical draft", () =
   assert.match(serviceHandler, /editingServiceLineId \? "Unbilled service line updated\." : "Unbilled service line added\.",\s*true,/);
   assert.match(serviceHandler, /updateEncounterServiceLine/);
 });
+
+test("empty note and missing signature provide direct correction instead of a silent disabled sign button",()=>{
+  const sign = source.slice(source.indexOf("async function sign()"),source.indexOf("if (loading && !data)"));
+  assert.match(sign,/if \(!noteText\.trim\(\)\)/);
+  assert.match(sign,/noteRef\.current\?\.focus/);
+  assert.match(sign,/if \(!signatureText\.trim\(\)\)/);
+  assert.match(sign,/signatureRef\.current\?\.focus/);
+  assert.match(source,/Go to Note Editor/);
+  assert.match(source,/setData\(\(current\) => current \?/);
+  assert.doesNotMatch(source,/disabled=\{saving \|\| !noteText\.trim\(\) \|\| !signatureText\.trim\(\)\}/);
+});

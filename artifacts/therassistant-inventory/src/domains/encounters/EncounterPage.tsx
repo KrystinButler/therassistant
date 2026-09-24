@@ -103,6 +103,7 @@ export function EncounterPage() {
   const [showSlashMenu, setShowSlashMenu] = useState(false);
   const [showPhraseMenu, setShowPhraseMenu] = useState(false);
   const noteRef = useRef<HTMLTextAreaElement>(null);
+  const signatureRef = useRef<HTMLInputElement>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -337,18 +338,37 @@ export function EncounterPage() {
   }
 
   async function sign() {
+    if (saving || signed) return;
+    if (!noteText.trim()) {
+      setError("Enter clinical documentation in the note editor before signing.");
+      noteRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+      noteRef.current?.focus({ preventScroll: true });
+      return;
+    }
+    if (!signatureText.trim()) {
+      setError("Enter the rendering provider's signature before signing.");
+      signatureRef.current?.focus();
+      return;
+    }
+    if (!data?.encounter.provider_id) {
+      setError("This encounter has no rendering provider. Assign a provider before signing.");
+      return;
+    }
     setSaving(true);
     setError(null);
     setMessage(null);
     try {
       const providerId = String(data?.encounter.provider_id ?? "");
-      await saveClinicalNote(encounterId, { noteType, noteText, goalAddressed, structuredSelections, generatedNarrative, carryForwardContext });
+      const saved = await saveClinicalNote(encounterId, { noteType, noteText, goalAddressed, structuredSelections, generatedNarrative, carryForwardContext });
       const result = await signEncounterNote(encounterId, providerId, signatureText);
       if (!result.ok) {
         setError(result.details?.length ? `${result.message} ${result.details.join(" ")}` : result.message);
         return;
       }
-      setMessage("Clinical note signed and locked. THERASSISTANT handed the encounter to Charge Capture; any billing exceptions remain outside the clinical workflow.");
+      setData((current) => current ? { ...current,
+        notes: [{ ...saved, note_status: "signed", locked_at: result.value.signedAt }, ...current.notes.filter((row) => row.id !== saved.id)],
+      } : current);
+      setMessage("Clinical note signed and locked. Billing exceptions remain outside the clinical workflow.");
       await load();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unable to sign note.");
@@ -741,7 +761,17 @@ export function EncounterPage() {
             {serviceError && <div className="thera-state error" role="alert" style={{ marginTop: 9 }}>{serviceError}</div>}
           </div>}
         </section>
-        <section className="thera-card thera-span-2 encounter-sign-card" id="encounter-signature"><div className="thera-card-header"><div><div className="thera-eyebrow">REVIEW → SIGN</div><h2>Documentation Readiness & Signature</h2><p>Billing follow-up never prevents completion of the clinical record.</p></div><StatusBadge value={billingFollowUpCount ? "billing_follow_up" : "ready"} /></div><div className="encounter-readiness-grid">{completionChecks.map((check) => <div className="encounter-readiness-item" key={check.label}><StatusBadge value={check.status} /><div><strong>{check.label}</strong><span>{check.detail}</span></div></div>)}</div><div className="encounter-nonblocking-note">{billingFollowUpCount ? `${billingFollowUpCount} item(s) still need billing/coding follow-up. You may still sign the clinical note; THERASSISTANT will route those issues outside the clinical workflow.` : "The clinical record and current billing details are ready for handoff."}</div>{signed ? <div className="encounter-signed-handoff"><div><strong>Signed clinical record → Charge Capture</strong><span>The note is locked. Billing/coding corrections can continue without changing provider documentation.</span></div><Link href="/billing/charges" className="thera-action">Open Charge Capture</Link></div> : <div className="encounter-sign-row"><label><div className="thera-field-label">Provider Signature</div><input className="thera-input" value={signatureText} onChange={(event) => setSignatureText(event.target.value)} placeholder="Provider signature" /></label><button type="button" className="thera-action" disabled={saving || !noteText.trim() || !signatureText.trim()} onClick={() => void sign()}>{saving ? "Signing..." : "Sign & Lock Note"}</button></div>}</section>
+        <section className="thera-card thera-span-2 encounter-sign-card" id="encounter-signature"><div className="thera-card-header"><div><div className="thera-eyebrow">REVIEW → SIGN</div><h2>Documentation Readiness & Signature</h2><p>Billing follow-up never prevents completion of the clinical record.</p></div><StatusBadge value={billingFollowUpCount ? "billing_follow_up" : "ready"} /></div><div className="encounter-readiness-grid">{completionChecks.map((check) => <div className="encounter-readiness-item" key={check.label}><StatusBadge value={check.status} /><div><strong>{check.label}</strong><span>{check.detail}</span></div></div>)}</div><div className="encounter-nonblocking-note">{billingFollowUpCount ? `${billingFollowUpCount} item(s) still need billing/coding follow-up. You may still sign the clinical note; THERASSISTANT will route those issues outside the clinical workflow.` : "The clinical record and current billing details are ready for handoff."}</div>{signed ? <div className="encounter-signed-handoff"><div><strong>Signed clinical record → Charge Capture</strong><span>The note is locked. Billing/coding corrections can continue without changing provider documentation.</span></div><Link href="/billing/charges" className="thera-action">Open Charge Capture</Link></div> : <div className="encounter-sign-block">
+          <div className="encounter-sign-guidance" aria-live="polite">
+            {!noteText.trim() ? <><strong>Clinical note required</strong><span>Write the visit note before signing. Billing information is not required.</span>
+              <button type="button" className="thera-action secondary" onClick={() => { noteRef.current?.scrollIntoView({ behavior: "smooth", block: "center" }); noteRef.current?.focus({ preventScroll: true }); }}>Go to Note Editor ↑</button></>
+              : !signatureText.trim() ? <><strong>Add your signature</strong><span>The note is ready; enter the rendering provider's signature.</span></>
+              : <><strong>Ready to sign</strong><span>Sign & Lock will save your latest note text and lock the clinical record. Billing review happens afterward.</span></>}
+          </div>
+          <div className="encounter-sign-row"><label><div className="thera-field-label">Rendering Provider Signature</div><input ref={signatureRef} className="thera-input" value={signatureText} onChange={(event) => setSignatureText(event.target.value)} placeholder="Provider signature" /></label>
+            <button type="button" className="thera-action" disabled={saving} onClick={() => void sign()}>{saving ? "Signing…" : "Sign & Lock Note"}</button>
+          </div>
+        </div>}</section>
         {signed && <ExternalSummaryPanel input={{
           patientName: personName(data.client),
           providerName: personName(data.provider),
