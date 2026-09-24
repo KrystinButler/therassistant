@@ -183,7 +183,7 @@ export function FastChartingPanel(props: Props) {
       </div>}
     </div>
 
-    <div className="thera& props.noteSimilarity >= NOTE_SIMILARITY_REVIEW_THRESHOLD && <div className="thera-card" style={{ padding: 12 }}>
+    {props.priorContext && props.noteSimilarity >= NOTE_SIMILARITY_REVIEW_THRESHOLD && <div className="thera-card" style={{ padding: 12 }}>
       <div className="thera-alert">
         <strong>Prior-note similarity review</strong>
         <div style={{ marginTop: 4 }}>
