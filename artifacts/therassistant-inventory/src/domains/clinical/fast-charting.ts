@@ -43,6 +43,7 @@ export type StructuredSelections = {
   psychedelicContext: PsychedelicContext;
   timelineEvents: TimelineEvent[];
   similarityReviewAcknowledged: boolean;
+  psychotherapyMinutes: number | null;
   anxiety: Severity;
   depression: Severity;
   interventions: string[];
@@ -101,6 +102,7 @@ export function emptyStructuredSelections(): StructuredSelections {
     psychedelicContext: emptyPsychedelicContext(),
     timelineEvents: [],
     similarityReviewAcknowledged: false,
+    psychotherapyMinutes: null,
     anxiety: "",
     depression: "",
     interventions: [],
@@ -138,6 +140,7 @@ export function normalizeStructuredSelections(value: unknown): StructuredSelecti
     psychedelicContext: normalizePsychedelicContext(source.psychedelicContext ?? source.psychedelic_context),
     timelineEvents,
     similarityReviewAcknowledged: source.similarityReviewAcknowledged === true || source.similarity_review_acknowledged === true,
+    psychotherapyMinutes: typeof source.psychotherapyMinutes === "number" && Number.isInteger(source.psychotherapyMinutes) && source.psychotherapyMinutes > 0 && source.psychotherapyMinutes <= 1440 ? source.psychotherapyMinutes : null,
     anxiety: validSeverity.has(anxiety) ? anxiety as Severity : "",
     depression: validSeverity.has(depression) ? depression as Severity : "",
     interventions: Array.isArray(source.interventions) ? source.interventions.map(String) : [],
