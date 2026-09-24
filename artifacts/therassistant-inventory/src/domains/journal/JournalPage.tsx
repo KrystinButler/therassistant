@@ -5,6 +5,7 @@ import { StatusBadge } from "../../components/status-badge";
 import { dateTime, shortDate } from "../../lib/format";
 import { tenantSelect, type Row } from "../../lib/tenant-data-client";
 import { flagJournalEntry, markJournalReviewed } from "./repository";
+import { PORTAL_LOGIN } from "../portal/routes";
 
 type DataRow = Row & { id: string };
 
@@ -148,13 +149,21 @@ export function JournalPage() {
           <h1>Journal Review</h1>
           <p>Review patient-shared journal entries without converting patient-authored content into signed clinical documentation.</p>
         </div>
-        <input
-          className="thera-input"
-          style={{ maxWidth: 320 }}
-          placeholder="Search patient, mood, goal, or text..."
-          value={search}
-          onChange={(event) => setSearch(event.target.value)}
-        />
+        <div className="journal-portal-tools" style={{ display: "grid", gap: 8, width: "min(360px, 100%)" }}>
+          <a href={PORTAL_LOGIN} target="_blank" rel="noopener noreferrer"
+            className="thera-action" style={{ justifySelf: "end" }}
+            title="Open patient portal sign-in in a separate browser session">
+            Open Patient Portal ↗
+          </a>
+          <p className="thera-table-subtext" style={{ margin: 0, textAlign: "right", lineHeight: 1.5 }}>
+            For testing alongside your staff account, open the portal in a private browser window and sign in as an invited synthetic patient.
+            Staff access does not grant patient-portal access.
+          </p>
+          <input className="thera-input" style={{ width: "100%" }}
+            placeholder="Search patient, mood, goal, or text..."
+            aria-label="Search journal reviews" value={search}
+            onChange={(event) => setSearch(event.target.value)} />
+        </div>
       </div>
 
       <div className="thera-metric-grid" style={{ marginBottom: 16 }}>

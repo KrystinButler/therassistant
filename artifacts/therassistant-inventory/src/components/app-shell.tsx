@@ -3,15 +3,16 @@ import { Link, useLocation } from "wouter";
 import { ClientSearchContext } from "../navigation/client-search-context";
 import {
   Bell, BookOpenText, BriefcaseBusiness, CalendarDays, ChartNoAxesCombined,
-  ChevronDown, ClipboardList, CreditCard, FileText, Landmark, LayoutDashboard,
+  ChevronDown, ClipboardList, CreditCard, ExternalLink, FileText, Landmark, LayoutDashboard,
   LogOut, Menu, Search, Settings, UsersRound, UserRoundCog, X,
   type LucideIcon,
 } from "lucide-react";
 import { useAuth } from "../auth/auth-context";
 import { useTenant } from "../auth/tenant-context";
+import { PORTAL_LOGIN } from "../domains/portal/routes";
 
 type Props = { children: ReactNode };
-type NavItem = { label: string; href: string; icon: LucideIcon; paths?: string[] };
+type NavItem = { label: string; href: string; icon: LucideIcon; paths?: string[]; external?: boolean };
 type NavGroup = { label?: string; items: NavItem[] };
 
 const navigation: NavGroup[] = [
@@ -34,6 +35,7 @@ const navigation: NavGroup[] = [
       { label: "Providers", href: "/providers", icon: UserRoundCog },
       { label: "Credentialing", href: "/credentialing", icon: ClipboardList },
       { label: "Patient Journal", href: "/journal", icon: BookOpenText },
+      { label: "Patient Portal", href: PORTAL_LOGIN, icon: ExternalLink, external: true },
       { label: "Work Center", href: "/work-center", icon: BriefcaseBusiness },
     ],
   },
@@ -95,6 +97,14 @@ export function AppShell({ children }: Props) {
   function navLink(item: NavItem) {
     const active = matches(location, item.href) || item.paths?.some((path) => matches(location, path));
     const Icon = item.icon;
+    const contents = <><Icon size={19} strokeWidth={1.75} aria-hidden="true" /><span>{item.label}</span></>;
+    if (item.external) {
+      // This is the real patient portal, not a staff impersonation mode.
+      // A separate private browser session is required for simultaneous testing.
+      return <a key={item.href} href={item.href} target="_blank" rel="noopener noreferrer"
+        className="cw-nav-link" title="Open in a private window with an invited patient identity to test while staff remains signed in"
+        onClick={() => setMobileOpen(false)}>{contents}<ExternalLink size={13} aria-hidden="true" /></a>;
+    }
     return (
       <Link
         key={item.href}
@@ -103,8 +113,7 @@ export function AppShell({ children }: Props) {
         aria-current={active ? "page" : undefined}
         onClick={() => setMobileOpen(false)}
       >
-        <Icon size={19} strokeWidth={1.75} aria-hidden="true" />
-        <span>{item.label}</span>
+        {contents}
       </Link>
     );
   }
