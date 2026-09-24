@@ -100,9 +100,12 @@ export function evaluatePayerBillingRules(input: PayerRuleContext): ReadinessChe
       continue;
     }
     const trusted = resource.verification_status === "verified" &&
-      Boolean(resource.source_url && resource.reviewed_at && resource.review_due_at) &&
+      /^https:\/\/[^\s]+$/i.test(String(resource.source_url ?? "")) &&
+      Boolean(resource.effective_date && serviceDate && resource.reviewed_at && resource.review_due_at) &&
+      datePart(resource.effective_date) <= serviceDate &&
       datePart(resource.reviewed_at) <= today &&
-      datePart(resource.review_due_at) >= today;
+      datePart(resource.review_due_at) >= today &&
+      datePart(resource.review_due_at) >= datePart(resource.reviewed_at);
     if (!trusted) {
       checks.push(check("payer_rule_unverified_" + resource.id, "Payer Rule Review", "warn", false,
         "The rule for " + config.procedure_code + " lacks current verified source/review evidence; its restrictions are advisory only."));
@@ -110,21 +113,27 @@ export function evaluatePayerBillingRules(input: PayerRuleContext): ReadinessChe
     }
     for (const {index} of matchedLines) applicable.push({resource,config,index});
   }
-  // When a plan-specific rule and payer-wide rule govern the same line,
-  // apply the plan-specific rule rather than enforcing contradictory defaults.
+  // A plan rule overrides only the specific restriction it defines, not other
+  // independently verified payer-wide requirements for that code and line.
+  const restrictionKeys = (config: PayerRuleConfig, index: number) => [
+    ...(config.max_units === undefined ? [] : ["units"]),
+    ...(config.required_modifier ? ["modifier"] : []),
+    ...(config.excluded_pos_codes?.length ? ["pos"] : []),
+  ].map(kind => config.procedure_code + ":" + index + ":" + kind);
   const planOverrideKeys = new Set(applicable
-    .filter(x=>Boolean(x.resource.payer_plan_id))
-    .map(x=>x.config.procedure_code+":"+x.index));
+    .filter(x => Boolean(x.resource.payer_plan_id))
+    .flatMap(x => restrictionKeys(x.config, x.index)));
   for (const {resource,config,index} of applicable) {
-    if (!resource.payer_plan_id && planOverrideKeys.has(config.procedure_code+":"+index)) continue;
+    const overridden = (kind: string) => !resource.payer_plan_id &&
+      planOverrideKeys.has(config.procedure_code + ":" + index + ":" + kind);
     const line = input.serviceLines[index];
     const prefix = "payer_rule_" + resource.id + "_" + index;
     const ruleLabel = resource.label + " (" + config.procedure_code + ")";
-    if (config.max_units !== undefined && Number(line.units ?? 0) > config.max_units) {
+    if (config.max_units !== undefined && !overridden("units") && Number(line.units ?? 0) > config.max_units) {
       checks.push(check(prefix+"_units","Payer Rule: Units","fail",true,
         ruleLabel + " permits at most " + config.max_units + " unit(s); the billing line records " + line.units + "."));
     }
-    if (config.required_modifier) {
+    if (config.required_modifier && !overridden("modifier")) {
       const modifiers = [line.modifier1,line.modifier2,line.modifier3,line.modifier4]
         .map(x=>String(x ?? "").trim().toUpperCase());
       if (!modifiers.includes(config.required_modifier)) {
@@ -132,7 +141,7 @@ export function evaluatePayerBillingRules(input: PayerRuleContext): ReadinessChe
           ruleLabel + " requires modifier " + config.required_modifier + " under the currently verified payer rule."));
       }
     }
-    if (config.excluded_pos_codes?.includes(String(line.place_of_service_code ?? "").trim())) {
+    if (!overridden("pos") && config.excluded_pos_codes?.includes(String(line.place_of_service_code ?? "").trim())) {
       checks.push(check(prefix+"_pos","Payer Rule: Place of Service","fail",true,
         ruleLabel + " excludes place of service " + line.place_of_service_code + " under the currently verified payer rule."));
     }
