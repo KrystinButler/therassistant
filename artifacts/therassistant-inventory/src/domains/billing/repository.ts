@@ -45,7 +45,7 @@ async function getBillingContext(encounterId: string): Promise<BillingReadinessI
   );
   if (!encounter) throw new Error("Encounter not found.");
 
-  const [clients, notes, diagnoses, serviceLines, eligibilityRows, enrollmentRows] = await Promise.all([
+  const [clients, notes, diagnoses, serviceLines, eligibilityRows, enrollmentRows, providerRows, appointmentRows] = await Promise.all([
     tenantSelect<DataRow>("clients", { id: `eq.${String(encounter.client_id)}`, limit: "1" }),
     tenantSelect<DataRow>("clinical_notes", { encounter_id: `eq.${encounterId}`, order: "created_at.desc", limit: "1" }),
     tenantSelect<DataRow>("encounter_diagnoses", { encounter_id: `eq.${encounterId}`, order: "sequence_number.asc" }),
@@ -64,7 +64,26 @@ async function getBillingContext(encounterId: string): Promise<BillingReadinessI
           limit: "1",
         })
       : Promise.resolve([]),
+    encounter.provider_id
+      ? tenantSelect<DataRow>("providers", { id: `eq.${String(encounter.provider_id)}`, limit: "1" })
+      : Promise.resolve([]),
+    encounter.appointment_id
+      ? tenantSelect<DataRow>("appointments", { id: `eq.${String(encounter.appointment_id)}`, limit: "1" })
+      : Promise.resolve([]),
   ]);
+
+  const structuredRows = notes[0]
+    ? await tenantSelect<DataRow>("clinical_note_structured_data", {
+        clinical_note_id: `eq.${notes[0].id}`,
+        limit: "1",
+      })
+    : [];
+  const rawSelections = structuredRows[0]?.selections;
+  const selections = rawSelections && typeof rawSelections === "object" && !Array.isArray(rawSelections)
+    ? rawSelections as Record<string, unknown> : {};
+  const minutes = selections.psychotherapyMinutes;
+  const documentedPsychotherapyMinutes = typeof minutes === "number" && Number.isInteger(minutes) && minutes > 0 && minutes <= 1440
+    ? minutes : null;
 
   const client = first(clients);
   const legacyBillingType = String(metadata(client).billing_type ?? "insurance");
@@ -80,6 +99,9 @@ async function getBillingContext(encounterId: string): Promise<BillingReadinessI
     note: first(notes),
     diagnoses,
     serviceLines,
+    provider: first(providerRows),
+    appointment: first(appointmentRows),
+    documentedPsychotherapyMinutes,
     eligibilityStatus: first(eligibilityRows)
       ? String(first(eligibilityRows)?.eligibility_status ?? "")
       : null,
