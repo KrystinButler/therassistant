@@ -15,7 +15,7 @@ test("provider completes the synthetic insured visit for billing", async ({ page
   const signedHandoff = page.getByText("Signed clinical record → Charge Capture", { exact: false });
   if (await signedHandoff.isVisible().catch(() => false)) return;
 
-  await page.getByLabel("Session / SOAP Note").fill(
+  await page.locator("#encounter-progress-note-editor").fill(
     "Synthetic insured psychotherapy progress note. Client participated in psychotherapy and collaborative problem solving. No acute safety concerns were reported. Continue the current plan of care.",
   );
 
