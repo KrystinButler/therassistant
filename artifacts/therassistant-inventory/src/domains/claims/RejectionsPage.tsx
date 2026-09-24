@@ -80,11 +80,11 @@ export function RejectionsPage() {
         const validationHold = String(claim.claim_status) === "validation_failed";
         const rejectionWorkMessages = (work?.workItems ?? [])
           .filter((row) =>
-            (row.workqueue_type === "claim_rejection" || (validationHold && row.workqueue_type === "claim_validation")) &&
+            row.workqueue_type === (validationHold ? "claim_validation" : "claim_rejection") &&
             !["completed", "cancelled"].includes(String(row.workqueue_status ?? "")),
           )
           .flatMap((row) => splitMessages(row.description));
-        const latestRejectedResponse = (work?.responses ?? [])
+        const latestRejectedResponse = validationHold ? undefined : (work?.responses ?? [])
           .find((row) => String(row.response_status ?? "").toLowerCase() === "rejected");
         const responseMessages = latestRejectedResponse
           ? splitMessages(latestRejectedResponse.response_message)
