@@ -44,6 +44,9 @@ export type StructuredSelections = {
   timelineEvents: TimelineEvent[];
   similarityReviewAcknowledged: boolean;
   psychotherapyMinutes: number | null;
+  psychotherapyTimeSource?: "confirmed_schedule" | "actual_start_stop";
+  psychotherapyStartTime?: string | null;
+  psychotherapyStopTime?: string | null;
   anxiety: Severity;
   depression: Severity;
   interventions: string[];
@@ -141,6 +144,13 @@ export function normalizeStructuredSelections(value: unknown): StructuredSelecti
     timelineEvents,
     similarityReviewAcknowledged: source.similarityReviewAcknowledged === true || source.similarity_review_acknowledged === true,
     psychotherapyMinutes: typeof source.psychotherapyMinutes === "number" && Number.isInteger(source.psychotherapyMinutes) && source.psychotherapyMinutes > 0 && source.psychotherapyMinutes <= 1440 ? source.psychotherapyMinutes : null,
+    ...(source.psychotherapyTimeSource === "confirmed_schedule" || source.psychotherapyTimeSource === "actual_start_stop"
+      ? { psychotherapyTimeSource: source.psychotherapyTimeSource as StructuredSelections["psychotherapyTimeSource"] }
+      : {}),
+    ...(typeof source.psychotherapyStartTime === "string" && /^([01]\d|2[0-3]):[0-5]\d$/.test(source.psychotherapyStartTime)
+      ? { psychotherapyStartTime: source.psychotherapyStartTime } : {}),
+    ...(typeof source.psychotherapyStopTime === "string" && /^([01]\d|2[0-3]):[0-5]\d$/.test(source.psychotherapyStopTime)
+      ? { psychotherapyStopTime: source.psychotherapyStopTime } : {}),
     anxiety: validSeverity.has(anxiety) ? anxiety as Severity : "",
     depression: validSeverity.has(depression) ? depression as Severity : "",
     interventions: Array.isArray(source.interventions) ? source.interventions.map(String) : [],
