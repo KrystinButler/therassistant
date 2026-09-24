@@ -23,3 +23,11 @@ test("charge workflow remains one connected workspace instead of a separate clai
   assert.doesNotMatch(source, /href="\/claims\/submission"/);
   assert.match(source, /GET PAID · STAGES 04–05/);
 });
+
+test("Insurance Claims explains preparation, validation, batching and clearly distinguishes submission", () => {
+  assert.match(source, /Insurance Claims/);
+  assert.match(source, /Prepare Insurance Claims/);
+  assert.match(source, /Nothing is sent to an insurer from this section/);
+  assert.match(source, /Group by payer/);
+  assert.match(source, /No insurance charges or claims require preparation/);
+});

@@ -426,7 +426,7 @@ export function BillingQueuePage() {
         <Tab active={tab === "blocked"} onClick={() => setTab("blocked")} label={`Validation Hold (${groups.blocked.length})`} />
         <Tab active={tab === "program"} onClick={() => setTab("program")} label={`Program Billing (${groups.programCharges.length})`} />
         <Tab active={tab === "private-pay"} onClick={() => setTab("private-pay")} label={`Private Pay (${groups.privatePayCharges.length})`} />
-        <Tab active={tab === "unbatched"} onClick={() => setTab("unbatched")} label={`Claim Prep (${groups.readyCharges.length + groups.preBatchClaims.length})`} />
+        <Tab active={tab === "unbatched"} onClick={() => setTab("unbatched")} label={`Insurance Claims (${groups.readyCharges.length + groups.preBatchClaims.length})`} title="Create insurance claims, check them for errors and prepare payer batches—nothing is transmitted here." />
         <Tab active={tab === "batches"} onClick={() => setTab("batches")} label={`837P Batches (${groups.openBatches.length})`} />
         <Tab active={tab === "submitted"} onClick={() => setTab("submitted")} label={`Submitted / Responses (${groups.submittedBatches.length})`} />
       </div>
@@ -516,8 +516,8 @@ export function BillingQueuePage() {
   );
 }
 
-function Tab({ active, label, onClick }: { active: boolean; label: string; onClick: () => void }) {
-  return <button type="button" className={active ? "thera-tab active" : "thera-tab"} onClick={onClick}>{label}</button>;
+function Tab({ active, label, title, onClick }: { active: boolean; label: string; title?: string; onClick: () => void }) {
+  return <button type="button" className={active ? "thera-tab active" : "thera-tab"} title={title} onClick={onClick}>{label}</button>;
 }
 
 function EncounterTable({
@@ -680,11 +680,24 @@ function UnbatchedCharges({
     claimsByPayer.set(payerId, list);
   }
 
-  if (!groupedCharges.size && !claimsByPayer.size) {
-    return <section className="thera-card"><div className="thera-empty">No unbatched charges or claims.</div></section>;
-  }
-
   return <div className="thera-stack">
+    <section className="thera-card" style={{ borderLeft: "4px solid var(--thera-sage)" }}>
+      <div className="thera-eyebrow">INSURANCE ONLY · BEFORE SUBMISSION</div>
+      <h2 style={{ margin: "4px 0 6px" }}>Prepare Insurance Claims</h2>
+      <p style={{ maxWidth: 780 }}>This is where ready insurance charges become claims. Each claim is checked for missing or invalid details before it can be grouped into a payer-specific 837P file. Nothing is sent to an insurer from this section.</p>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 10, marginTop: 13 }}>
+        {[
+          ["01", "Create claim", "Convert captured charges into an insurance claim."],
+          ["02", "Check for errors", "Review required fields and route failed checks to Rejections."],
+          ["03", "Group by payer", "Create an 837P batch from claims that passed validation."],
+        ].map(([number, label, detail]) => <div key={number} style={{ padding: 11, border: "1px solid var(--thera-border)", borderRadius: 8, background: "var(--thera-cream)" }}>
+          <span className="thera-eyebrow">{number}</span>
+          <strong style={{ display: "block", color: "var(--thera-navy)", fontSize: ".82rem", marginTop: 3 }}>{label}</strong>
+          <p style={{ fontSize: ".73rem", margin: "4px 0 0" }}>{detail}</p>
+        </div>)}
+      </div>
+    </section>
+    {!groupedCharges.size && !claimsByPayer.size && <section className="thera-card"><div className="thera-empty">No insurance charges or claims require preparation. Create charges from Ready for Billing when signed encounters are available.</div></section>}
     {[...groupedCharges.entries()].map(([encounterId, charges]) => {
       const encounter = encounters.get(encounterId);
       const total = charges.reduce((sum, charge) => sum + Number(charge.charge_amount_cents ?? 0), 0);
