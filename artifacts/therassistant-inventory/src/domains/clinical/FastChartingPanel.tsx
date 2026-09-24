@@ -135,7 +135,7 @@ export function FastChartingPanel(props: Props) {
     <div className="thera-card" style={{ padding: 12 }}>
       <div className="thera-filter-row" style={{ justifyContent: "space-between", alignItems: "flex-start" }}>
         <div>
-          <strong>Documentation Context</strong>
+          <strong>Note Template & Guidance</strong>
           <div className="thera-table-subtext">Template context changes the prompts shown here. It does not change billing, diagnosis, or signing rules.</div>
         </div>
       </div>
@@ -256,7 +256,7 @@ export function FastChartingPanel(props: Props) {
 
     <div className="thera-card" style={{ padding: 12 }}>
       <div className="thera-filter-row" style={{ justifyContent: "space-between", alignItems: "flex-start" }}>
-        <div><strong>Click-to-Note</strong><div className="thera-table-subtext">Only selections you make are synthesized into narrative.</div></div>
+        <div><strong>Clinical Findings & Interventions</strong><div className="thera-table-subtext">Only selections you make are synthesized into narrative.</div></div>
         {props.priorContext && !props.signed && <button type="button" className="thera-action secondary" onClick={props.onCarryForward}>Carry Forward Structured Context</button>}
       </div>
       <div style={{ display: "grid", gap: 10, marginTop: 10 }}>
