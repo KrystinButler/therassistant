@@ -4,7 +4,7 @@ const routes = [
   { path: "/clients", heading: "Patients" },
   { path: "/schedule", heading: "My Schedule" },
   { path: "/claims", heading: "Claims & A/R Follow-Up" },
-  { path: "/payments", heading: "Payments, ERA & Reconciliation" },
+  { path: "/payments", heading: "Payment Posting" },
   { path: "/eligibility", heading: "Eligibility" },
   { path: "/credentialing", heading: "Credentialing" },
   { path: "/providers", heading: "Providers" },
@@ -32,31 +32,26 @@ test("retired Authorizations route resolves to Eligibility", async ({ page }) =>
 test("provider root opens the connected workflow home", async ({ page }) => {
   await page.goto("/");
   await expect.poll(() => new URL(page.url()).pathname).toBe("/");
-  await expect(page.getByRole("heading", { level: 1, name: "Today in THERASSISTANT" })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 2, name: "Today's Schedule" })).toBeVisible();
+  await expect(page.getByLabel("Practice summary")).toBeVisible();
 
   const nav = page.getByRole("navigation", { name: "Primary navigation" });
-  await expect(nav.getByRole("link", { name: /Home/ })).toBeVisible();
-
-  for (const stage of ["ENGAGE", "PREPARE", "DOCUMENT", "GET PAID", "OPERATE"]) {
-    await expect(nav.getByRole("button", { name: stage, exact: true })).toBeVisible();
+  for (const label of ["Dashboard", "Appointments", "Clients", "Clinical Notes", "Charge Capture", "Claims", "Payments"]) {
+    await expect(nav.getByRole("link", { name: label, exact: true })).toBeVisible();
   }
 });
 
-test("GET PAID exposes the product-manual revenue-cycle workqueues", async ({ page }) => {
+test("Direct navigation exposes the revenue-cycle workspaces", async ({ page }) => {
   await page.goto("/claims");
   await expect(page.getByRole("heading", { level: 1, name: "Claims & A/R Follow-Up", exact: true })).toBeVisible();
 
   const nav = page.getByRole("navigation", { name: "Primary navigation" });
-  await expect(nav.getByRole("button", { name: "GET PAID", exact: true })).toHaveAttribute("aria-expanded", "true");
-
-  for (const label of [
-    "Charge Capture",
-    "Claim Rejections",
-    "Claims & 837P",
-    "Denials & Appeals",
-    "Payments & ERA",
-  ]) {
-    await expect(nav.getByRole("link", { name: label, exact: true })).toBeVisible();
+  for (const [label, href] of [
+    ["Charge Capture", "/billing/charges"],
+    ["Claims", "/claims"],
+    ["Payments", "/payments"],
+  ] as const) {
+    await expect(nav.getByRole("link", { name: label, exact: true })).toHaveAttribute("href", href);
   }
 
   await expect(nav.getByText("Command Center", { exact: true })).toHaveCount(0);
