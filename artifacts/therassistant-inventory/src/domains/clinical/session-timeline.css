@@ -1,0 +1,17 @@
+/* Compact optional session timeline belongs near psychotherapy timing and note type. */
+.encounter-session-timeline{margin:10px 0 3px;border:1px solid var(--thera-border);border-radius:9px;background:var(--thera-paper);overflow:hidden}
+.encounter-timeline-heading{display:flex;align-items:center;gap:9px;list-style:none;cursor:pointer;padding:10px 13px;background:var(--thera-cream)}
+.encounter-timeline-heading::-webkit-details-marker{display:none}
+.encounter-timeline-heading:focus-visible{outline:3px solid var(--thera-sage);outline-offset:-3px}
+.encounter-timeline-heading strong{font-size:.73rem;color:var(--thera-navy)}
+.encounter-timeline-heading>span:nth-child(2){font-size:.65rem;color:var(--thera-muted);margin-left:auto}
+.encounter-timeline-chevron{font-size:.93rem;color:var(--thera-sage-dark);transition:transform .12s ease}
+.encounter-session-timeline[open] .encounter-timeline-chevron{transform:rotate(180deg)}
+.encounter-timeline-body{padding:12px;display:grid;gap:10px}
+.encounter-timeline-body .thera-form-grid{display:grid;grid-template-columns:95px minmax(180px,1fr);gap:8px}
+.encounter-timeline-body .thera-form-grid label{min-width:0;font-size:.69rem;font-weight:650;color:var(--thera-navy)}
+.encounter-timeline-body .thera-input{width:100%;min-width:0}
+.encounter-timeline-body .thera-alert{font-size:.69rem}
+.encounter-timeline-body .thera-filter-row{gap:7px}
+@media(max-width:650px){.encounter-timeline-body{padding:10px}.encounter-timeline-body .thera-form-grid{grid-template-columns:minmax(0,1fr)}.encounter-timeline-body .thera-form-grid label[style]{grid-column:auto!important}}
+@media(prefers-reduced-motion:reduce){.encounter-timeline-chevron{transition:none}}
