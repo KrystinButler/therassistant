@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Link, useLocation } from "wouter";
+import { ClientSearchContext } from "../navigation/client-search-context";
 import {
   Bell, BookOpenText, BriefcaseBusiness, CalendarDays, ChartNoAxesCombined,
   ChevronDown, ClipboardList, CreditCard, FileText, Landmark, LayoutDashboard,
@@ -43,12 +44,14 @@ function matches(path: string, href: string) {
 }
 
 export function AppShell({ children }: Props) {
-  const [location] = useLocation();
+  const [location, navigate] = useLocation();
   const { user, signOut } = useAuth();
   const { tenantName, roles } = useTenant();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
+  const [clientSearch, setClientSearch] = useState("");
+  const [submittedClientSearch, setSubmittedClientSearch] = useState({ term: "", revision: 0 });
 
   useEffect(() => {
     setMobileOpen(false);
@@ -104,6 +107,7 @@ export function AppShell({ children }: Props) {
   }
 
   return (
+    <ClientSearchContext.Provider value={submittedClientSearch}>
     <div className="thera-app cw-app">
       <header className="cw-global-header">
         <div className="cw-global-brand-area">
@@ -124,11 +128,16 @@ export function AppShell({ children }: Props) {
             </span>
           </Link>
         </div>
-        <form className="cw-global-search" action="/clients" method="get" role="search">
+        <form className="cw-global-search" role="search" onSubmit={(event) => {
+          event.preventDefault();
+          setSubmittedClientSearch((previous) => ({ term: clientSearch.trim(), revision: previous.revision + 1 }));
+          navigate("/clients");
+        }}>
           <Search size={20} aria-hidden="true" />
           <input
             type="search"
-            name="search"
+            value={clientSearch}
+            onChange={(event) => setClientSearch(event.target.value)}
             aria-label="Search clients"
             placeholder="Search clients by name, email or phone..."
           />
@@ -194,5 +203,6 @@ export function AppShell({ children }: Props) {
         <section className="thera-content cw-content">{children}</section>
       </main>
     </div>
+    </ClientSearchContext.Provider>
   );
 }
