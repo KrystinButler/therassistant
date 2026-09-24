@@ -421,6 +421,7 @@ export function EncounterPage() {
       forensicContext: forensicContextForCarryForward(priorStructuredContext.selections.forensicContext),
       psychedelicContext: psychedelicContextForCarryForward(priorStructuredContext.selections.psychedelicContext),
       timelineEvents: [],
+      psychotherapyMinutes: null,
       similarityReviewAcknowledged: false,
     });
     if (!goalAddressed.trim() && priorStructuredContext.goalAddressed) setGoalAddressed(priorStructuredContext.goalAddressed);
@@ -476,6 +477,7 @@ export function EncounterPage() {
             {note && <StatusBadge value={String(note.note_status)} />}
           </div>
           <div className="encounter-note-controls">
+            <label><div className="thera-field-label">Actual psychotherapy minutes</div><input className="thera-input" type="number" min={1} max={1440} step={1} value={structuredSelections.psychotherapyMinutes ?? ""} disabled={signed} onChange={(event) => { const text = event.target.value; const minutes = Number(text); setStructuredSelections((current) => ({ ...current, psychotherapyMinutes: text && Number.isInteger(minutes) && minutes >= 1 && minutes <= 1440 ? minutes : null })); }} placeholder="Actual direct psychotherapy time" /><small>Use actual psychotherapy time, not the scheduled visit length or E/M time.</small></label>
             <label><div className="thera-field-label">Note Type</div><select className="thera-input" value={noteType} disabled={signed} onChange={(event) => setNoteType(event.target.value)}><option value="psychotherapy">Psychotherapy</option><option value="assessment">Assessment</option><option value="intake">Intake</option><option value="crisis">Crisis</option><option value="case_management">Case Management</option><option value="medication_management">Medication Management</option><option value="other">Other</option></select></label>
             <label><div className="thera-field-label">Goal / Objective Addressed</div><input className="thera-input" value={goalAddressed} disabled={signed} onChange={(event) => setGoalAddressed(event.target.value)} placeholder="Goal or objective addressed" /></label>
           </div>
