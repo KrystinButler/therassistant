@@ -4,7 +4,7 @@ import { ClientSearchContext } from "../navigation/client-search-context";
 import {
   Bell, BookOpenText, BriefcaseBusiness, CalendarDays, ChartNoAxesCombined,
   ChevronDown, ClipboardList, CreditCard, FileText, Landmark, LayoutDashboard,
-  LogOut, Menu, Search, Settings, Sprout, UsersRound, UserRoundCog, X,
+  LogOut, Menu, Search, Settings, UsersRound, UserRoundCog, X,
   type LucideIcon,
 } from "lucide-react";
 import { useAuth } from "../auth/auth-context";
@@ -48,6 +48,7 @@ export function AppShell({ children }: Props) {
   const { user, signOut } = useAuth();
   const { tenantName, roles } = useTenant();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
   const [clientSearch, setClientSearch] = useState("");
@@ -55,6 +56,7 @@ export function AppShell({ children }: Props) {
 
   useEffect(() => {
     setMobileOpen(false);
+    setMobileSearchOpen(false);
     setProfileOpen(false);
   }, [location]);
 
@@ -62,6 +64,7 @@ export function AppShell({ children }: Props) {
     function closeOnEscape(event: KeyboardEvent) {
       if (event.key === "Escape") {
         setMobileOpen(false);
+        setMobileSearchOpen(false);
         setProfileOpen(false);
       }
     }
@@ -121,16 +124,17 @@ export function AppShell({ children }: Props) {
             {mobileOpen ? <X size={22} /> : <Menu size={22} />}
           </button>
           <Link href="/" className="cw-wordmark" aria-label="Therassistant EHR dashboard">
-            <Sprout size={36} strokeWidth={1.35} aria-hidden="true" />
+            <img className="cw-brand-emblem" src="/brand/favicon.webp" width={36} height={36} alt="" aria-hidden="true" />
             <span className="cw-wordmark-type">
               <strong>THERASSISTANT</strong>
               <small>EHR</small>
             </span>
           </Link>
         </div>
-        <form className="cw-global-search" role="search" onSubmit={(event) => {
+        <form className={mobileSearchOpen ? "cw-global-search mobile-search-open" : "cw-global-search"} role="search" onSubmit={(event) => {
           event.preventDefault();
           setSubmittedClientSearch((previous) => ({ term: clientSearch.trim(), revision: previous.revision + 1 }));
+          setMobileSearchOpen(false);
           navigate("/clients");
         }}>
           <Search size={20} aria-hidden="true" />
@@ -141,8 +145,10 @@ export function AppShell({ children }: Props) {
             aria-label="Search clients"
             placeholder="Search clients by name, email or phone..."
           />
+          <button type="submit" className="cw-search-submit" aria-label="Submit search"><Search size={17} /></button>
         </form>
         <div className="cw-header-actions">
+          <button type="button" className="cw-mobile-search-toggle" aria-label={mobileSearchOpen ? "Close search" : "Search patients"} aria-expanded={mobileSearchOpen} onClick={() => setMobileSearchOpen((open) => !open)}>{mobileSearchOpen ? <X size={19} /> : <Search size={19} />}</button>
           <Link href="/work-center" className="cw-alert-link" aria-label="Open Work Center" title="Work Center">
             <Bell size={21} strokeWidth={1.7} aria-hidden="true" />
           </Link>
