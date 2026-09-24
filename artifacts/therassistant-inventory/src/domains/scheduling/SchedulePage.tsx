@@ -22,6 +22,19 @@ type FormState = {
   cptCode: string;
 };
 
+const SERVICE_TYPES = [
+  { name: "Individual Therapy", code: "90837" },
+  { name: "Psychotherapy, 45 minutes", code: "90834" },
+  { name: "Psychotherapy, 30 minutes", code: "90832" },
+  { name: "Initial Assessment", code: "90791" },
+  { name: "Psychiatric Evaluation", code: "90792" },
+  { name: "Crisis Psychotherapy", code: "90839" },
+  { name: "Family Therapy", code: "90847" },
+  { name: "Group Therapy", code: "90853" },
+  { name: "Medication Management", code: "99213" },
+  { name: "Case Management", code: "" },
+] as const;
+
 const initialForm: FormState = {
   clientId: "", providerId: "", date: "", time: "09:00", durationMinutes: 60,
   locationType: "telehealth", serviceType: "Individual Therapy", cptCode: "90837",
@@ -311,8 +324,7 @@ export function SchedulePage() {
         <label>Time<input className="thera-input" type="time" value={form.time} onChange={(e) => setForm({ ...form, time: e.target.value })} /></label>
         <label>Duration<select className="thera-input" value={form.durationMinutes} onChange={(e) => setForm({ ...form, durationMinutes: Number(e.target.value) })}><option value={30}>30 minutes</option><option value={45}>45 minutes</option><option value={60}>60 minutes</option><option value={90}>90 minutes</option></select></label>
         <label>Location<select className="thera-input" value={form.locationType} onChange={(e) => setForm({ ...form, locationType: e.target.value as FormState["locationType"] })}><option value="telehealth">Telehealth</option><option value="in_person">In Person</option><option value="phone">Phone</option><option value="community">Community</option><option value="home">Home</option><option value="school">School</option><option value="other">Other</option></select></label>
-        <label>Service<input className="thera-input" value={form.serviceType} onChange={(e) => setForm({ ...form, serviceType: e.target.value })} /></label>
-        <label>CPT / HCPCS<input className="thera-input" value={form.cptCode} onChange={(e) => setForm({ ...form, cptCode: e.target.value })} /></label>
+        <label>Service Type<select className="thera-input" value={form.serviceType} onChange={(e) => { const service = SERVICE_TYPES.find((item) => item.name === e.target.value); setForm({ ...form, serviceType: e.target.value, cptCode: service?.code ?? form.cptCode }); }}><option value="">Select service</option>{SERVICE_TYPES.map((service) => <option key={service.name} value={service.name}>{service.name}</option>)}{form.serviceType && !SERVICE_TYPES.some((service) => service.name === form.serviceType) && <option value={form.serviceType}>{form.serviceType}</option>}</select><small>Sets the starting encounter note template. Billing codes are managed outside scheduling.</small></label>
       </div>
     </WorkDrawer>}
   </>;
