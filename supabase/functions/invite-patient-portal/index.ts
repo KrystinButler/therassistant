@@ -67,6 +67,7 @@ Deno.serve(async (req: Request) => {
   const origin = req.headers.get("Origin");
   const allowedOrigin = !origin || origin === PORTAL_ORIGIN
     || origin === "https://therassistant.vercel.app"
+    || origin === "https://therassistant-therassistant-1064.vercel.app"
     || /^https:\/\/therassistant-[a-z0-9-]+-therassistant-1064\.vercel\.app$/.test(origin);
   if (!allowedOrigin) return new Response(JSON.stringify({ error: "Origin is not allowed." }), { status: 403, headers: corsHeaders() });
   const requestOrigin = origin || PORTAL_ORIGIN;
