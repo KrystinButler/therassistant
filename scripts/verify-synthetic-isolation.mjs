@@ -210,3 +210,119 @@ const unchanged = await request("/rest/v1/clients?id=eq." + IDS.otherPatient + "
 assert(unchanged.payload?.[0]?.preferred_name === "Casey", "Cross-tenant write-denial control failed.");
 
 console.log("Synthetic isolation verified for distinct staff, provider, and patient identities.");
+
+
+const primaryTenant = "10000000-0000-4000-8000-000000000002";
+
+// Verify the staff-transcribed journal path using the same JWT/RLS boundary as the browser.
+const journalInput = {
+  tenant_id: primaryTenant,
+  client_id: IDS.insuredPatient,
+  entry_text: "Synthetic patient-reported text transcribed by staff.",
+  entry_date: new Date().toISOString().slice(0, 10),
+  author_type: "patient",
+  visibility: "shared_with_provider",
+  recorded_by_staff_user_id: staff.userId,
+  entry_status: "submitted",
+};
+const journalSaved = await request("/rest/v1/patient_journal_entries?select=id,recorded_by_staff_user_id", {
+  method: "POST",
+  token: staff.token,
+  body: journalInput,
+  prefer: "return=representation",
+});
+assert(journalSaved.payload?.[0]?.recorded_by_staff_user_id === staff.userId,
+  "Staff could not create a properly attributed, shared patient journal entry.");
+
+for (const [label, overrides] of [
+  ["private journal", { visibility: "private" }],
+  ["forged recorder", { recorded_by_staff_user_id: provider.userId }],
+  ["cross-tenant journal", { client_id: IDS.otherPatient }],
+]) {
+  const denied = await request("/rest/v1/patient_journal_entries?select=id", {
+    method: "POST",
+    token: staff.token,
+    body: { ...journalInput, ...overrides },
+    prefer: "return=representation",
+    allowFailure: true,
+  });
+  assert(!denied.response.ok || denied.payload?.length === 0,
+    "RLS allowed staff to create a " + label + ".");
+}
+
+const clinicianJournal = await request(
+  "/rest/v1/patient_journal_entries?select=id,recorded_by_staff_user_id&id=eq." + journalSaved.payload[0].id,
+  { token: provider.token },
+);
+assert(clinicianJournal.payload?.[0]?.recorded_by_staff_user_id === staff.userId,
+  "Clinician could not retrieve a shared, staff-transcribed journal entry.");
+
+const patientJournalDirect = await request("/rest/v1/patient_journal_entries?select=id&id=eq." + journalSaved.payload[0].id, {
+  token: patient.token,
+});
+assert(patientJournalDirect.payload?.length === 0,
+  "Patient portal principal bypassed its restricted journal RPC by directly reading staff tables.");
+
+// Exercise an actual private Storage upload/download, not a metadata-only document.
+const proofText = "Synthetic document bytes for private storage verification.";
+const proofFile = new Blob([proofText], { type: "text/plain" });
+const objectPath = [primaryTenant, IDS.insuredPatient, crypto.randomUUID(), "e2e-proof.txt"].join("/");
+const storageHeaders = {
+  apikey: PUBLISHABLE_KEY,
+  Authorization: "Bearer " + staff.token,
+  "Content-Type": "text/plain",
+  "x-upsert": "false",
+};
+const uploaded = await fetch(SUPABASE_URL + "/storage/v1/object/therassistant-documents/" + objectPath, {
+  method: "POST",
+  headers: storageHeaders,
+  body: proofFile,
+});
+assert(uploaded.ok, "Authenticated synthetic document upload failed: " + uploaded.status);
+
+const indexed = await request("/rest/v1/documents?select=id,storage_path", {
+  method: "POST",
+  token: staff.token,
+  body: {
+    tenant_id: primaryTenant,
+    client_id: IDS.insuredPatient,
+    document_type: "other",
+    document_status: "uploaded",
+    file_name: "e2e-proof.txt",
+    storage_path: objectPath,
+    mime_type: "text/plain",
+    file_size_bytes: proofFile.size,
+    uploaded_by: staff.userId,
+  },
+  prefer: "return=representation",
+});
+assert(indexed.payload?.[0]?.storage_path === objectPath,
+  "Uploaded private document bytes were not linked to their metadata.");
+
+const privateUrl = SUPABASE_URL + "/storage/v1/object/authenticated/therassistant-documents/" + objectPath;
+const download = await fetch(privateUrl, {
+  headers: { apikey: PUBLISHABLE_KEY, Authorization: "Bearer " + staff.token },
+});
+assert(download.ok && await download.text() === proofText,
+  "Authenticated private document download failed to return the original bytes.");
+
+const deniedStorage = await fetch(privateUrl, {
+  headers: { apikey: PUBLISHABLE_KEY, Authorization: "Bearer " + patient.token },
+});
+assert(!deniedStorage.ok,
+  "A patient portal principal downloaded a staff-only Storage object without authorization.");
+
+const crossTenantUpload = await fetch(
+  SUPABASE_URL + "/storage/v1/object/therassistant-documents/" +
+    [IDS.otherTenant, IDS.otherPatient, crypto.randomUUID(), "forbidden.txt"].join("/"),
+  { method: "POST", headers: storageHeaders, body: proofFile },
+);
+assert(!crossTenantUpload.ok, "Staff uploaded a private document outside its assigned tenant.");
+
+const patientDocumentsDirect = await request("/rest/v1/documents?select=id&id=eq." + indexed.payload[0].id, {
+  token: patient.token,
+});
+assert(patientDocumentsDirect.payload?.length === 0,
+  "Patient portal principal bypassed the portal document RPC and read staff document metadata.");
+
+console.log("Synthetic staff journals and private document byte transfers passed RLS isolation.");
