@@ -2,6 +2,7 @@ import type { ReadinessCheck } from "./types";
 import { evaluateFundingGuardrails } from "../billing/billing-guardrails";
 import { evaluateServiceGuardrails } from "../billing/service-guardrails";
 import { evaluatePayerBillingRules, type PayerRuleResource } from "../billing/payer-billing-rules";
+import { evaluateCodeCompatibility } from "../billing/code-compatibility";
 
 export type BillingReadinessInput = {
   encounter: Record<string, any>;
@@ -49,6 +50,7 @@ export function evaluateBillingReadiness(input: BillingReadinessInput): BillingR
   checks.push(...evaluateFundingGuardrails(input));
   checks.push(...evaluateServiceGuardrails(input));
   checks.push(...evaluatePayerBillingRules(input));
+  checks.push(...evaluateCodeCompatibility(input.serviceLines, billingPath));
 
   if (!input.note || !["signed", "locked"].includes(String(input.note.note_status))) {
     checks.push(result("note_unsigned", "Clinical Note", "fail", true, "The clinical note is not signed.", "Complete and sign the encounter note."));
