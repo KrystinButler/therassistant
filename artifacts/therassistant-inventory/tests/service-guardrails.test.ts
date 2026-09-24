@@ -121,3 +121,17 @@ test("stored structured psychotherapy time inconsistency is held in billing", ()
   assert.equal(result.ready, false);
   assert.ok(result.checks.some(c => c.code === "psychotherapy_duration_conflict_0" && c.blocking));
 });
+
+test("provider individual NPI is accepted and therapy-only credentials prompt E/M scope review", () => {
+  const result = evaluateBillingReadiness({
+    ...base,
+    provider: { id: "provider", individual_npi: "1234567890", credentials: "LCSW" },
+    serviceLines: [
+      { ...base.serviceLines[0], cpt_hcpcs_code: "90836" },
+      { ...base.serviceLines[0], id: "em", cpt_hcpcs_code: "99214" },
+    ],
+  });
+  assert.equal(result.ready, true);
+  assert.ok(result.checks.some(c => c.code === "psychotherapy_em_provider_review_0" && c.status === "warn"));
+  assert.equal(result.checks.some(c => c.code === "billing_provider_npi_missing"), false);
+});
