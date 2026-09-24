@@ -31,6 +31,8 @@ function encounterRepo(options: { ready?: boolean; appointmentStatus?: string } 
         readiness: { ready: options.ready ?? true, checks: [] },
         policyId: "policy-1",
         payerId: "payer-1",
+        fundingSourceType: "insurance",
+        billingPath: "insurance_claim",
       };
     },
     async createEncounter(values: Record<string, unknown>) {
@@ -64,6 +66,8 @@ test("payer readiness issues do not prevent encounter start", async () => {
   assert.equal(result.ok, true);
   assert.equal(repo.encounters.length, 1);
   assert.equal(repo.appointmentStatus, "in_session");
+  assert.equal(repo.encounters[0].funding_source_type, "insurance");
+  assert.equal(repo.encounters[0].billing_path, "insurance_claim");
 });
 
 test("cancelled, no-show, and rescheduled appointments cannot start encounters", async () => {
