@@ -1,0 +1,14 @@
+.encounter-plan-composer{display:grid;gap:11px;min-width:0;padding:12px;border:1px solid #aec8b2;border-radius:9px;background:#f5faf5}
+.encounter-plan-composer-heading{display:flex;align-items:start;justify-content:space-between;gap:7px;padding-bottom:8px;border-bottom:1px solid #dbe7db}
+.encounter-plan-composer-heading>div{display:grid;gap:4px}.encounter-plan-composer-heading strong{font-size:.83rem;color:var(--thera-navy)}
+.encounter-plan-composer-heading>button{width:28px;height:28px;border:1px solid var(--thera-border);border-radius:6px;background:#fff;color:var(--thera-navy);font-size:1.1rem;cursor:pointer}
+.encounter-plan-composer label{display:grid;gap:5px;min-width:0;color:var(--thera-navy);font-size:.71rem;font-weight:700}
+.encounter-plan-composer label span{font-weight:400;color:var(--thera-muted)}
+.encounter-plan-composer .thera-input{width:100%;min-width:0;font-size:.76rem}
+.encounter-plan-composer textarea{resize:vertical}
+.encounter-plan-dates{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}
+.encounter-plan-goal-fields{display:grid;gap:9px;padding-top:12px;border-top:1px solid #dbe7db}
+.encounter-plan-form-hint{margin:0;font-size:.65rem;line-height:1.5;color:var(--thera-muted)}
+.encounter-plan-composer-footer{display:flex;flex-wrap:wrap;align-items:center;justify-content:flex-end;gap:8px}
+.encounter-plan-composer-footer button{font-size:.69rem}
+@media(max-width:520px){.encounter-plan-composer{padding:10px}.encounter-plan-dates{grid-template-columns:minmax(0,1fr)}}

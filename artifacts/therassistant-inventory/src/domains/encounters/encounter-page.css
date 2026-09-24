@@ -669,3 +669,19 @@
 .encounter-time-adjustment>span{grid-column:1/-1;font-size:.65rem;color:var(--thera-muted)}
 .encounter-time-adjustment>button{grid-column:1/-1;justify-self:start}
 @media(max-width:600px){.encounter-scheduled-time{padding:10px}.encounter-time-adjustment{grid-template-columns:minmax(0,1fr)}}
+
+/* In-context treatment-plan authoring without leaving the clinical note. */
+.encounter-plan-heading{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:7px}
+.encounter-plan-heading-actions{display:flex;align-items:center;flex-wrap:wrap;gap:7px}
+.encounter-plan-heading-actions .thera-action{font-size:.64rem;padding:5px 9px}
+.encounter-treatment-section{display:grid;gap:10px}
+.encounter-treatment-section .encounter-context-source{display:grid;gap:5px}
+.encounter-treatment-section .encounter-context-source strong{font-size:.73rem;line-height:1.5}
+.encounter-treatment-section .encounter-context-source small{font-size:.65rem}
+.encounter-add-plan-goal{justify-self:start}
+.encounter-plan-empty{color:var(--thera-muted);font-size:.72rem}
+.encounter-goal-create-link{display:inline;border:0;background:transparent;color:var(--thera-sage-dark);font:inherit;font-weight:700;text-decoration:underline;cursor:pointer}
+#encounter-treatment-plans{scroll-margin-top:85px}
+
+.encounter-plan-switcher{display:grid;gap:5px;font-size:.68rem;font-weight:700;color:var(--thera-navy)}
+.encounter-plan-switcher .thera-input{max-width:100%;min-width:0;font-size:.74rem}
