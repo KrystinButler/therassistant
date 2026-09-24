@@ -278,7 +278,8 @@ const uploaded = await fetch(SUPABASE_URL + "/storage/v1/object/therassistant-do
   headers: storageHeaders,
   body: proofFile,
 });
-assert(uploaded.ok, "Authenticated synthetic document upload failed: " + uploaded.status);
+const uploadError = uploaded.ok ? "" : (await uploaded.text()).slice(0, 500);
+assert(uploaded.ok, "Authenticated synthetic document upload failed (" + uploaded.status + "): " + uploadError);
 
 const indexed = await request("/rest/v1/documents?select=id,storage_path", {
   method: "POST",
