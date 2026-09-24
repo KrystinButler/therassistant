@@ -125,15 +125,22 @@ export async function createChargeFromEncounterWorkflow(
     }
 
     const readiness = evaluateBillingReadiness(context);
-    const selfPay = context.billingType === "self_pay";
+    const billingPath =
+      context.billingPath ||
+      (context.billingType === "self_pay" ? "private_pay" : "insurance_claim");
+    const selfPay = billingPath === "private_pay";
+    const programBilling = billingPath === "program_invoice_voucher";
+    const insuranceClaim = billingPath === "insurance_claim";
     const blockingMessages = readiness.checks
       .filter((check) => check.blocking)
       .map((check) => check.message);
     const chargeStatus = selfPay
       ? "patient_responsibility"
-      : readiness.ready
-        ? "ready_for_claim"
-        : "blocked";
+      : programBilling
+        ? "program_billing"
+        : readiness.ready
+          ? "ready_for_claim"
+          : "blocked";
     const blockReason = readiness.ready ? null : blockingMessages.join(" ");
 
     const primaryDiagnosis =
@@ -158,7 +165,7 @@ export async function createChargeFromEncounterWorkflow(
       const current = activeByServiceLine.get(serviceLineId);
       if (
         current &&
-        ["claim_created", "patient_responsibility"].includes(String(current.charge_status ?? ""))
+        ["claim_created", "patient_responsibility", "program_billing"].includes(String(current.charge_status ?? ""))
       ) {
         charges.push(current);
         continue;
@@ -171,7 +178,11 @@ export async function createChargeFromEncounterWorkflow(
         appointment_id: context.encounter.appointment_id ?? null,
         clinical_note_id: context.note?.id ?? null,
         provider_id: context.encounter.provider_id ?? null,
-        payer_id: selfPay ? null : context.encounter.payer_id ?? null,
+        payer_id: insuranceClaim ? context.encounter.payer_id ?? null : null,
+        funding_source_type: context.fundingSourceType ?? context.encounter.funding_source_type ?? null,
+        funding_source_subtype: context.fundingSourceSubtype ?? context.encounter.funding_source_subtype ?? null,
+        billing_path: billingPath,
+        funding_context: context.fundingContext ?? context.encounter.funding_context ?? {},
         service_date:
           context.note?.service_date ??
           String(context.encounter.started_at ?? "").slice(0, 10),
@@ -190,7 +201,7 @@ export async function createChargeFromEncounterWorkflow(
         ? await repo.updateCharge(String(current.id), values)
         : await repo.createCharge(values);
       charges.push(charge);
-      await repo.updateServiceLine(serviceLineId, { ready_for_claim: readiness.ready && !selfPay });
+      await repo.updateServiceLine(serviceLineId, { ready_for_claim: readiness.ready && insuranceClaim });
     }
 
     if (!charges.length) {
