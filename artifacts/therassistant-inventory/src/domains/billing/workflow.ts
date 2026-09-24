@@ -15,7 +15,7 @@ export type BillingRepository = {
 
 function queueForCode(code: string) {
   if (code.startsWith("eligibility")) return "eligibility_issue";
-  if (code === "provider_enrollment") return "credentialing_issue";
+  if (code.startsWith("provider_enrollment")) return "credentialing_issue";
   if (code.startsWith("note_") || code.startsWith("diagnosis_")) return "missing_documentation";
   return "charge_validation";
 }
@@ -68,7 +68,7 @@ export async function routeEncounterToBillingWorkflow(
       });
 
       for (const [workqueueType, checks] of groupedBlockers) {
-        const highPriority = checks.some((check) => check.code === "provider_enrollment");
+        const highPriority = checks.some((check) => check.code.startsWith("provider_enrollment"));
         await repo.upsertWorkItem({
           workqueue_type: workqueueType,
           workqueue_status: "open",
