@@ -7,6 +7,10 @@ import {
 } from "../../lib/tenant-data-client";
 import { getPreSessionData } from "../scheduling/repository";
 import {
+  billingPathForFundingSource,
+  legacyFundingSourceType,
+} from "../billing/funding-source";
+import {
   startEncounterWorkflow,
   type AppointmentForEncounter,
   type EncounterRecord,
@@ -50,10 +54,13 @@ const repository: EncounterRepository = {
 
   async getPreSessionContext(id) {
     const { appointment } = await getPreSessionData(id);
+    const fundingSourceType = legacyFundingSourceType(appointment.billingType);
     return {
       readiness: appointment.readiness,
       policyId: appointment.policyId,
       payerId: appointment.payerId,
+      fundingSourceType,
+      billingPath: billingPathForFundingSource(fundingSourceType),
     };
   },
 
