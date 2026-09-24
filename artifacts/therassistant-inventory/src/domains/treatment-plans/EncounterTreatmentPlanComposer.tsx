@@ -32,6 +32,7 @@ export function EncounterTreatmentPlanComposer({
   const [goalText, setGoalText] = useState("");
   const [objectiveText, setObjectiveText] = useState("");
   const [createdPlanId, setCreatedPlanId] = useState<string | null>(null);
+  const [savedGoalId, setSavedGoalId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -59,6 +60,7 @@ export function EncounterTreatmentPlanComposer({
     setSaving(true);
     setError(null);
     let planId = mode === "goal" ? existingPlanId : createdPlanId ?? undefined;
+    let goalAlreadySaved = Boolean(savedGoalId);
     try {
       if (!planId && mode === "plan") {
         const draft: TreatmentPlanDraft = {
@@ -71,14 +73,21 @@ export function EncounterTreatmentPlanComposer({
         await onPlanPersisted(planId);
       }
       if (!planId) throw new Error("No treatment plan is selected.");
-      if (goal) await addTreatmentGoal(planId, { goalText: goal, objectiveText, status: "active" });
+      if (goal && !goalAlreadySaved) {
+        const createdGoal = await addTreatmentGoal(planId, { goalText: goal, objectiveText, status: "active" });
+        setSavedGoalId(String(createdGoal.id));
+        goalAlreadySaved = true;
+      }
       await onSaved(planId, goal || undefined);
     } catch (err) {
       // If goal creation fails after the plan was saved, retry against the
       // saved plan ID; never create a second plan on the next submit.
-      setError((createdPlanId || (mode === "plan" && planId))
-        ? "The plan was saved. " + (err instanceof Error ? err.message : "The goal could not be added.") + " Retry to complete the goal without duplicating the plan."
-        : err instanceof Error ? err.message : "Unable to save treatment plan.");
+      const reason = err instanceof Error ? err.message : "Unable to finish saving the treatment plan.";
+      setError(goalAlreadySaved
+        ? `The goal was saved, but the chart could not refresh: ${reason} Retry to finish without adding another goal.`
+        : createdPlanId || (mode === "plan" && planId)
+          ? `The plan was saved. ${reason} Retry without creating a duplicate plan.`
+          : reason);
     } finally {
       setSaving(false);
     }
@@ -114,17 +123,17 @@ export function EncounterTreatmentPlanComposer({
       </>}
       <div className="encounter-plan-goal-fields">
         <label>Measurable goal {mode === "plan" && <span>(optional)</span>}
-          <textarea className="thera-input" required={mode === "goal"} rows={2} value={goalText} onChange={(e) => setGoalText(e.target.value)} placeholder="Describe the goal in measurable terms" />
+          <textarea className="thera-input" required={mode === "goal"} disabled={Boolean(savedGoalId)} rows={2} value={goalText} onChange={(e) => setGoalText(e.target.value)} placeholder="Describe the goal in measurable terms" />
         </label>
         <label>Objective <span>(optional)</span>
-          <textarea className="thera-input" rows={2} value={objectiveText} onChange={(e) => setObjectiveText(e.target.value)} placeholder="Patient-specific objective" />
+          <textarea className="thera-input" disabled={Boolean(savedGoalId)} rows={2} value={objectiveText} onChange={(e) => setObjectiveText(e.target.value)} placeholder="Patient-specific objective" />
         </label>
       </div>
       {error && <div className="thera-state error" role="alert">{error}</div>}
       <div className="encounter-plan-composer-footer">
         <button type="button" className="thera-action secondary" disabled={saving} onClick={onCancel}>Cancel</button>
         <button type="submit" className="thera-action" disabled={saving || (mode === "plan" && !createdPlanId && (!providerId || !planText.trim())) || (mode === "goal" && !goalText.trim())}>
-          {saving ? "Saving…" : createdPlanId ? "Finish Plan" : mode === "plan" ? "Save Draft Plan" : "Add Goal"}
+          {saving ? "Saving…" : savedGoalId ? "Finish Saved Goal" : createdPlanId ? "Finish Plan" : mode === "plan" ? "Save Draft Plan" : "Add Goal"}
         </button>
       </div>
     </form>
