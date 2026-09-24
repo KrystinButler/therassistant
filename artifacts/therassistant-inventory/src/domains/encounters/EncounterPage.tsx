@@ -6,6 +6,8 @@ import { dateTime, money, shortDate } from "../../lib/format";
 import {
   addEncounterDiagnosis,
   addEncounterServiceLine,
+  updateEncounterServiceLine,
+  removeEncounterServiceLine,
   saveClinicalNote,
   signEncounterNote,
 } from "../clinical/repository";
@@ -18,6 +20,7 @@ import { clinicalNoteSimilarity, emptyStructuredSelections, expandSmartPhraseAtC
 import { forensicContextForCarryForward } from "../clinical/forensic-context";
 import { psychedelicContextForCarryForward } from "../clinical/psychedelic-context";
 import { Icd10SearchInput } from "../coding/Icd10SearchInput";
+import { normalizedServiceLine, matchingServiceLineExists } from "./service-line-validation";
 import { ProcedureCodeSearchInput } from "../coding/ProcedureCodeSearchInput";
 import { PlaceOfServiceSearchInput } from "../coding/PlaceOfServiceSearchInput";
 import {
@@ -112,6 +115,8 @@ export function EncounterPage() {
   const [diagnosisCode, setDiagnosisCode] = useState("");
   const [diagnosisDescription, setDiagnosisDescription] = useState("");
   const [serviceCode, setServiceCode] = useState("");
+  const [editingServiceLineId, setEditingServiceLineId] = useState<string | null>(null);
+  const [serviceError, setServiceError] = useState<string | null>(null);
   const [modifier1, setModifier1] = useState("");
   const [units, setUnits] = useState(1);
   const [chargeDollars, setChargeDollars] = useState("");
@@ -205,6 +210,7 @@ export function EncounterPage() {
     action: () => Promise<unknown>,
     successMessage: string,
     preserveClinicalDraft = false,
+    onFailure?: (message: string) => void,
   ) {
     const draft = preserveClinicalDraft
       ? {
@@ -230,8 +236,12 @@ export function EncounterPage() {
         setStructuredSelections(draft.structuredSelections);
         setCarryForwardContext(draft.carryForwardContext);
       }
+      return true;
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Unable to save encounter changes.");
+      const reason = err instanceof Error ? err.message : "Unable to save encounter changes.";
+      setError(reason);
+      onFailure?.(reason);
+      return false;
     } finally {
       setSaving(false);
     }
@@ -258,20 +268,54 @@ export function EncounterPage() {
     setDiagnosisDescription("");
   }
 
-  async function addServiceLine() {
-    const amount = Math.round(Number(chargeDollars || 0) * 100);
-    await withSave(
-      () => addEncounterServiceLine(encounterId, {
-        cptCode: serviceCode,
-        modifier1,
-        units,
-        chargeAmountCents: amount,
-        placeOfService,
-      }),
-      "Service line added to encounter.",
-      true,
-    );
+  function editServiceLine(line: EncounterDetail["serviceLines"][number]) {
+    setEditingServiceLineId(String(line.id));
+    setServiceError(null);
+    setServiceCode(String(line.cpt_hcpcs_code ?? ""));
+    setModifier1(String(line.modifier1 ?? ""));
+    setUnits(Number(line.units ?? 1));
+    setChargeDollars((Number(line.charge_amount_cents ?? 0) / 100).toFixed(2));
+    setPlaceOfService(String(line.place_of_service_code ?? "11"));
+    document.getElementById("encounter-service-editor")?.scrollIntoView({ behavior: "smooth", block: "center" });
+  }
+  function resetServiceEditor() {
+    setEditingServiceLineId(null);
+    setServiceError(null);
     setModifier1("");
+    setUnits(1);
+    setChargeDollars("");
+  }
+  async function addServiceLine() {
+    setServiceError(null);
+    let values;
+    try {
+      values = normalizedServiceLine({ cptCode: serviceCode, modifier1, units, chargeDollars, placeOfService });
+      if (!editingServiceLineId && matchingServiceLineExists(data?.serviceLines ?? [], values)) {
+        throw new Error("This encounter already has that procedure, modifier and place of service. Edit the existing line instead of adding a duplicate.");
+      }
+    } catch (err) {
+      setServiceError(err instanceof Error ? err.message : "Review service-line details.");
+      return;
+    }
+    const success = await withSave(
+      () => editingServiceLineId
+        ? updateEncounterServiceLine(encounterId, editingServiceLineId, values)
+        : addEncounterServiceLine(encounterId, values),
+      editingServiceLineId ? "Unbilled service line updated." : "Unbilled service line added.",
+      true,
+      setServiceError,
+    );
+    if (success) resetServiceEditor();
+  }
+  async function removeServiceLine(lineId: string) {
+    if (!window.confirm("Remove this unbilled service line? This cannot be undone.")) return;
+    const success = await withSave(
+      () => removeEncounterServiceLine(encounterId, lineId),
+      "Unbilled service line removed.",
+      true,
+      setServiceError,
+    );
+    if (success && editingServiceLineId === lineId) resetServiceEditor();
   }
 
   async function saveFundingPath() {
@@ -657,7 +701,46 @@ export function EncounterPage() {
           </div>
         </section>
         <section className="thera-card" id="encounter-diagnoses"><div className="thera-card-header"><div><div className="thera-eyebrow">CLINICAL CONTEXT</div><h2>Diagnoses</h2></div></div>{data.diagnoses.length > 0 && <div className="thera-table-wrap"><table className="thera-table"><thead><tr><th>Code</th><th>Description</th><th>Primary</th></tr></thead><tbody>{data.diagnoses.map((diagnosis) => <tr key={diagnosis.id}><td><strong>{String(diagnosis.diagnosis_code)}</strong></td><td>{String(diagnosis.diagnosis_description ?? "—")}</td><td>{diagnosis.is_primary ? "Yes" : "No"}</td></tr>)}</tbody></table></div>}{!signed && <div className="encounter-compact-form"><Icd10SearchInput code={diagnosisCode} description={diagnosisDescription} serviceDate={serviceDate} onSelect={(result) => { setDiagnosisCode(result.code); if (result.name) setDiagnosisDescription(result.name); }} /><input className="thera-input" placeholder="Diagnosis description" value={diagnosisDescription} onChange={(event) => setDiagnosisDescription(event.target.value)} /><button type="button" className="thera-action secondary" disabled={saving || !diagnosisCode.trim()} onClick={() => void addDiagnosis()}>+ Add Diagnosis</button></div>}</section>
-        <section className="thera-card" id="encounter-coding-service"><div className="thera-card-header"><div><div className="thera-eyebrow">CODE</div><h2>Coding & Service</h2></div></div><div className="encounter-coding-summary"><Field label="Scheduled Time" value={duration ? `${duration} minutes` : "Not available"} /><Field label="Visit Location" value={String(encounter.location_type ?? "—").replaceAll("_", " ")} /><Field label="Current POS" value={placeOfService || "—"} /><Field label="Payer" value={String(data.payer?.name ?? "—")} /></div>{!signed && <div className="encounter-service-form"><ProcedureCodeSearchInput code={serviceCode} serviceDate={serviceDate} onSelect={(result) => setServiceCode(result.code)} /><input className="thera-input" placeholder="Modifier" value={modifier1} onChange={(event) => setModifier1(event.target.value.toUpperCase())} /><input className="thera-input" type="number" min={1} value={units} onChange={(event) => setUnits(Number(event.target.value))} /><PlaceOfServiceSearchInput code={placeOfService} onSelect={(result) => setPlaceOfService(result.code)} /><input className="thera-input" type="number" step="0.01" min="0" placeholder="Charge $" value={chargeDollars} onChange={(event) => setChargeDollars(event.target.value)} /><button type="button" className="thera-action secondary" disabled={saving || !serviceCode.trim()} onClick={() => void addServiceLine()}>+ Add Service Line</button></div>}</section>
+        <section className="thera-card" id="encounter-coding-service">
+          <div className="thera-card-header"><div><div className="thera-eyebrow">CODE</div><h2>Coding & Service</h2></div></div>
+          <div className="encounter-coding-summary">
+            <Field label="Scheduled Time" value={duration ? `${duration} minutes` : "Not available"} />
+            <Field label="Visit Location" value={String(encounter.location_type ?? "—").replaceAll("_", " ")} />
+            <Field label="Current POS" value={placeOfService || "—"} />
+            <Field label="Payer" value={String(data.payer?.name ?? "—")} />
+          </div>
+          <div className="encounter-saved-services">
+            <div className="thera-card-header"><div><h3>Recorded service lines ({data.serviceLines.length})</h3><p>Review existing lines before creating another. Unbilled lines can be corrected here.</p></div></div>
+            {data.serviceLines.length ? <div className="thera-table-wrap"><table className="thera-table">
+              <thead><tr><th>CPT / HCPCS</th><th>Modifier</th><th>Units</th><th>POS</th><th>Charge</th>{!signed && <th>Actions</th>}</tr></thead>
+              <tbody>{data.serviceLines.map((line) => <tr key={String(line.id)}>
+                <td><strong>{String(line.cpt_hcpcs_code ?? "—")}</strong></td><td>{String(line.modifier1 ?? "—")}</td>
+                <td>{String(line.units ?? 1)}</td><td>{String(line.place_of_service_code ?? "—")}</td>
+                <td>{Number(line.charge_amount_cents ?? 0) > 0 ? money(Number(line.charge_amount_cents)) : <span className="encounter-service-warning">Missing charge</span>}</td>
+                {!signed && <td><div className="thera-filter-row">
+                  <button type="button" className="thera-action secondary" disabled={saving} onClick={() => editServiceLine(line)}>Edit</button>
+                  <button type="button" className="thera-action secondary" disabled={saving} onClick={() => void removeServiceLine(String(line.id))}>Remove</button>
+                </div></td>}
+              </tr>)}</tbody>
+            </table></div> : <div className="thera-empty">No service lines recorded for this visit.</div>}
+          </div>
+          {!signed && <div className="encounter-service-editor" id="encounter-service-editor">
+            <div className="thera-card-header split"><div><h3>{editingServiceLineId ? "Edit service line" : "Add service line"}</h3><p>Enter the code, units, place of service and a charge greater than $0.</p></div>
+              {editingServiceLineId && <button className="thera-action secondary" type="button" disabled={saving} onClick={resetServiceEditor}>Cancel edit</button>}
+            </div>
+            <div className="encounter-service-form">
+              <label>Procedure code <ProcedureCodeSearchInput code={serviceCode} serviceDate={serviceDate} onSelect={(result) => setServiceCode(result.code)} /></label>
+              <label>Modifier (optional) <input className="thera-input" maxLength={2} placeholder="e.g., 95" value={modifier1} onChange={(event) => setModifier1(event.target.value.toUpperCase())} /></label>
+              <label>Units <input aria-label="Service units" className="thera-input" type="number" min={1} step={1} value={units} onChange={(event) => setUnits(Number(event.target.value))} /></label>
+              <label>Place of service <PlaceOfServiceSearchInput code={placeOfService} onSelect={(result) => setPlaceOfService(result.code)} /></label>
+              <label>Charge ($) <input aria-label="Service charge" className="thera-input" type="number" step="0.01" min="0.01" placeholder="0.00" value={chargeDollars} onChange={(event) => setChargeDollars(event.target.value)} /></label>
+              <div className="encounter-service-submit"><button type="button" className="thera-action" disabled={saving} onClick={() => void addServiceLine()}>
+                {saving ? "Saving…" : editingServiceLineId ? "Save Service Line" : "+ Add Service Line"}
+              </button></div>
+            </div>
+            {serviceError && <div className="thera-state error" role="alert" style={{ marginTop: 9 }}>{serviceError}</div>}
+          </div>}
+        </section>
         <section className="thera-card thera-span-2 encounter-sign-card" id="encounter-signature"><div className="thera-card-header"><div><div className="thera-eyebrow">REVIEW → SIGN</div><h2>Documentation Readiness & Signature</h2><p>Billing follow-up never prevents completion of the clinical record.</p></div><StatusBadge value={billingFollowUpCount ? "billing_follow_up" : "ready"} /></div><div className="encounter-readiness-grid">{completionChecks.map((check) => <div className="encounter-readiness-item" key={check.label}><StatusBadge value={check.status} /><div><strong>{check.label}</strong><span>{check.detail}</span></div></div>)}</div><div className="encounter-nonblocking-note">{billingFollowUpCount ? `${billingFollowUpCount} item(s) still need billing/coding follow-up. You may still sign the clinical note; THERASSISTANT will route those issues outside the clinical workflow.` : "The clinical record and current billing details are ready for handoff."}</div>{signed ? <div className="encounter-signed-handoff"><div><strong>Signed clinical record → Charge Capture</strong><span>The note is locked. Billing/coding corrections can continue without changing provider documentation.</span></div><Link href="/billing/charges" className="thera-action">Open Charge Capture</Link></div> : <div className="encounter-sign-row"><label><div className="thera-field-label">Provider Signature</div><input className="thera-input" value={signatureText} onChange={(event) => setSignatureText(event.target.value)} placeholder="Provider signature" /></label><button type="button" className="thera-action" disabled={saving || !noteText.trim() || !signatureText.trim()} onClick={() => void sign()}>{saving ? "Signing..." : "Sign & Lock Note"}</button></div>}</section>
         {signed && <ExternalSummaryPanel input={{
           patientName: personName(data.client),

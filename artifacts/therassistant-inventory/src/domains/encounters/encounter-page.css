@@ -641,3 +641,11 @@
 /* Highlight editable encounter sections opened from charge-validation correction links. */
 #encounter-signature,#encounter-diagnoses,#encounter-coding-service,#encounter-billing-source,#encounter-session-time,#encounter-progress-note-editor{scroll-margin-top:85px}
 #encounter-signature:target,#encounter-diagnoses:target,#encounter-coding-service:target,#encounter-billing-source:target{outline:2px solid var(--thera-sage);outline-offset:3px}
+
+.encounter-saved-services{margin:12px 0}.encounter-saved-services .thera-card-header h3,.encounter-service-editor h3{font-size:.84rem;margin:0 0 4px;color:var(--thera-navy)}
+.encounter-saved-services .thera-card-header p,.encounter-service-editor .thera-card-header p{font-size:.69rem;margin:0;color:var(--thera-muted)}
+.encounter-service-warning{color:#90512c;font-weight:700;font-size:.7rem}
+.encounter-service-editor{padding:13px;border:1px solid var(--thera-border);border-radius:9px;background:var(--thera-cream)}
+.encounter-service-editor .encounter-service-form{margin-top:10px}
+.encounter-service-editor .encounter-service-form label{display:grid;gap:5px;font-size:.7rem;font-weight:650;color:var(--thera-navy)}
+.encounter-service-submit{display:flex;align-items:flex-end}.encounter-service-submit button{width:100%;justify-content:center}
