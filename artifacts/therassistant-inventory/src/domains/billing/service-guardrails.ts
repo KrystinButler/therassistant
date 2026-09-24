@@ -84,6 +84,38 @@ export function evaluateServiceGuardrails(input: ServiceGuardrailInput): Readine
   const hasEandM = codes.some(code => /^99[0-9]{3}$/.test(code));
   const actualMinutes = documentedPsychotherapyMinutes(input);
   const slotMinutes = scheduledMinutes(input.appointment);
+  const standalone = new Set(["90832", "90834", "90837"]);
+  const standaloneCodes = codes.filter(code => standalone.has(code));
+  const addOnCodes = codes.filter(code => psychotherapyAddOns.has(code));
+  if (new Set(standaloneCodes).size > 1 || new Set(addOnCodes).size > 1) {
+    checks.push(check(
+      "multiple_psychotherapy_time_codes", "Psychotherapy Code Compatibility", "warn", false,
+      "Multiple psychotherapy time categories appear on the same encounter; verify distinct documented services or correct overlapping codes.",
+      "Review actual service intervals and code combinations. Do not infer incompatibility from encounter duration alone.",
+    ));
+  }
+  if (standaloneCodes.length && addOnCodes.length) {
+    checks.push(check(
+      "mixed_psychotherapy_standalone_addon", "Psychotherapy Code Compatibility", "warn", false,
+      "Standalone and E/M add-on psychotherapy codes appear together; review whether separate services and documentation support both.",
+      "Verify distinct services and current coding/payer rules before insurance submission.",
+    ));
+  }
+  const seenLines = new Set<string>();
+  for (const line of input.serviceLines) {
+    const key = [line.cpt_hcpcs_code, line.modifier1, line.modifier2, line.place_of_service_code]
+      .map(value => String(value ?? "").trim().toUpperCase()).join("|");
+    if (!String(line.cpt_hcpcs_code ?? "").trim()) continue;
+    if (seenLines.has(key)) {
+      checks.push(check(
+        "duplicate_service_line_review", "Potential Duplicate Service", "warn", false,
+        "Two lines share the same procedure code, modifiers, and place of service.",
+        "Confirm that separate documented services or units justify the second line; otherwise consolidate.",
+      ));
+      break;
+    }
+    seenLines.add(key);
+  }
 
   for (const [i, line] of input.serviceLines.entries()) {
     const code = codes[i];
