@@ -474,7 +474,7 @@ function EncounterTable({
     <section className="thera-card">
       <div className="thera-table-wrap">
         <table className="thera-table">
-          <thead><tr><th>DOS</th><th>Patient</th><th>Provider</th><th>Funding / Payer</th><th>Encounter</th><th>Billing</th><th>Blocking Issues</th><th>Actions</th></tr></thead>
+          <thead><tr><th>DOS</th><th>Patient</th><th>Provider</th><th>Funding / Payer</th><th>Encounter</th><th>Billing</th><th>Blocking Issues</th><th>Advisories</th><th>Actions</th></tr></thead>
           <tbody>
             {rows.map((row) => {
               const charges = data.chargesByEncounter.get(row.id) ?? [];
@@ -486,6 +486,7 @@ function EncounterTable({
                 <td><StatusBadge value={String(row.encounter_status)} /></td>
                 <td><StatusBadge value={String(row.billing_status)} /></td>
                 <td>{row.blockingChecks.length ? <><StatusBadge value="blocked" /><div className="thera-table-subtext">{row.blockingChecks.map((check) => String(check.message)).join(" · ")}</div></> : "—"}</td>
+                <td>{row.advisoryChecks.length ? <><StatusBadge value="needs_review" /><div className="thera-table-subtext">{row.advisoryChecks.map((check) => String(check.message)).join(" · ")}</div></> : "—"}</td>
                 <td><div className="thera-filter-row"><Link className="thera-action secondary" href={`/encounters/${row.id}`}>Open Encounter</Link><button type="button" className="thera-action secondary" disabled={savingId === row.id} onClick={() => onAudit(row.id)}>Run Audit</button>{row.billing_status === "ready" && charges.length === 0 && <button type="button" className="thera-action" disabled={savingId === row.id} onClick={() => onCharge(row.id)}>Create Charge</button>}</div></td>
               </tr>;
             })}
