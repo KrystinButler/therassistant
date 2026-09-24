@@ -12,6 +12,8 @@ import {
   validateClaim,
 } from "../claims/repository";
 import { buildCms1500PreviewHtml } from "./cms1500-preview";
+import { getPrivatePaySuperbillData } from "./superbill-repository";
+import { buildSuperbillHtml } from "./superbill";
 import { getClaimPreviewData } from "./claim-output-repository";
 import { archiveBatch837PArtifact } from "./claim-artifact-repository";
 import {
@@ -381,6 +383,30 @@ export function BillingQueuePage() {
     }
   }
 
+  async function runSuperbillPreview(encounterId: string) {
+    const previewWindow = window.open("", "_blank");
+    if (!previewWindow) {
+      setError("Allow pop-ups to preview the superbill.");
+      return;
+    }
+    previewWindow.opener = null;
+    previewWindow.document.write("<p style='font-family:Inter,Arial,sans-serif;padding:24px'>Preparing superbill…</p>");
+    setSavingId("superbill-" + encounterId);
+    setError(null);
+    try {
+      const superbill = await getPrivatePaySuperbillData(encounterId);
+      previewWindow.document.open();
+      previewWindow.document.write(buildSuperbillHtml(superbill));
+      previewWindow.document.close();
+      previewWindow.focus();
+    } catch (err) {
+      previewWindow.close();
+      setError(err instanceof Error ? err.message : "Unable to generate superbill.");
+    } finally {
+      setSavingId(null);
+    }
+  }
+
   async function runPrintCms1500(_batchId: string, claimId: string) {
     await runCms1500Preview(claimId, true);
   }
@@ -447,6 +473,8 @@ export function BillingQueuePage() {
           heading="Private Pay Responsibility"
           description="These charges are routed to private-pay responsibility rather than an insurance claim."
           showPaymentsLink
+          savingId={savingId}
+          onGenerateSuperbill={(encounterId) => void runSuperbillPreview(encounterId)}
         />
       )}
 
@@ -568,15 +596,20 @@ function FundingCharges({
   heading,
   description,
   showPaymentsLink = false,
+  savingId,
+  onGenerateSuperbill,
 }: {
   rows: BillingData["charges"];
   data: BillingData;
   heading: string;
   description: string;
   showPaymentsLink?: boolean;
+  savingId?: string | null;
+  onGenerateSuperbill?: (encounterId: string) => void;
 }) {
   const encounters = new Map(data.encounters.map((row) => [row.id, row]));
-  if (!rows.length) return <section className="thera-card"><div className="thera-empty">No charges in this funding queue.</div></section>;
+  const renderedSuperbills = new Set<string>();
+  if (!rows.length) return <section className="thera-card"><div className="thera-empty">{showPaymentsLink ? "No private-pay charges yet. Once charges are created from a signed encounter, its superbill will be available here." : "No charges in this funding queue."}</div></section>;
 
   return <section className="thera-card">
     <div className="thera-card-header split">
@@ -593,6 +626,8 @@ function FundingCharges({
             ? charge.funding_context as Record<string, unknown>
             : {};
           const reference = String(context.reference ?? "").trim();
+          const showSuperbill = showPaymentsLink && Boolean(encounterId) && !renderedSuperbills.has(encounterId);
+          if (showSuperbill) renderedSuperbills.add(encounterId);
           return <tr key={charge.id}>
             <td>{shortDate(String(charge.service_date ?? encounter?.started_at ?? ""))}</td>
             <td>{encounter?.clientName ?? "—"}</td>
@@ -601,7 +636,7 @@ function FundingCharges({
             <td>{String(charge.cpt_code ?? "—")}</td>
             <td>{money(Number(charge.charge_amount_cents ?? 0))}</td>
             <td><StatusBadge value={String(charge.charge_status ?? "")} /></td>
-            <td>{encounterId ? <Link className="thera-action secondary" href={`/encounters/${encounterId}`}>Open Encounter</Link> : "—"}</td>
+            <td><div className="thera-filter-row">{encounterId ? <Link className="thera-action secondary" href={`/encounters/${encounterId}`}>Open Encounter</Link> : "—"}{showSuperbill && <button type="button" className="thera-action" disabled={Boolean(savingId)} onClick={() => onGenerateSuperbill?.(encounterId)}>{savingId === "superbill-" + encounterId ? "Preparing…" : "Generate Superbill"}</button>}</div></td>
           </tr>;
         })}</tbody>
       </table>
