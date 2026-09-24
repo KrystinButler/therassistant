@@ -2,6 +2,7 @@ import {
   tenantInsert,
   tenantSelect,
   tenantUpdate,
+  tenantUpdateExact,
   referenceSelect,
   type Row,
 } from "../../lib/tenant-data-client";
@@ -63,6 +64,23 @@ export async function saveClaimLineCorrections(claimId: string, rows: ClaimLineC
   const current = await tenantSelect<DataRow>("professional_claim_lines", { claim_id: `eq.${claimId}` });
   const allowed = new Set(current.map((row) => row.id));
   for (const row of rows) {
+    if (row.id.startsWith("new:")) {
+      if (!row.service_date || !row.cpt_code.trim() || row.units <= 0 || row.charge_amount_cents <= 0) {
+        throw new Error("Complete the new claim line's service date, CPT/HCPCS, units, and charge before saving.");
+      }
+      await tenantInsert<DataRow>("professional_claim_lines", {
+        claim_id: claimId,
+        service_date: row.service_date,
+        cpt_code: row.cpt_code.trim().toUpperCase(),
+        modifier1: row.modifier1.trim().toUpperCase() || null,
+        modifier2: row.modifier2.trim().toUpperCase() || null,
+        diagnosis_pointer: row.diagnosis_pointer.trim() || null,
+        place_of_service: row.place_of_service.trim() || null,
+        units: row.units,
+        charge_amount_cents: Math.round(row.charge_amount_cents),
+      });
+      continue;
+    }
     if (!allowed.has(row.id)) continue;
     await tenantUpdate<DataRow>("professional_claim_lines", row.id, {
       service_date: row.service_date || null,
@@ -81,8 +99,17 @@ export async function saveClaimDiagnosisCorrections(claimId: string, rows: Claim
   const current = await tenantSelect<DataRow>("claim_diagnoses", { claim_id: `eq.${claimId}` });
   const allowed = new Set(current.map((row) => row.id));
   for (const row of rows) {
+    if (row.id.startsWith("new:")) {
+      if (!row.diagnosis_code.trim()) throw new Error("Select a diagnosis code before saving a new diagnosis.");
+      await tenantInsert<DataRow>("claim_diagnoses", {
+        claim_id: claimId,
+        diagnosis_code: row.diagnosis_code.trim().toUpperCase(),
+        pointer_order: Math.max(1, Math.round(Number(row.pointer_order || 1))),
+      });
+      continue;
+    }
     if (!allowed.has(row.id)) continue;
-    await tenantUpdate<DataRow>("claim_diagnoses", row.id, {
+    await tenantUpdateExact<DataRow>("claim_diagnoses", row.id, {
       diagnosis_code: row.diagnosis_code.trim().toUpperCase(),
       pointer_order: Math.max(1, Math.round(Number(row.pointer_order || 1))),
     });

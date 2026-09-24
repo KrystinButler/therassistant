@@ -8,6 +8,7 @@ import {
   type RejectionCategory,
 } from "../rcm/queue-routing";
 import type { ClaimWorkRecord } from "./claim-work-drawer";
+import { deriveClaimValidationIssues } from "./claim-error-guidance";
 import { RejectionWorkDrawer } from "./rejection-work-drawer";
 import { getClaimsQueueData, type ClaimsQueueRow } from "./claims-queue-repository";
 import { getClaimWorkData } from "./workspace-repository";
@@ -76,9 +77,10 @@ export function RejectionsPage() {
 
       const next = await Promise.all(rejected.map(async (claim): Promise<RejectionItem> => {
         const work = await getClaimWorkData(claim.id);
+        const validationHold = String(claim.claim_status) === "validation_failed";
         const rejectionWorkMessages = (work?.workItems ?? [])
           .filter((row) =>
-            row.workqueue_type === "claim_rejection" &&
+            (row.workqueue_type === "claim_rejection" || (validationHold && row.workqueue_type === "claim_validation")) &&
             !["completed", "cancelled"].includes(String(row.workqueue_status ?? "")),
           )
           .flatMap((row) => splitMessages(row.description));
@@ -87,7 +89,11 @@ export function RejectionsPage() {
         const responseMessages = latestRejectedResponse
           ? splitMessages(latestRejectedResponse.response_message)
           : [];
-        const messages = responseMessages.length ? responseMessages : rejectionWorkMessages;
+        const exactFieldMessages = validationHold && work
+          ? deriveClaimValidationIssues(work.claim, work.lines, work.diagnoses)
+          : [];
+        const messages = [...new Set([...exactFieldMessages, ...responseMessages, ...rejectionWorkMessages])];
+        if (!messages.length && validationHold) messages.push("Claim failed validation. Review the highlighted fields and revalidate.");
         const categories = getRejectionCategories(messages.length ? messages : ["Other claim correction required."]);
         return {
           claim,
@@ -171,8 +177,8 @@ export function RejectionsPage() {
       <div className="thera-page-header">
         <div>
           <div className="thera-eyebrow">REVENUE CYCLE</div>
-          <h1>Rejections</h1>
-          <p>Correct failed claim scrubs and clearinghouse rejections, organized by payer and the field that needs attention.</p>
+          <h1>Rejections & Validation Holds</h1>
+          <p>Correct claim-validation holds and clearinghouse rejections in one editable workqueue. Select an error to jump to its field.</p>
         </div>
       </div>
 
