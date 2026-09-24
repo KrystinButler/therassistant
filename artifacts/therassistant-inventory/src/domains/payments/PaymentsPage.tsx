@@ -266,7 +266,7 @@ export function PaymentsPage() {
       <div className="thera-metric-card"><div className="thera-metric-label">Posted Payments</div><div className="thera-metric-value">{money(postedTotalCents)}</div><div className="thera-muted">{data.payments.length} payment{data.payments.length === 1 ? "" : "s"}</div></div>
       <div className="thera-metric-card"><div className="thera-metric-label">Unapplied</div><div className="thera-metric-value">{money(unappliedTotalCents)}</div><div className="thera-muted">{unappliedPayments.length} item{unappliedPayments.length === 1 ? "" : "s"} to allocate</div></div>
       <div className="thera-metric-card"><div className="thera-metric-label">Underpayments</div><div className="thera-metric-value">{money(underpaymentTotalCents)}</div><div className="thera-muted">{exceptionData?.variances.length ?? 0} variance{(exceptionData?.variances.length ?? 0) === 1 ? "" : "s"}</div></div>
-      <div className="thera-metric-card"><div className="thera-metric-label">Recovery / Refund</div><div className="thera-metric-value">{money(recoveryTotalCents)}</div><div className="thera-muted">{exceptionData?.recovery.length ?? 0} open item{(exceptionData?.recovery.length ?? 0) === 1 ? "" : "s"}</div></div>
+      <div className="thera-metric-card"><div className="thera-metric-label">Recoupments / Refunds</div><div className="thera-metric-value">{money(recoveryTotalCents)}</div><div className="thera-muted">{exceptionData?.recovery.length ?? 0} open item{(exceptionData?.recovery.length ?? 0) === 1 ? "" : "s"}</div></div>
     </div>}
 
     <section className="thera-card" style={{ padding: 12, marginBottom: 14 }}>
@@ -277,7 +277,7 @@ export function PaymentsPage() {
         <WorkflowButton active={tab === "unapplied"} onClick={() => selectTab("unapplied")} label="Unapplied" count={unappliedPayments.length} />
         <WorkflowButton active={tab === "adjustments"} onClick={() => selectTab("adjustments")} label="Adjustments" count={(data?.adjustments.length ?? 0) + (data?.reversals.length ?? 0)} />
         <WorkflowButton active={tab === "underpayments"} onClick={() => selectTab("underpayments")} label="Underpayments" count={exceptionData?.variances.length ?? 0} />
-        <WorkflowButton active={tab === "recovery"} onClick={() => selectTab("recovery")} label="Recovery / Refunds" count={exceptionData?.recovery.length ?? 0} />
+        <WorkflowButton active={tab === "recovery"} onClick={() => selectTab("recovery")} label="Recoupments / Refunds" count={exceptionData?.recovery.length ?? 0} />
       </div>
     </section>
 
