@@ -738,7 +738,7 @@ export function EncounterPage() {
                 {currentTreatmentPlan ? <div className="encounter-context-source">
                   <strong>{String(currentTreatmentPlan.plan_text ?? "Treatment plan")}</strong>
                   <small>Effective {shortDate(String(currentTreatmentPlan.effective_date ?? ""))} · {String(currentTreatmentPlan.status ?? "draft").replaceAll("_", " ")}</small>
-                  {currentTreatmentPlan.review_due_date && <small>Review due {shortDate(String(currentTreatmentPlan.review_due_date))}</small>}
+                  {Boolean(currentTreatmentPlan.review_due_date) && <small>Review due {shortDate(String(currentTreatmentPlan.review_due_date))}</small>}
                 </div> : <div className="thera-empty">No treatment plan on file. Create a draft here without leaving the encounter.</div>}
                 {activeGoals.map((goal) => { const goalText = displayText(goal, ["goal_text", "description", "goal", "title"], "Goal"); return <div className="encounter-context-goal" key={goal.id}><div><strong>{goalText}</strong><small>{String(goal.goal_status ?? goal.status ?? "active").replaceAll("_", " ")}</small></div>{!signed && <button type="button" onClick={() => injectIntoNote(`\nProgress regarding treatment goal: ${goalText}\nIntervention: \nPatient response/progress: \n`)}>Cite →</button>}</div>; })}
                 {!activeGoals.length && currentTreatmentPlan && <p className="encounter-plan-empty">No goals recorded for the current plan.</p>}
