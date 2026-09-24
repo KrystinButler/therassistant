@@ -6,6 +6,10 @@ export type BillingReadinessInput = {
   diagnoses: Array<Record<string, any>>;
   serviceLines: Array<Record<string, any>>;
   billingType?: string | null;
+  fundingSourceType?: string | null;
+  fundingSourceSubtype?: string | null;
+  billingPath?: string | null;
+  fundingContext?: Record<string, unknown>;
   eligibilityStatus?: string | null;
   providerEnrollmentStatus?: string | null;
 };
@@ -28,6 +32,10 @@ function result(
 
 export function evaluateBillingReadiness(input: BillingReadinessInput): BillingReadiness {
   const checks: ReadinessCheck[] = [];
+  const billingPath =
+    input.billingPath ||
+    (input.billingType === "self_pay" ? "private_pay" : "insurance_claim");
+  const insuranceClaim = billingPath === "insurance_claim";
 
   if (!input.note || !["signed", "locked"].includes(String(input.note.note_status))) {
     checks.push(result("note_unsigned", "Clinical Note", "fail", true, "The clinical note is not signed.", "Complete and sign the encounter note."));
@@ -36,7 +44,11 @@ export function evaluateBillingReadiness(input: BillingReadinessInput): BillingR
   }
 
   if (!input.diagnoses.length) {
-    checks.push(result("diagnosis_missing", "Diagnosis", "fail", true, "No encounter diagnosis is available for billing.", "Add at least one diagnosis."));
+    checks.push(
+      insuranceClaim
+        ? result("diagnosis_missing", "Diagnosis", "fail", true, "No encounter diagnosis is available for an insurance claim.", "Add at least one diagnosis.")
+        : result("diagnosis_not_recorded", "Diagnosis", "warn", false, "No encounter diagnosis is recorded. This is not an insurance-claim blocker for the selected billing path; verify the applicable program or private-pay requirements."),
+    );
   } else {
     checks.push(result("diagnosis_present", "Diagnosis", "pass", false, "Encounter diagnosis is available."));
   }
@@ -57,13 +69,21 @@ export function evaluateBillingReadiness(input: BillingReadinessInput): BillingR
     );
   }
 
-  if (input.billingType === "self_pay") {
+  if (billingPath === "private_pay") {
     checks.push(result(
       "self_pay",
-      "Patient Responsibility",
+      "Private Pay",
       "pass",
       false,
-      "Patient is self-pay. The charge will route to patient responsibility instead of payer claim creation.",
+      "This encounter will route to private-pay responsibility instead of payer claim creation.",
+    ));
+  } else if (billingPath === "program_invoice_voucher") {
+    checks.push(result(
+      "program_billing",
+      "Program Funding",
+      "pass",
+      false,
+      "This encounter will route to the program invoice/voucher queue instead of payer claim creation.",
     ));
   } else {
     if (!["active", "eligible"].includes(String(input.eligibilityStatus ?? ""))) {

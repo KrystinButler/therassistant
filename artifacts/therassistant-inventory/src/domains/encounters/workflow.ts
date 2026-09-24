@@ -19,6 +19,8 @@ export type EncounterRepository = {
     readiness: { ready: boolean; checks: Array<{ blocking?: boolean; message?: string }> };
     policyId?: string | null;
     payerId?: string | null;
+    fundingSourceType?: string | null;
+    billingPath?: string | null;
   }>;
   createEncounter(values: Record<string, unknown>): Promise<EncounterRecord>;
   updateAppointment(id: string, values: Record<string, unknown>): Promise<Record<string, unknown>>;
@@ -49,6 +51,8 @@ export async function startEncounterWorkflow(
     readiness: { ready: boolean; checks: Array<{ blocking?: boolean; message?: string }> };
     policyId?: string | null;
     payerId?: string | null;
+    fundingSourceType?: string | null;
+    billingPath?: string | null;
   } = { readiness: { ready: true, checks: [] } };
 
   try {
@@ -65,6 +69,10 @@ export async function startEncounterWorkflow(
       provider_id: appointment.provider_id || null,
       insurance_policy_id: preSession.policyId || null,
       payer_id: preSession.payerId || null,
+      funding_source_type: preSession.fundingSourceType || null,
+      funding_source_subtype: null,
+      billing_path: preSession.billingPath || null,
+      funding_context: {},
       encounter_status: "in_progress",
       billing_status: "not_ready",
       started_at: new Date().toISOString(),

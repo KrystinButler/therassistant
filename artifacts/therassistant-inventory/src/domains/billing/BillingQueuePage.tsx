@@ -22,7 +22,7 @@ import {
 type BillingData = Awaited<ReturnType<typeof getBillingQueueData>>;
 type ClaimsData = Awaited<ReturnType<typeof getClaimSubmissionData>>;
 type ChargesData = { billing: BillingData; claims: ClaimsData };
-type ChargesTab = "ready" | "blocked" | "unbatched" | "batches" | "submitted";
+type ChargesTab = "ready" | "blocked" | "program" | "private-pay" | "unbatched" | "batches" | "submitted";
 
 export function BillingQueuePage() {
   const [data, setData] = useState<ChargesData | null>(null);
@@ -58,6 +58,8 @@ export function BillingQueuePage() {
         ready: [],
         blocked: [],
         readyCharges: [],
+        programCharges: [],
+        privatePayCharges: [],
         preBatchClaims: [],
         readyForBatch: [],
         openBatches: [],
@@ -78,6 +80,8 @@ export function BillingQueuePage() {
       ready,
       blocked,
       readyCharges: data.billing.charges.filter((row) => row.charge_status === "ready_for_claim"),
+      programCharges: data.billing.charges.filter((row) => row.charge_status === "program_billing"),
+      privatePayCharges: data.billing.charges.filter((row) => row.charge_status === "patient_responsibility"),
       preBatchClaims: data.claims.claims.filter((claim) =>
         ["ready_for_validation", "ready_for_batch"].includes(String(claim.claim_status)),
       ),
@@ -351,14 +355,16 @@ export function BillingQueuePage() {
       <div className="thera-page-header">
         <div>
           <div className="thera-eyebrow">GET PAID · STAGES 04–05</div>
-          <h1>Charge Capture & Claim Submission</h1>
-          <p>Move a signed encounter through charge readiness, clean-claim validation, 837P batching, submission, and response tracking without re-entering the clinical record.</p>
+          <h1>Charge Capture & Billing Routing</h1>
+          <p>Route signed encounters to insurance claims, program invoice/voucher work, or private-pay responsibility without re-entering the clinical record.</p>
         </div>
       </div>
 
       <div className="thera-tabs" style={{ marginBottom: 16 }}>
-        <Tab active={tab === "ready"} onClick={() => setTab("ready")} label={`Ready for Claim (${groups.ready.length})`} />
+        <Tab active={tab === "ready"} onClick={() => setTab("ready")} label={`Ready for Billing (${groups.ready.length})`} />
         <Tab active={tab === "blocked"} onClick={() => setTab("blocked")} label={`Validation Hold (${groups.blocked.length})`} />
+        <Tab active={tab === "program"} onClick={() => setTab("program")} label={`Program Billing (${groups.programCharges.length})`} />
+        <Tab active={tab === "private-pay"} onClick={() => setTab("private-pay")} label={`Private Pay (${groups.privatePayCharges.length})`} />
         <Tab active={tab === "unbatched"} onClick={() => setTab("unbatched")} label={`Claim Prep (${groups.readyCharges.length + groups.preBatchClaims.length})`} />
         <Tab active={tab === "batches"} onClick={() => setTab("batches")} label={`837P Batches (${groups.openBatches.length})`} />
         <Tab active={tab === "submitted"} onClick={() => setTab("submitted")} label={`Submitted / Responses (${groups.submittedBatches.length})`} />
@@ -385,6 +391,25 @@ export function BillingQueuePage() {
           savingId={savingId}
           onAudit={(id) => void runEncounterAction(id, "audit")}
           onCharge={(id) => void runEncounterAction(id, "charge")}
+        />
+      )}
+
+      {!loading && data && tab === "program" && (
+        <FundingCharges
+          rows={groups.programCharges}
+          data={data.billing}
+          heading="Program Invoice / Voucher Queue"
+          description="These charges are intentionally excluded from CMS-1500 and 837P claim creation. Use the encounter funding reference to complete the applicable program billing process."
+        />
+      )}
+
+      {!loading && data && tab === "private-pay" && (
+        <FundingCharges
+          rows={groups.privatePayCharges}
+          data={data.billing}
+          heading="Private Pay Responsibility"
+          description="These charges are routed to private-pay responsibility rather than an insurance claim."
+          showPaymentsLink
         />
       )}
 
@@ -449,7 +474,7 @@ function EncounterTable({
     <section className="thera-card">
       <div className="thera-table-wrap">
         <table className="thera-table">
-          <thead><tr><th>DOS</th><th>Patient</th><th>Provider</th><th>Payer</th><th>Encounter</th><th>Billing</th><th>Blocking Issues</th><th>Actions</th></tr></thead>
+          <thead><tr><th>DOS</th><th>Patient</th><th>Provider</th><th>Funding / Payer</th><th>Encounter</th><th>Billing</th><th>Blocking Issues</th><th>Actions</th></tr></thead>
           <tbody>
             {rows.map((row) => {
               const charges = data.chargesByEncounter.get(row.id) ?? [];
@@ -469,6 +494,54 @@ function EncounterTable({
       </div>
     </section>
   );
+}
+
+
+function FundingCharges({
+  rows,
+  data,
+  heading,
+  description,
+  showPaymentsLink = false,
+}: {
+  rows: BillingData["charges"];
+  data: BillingData;
+  heading: string;
+  description: string;
+  showPaymentsLink?: boolean;
+}) {
+  const encounters = new Map(data.encounters.map((row) => [row.id, row]));
+  if (!rows.length) return <section className="thera-card"><div className="thera-empty">No charges in this funding queue.</div></section>;
+
+  return <section className="thera-card">
+    <div className="thera-card-header split">
+      <div><h2>{heading}</h2><p>{description}</p></div>
+      {showPaymentsLink && <Link className="thera-action secondary" href="/payments">Open Payments</Link>}
+    </div>
+    <div className="thera-table-wrap">
+      <table className="thera-table">
+        <thead><tr><th>DOS</th><th>Patient</th><th>Funding</th><th>Reference</th><th>Service</th><th>Charge</th><th>Status</th><th>Action</th></tr></thead>
+        <tbody>{rows.map((charge) => {
+          const encounterId = String(charge.encounter_id ?? "");
+          const encounter = encounters.get(encounterId);
+          const context = charge.funding_context && typeof charge.funding_context === "object"
+            ? charge.funding_context as Record<string, unknown>
+            : {};
+          const reference = String(context.reference ?? "").trim();
+          return <tr key={charge.id}>
+            <td>{shortDate(String(charge.service_date ?? encounter?.started_at ?? ""))}</td>
+            <td>{encounter?.clientName ?? "—"}</td>
+            <td>{encounter?.payerName ?? String(charge.billing_path ?? "—").replaceAll("_", " ")}</td>
+            <td>{reference || "—"}</td>
+            <td>{String(charge.cpt_code ?? "—")}</td>
+            <td>{money(Number(charge.charge_amount_cents ?? 0))}</td>
+            <td><StatusBadge value={String(charge.charge_status ?? "")} /></td>
+            <td>{encounterId ? <Link className="thera-action secondary" href={`/encounters/${encounterId}`}>Open Encounter</Link> : "—"}</td>
+          </tr>;
+        })}</tbody>
+      </table>
+    </div>
+  </section>;
 }
 
 function UnbatchedCharges({

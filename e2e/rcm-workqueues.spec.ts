@@ -45,7 +45,7 @@ test("GET PAID navigation follows the product manual", async ({ page }) => {
 
 test("canonical RCM routes render the manual-aligned owning pages", async ({ page }) => {
   const routes = [
-    ["/billing/charges", "Charge Capture & Claim Submission"],
+    ["/billing/charges", "Charge Capture & Billing Routing"],
     ["/rejections", "Rejections"],
     ["/claims", "Claims & A/R Follow-Up"],
     ["/denials", "Denials, Appeals & A/R"],

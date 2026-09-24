@@ -47,7 +47,7 @@ test("staff creates, archives, records and accepts the synthetic insured claim",
   });
 
   await page.goto("/billing/charges");
-  await expect(page.getByRole("heading", { name: "Charge Capture & Claim Submission" })).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByRole("heading", { name: "Charge Capture & Billing Routing" })).toBeVisible({ timeout: 15_000 });
 
   await page.getByRole("button", { name: /Claim Prep/ }).click();
   const chargeCard = page.locator("section.thera-card").filter({ hasText: "Taylor Morgan" }).first();

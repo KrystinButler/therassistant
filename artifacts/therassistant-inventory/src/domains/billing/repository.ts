@@ -7,6 +7,10 @@ import {
 } from "../../lib/tenant-data-client";
 import type { BillingReadinessInput } from "../readiness/evaluate-billing-readiness";
 import {
+  fundingSourceLabel,
+  resolveEncounterFunding,
+} from "./funding-source";
+import {
   createChargeFromEncounterWorkflow,
   routeEncounterToBillingWorkflow,
   type BillingRepository,
@@ -15,6 +19,10 @@ import {
 type DataRow = Row & { id: string };
 type BillingQueueEncounter = DataRow & {
   billingType: string;
+  fundingSourceType: string;
+  fundingSourceSubtype: string;
+  billingPath: string;
+  fundingSourceLabel: string;
   clientName: string;
   providerName: string;
   payerName: string;
@@ -59,10 +67,16 @@ async function getBillingContext(encounterId: string): Promise<BillingReadinessI
   ]);
 
   const client = first(clients);
-  const billingType = String(metadata(client).billing_type ?? "insurance");
+  const legacyBillingType = String(metadata(client).billing_type ?? "insurance");
+  const funding = resolveEncounterFunding(encounter, legacyBillingType);
+  const billingType = funding.billingPath === "private_pay" ? "self_pay" : "insurance";
   return {
     encounter,
     billingType,
+    fundingSourceType: funding.sourceType,
+    fundingSourceSubtype: funding.sourceSubtype,
+    billingPath: funding.billingPath,
+    fundingContext: funding.context,
     note: first(notes),
     diagnoses,
     serviceLines,
@@ -198,15 +212,26 @@ export async function getBillingQueueData() {
 
   const encounterRows = encounters.map((encounter): BillingQueueEncounter => {
     const client = clientsById.get(String(encounter.client_id));
-    const billingType = String(metadata(client).billing_type ?? "insurance");
+    const legacyBillingType = String(metadata(client).billing_type ?? "insurance");
+    const funding = resolveEncounterFunding(encounter, legacyBillingType);
+    const billingType = funding.billingPath === "private_pay" ? "self_pay" : "insurance";
+    const responsibleEntity = String(funding.context.responsible_entity ?? "").trim();
+    const payerName =
+      funding.billingPath === "insurance_claim"
+        ? String(payersById.get(String(encounter.payer_id))?.name ?? "—")
+        : funding.billingPath === "program_invoice_voucher"
+          ? responsibleEntity || "Government / Program"
+          : responsibleEntity || "Private Pay";
     return {
       ...encounter,
       billingType,
+      fundingSourceType: funding.sourceType,
+      fundingSourceSubtype: funding.sourceSubtype,
+      billingPath: funding.billingPath,
+      fundingSourceLabel: fundingSourceLabel(funding.sourceType),
       clientName: displayName(client),
       providerName: displayName(providersById.get(String(encounter.provider_id))),
-      payerName: billingType === "self_pay"
-        ? "Self Pay"
-        : String(payersById.get(String(encounter.payer_id))?.name ?? "—"),
+      payerName,
       blockingChecks: readinessChecks.filter(
         (check) => check.encounter_id === encounter.id && check.blocking === true,
       ),
