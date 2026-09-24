@@ -50,7 +50,7 @@ function namedKey(currentName: string, legacyName: string) {
 const SUPABASE_URL = requiredEnv("SUPABASE_URL");
 const PUBLISHABLE_KEY = namedKey("SUPABASE_PUBLISHABLE_KEYS", "SUPABASE_ANON_KEY");
 const SECRET_KEY = namedKey("SUPABASE_SECRET_KEYS", "SUPABASE_SERVICE_ROLE_KEY");
-const PORTAL_BASE_URL = (Deno.env.get("PORTAL_BASE_URL")?.trim() || "https://therassistant-git-ui-appointment-enco-c897d9-therassistant-1064.vercel.app").replace(/\/+$/, "");
+const PORTAL_BASE_URL = (Deno.env.get("PORTAL_BASE_URL")?.trim() || "https://therassistant.vercel.app").replace(/\/+$/, "");
 const PORTAL_ORIGIN = new URL(PORTAL_BASE_URL).origin;
 
 function corsHeaders(origin = PORTAL_ORIGIN) {
@@ -66,6 +66,7 @@ function corsHeaders(origin = PORTAL_ORIGIN) {
 Deno.serve(async (req: Request) => {
   const origin = req.headers.get("Origin");
   const allowedOrigin = !origin || origin === PORTAL_ORIGIN
+    || origin === "https://therassistant.vercel.app"
     || /^https:\/\/therassistant-[a-z0-9-]+-therassistant-1064\.vercel\.app$/.test(origin);
   if (!allowedOrigin) return new Response(JSON.stringify({ error: "Origin is not allowed." }), { status: 403, headers: corsHeaders() });
   const requestOrigin = origin || PORTAL_ORIGIN;
