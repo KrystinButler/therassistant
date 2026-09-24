@@ -20,7 +20,7 @@ function person(row: RecordRow | null): string {
 }
 function date(value: unknown): string {
   const valueText = text(value).slice(0, 10);
-  const match = /^(\\d{4})-(\\d{2})-(\\d{2})$/.exec(valueText);
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(valueText);
   return match ? match[2] + "/" + match[3] + "/" + match[1] : valueText || "Not recorded";
 }
 function amount(value: unknown): string {
