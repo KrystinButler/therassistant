@@ -74,12 +74,7 @@ export function evaluatePayerBillingRules(input: PayerRuleContext): ReadinessChe
   for (const resource of input.payerBillingRules ?? []) {
     if (resource.resource_type !== "billing_rule" || resource.payer_id !== input.payerId) continue;
     // A plan-specific restriction must never leak onto another plan.
-    if (resource.payer_plan_id && !input.payerPlanId) {
-      checks.push(check("payer_rule_plan_unknown_" + resource.id, "Payer Rule Scope", "warn", false,
-        "A plan-specific billing rule exists but the encounter's exact payer product has not been established."));
-      continue;
-    }
-    if (resource.payer_plan_id && resource.payer_plan_id !== input.payerPlanId) continue;
+    if (resource.payer_plan_id && input.payerPlanId && resource.payer_plan_id !== input.payerPlanId) continue;
     const config = parsePayerRuleConfig(resource.rule_config);
     if (!config) {
       checks.push(check("payer_rule_invalid_" + resource.id, "Payer Rule Setup", "warn", false,
@@ -90,14 +85,24 @@ export function evaluatePayerBillingRules(input: PayerRuleContext): ReadinessChe
       (resource.effective_date && datePart(resource.effective_date) > serviceDate) ||
       (resource.expiration_date && datePart(resource.expiration_date) < serviceDate)
     )) continue;
-    const trusted = resource.verification_status === "verified" &&
-      Boolean(resource.source_url && resource.reviewed_at && resource.review_due_at) &&
-      datePart(resource.reviewed_at) <= today &&
-      datePart(resource.review_due_at) >= today;
     const matchedLines = input.serviceLines
       .map((line,index)=>({line,index}))
       .filter(({line}) => String(line.cpt_hcpcs_code ?? "").trim().toUpperCase() === config.procedure_code);
     if (!matchedLines.length) continue;
+    if (resource.payer_plan_id && !input.payerPlanId) {
+      checks.push(check("payer_rule_plan_unknown_" + resource.id, "Payer Rule Scope", "warn", false,
+        "A plan-specific billing rule exists for " + config.procedure_code + " but the encounter's exact payer product has not been established."));
+      continue;
+    }
+    if (!serviceDate && (resource.effective_date || resource.expiration_date)) {
+      checks.push(check("payer_rule_dos_unknown_" + resource.id, "Payer Rule Effective Period", "warn", false,
+        "Service date is unavailable, so the effective period for " + config.procedure_code + " cannot be verified."));
+      continue;
+    }
+    const trusted = resource.verification_status === "verified" &&
+      Boolean(resource.source_url && resource.reviewed_at && resource.review_due_at) &&
+      datePart(resource.reviewed_at) <= today &&
+      datePart(resource.review_due_at) >= today;
     if (!trusted) {
       checks.push(check("payer_rule_unverified_" + resource.id, "Payer Rule Review", "warn", false,
         "The rule for " + config.procedure_code + " lacks current verified source/review evidence; its restrictions are advisory only."));
