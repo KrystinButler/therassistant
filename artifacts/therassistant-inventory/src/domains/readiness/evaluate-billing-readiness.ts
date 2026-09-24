@@ -15,6 +15,7 @@ export type BillingReadinessInput = {
   eligibilityStatus?: string | null;
   providerEnrollmentStatus?: string | null;
   provider?: Record<string, any> | null;
+  documentedPsychotherapyMinutes?: number | null;
   appointment?: Record<string, any> | null;
 };
 
