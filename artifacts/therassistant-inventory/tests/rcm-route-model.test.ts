@@ -19,9 +19,12 @@ test("legacy duplicate RCM routes redirect while Work Center is operational", ()
   assert.match(appSource, /path="\/work-center"[^\n]*<WorkCenterPage/);
 });
 
-test("AppShell uses section navigation and no user-facing workspace label", () => {
-  assert.match(shellSource, /navigation\/sections/);
+test("AppShell uses the approved direct navigation and retains working module destinations", () => {
   assert.match(shellSource, /aria-label="Primary navigation"/);
-  assert.doesNotMatch(shellSource, /Operational Workspace/);
-  assert.doesNotMatch(shellSource, /Workspace navigation/);
+  for (const path of ["/schedule", "/clients", "/clinical", "/billing/charges", "/claims", "/payments", "/reports", "/payers-contracts", "/providers", "/credentialing", "/work-center"]) {
+    assert.ok(shellSource.includes(path), path);
+  }
+  assert.doesNotMatch(shellSource, /navigation\/sections/);
+  assert.doesNotMatch(shellSource, /Operational Workspace|Workspace navigation/);
+  assert.doesNotMatch(shellSource, /href="\/authorizations"|href="\/mailroom"/);
 });

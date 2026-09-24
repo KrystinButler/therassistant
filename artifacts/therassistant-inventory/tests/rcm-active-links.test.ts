@@ -13,18 +13,20 @@ const billingHubSource = readFileSync(
 
 const retiredRoutes = ["/claims/submission", "/claims/follow-up", "/ar-denials"];
 
-test("workflow dashboard links to the canonical connected destinations", () => {
+test("approved dashboard routes to the canonical clinical and revenue-cycle screens", () => {
   for (const route of retiredRoutes) {
     assert.doesNotMatch(dashboardSource, new RegExp(route.replaceAll("/", "\\/")));
   }
-  for (const route of ["/work-center", "/billing/charges", "/rejections", "/claims", "/payments"]) {
+  for (const route of ["/schedule", "/clients", "/clinical", "/billing/charges", "/claims", "/work-center"]) {
     assert.match(dashboardSource, new RegExp(route.replaceAll("/", "\\/")));
   }
-  assert.match(dashboardSource, /ENGAGE/);
-  assert.match(dashboardSource, /PREPARE/);
-  assert.match(dashboardSource, /DOCUMENT/);
-  assert.match(dashboardSource, /GET PAID/);
-  assert.match(dashboardSource, /OPERATE/);
+  for (const section of ["Today's Schedule", "Recent Clients", "My Tasks", "Alerts &amp; Updates"]) {
+    assert.ok(dashboardSource.includes(section), section);
+  }
+  assert.match(dashboardSource, /todayAppointments/);
+  assert.match(dashboardSource, /unsignedNotes/);
+  assert.match(dashboardSource, /readyCharges/);
+  assert.match(dashboardSource, /attentionClaims/);
 });
 
 test("Billing Hub routes every financial metric to a canonical owner", () => {

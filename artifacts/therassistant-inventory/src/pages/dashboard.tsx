@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Link } from "wouter";
 import {
   ArrowRight, Bell, CalendarDays, CheckCircle2, CircleDollarSign, ClipboardCheck,
@@ -308,7 +308,7 @@ export function DashboardPage() {
 function SummaryCard({
   icon, label, value, detail, href, tone,
 }: {
-  icon: React.ReactNode; label: string; value: number; detail: string; href: string;
+  icon: ReactNode; label: string; value: number; detail: string; href: string;
   tone: "sage" | "mint" | "cream" | "blue";
 }) {
   return (
@@ -324,7 +324,7 @@ function SummaryCard({
   );
 }
 
-function EmptyState({ icon, message, href, action }: { icon: React.ReactNode; message: string; href: string; action: string }) {
+function EmptyState({ icon, message, href, action }: { icon: ReactNode; message: string; href: string; action: string }) {
   return <div className="cw-empty-state"><span>{icon}</span><p>{message}</p>
     <Link href={href} className="cw-panel-link">{action} <ArrowRight size={16} /></Link></div>;
 }
