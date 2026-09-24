@@ -183,7 +183,7 @@ Deno.serve(async (req: Request) => {
     });
 
   if (inviteError || !invited.user) {
-    const duplicate = isExistingUserError(inviteError?.message);
+    const duplicate = isExistingUserError(inviteError?.message, inviteError?.code);
 
     if (duplicate) {
       const { data: latestContext } = await userClient.rpc(
@@ -207,8 +207,9 @@ Deno.serve(async (req: Request) => {
     return json(
       {
         error: duplicate
-          ? "An Auth account already exists for this email. It was not linked automatically."
+          ? "An account already exists for this email. Staff must verify the patient identity and connect the existing account through an authorized enrollment workflow; accounts are never linked automatically."
           : inviteError?.message ?? "Unable to send patient portal invitation.",
+        ...(duplicate ? { code: "existing_auth_account", action: "staff_identity_review" } : {}),
       },
       duplicate ? 409 : 502,
     );
