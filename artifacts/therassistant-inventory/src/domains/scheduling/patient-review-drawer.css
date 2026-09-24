@@ -1,6 +1,6 @@
 .patient-review-drawer {
-  width: min(410px, 96vw) !important;
-  max-width: 410px !important;
+  width: 75vw !important;
+  max-width: 75vw !important;
   height: 100dvh;
   padding: 0 !important;
   gap: 0 !important;
