@@ -38,6 +38,7 @@ import {
   PORTAL_RECOVER,
 } from "./domains/portal/routes";
 import { SchedulePage } from "./domains/scheduling/SchedulePage";
+import { SpecialtyProgramTemplatesPage } from "./domains/specialty-programs/SpecialtyProgramTemplatesPage";
 import { DashboardPage } from "./pages/dashboard";
 import { WorkCenterPage } from "./pages/work-center";
 import { AdministrationPage } from "./pages/administration";
@@ -100,6 +101,7 @@ function StaffRoutes() {
         <Route path="/administration/users"><UserRolesPage /></Route>
         <Route path="/administration/audit"><AuditPage /></Route>
         <Route path="/administration/practices"><PracticeConfigurationPage /></Route>
+        <Route path="/administration/program-templates"><SpecialtyProgramTemplatesPage /></Route>
         <Route path="/administration"><AdministrationPage /></Route>
         <Route path="/"><DashboardPage /></Route>
         <Route><div className="thera-state">Page not found.</div></Route>

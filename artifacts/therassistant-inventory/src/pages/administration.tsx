@@ -44,6 +44,13 @@ export function AdministrationPage() {
       href: "/administration/practices",
       available: true,
     },
+    {
+      name: "Specialty Program Templates",
+      description:
+        "Configure program-specific documentation, assessments, progress measures, reporting, milestones, and forms.",
+      href: "/administration/program-templates",
+      available: true,
+    },
   ];
 
   return (

@@ -132,6 +132,7 @@ export const NAV_SECTIONS: readonly NavigationSection[] = [
     visibility: visibleToAll,
     children: [
       { id: "administration", label: "Administration", href: "/administration", visibility: visibleToAll },
+      { id: "program-templates", label: "Program Templates", href: "/administration/program-templates", visibility: visibleToAll },
       { id: "audit", label: "Audit History", href: "/administration/audit", visibility: visibleToAll },
     ],
   },
