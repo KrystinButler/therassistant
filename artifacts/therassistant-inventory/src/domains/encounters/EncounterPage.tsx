@@ -44,6 +44,7 @@ import {
 } from "./clinical-source-context";
 import { getEncounterDetail, updateEncounter } from "./repository";
 import { scheduledSessionTime } from "./scheduled-session-time";
+import { noteTypeForService } from "./service-note-template";
 import "./encounter-page.css";
 
 type EncounterDetail = Awaited<ReturnType<typeof getEncounterDetail>>;
@@ -57,14 +58,6 @@ const noteLayouts: Record<string, { title: string; sections: string[] }> = {
  medication_management: { title: "Medication Management Note", sections: ["Symptoms", "Adherence", "Side effects", "Mental status", "Risk assessment", "Medication plan"] },
  other: { title: "Clinical Note", sections: ["Reason for visit", "Findings", "Intervention", "Response", "Plan"] },
 };
-function noteTypeForService(value: string): string {
- const service = value.toLowerCase();
- if (service.includes("crisis")) return "crisis";
- if (/medication|psychiatric/.test(service)) return "medication_management";
- if (/assessment|intake|evaluation/.test(service)) return "assessment";
- if (service.includes("case management")) return "case_management";
- return "psychotherapy";
-}
 function sessionMinutes(start: string, end: string): number | null {
  if (!start || !end) return null;
  const [sh, sm] = start.split(":").map(Number);
