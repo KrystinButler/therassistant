@@ -27,7 +27,7 @@ test("provider completes a synthetic visit from schedule through signed note and
   if (!(await serviceLineComplete.isVisible().catch(() => false))) {
     await page.getByPlaceholder("Charge $").fill("150.00");
     await page.getByRole("button", { name: "+ Add Service Line" }).click();
-    await expect(page.getByText("Service line added to encounter.")).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByText("Unbilled service line added.")).toBeVisible({ timeout: 15_000 });
     await expect(page.getByText(/1 service line\(s\) connected\./)).toBeVisible();
   }
 
