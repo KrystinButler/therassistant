@@ -104,3 +104,11 @@ test("forensic context is normalized without calculating a risk score", async ()
   assert.equal(normalized.forensicContext.assessmentReferences.length, 1);
   assert.equal("riskScore" in normalized.forensicContext, false);
 });
+
+test("actual psychotherapy minutes normalize safely in structured documentation", () => {
+  assert.equal(emptyStructuredSelections().psychotherapyMinutes, null);
+  assert.equal(normalizeStructuredSelections({ psychotherapyMinutes: 45 }).psychotherapyMinutes, 45);
+  assert.equal(normalizeStructuredSelections({ psychotherapyMinutes: -1 }).psychotherapyMinutes, null);
+  assert.equal(normalizeStructuredSelections({ psychotherapyMinutes: 1500 }).psychotherapyMinutes, null);
+  assert.equal(normalizeStructuredSelections({ psychotherapyMinutes: "60" }).psychotherapyMinutes, null);
+});
