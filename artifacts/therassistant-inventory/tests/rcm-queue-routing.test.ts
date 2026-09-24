@@ -12,7 +12,7 @@ const today = new Date("2026-09-16T12:00:00Z");
 
 test("operational ownership routes each claim state to one canonical area", () => {
   assert.equal(getOperationalHome({ claimStatus: "ready_for_validation", hasActiveDenial: false, openBalanceCents: 10000 }), "charges");
-  assert.equal(getOperationalHome({ claimStatus: "validation_failed", hasActiveDenial: false, openBalanceCents: 10000 }), "charges");
+  assert.equal(getOperationalHome({ claimStatus: "validation_failed", hasActiveDenial: false, openBalanceCents: 10000 }), "rejections");
   assert.equal(getOperationalHome({ claimStatus: "rejected", hasActiveDenial: false, openBalanceCents: 10000 }), "rejections");
   assert.equal(getOperationalHome({ claimStatus: "ready_for_batch", hasActiveDenial: false, openBalanceCents: 10000 }), "charges");
   assert.equal(getOperationalHome({ claimStatus: "submitted", hasActiveDenial: false, openBalanceCents: 10000 }), "claims");

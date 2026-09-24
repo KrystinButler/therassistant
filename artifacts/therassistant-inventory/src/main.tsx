@@ -7,6 +7,7 @@ import './index.css';
 // Keep the reference palette last so it consistently overrides the base theme.
 import './therassistant-reference-theme.css';
 import './clinical-workspace-refresh.css';
+import './brand-system.css';
 
 createRoot(document.getElementById('root')!, {
   // Keeps caught errors off reportError(), which would raise the dev overlay.

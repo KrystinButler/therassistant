@@ -15,7 +15,7 @@ test("provider completes the synthetic insured visit for billing", async ({ page
   const signedHandoff = page.getByText("Signed clinical record → Charge Capture", { exact: false });
   if (await signedHandoff.isVisible().catch(() => false)) return;
 
-  await page.getByLabel("Session / SOAP Note").fill(
+  await page.locator("#encounter-progress-note-editor").fill(
     "Synthetic insured psychotherapy progress note. Client participated in psychotherapy and collaborative problem solving. No acute safety concerns were reported. Continue the current plan of care.",
   );
 
@@ -30,9 +30,9 @@ test("provider completes the synthetic insured visit for billing", async ({ page
 
   const serviceLineReady = page.getByText(/\d+ service line\(s\) connected\./);
   if (!(await serviceLineReady.isVisible().catch(() => false))) {
-    await page.getByPlaceholder("Charge $").fill("150.00");
+    await page.getByRole("spinbutton", { name: "Service charge" }).fill("150.00");
     await page.getByRole("button", { name: "+ Add Service Line" }).click();
-    await expect(page.getByText("Service line added to encounter.")).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByText("Unbilled service line added.")).toBeVisible({ timeout: 15_000 });
     await expect(page.getByText(/1 service line\(s\) connected\./)).toBeVisible();
   }
 

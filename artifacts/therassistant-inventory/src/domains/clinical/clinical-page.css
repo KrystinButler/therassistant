@@ -1,0 +1,7 @@
+.clinical-create-backdrop{position:fixed;inset:0;z-index:1050;display:grid;place-items:center;overflow-y:auto;padding:18px;background:rgba(12,38,26,.48)}
+.clinical-create-modal{width:min(670px,100%);max-height:min(90vh,820px);overflow-y:auto;padding:19px}
+.clinical-create-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:13px;margin-top:13px}
+.clinical-create-grid label{display:grid;gap:5px;align-content:start;font-size:.73rem;font-weight:650;color:var(--thera-navy)}
+.clinical-create-grid label:nth-child(-n+2){grid-column:span 2}
+.clinical-create-grid .thera-input{width:100%;min-width:0}
+@media(max-width:650px){.clinical-create-backdrop{padding:8px;align-items:start}.clinical-create-modal{max-height:calc(100dvh - 16px);padding:13px}.clinical-create-grid{grid-template-columns:minmax(0,1fr);gap:10px}.clinical-create-grid label:nth-child(-n+2){grid-column:1}}

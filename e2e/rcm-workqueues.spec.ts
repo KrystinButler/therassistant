@@ -14,28 +14,25 @@ for (const [legacy, target] of redirects) {
   });
 }
 
-test("Work Center is the OPERATE exception workspace", async ({ page }) => {
+test("Work Center remains available in the practice navigation", async ({ page }) => {
   await page.goto("/work-center");
   await expect(page.getByRole("heading", { level: 1, name: "Work Center" })).toBeVisible();
 
   const nav = page.getByRole("navigation", { name: "Primary navigation" });
-  await expect(nav.getByRole("button", { name: "OPERATE", exact: true })).toHaveAttribute("aria-expanded", "true");
+  await expect(nav.getByText("PRACTICE", { exact: true })).toBeVisible();
   await expect(nav.getByRole("link", { name: "Work Center", exact: true })).toBeVisible();
 });
 
-test("GET PAID navigation follows the product manual", async ({ page }) => {
+test("RCM workspaces are accessible through direct navigation links", async ({ page }) => {
   await page.goto("/claims");
   const nav = page.getByRole("navigation", { name: "Primary navigation" });
 
-  await expect(nav.getByRole("button", { name: "GET PAID", exact: true })).toHaveAttribute("aria-expanded", "true");
-  for (const label of [
-    "Charge Capture",
-    "Claim Rejections",
-    "Claims & 837P",
-    "Denials & Appeals",
-    "Payments & ERA",
-  ]) {
-    await expect(nav.getByRole("link", { name: label, exact: true })).toBeVisible();
+  for (const [label, href] of [
+    ["Charge Capture", "/billing/charges"],
+    ["Claims", "/claims"],
+    ["Payments", "/payments"],
+  ] as const) {
+    await expect(nav.getByRole("link", { name: label, exact: true })).toHaveAttribute("href", href);
   }
 
   for (const removed of ["Claim Follow-Up", "Claim Submission / 837P", "A/R & Denials"]) {
@@ -46,10 +43,10 @@ test("GET PAID navigation follows the product manual", async ({ page }) => {
 test("canonical RCM routes render the manual-aligned owning pages", async ({ page }) => {
   const routes = [
     ["/billing/charges", "Charge Capture & Billing Routing"],
-    ["/rejections", "Rejections"],
+    ["/rejections", "Rejections & Validation Holds"],
     ["/claims", "Claims & A/R Follow-Up"],
     ["/denials", "Denials, Appeals & A/R"],
-    ["/payments", "Payments, ERA & Reconciliation"],
+    ["/payments", "Payment Posting"],
   ] as const;
 
   for (const [path, heading] of routes) {

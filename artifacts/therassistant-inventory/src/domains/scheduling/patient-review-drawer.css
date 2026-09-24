@@ -1,95 +1,39 @@
-.patient-review-drawer {
-  width: min(410px, 96vw) !important;
-  max-width: 410px !important;
-  height: 100dvh;
-  padding: 0 !important;
-  gap: 0 !important;
-  display: grid;
-  grid-template-rows: minmax(0, 1fr) auto;
-  overflow: hidden;
-  background: #f8fbff;
-}
-
-.patient-review-scroll { min-height: 0; overflow-y: auto; padding: 18px 18px 12px; }
-.patient-review-heading { padding-right: 28px; margin-bottom: 14px; }
-.patient-review-heading h2 { color: #082a78; font-size: 1.15rem; }
-.patient-review-heading p { color: #5172a8; font-size: .76rem; }
-.patient-review-person-card { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 10px; align-items: center; background: white; border: 1px solid #d9e7f6; border-radius: 10px; padding: 11px; box-shadow: 0 1px 3px rgba(24, 58, 101, .06); }
-.patient-review-avatar { width: 46px; height: 46px; border-radius: 50%; display: grid; place-items: center; background: #e3f2fb; color: #2a6d9e; font-weight: 700; }
-.patient-review-person-main, .patient-review-appointment { display: flex; flex-direction: column; gap: 2px; }
-.patient-review-person-main strong, .patient-review-appointment strong { color: #0b2c72; font-size: .82rem; }
-.patient-review-person-main span, .patient-review-appointment span { color: #52709d; font-size: .68rem; }
-.patient-review-pronouns { font-weight: 400; }
-.patient-review-appointment { align-items: flex-start; border-left: 1px solid #e3ecf6; padding-left: 10px; min-width: 116px; }
-.patient-review-sections { display: grid; gap: 8px; margin-top: 10px; }
-.patient-review-section { background: white; border: 1px solid #dbe8f6; border-radius: 8px; overflow: hidden; }
-.patient-review-section-title { min-height: 28px; padding: 5px 8px; display: grid; grid-template-columns: auto 1fr auto; gap: 6px; align-items: center; background: #edf6fd; color: #0b397f; font-size: .72rem; }
-.patient-review-section-title button { border: 0; background: transparent; color: #2c6eb4; font-size: .65rem; cursor: pointer; }
-.patient-review-section-body { padding: 8px 10px; color: #24436d; font-size: .7rem; line-height: 1.35; }
-.patient-review-section-body p { margin: 0; }
-.patient-review-definition { display: grid; grid-template-columns: 92px 1fr; gap: 6px; margin-bottom: 5px; }
-.patient-review-definition:last-child { margin-bottom: 0; }
-.patient-review-definition > span { color: #1d4d8b; font-weight: 700; font-size: .64rem; }
-.patient-review-definition ul { margin: 0; padding-left: 15px; }
-.patient-review-inline-meta { display: flex; align-items: center; gap: 9px; color: #53709b; font-size: .64rem; margin-bottom: 5px; }
-.patient-review-shared { display: inline-flex; align-items: center; gap: 4px; color: #278e64; background: #ebf8f2; border-radius: 999px; padding: 2px 6px; }
-.patient-review-quote { color: #264975; }
-.patient-review-highlight { display: flex; gap: 8px; align-items: flex-start; border-radius: 7px; padding: 8px; }
-.patient-review-highlight.positive { background: #e8f8f1; color: #147a59; }
-.patient-review-highlight.warning { background: #fff4e3; color: #9a6200; }
-.patient-review-highlight strong { display: block; font-size: .67rem; margin-bottom: 1px; }
-.patient-review-highlight p { color: #456b79; font-size: .66rem; }
-.patient-review-goal { margin-bottom: 6px !important; }
-.patient-review-muted { color: #6e829f; }
-.patient-review-error { margin-top: 10px; padding: 8px 10px; background: #fff0f0; border: 1px solid #f2c9c9; border-radius: 7px; color: #a12626; font-size: .7rem; }
-.patient-review-footer { display: grid; grid-template-columns: 1fr 1fr; gap: 9px; padding: 10px 16px 14px; border-top: 1px solid #d9e5f2; background: white; }
-.patient-review-footer button { min-height: 40px; border-radius: 5px; display: inline-flex; align-items: center; justify-content: center; gap: 7px; font-weight: 600; font-size: .75rem; cursor: pointer; }
-.patient-review-secondary { background: white; color: #17447e; border: 1px solid #7ea8d5; }
-.patient-review-primary { background: #2475b7; color: white; border: 1px solid #2475b7; }
-.patient-review-primary:disabled { opacity: .6; cursor: wait; }
-
-@media (max-width: 520px) {
-  .patient-review-drawer { width: 100vw !important; max-width: 100vw !important; }
-  .patient-review-person-card { grid-template-columns: auto 1fr; }
-  .patient-review-appointment { grid-column: 2; border-left: 0; padding-left: 0; }
-}
-
-
-.patient-review-status-row {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 5px;
-  margin-top: 2px;
-}
-.patient-review-status-row > span:last-child {
-  color: #6a7f9d;
-  font-size: .6rem;
-  text-transform: capitalize;
-}
-.patient-review-edit-appointment {
-  margin-top: 3px;
-  padding: 0;
-  border: 0;
-  background: transparent;
-  color: #2c6eb4;
-  font-size: .61rem;
-  text-align: left;
-  cursor: pointer;
-}
-.patient-review-edit-appointment:hover {
-  text-decoration: underline;
-}
-.patient-review-source-tag {
-  display: inline-flex;
-  align-items: center;
-  min-height: 20px;
-  padding: 2px 6px;
-  border-radius: 999px;
-  background: #f4f7fa;
-  color: #617793;
-  font-size: .56rem;
-  font-weight: 700;
-  letter-spacing: .02em;
-  text-transform: uppercase;
-}
+.patient-review-drawer{width:75vw!important;max-width:75vw!important;height:100dvh;min-width:0;display:grid;grid-template-rows:minmax(0,1fr) auto;gap:0!important;padding:0!important;overflow:hidden;background:#f7f9f6;color:var(--thera-text)}
+.patient-review-scroll{min-width:0;min-height:0;overflow-y:auto;padding:22px 24px 15px}
+.patient-review-heading{padding-right:28px;margin-bottom:17px}.patient-review-heading h2{color:var(--thera-navy);font-size:1.24rem}.patient-review-heading p{color:var(--thera-muted);font-size:.81rem;line-height:1.45}
+.patient-review-person-card{display:grid;grid-template-columns:auto minmax(0,1fr) minmax(210px,auto);align-items:center;gap:14px;padding:15px 17px;border:1px solid var(--thera-border);border-radius:11px;background:#fff;box-shadow:0 2px 10px rgba(29,57,40,.045)}
+.patient-review-avatar{display:grid;place-items:center;width:52px;height:52px;border-radius:50%;background:#e2eee3;color:var(--thera-navy);font-size:.94rem;font-weight:750}
+.patient-review-person-main,.patient-review-appointment{display:flex;flex-direction:column;min-width:0;gap:5px}
+.patient-review-person-main strong{color:var(--thera-navy);font-size:1rem;line-height:1.25}.patient-review-person-main span{color:var(--thera-muted);font-size:.78rem}.patient-review-pronouns{font-weight:400;font-size:.76rem}
+.patient-review-appointment{border-left:1px solid var(--thera-border);padding-left:17px}.patient-review-appointment strong{color:var(--thera-navy);font-size:.93rem}.patient-review-appointment>span{color:var(--thera-muted);font-size:.75rem}
+.patient-review-status-row{display:flex;align-items:center;flex-wrap:wrap;gap:7px;margin-top:3px}.patient-review-status-row>span:last-child{color:var(--thera-muted);font-size:.7rem;text-transform:capitalize}
+.patient-review-edit-appointment{align-self:start;margin-top:4px;padding:0;border:0;background:transparent;color:var(--thera-sage-dark);font-size:.73rem;font-weight:650;text-decoration:underline;cursor:pointer}
+.patient-review-sections{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:13px;align-items:stretch;margin-top:15px}
+.patient-review-section{display:flex;min-width:0;flex-direction:column;overflow:hidden;border:1px solid var(--thera-border);border-radius:10px;background:#fff;box-shadow:0 1px 4px rgba(29,57,40,.025)}
+.patient-review-section.wide{grid-column:1/-1}
+.patient-review-section-title{display:grid;grid-template-columns:30px minmax(0,1fr) auto;align-items:center;gap:9px;min-height:48px;padding:9px 14px;background:#f0f5ef;border-bottom:1px solid #e3ece3;color:var(--thera-navy)}
+.patient-review-section-title strong{font-size:.83rem;font-weight:750}
+.patient-review-section-icon{display:grid;place-items:center;width:28px;height:28px;border-radius:7px;background:#e0eadd;color:#4b7558}
+.patient-review-section-title button{padding:4px 0;border:0;background:transparent;color:var(--thera-sage-dark);font-size:.74rem;font-weight:650;text-decoration:underline;cursor:pointer}
+.patient-review-section-body{flex:1;min-width:0;padding:15px 16px;color:var(--thera-text);font-size:.82rem;line-height:1.6;overflow-wrap:anywhere}.patient-review-section-body p{margin:0}
+.patient-review-section-body.checkin{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));align-content:start;gap:16px 27px}
+.patient-review-definition{display:grid;align-content:start;min-width:0;gap:5px}.patient-review-definition>span{color:var(--thera-sage-dark);font-size:.68rem;font-weight:750;text-transform:uppercase;letter-spacing:.025em}
+.patient-review-definition p,.patient-review-definition li{color:var(--thera-text);font-size:.84rem;line-height:1.55}.patient-review-definition ul{margin:0;padding-left:17px}
+.patient-review-empty-value{color:#829187!important;font-style:italic}
+.patient-review-inline-meta{display:flex;align-items:center;flex-wrap:wrap;gap:9px;color:var(--thera-muted);font-size:.71rem;margin-bottom:10px}
+.patient-review-shared{display:inline-flex;align-items:center;gap:4px;padding:3px 8px;border-radius:99px;background:#eaf4ea;color:#426e4f;font-size:.67rem}
+.patient-review-quote{padding-left:13px;border-left:3px solid #aac7b0;color:var(--thera-text);font-size:.85rem;line-height:1.65}
+.patient-review-highlight{display:flex;align-items:flex-start;gap:11px;padding:13px 14px;border-radius:8px}
+.patient-review-highlight.positive{background:#edf6ee;color:#2d744f}.patient-review-highlight.warning{background:#fff5e7;color:#916125}.patient-review-highlight.neutral{background:#f3f5f1;color:var(--thera-muted)}
+.patient-review-highlight>svg{flex:0 0 auto;margin-top:2px}.patient-review-highlight strong{display:block;margin-bottom:5px;color:var(--thera-navy);font-size:.78rem;line-height:1.4}
+.patient-review-highlight p{color:var(--thera-text);font-size:.8rem;line-height:1.55}.patient-review-goal{margin:0 0 11px!important;font-size:.87rem;font-weight:600;line-height:1.5}.patient-review-muted{color:var(--thera-muted)}
+.patient-review-source-tag{display:inline-flex;align-items:center;min-height:23px;padding:3px 8px;border-radius:99px;background:#e5eee3;color:#436a4a;font-size:.64rem;font-weight:750;white-space:nowrap}
+.patient-review-error{margin:12px 0;padding:11px 13px;border:1px solid #eac6c6;border-radius:8px;background:#fff2f2;color:#9a2424;font-size:.8rem}
+.patient-review-footer{display:grid;grid-template-columns:1fr 1fr;gap:12px;padding:14px 24px;border-top:1px solid var(--thera-border);background:#fff;box-shadow:0 -3px 10px rgba(26,57,36,.04)}
+.patient-review-footer button{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:44px;border-radius:7px;font:inherit;font-size:.83rem;font-weight:700;cursor:pointer}
+.patient-review-secondary{border:1px solid #95b5a0;background:#fff;color:var(--thera-navy)}.patient-review-primary{border:1px solid var(--thera-navy);background:var(--thera-navy);color:#fff}
+.patient-review-primary:disabled{opacity:.58;cursor:wait}
+.patient-review-footer button:focus-visible,.patient-review-section-title button:focus-visible,.patient-review-edit-appointment:focus-visible{outline:3px solid var(--thera-sage);outline-offset:2px}
+@media(max-width:1150px){.patient-review-scroll{padding:16px}.patient-review-sections{grid-template-columns:1fr}.patient-review-section.wide{grid-column:auto}.patient-review-person-card{grid-template-columns:auto minmax(0,1fr)}.patient-review-appointment{grid-column:2;padding-left:0;border:0}}
+@media(max-width:760px){.patient-review-drawer{width:100vw!important;max-width:100vw!important}.patient-review-scroll{padding:14px}.patient-review-sections{gap:11px}.patient-review-section-body.checkin{grid-template-columns:1fr}.patient-review-footer{padding:11px 14px;gap:8px}.patient-review-footer button{font-size:.74rem}}
+@media(max-width:420px){.patient-review-footer{grid-template-columns:1fr}.patient-review-heading h2{font-size:1.1rem}}

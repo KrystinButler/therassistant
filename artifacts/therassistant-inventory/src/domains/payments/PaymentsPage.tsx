@@ -38,7 +38,7 @@ const toCents = (value: string) => Math.round(Number(value || 0) * 100);
 export function PaymentsPage() {
   const [data, setData] = useState<Data | null>(null);
   const [exceptionData, setExceptionData] = useState<ExceptionData | null>(null);
-  const [tab, setTab] = useState<Tab>("era");
+  const [tab, setTab] = useState<Tab>("insurance");
   const [loading, setLoading] = useState(true);
   const [savingId, setSavingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -98,6 +98,22 @@ export function PaymentsPage() {
         ? unappliedPayments
         : [];
   const paymentDetailIndex = paymentDetail ? paymentQueue.findIndex((row) => row.id === paymentDetail.id) : -1;
+  const postedTotalCents = useMemo(
+    () => (data?.payments ?? []).reduce((sum, payment) => sum + Number(payment.amount_cents ?? 0), 0),
+    [data],
+  );
+  const unappliedTotalCents = useMemo(
+    () => unappliedPayments.reduce((sum, payment) => sum + Number(payment.unappliedCents ?? 0), 0),
+    [unappliedPayments],
+  );
+  const underpaymentTotalCents = useMemo(
+    () => (exceptionData?.variances ?? []).reduce((sum, row) => sum + Number(row.varianceCents ?? 0), 0),
+    [exceptionData],
+  );
+  const recoveryTotalCents = useMemo(
+    () => (exceptionData?.recovery ?? []).reduce((sum, row) => sum + Number(row.amount_cents ?? 0), 0),
+    [exceptionData],
+  );
 
   function selectTab(nextTab: Tab) {
     setTab(nextTab);
@@ -237,24 +253,33 @@ export function PaymentsPage() {
   }
 
   return <>
-    <div className="thera-page-header split">
+    <div className="thera-page-header split" style={{ alignItems: "center", marginBottom: 14 }}>
       <div>
-        <div className="thera-eyebrow">GET PAID · PAYMENT POSTING</div>
-        <h1>Payments, ERA & Reconciliation</h1>
-        <p>Post insurance and patient payments, import 835 remittance, reconcile allocations, and route underpayments, recoupments, and exceptions into follow-up work.</p>
+        <div className="thera-eyebrow">REVENUE CYCLE · PAYMENT POSTING</div>
+        <h1>Payment Posting</h1>
+        <p>Post, reconcile, and resolve payment activity from one workspace.</p>
       </div>
       <button type="button" className="thera-action" onClick={() => { setManualPaymentRequestKey(globalThis.crypto.randomUUID()); setPosting(true); }}>+ Post Payment</button>
     </div>
 
-    <div className="thera-tabs" style={{ marginBottom: 16 }}>
-      <TabButton active={tab === "insurance"} onClick={() => selectTab("insurance")} label={`Insurance Payments (${insurancePayments.length})`} />
-      <TabButton active={tab === "patient"} onClick={() => selectTab("patient")} label={`Patient Payments (${patientPayments.length})`} />
-      <TabButton active={tab === "era"} onClick={() => selectTab("era")} label={`ERA / 835 (${data?.eraFiles.length ?? 0})`} />
-      <TabButton active={tab === "unapplied"} onClick={() => selectTab("unapplied")} label={`Unapplied (${unappliedPayments.length})`} />
-      <TabButton active={tab === "adjustments"} onClick={() => selectTab("adjustments")} label={`Adjustments / Reversals (${(data?.adjustments.length ?? 0) + (data?.reversals.length ?? 0)})`} />
-      <TabButton active={tab === "underpayments"} onClick={() => selectTab("underpayments")} label={`Underpayments (${exceptionData?.variances.length ?? 0})`} />
-      <TabButton active={tab === "recovery"} onClick={() => selectTab("recovery")} label={`Recoupments / Refunds (${exceptionData?.recovery.length ?? 0})`} />
-    </div>
+    {!loading && data && <div className="thera-metric-grid four" style={{ marginBottom: 14 }}>
+      <div className="thera-metric-card"><div className="thera-metric-label">Posted Payments</div><div className="thera-metric-value">{money(postedTotalCents)}</div><div className="thera-muted">{data.payments.length} payment{data.payments.length === 1 ? "" : "s"}</div></div>
+      <div className="thera-metric-card"><div className="thera-metric-label">Unapplied</div><div className="thera-metric-value">{money(unappliedTotalCents)}</div><div className="thera-muted">{unappliedPayments.length} item{unappliedPayments.length === 1 ? "" : "s"} to allocate</div></div>
+      <div className="thera-metric-card"><div className="thera-metric-label">Underpayments</div><div className="thera-metric-value">{money(underpaymentTotalCents)}</div><div className="thera-muted">{exceptionData?.variances.length ?? 0} variance{(exceptionData?.variances.length ?? 0) === 1 ? "" : "s"}</div></div>
+      <div className="thera-metric-card"><div className="thera-metric-label">Recoupments / Refunds</div><div className="thera-metric-value">{money(recoveryTotalCents)}</div><div className="thera-muted">{exceptionData?.recovery.length ?? 0} open item{(exceptionData?.recovery.length ?? 0) === 1 ? "" : "s"}</div></div>
+    </div>}
+
+    <section className="thera-card" style={{ padding: 12, marginBottom: 14 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(145px, 1fr))", gap: 8 }}>
+        <WorkflowButton active={tab === "insurance"} onClick={() => selectTab("insurance")} label="Insurance" count={insurancePayments.length} />
+        <WorkflowButton active={tab === "patient"} onClick={() => selectTab("patient")} label="Patient" count={patientPayments.length} />
+        <WorkflowButton active={tab === "era"} onClick={() => selectTab("era")} label="ERA / 835" count={data?.eraFiles.length ?? 0} />
+        <WorkflowButton active={tab === "unapplied"} onClick={() => selectTab("unapplied")} label="Unapplied" count={unappliedPayments.length} />
+        <WorkflowButton active={tab === "adjustments"} onClick={() => selectTab("adjustments")} label="Adjustments" count={(data?.adjustments.length ?? 0) + (data?.reversals.length ?? 0)} />
+        <WorkflowButton active={tab === "underpayments"} onClick={() => selectTab("underpayments")} label="Underpayments" count={exceptionData?.variances.length ?? 0} />
+        <WorkflowButton active={tab === "recovery"} onClick={() => selectTab("recovery")} label="Recoupments / Refunds" count={exceptionData?.recovery.length ?? 0} />
+      </div>
+    </section>
 
     {error && <div className="thera-state error" style={{ marginBottom: 12 }}>{error}</div>}
     {message && <div className="thera-alert" style={{ marginBottom: 12 }}>{message}</div>}
@@ -310,8 +335,26 @@ export function PaymentsPage() {
   </>;
 }
 
-function TabButton({ active, label, onClick }: { active: boolean; label: string; onClick: () => void }) {
-  return <button type="button" className={active ? "thera-tab active" : "thera-tab"} onClick={onClick}>{label}</button>;
+function WorkflowButton({ active, label, count, onClick }: { active: boolean; label: string; count: number; onClick: () => void }) {
+  return <button
+    type="button"
+    onClick={onClick}
+    aria-pressed={active}
+    style={{
+      border: active ? "1px solid var(--thera-sage-dark)" : "1px solid var(--thera-border)",
+      background: active ? "var(--thera-blue-soft)" : "var(--thera-paper)",
+      color: "var(--thera-text)",
+      borderRadius: 9,
+      padding: "10px 11px",
+      minHeight: 54,
+      textAlign: "left",
+      cursor: "pointer",
+      boxShadow: active ? "inset 3px 0 0 var(--thera-sage-dark)" : "none",
+    }}
+  >
+    <span style={{ display: "block", fontSize: 11, fontWeight: 750 }}>{label}</span>
+    <span className="thera-muted" style={{ display: "block", marginTop: 2, fontSize: 10 }}>{count} item{count === 1 ? "" : "s"}</span>
+  </button>;
 }
 
 function PaymentsTable({ rows, onOpen }: { rows: Data["payments"]; onOpen: (row: PaymentRow) => void }) {

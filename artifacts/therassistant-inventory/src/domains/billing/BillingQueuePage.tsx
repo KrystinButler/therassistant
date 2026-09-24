@@ -12,6 +12,9 @@ import {
   validateClaim,
 } from "../claims/repository";
 import { buildCms1500PreviewHtml } from "./cms1500-preview";
+import { getPrivatePaySuperbillData } from "./superbill-repository";
+import { buildSuperbillHtml } from "./superbill";
+import { billingCorrectionLink, billingCorrectionLinks, type BillingCorrectionLink } from "./billing-correction-links";
 import { getClaimPreviewData } from "./claim-output-repository";
 import { archiveBatch837PArtifact } from "./claim-artifact-repository";
 import {
@@ -30,11 +33,13 @@ export function BillingQueuePage() {
   const [loading, setLoading] = useState(true);
   const [savingId, setSavingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [correctionLinks, setCorrectionLinks] = useState<BillingCorrectionLink[]>([]);
   const [message, setMessage] = useState<string | null>(null);
 
   async function load() {
     setLoading(true);
     setError(null);
+    setCorrectionLinks([]);
     try {
       const [billing, claims] = await Promise.all([
         getBillingQueueData(),
@@ -94,10 +99,13 @@ export function BillingQueuePage() {
   async function runEncounterAction(id: string, action: "audit" | "charge") {
     setSavingId(id);
     setError(null);
+    setCorrectionLinks([]);
     setMessage(null);
     try {
       const result = await createChargeFromEncounter(id);
       if (!result.ok) {
+        const encounter = data?.billing.encounters.find((row) => row.id === id);
+        setCorrectionLinks(billingCorrectionLinks([...(encounter?.blockingChecks ?? []), { message: result.message }, ...(result.details ?? []).map((message) => ({ message }))], id, String(encounter?.client_id ?? "")));
         setError(result.details?.length ? `${result.message} ${result.details.join(" ")}` : result.message);
         return;
       }
@@ -106,6 +114,48 @@ export function BillingQueuePage() {
       await load();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unable to complete charge action.");
+    } finally {
+      setSavingId(null);
+    }
+  }
+
+  async function runBatchCreateCharges(ids: string[]) {
+    if (!data || !ids.length || savingId) return;
+    const eligible = groups.ready.filter((row) =>
+      ids.includes(row.id) && row.billing_status === "ready" &&
+      !row.blockingChecks.length && !(data.billing.chargesByEncounter.get(row.id)?.length),
+    );
+    if (!eligible.length) {
+      setError("Select encounters that are ready for billing and have no existing charges.");
+      return;
+    }
+    setSavingId("batch-charges");
+    setError(null);
+    setMessage(null);
+    let created = 0;
+    const failures: string[] = [];
+    const batchCorrectionLinks: BillingCorrectionLink[] = [];
+    try {
+      // Process serially so each encounter is independently validated and failures
+      // do not create duplicate charges or stop the remaining selected work.
+      for (const row of eligible) {
+        try {
+          const result = await createChargeFromEncounter(row.id);
+          if (result.ok) created += 1;
+          else {
+            failures.push(`${row.clientName}: ${result.message}`);
+            batchCorrectionLinks.push(...billingCorrectionLinks([...row.blockingChecks, { message: result.message }], row.id, String(row.client_id ?? "")));
+          }
+        } catch (err) {
+          failures.push(`${row.clientName}: ${err instanceof Error ? err.message : "Unable to create charge."}`);
+        }
+      }
+      await load();
+      setMessage(`${created} of ${eligible.length} selected encounters had charges created.`);
+      if (failures.length) {
+        setError(`${failures.length} encounter(s) require review: ${failures.join(" · ")}`);
+        setCorrectionLinks([...new Map(batchCorrectionLinks.map((link) => [link.href, link])).values()]);
+      }
     } finally {
       setSavingId(null);
     }
@@ -128,6 +178,8 @@ export function BillingQueuePage() {
     try {
       const created = await createClaimFromCharges(chargeIds);
       if (!created.ok) {
+        const encounter = data.billing.encounters.find((row) => row.id === encounterId);
+        setCorrectionLinks(billingCorrectionLinks([{ message: created.message }, ...(created.details ?? []).map((message) => ({ message }))], encounterId, String(encounter?.client_id ?? "")));
         setError(created.details?.length ? `${created.message} ${created.details.join(" ")}` : created.message);
         return;
       }
@@ -149,6 +201,7 @@ export function BillingQueuePage() {
       }
       setTab("unbatched");
       await load();
+      if (!validation.ok) setCorrectionLinks([{ href: "/rejections?claim=" + encodeURIComponent(claimId), label: "Correct this claim in Rejections" }]);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unable to create claim.");
     } finally {
@@ -168,6 +221,7 @@ export function BillingQueuePage() {
         setMessage("Claim scrub passed and the claim is ready to batch.");
       }
       await load();
+      if (!result.ok) setCorrectionLinks([{ href: "/rejections?claim=" + encodeURIComponent(claimId), label: "Open this claim’s editable fields" }]);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unable to validate claim.");
     } finally {
@@ -346,6 +400,30 @@ export function BillingQueuePage() {
     }
   }
 
+  async function runSuperbillPreview(encounterId: string) {
+    const previewWindow = window.open("", "_blank");
+    if (!previewWindow) {
+      setError("Allow pop-ups to preview the superbill.");
+      return;
+    }
+    previewWindow.opener = null;
+    previewWindow.document.write("<p style='font-family:Inter,Arial,sans-serif;padding:24px'>Preparing superbill…</p>");
+    setSavingId("superbill-" + encounterId);
+    setError(null);
+    try {
+      const superbill = await getPrivatePaySuperbillData(encounterId);
+      previewWindow.document.open();
+      previewWindow.document.write(buildSuperbillHtml(superbill));
+      previewWindow.document.close();
+      previewWindow.focus();
+    } catch (err) {
+      previewWindow.close();
+      setError(err instanceof Error ? err.message : "Unable to generate superbill.");
+    } finally {
+      setSavingId(null);
+    }
+  }
+
   async function runPrintCms1500(_batchId: string, claimId: string) {
     await runCms1500Preview(claimId, true);
   }
@@ -365,13 +443,13 @@ export function BillingQueuePage() {
         <Tab active={tab === "blocked"} onClick={() => setTab("blocked")} label={`Validation Hold (${groups.blocked.length})`} />
         <Tab active={tab === "program"} onClick={() => setTab("program")} label={`Program Billing (${groups.programCharges.length})`} />
         <Tab active={tab === "private-pay"} onClick={() => setTab("private-pay")} label={`Private Pay (${groups.privatePayCharges.length})`} />
-        <Tab active={tab === "unbatched"} onClick={() => setTab("unbatched")} label={`Claim Prep (${groups.readyCharges.length + groups.preBatchClaims.length})`} />
+        <Tab active={tab === "unbatched"} onClick={() => setTab("unbatched")} label={`Insurance Claims (${groups.readyCharges.length + groups.preBatchClaims.length})`} title="Create insurance claims, check them for errors and prepare payer batches—nothing is transmitted here." />
         <Tab active={tab === "batches"} onClick={() => setTab("batches")} label={`837P Batches (${groups.openBatches.length})`} />
         <Tab active={tab === "submitted"} onClick={() => setTab("submitted")} label={`Submitted / Responses (${groups.submittedBatches.length})`} />
       </div>
 
-      {error && <div className="thera-state error" style={{ marginBottom: 12 }}>{error}</div>}
-      {message && <div className="thera-alert" style={{ marginBottom: 12 }}>{message}</div>}
+      {error && <div className="thera-state error" style={{ marginBottom: 12 }}>{error}{correctionLinks.length > 0 && <BillingCorrectionActions links={correctionLinks} />}</div>}
+      {message && <div className="thera-alert" style={{ marginBottom: 12 }}>{message}{!error && correctionLinks.length > 0 && <BillingCorrectionActions links={correctionLinks} />}</div>}
       {loading && <div className="thera-state">Loading Charges...</div>}
 
       {!loading && data && tab === "ready" && (
@@ -381,6 +459,8 @@ export function BillingQueuePage() {
           savingId={savingId}
           onAudit={(id) => void runEncounterAction(id, "audit")}
           onCharge={(id) => void runEncounterAction(id, "charge")}
+          enableBatch
+          onBatchCharge={(ids) => void runBatchCreateCharges(ids)}
         />
       )}
 
@@ -410,6 +490,8 @@ export function BillingQueuePage() {
           heading="Private Pay Responsibility"
           description="These charges are routed to private-pay responsibility rather than an insurance claim."
           showPaymentsLink
+          savingId={savingId}
+          onGenerateSuperbill={(encounterId) => void runSuperbillPreview(encounterId)}
         />
       )}
 
@@ -451,8 +533,14 @@ export function BillingQueuePage() {
   );
 }
 
-function Tab({ active, label, onClick }: { active: boolean; label: string; onClick: () => void }) {
-  return <button type="button" className={active ? "thera-tab active" : "thera-tab"} onClick={onClick}>{label}</button>;
+function BillingCorrectionActions({ links }: { links: BillingCorrectionLink[] }) {
+  return <div className="thera-filter-row" role="group" aria-label="Correct source fields" style={{ marginTop: 9, flexWrap: "wrap", gap: 6 }}>
+    {links.map((link) => <Link className="thera-action secondary" key={link.href} href={link.href}>{link.label} →</Link>)}
+  </div>;
+}
+
+function Tab({ active, label, title, onClick }: { active: boolean; label: string; title?: string; onClick: () => void }) {
+  return <button type="button" className={active ? "thera-tab active" : "thera-tab"} title={title} onClick={onClick}>{label}</button>;
 }
 
 function EncounterTable({
@@ -461,33 +549,61 @@ function EncounterTable({
   savingId,
   onAudit,
   onCharge,
+  enableBatch = false,
+  onBatchCharge,
 }: {
   rows: BillingData["encounters"];
   data: BillingData;
   savingId: string | null;
   onAudit: (id: string) => void;
   onCharge: (id: string) => void;
+  enableBatch?: boolean;
+  onBatchCharge?: (ids: string[]) => void;
 }) {
-  if (!rows.length) return <section className="thera-card"><div className="thera-empty">No encounters in this queue.</div></section>;
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  useEffect(() => { setSelectedIds(new Set()); }, [rows, enableBatch]);
+  const eligible = rows.filter((row) =>
+    row.billing_status === "ready" && !row.blockingChecks.length &&
+    !(data.chargesByEncounter.get(row.id)?.length),
+  );
+  const eligibleIds = eligible.map((row) => row.id);
+  const selectedEligible = eligibleIds.filter((id) => selectedIds.has(id));
+  const allSelected = eligibleIds.length > 0 && selectedEligible.length === eligibleIds.length;
 
+  if (!rows.length) return <section className="thera-card"><div className="thera-empty">No encounters in this queue.</div></section>;
   return (
     <section className="thera-card">
+      {enableBatch && <div className="thera-card-header split">
+        <div><h2>Ready encounters</h2><p>Select eligible encounters to create charges in one operation. Held or already-charged visits cannot be selected.</p></div>
+        <button type="button" className="thera-action" disabled={!selectedEligible.length || Boolean(savingId)} onClick={() => onBatchCharge?.(selectedEligible)}>
+          {savingId === "batch-charges" ? "Creating charges..." : `Create selected charges (${selectedEligible.length})`}
+        </button>
+      </div>}
       <div className="thera-table-wrap">
         <table className="thera-table">
-          <thead><tr><th>DOS</th><th>Patient</th><th>Provider</th><th>Funding / Payer</th><th>Encounter</th><th>Billing</th><th>Blocking Issues</th><th>Advisories</th><th>Actions</th></tr></thead>
+          <thead><tr>
+            {enableBatch && <th><input type="checkbox" aria-label="Select all eligible encounters" checked={allSelected} disabled={!eligibleIds.length || Boolean(savingId)} onChange={(event) => setSelectedIds(event.target.checked ? new Set(eligibleIds) : new Set())} /></th>}
+            <th>DOS</th><th>Patient</th><th>Provider</th><th>Funding / Payer</th><th>Encounter</th><th>Billing</th><th>Blocking Issues</th><th>Advisories</th><th>Actions</th>
+          </tr></thead>
           <tbody>
             {rows.map((row) => {
               const charges = data.chargesByEncounter.get(row.id) ?? [];
+              const canCharge = row.billing_status === "ready" && !row.blockingChecks.length && !charges.length;
               return <tr key={row.id}>
+                {enableBatch && <td><input type="checkbox" aria-label={`Select ${row.clientName} encounter`} checked={canCharge && selectedIds.has(row.id)} disabled={!canCharge || Boolean(savingId)} onChange={(event) => setSelectedIds((current) => {
+                  const next = new Set(current);
+                  if (event.target.checked) next.add(row.id); else next.delete(row.id);
+                  return next;
+                })} /></td>}
                 <td>{shortDate(String(row.started_at ?? ""))}</td>
                 <td>{row.clientName}</td>
                 <td>{row.providerName}</td>
                 <td>{row.payerName}</td>
                 <td><StatusBadge value={String(row.encounter_status)} /></td>
                 <td><StatusBadge value={String(row.billing_status)} /></td>
-                <td>{row.blockingChecks.length ? <><StatusBadge value="blocked" /><div className="thera-table-subtext">{row.blockingChecks.map((check) => String(check.message)).join(" · ")}</div></> : "—"}</td>
+                <td>{row.blockingChecks.length ? <><StatusBadge value="blocked" /><div className="thera-table-subtext">{row.blockingChecks.map((check, index) => { const link = billingCorrectionLink(check, row.id, String(row.client_id ?? "")); return <div key={String(check.id ?? index)} style={{ marginTop: 4 }}>{String(check.message)} {link && <Link className="thera-link" href={link.href}>{link.label} →</Link>}</div>; })}</div></> : "—"}</td>
                 <td>{row.advisoryChecks.length ? <><StatusBadge value="needs_review" /><div className="thera-table-subtext">{row.advisoryChecks.map((check) => String(check.message)).join(" · ")}</div></> : "—"}</td>
-                <td><div className="thera-filter-row"><Link className="thera-action secondary" href={`/encounters/${row.id}`}>Open Encounter</Link><button type="button" className="thera-action secondary" disabled={savingId === row.id} onClick={() => onAudit(row.id)}>Run Audit</button>{row.billing_status === "ready" && charges.length === 0 && <button type="button" className="thera-action" disabled={savingId === row.id} onClick={() => onCharge(row.id)}>Create Charge</button>}</div></td>
+                <td><div className="thera-filter-row"><Link className="thera-action secondary" href={`/encounters/${row.id}`}>Open Encounter</Link><button type="button" className="thera-action secondary" disabled={Boolean(savingId)} onClick={() => onAudit(row.id)}>Run Audit</button>{canCharge && <button type="button" className="thera-action" disabled={Boolean(savingId)} onClick={() => onCharge(row.id)}>Create Charge</button>}</div></td>
               </tr>;
             })}
           </tbody>
@@ -497,22 +613,26 @@ function EncounterTable({
   );
 }
 
-
 function FundingCharges({
   rows,
   data,
   heading,
   description,
   showPaymentsLink = false,
+  savingId,
+  onGenerateSuperbill,
 }: {
   rows: BillingData["charges"];
   data: BillingData;
   heading: string;
   description: string;
   showPaymentsLink?: boolean;
+  savingId?: string | null;
+  onGenerateSuperbill?: (encounterId: string) => void;
 }) {
   const encounters = new Map(data.encounters.map((row) => [row.id, row]));
-  if (!rows.length) return <section className="thera-card"><div className="thera-empty">No charges in this funding queue.</div></section>;
+  const renderedSuperbills = new Set<string>();
+  if (!rows.length) return <section className="thera-card"><div className="thera-empty">{showPaymentsLink ? "No private-pay charges yet. Once charges are created from a signed encounter, its superbill will be available here." : "No charges in this funding queue."}</div></section>;
 
   return <section className="thera-card">
     <div className="thera-card-header split">
@@ -529,6 +649,8 @@ function FundingCharges({
             ? charge.funding_context as Record<string, unknown>
             : {};
           const reference = String(context.reference ?? "").trim();
+          const showSuperbill = showPaymentsLink && Boolean(encounterId) && !renderedSuperbills.has(encounterId);
+          if (showSuperbill) renderedSuperbills.add(encounterId);
           return <tr key={charge.id}>
             <td>{shortDate(String(charge.service_date ?? encounter?.started_at ?? ""))}</td>
             <td>{encounter?.clientName ?? "—"}</td>
@@ -537,7 +659,7 @@ function FundingCharges({
             <td>{String(charge.cpt_code ?? "—")}</td>
             <td>{money(Number(charge.charge_amount_cents ?? 0))}</td>
             <td><StatusBadge value={String(charge.charge_status ?? "")} /></td>
-            <td>{encounterId ? <Link className="thera-action secondary" href={`/encounters/${encounterId}`}>Open Encounter</Link> : "—"}</td>
+            <td><div className="thera-filter-row">{encounterId ? <Link className="thera-action secondary" href={`/encounters/${encounterId}`}>Open Encounter</Link> : "—"}{showSuperbill && <button type="button" className="thera-action" disabled={Boolean(savingId)} onClick={() => onGenerateSuperbill?.(encounterId)}>{savingId === "superbill-" + encounterId ? "Preparing…" : "Generate Superbill"}</button>}</div></td>
           </tr>;
         })}</tbody>
       </table>
@@ -581,11 +703,24 @@ function UnbatchedCharges({
     claimsByPayer.set(payerId, list);
   }
 
-  if (!groupedCharges.size && !claimsByPayer.size) {
-    return <section className="thera-card"><div className="thera-empty">No unbatched charges or claims.</div></section>;
-  }
-
   return <div className="thera-stack">
+    <section className="thera-card" style={{ borderLeft: "4px solid var(--thera-sage)" }}>
+      <div className="thera-eyebrow">INSURANCE ONLY · BEFORE SUBMISSION</div>
+      <h2 style={{ margin: "4px 0 6px" }}>Prepare Insurance Claims</h2>
+      <p style={{ maxWidth: 780 }}>This is where ready insurance charges become claims. Each claim is checked for missing or invalid details before it can be grouped into a payer-specific 837P file. Nothing is sent to an insurer from this section.</p>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 10, marginTop: 13 }}>
+        {[
+          ["01", "Create claim", "Convert captured charges into an insurance claim."],
+          ["02", "Check for errors", "Review required fields and route failed checks to Rejections."],
+          ["03", "Group by payer", "Create an 837P batch from claims that passed validation."],
+        ].map(([number, label, detail]) => <div key={number} style={{ padding: 11, border: "1px solid var(--thera-border)", borderRadius: 8, background: "var(--thera-cream)" }}>
+          <span className="thera-eyebrow">{number}</span>
+          <strong style={{ display: "block", color: "var(--thera-navy)", fontSize: ".82rem", marginTop: 3 }}>{label}</strong>
+          <p style={{ fontSize: ".73rem", margin: "4px 0 0" }}>{detail}</p>
+        </div>)}
+      </div>
+    </section>
+    {!groupedCharges.size && !claimsByPayer.size && <section className="thera-card"><div className="thera-empty">No insurance charges or claims require preparation. Create charges from Ready for Billing when signed encounters are available.</div></section>}
     {[...groupedCharges.entries()].map(([encounterId, charges]) => {
       const encounter = encounters.get(encounterId);
       const total = charges.reduce((sum, charge) => sum + Number(charge.charge_amount_cents ?? 0), 0);

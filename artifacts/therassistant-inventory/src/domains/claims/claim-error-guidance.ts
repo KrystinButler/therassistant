@@ -7,6 +7,7 @@ export type ClaimCorrectionTarget =
   | "claim_lines"
   | "diagnoses"
   | "rendering_provider"
+  | "billing_provider"
   | "payer"
   | "patient"
   | "subscriber";
@@ -17,6 +18,8 @@ export type ClaimErrorGuidance = {
   whatIsWrong: string;
   whyItMatters: string;
   correction: string;
+  field?: string;
+  lineNumber?: number;
 };
 
 export type ClaimRejectionIssue = ClaimErrorGuidance & {
@@ -32,6 +35,22 @@ function objectValue(value: unknown) {
 
 export function getClaimErrorGuidance(message: string): ClaimErrorGuidance | null {
   const value = message.toLowerCase();
+  if (value.includes("billing provider")) return {
+    target: "billing_provider", actionLabel: "Correct Billing Provider", whatIsWrong: message,
+    whyItMatters: "The billing provider must match the submitting entity or clinician.",
+    correction: "Select the correct billing provider and check enrollment.",
+  };
+  if (value.includes("at least one claim line")) return {
+    target: "claim_lines", actionLabel: "Add Claim Line", whatIsWrong: message,
+    whyItMatters: "A claim needs at least one billable service line.",
+    correction: "Create a supported service line from the linked encounter or charge.",
+  };
+  if (value.includes("at least one diagnosis")) return {
+    target: "diagnoses", actionLabel: "Add Diagnosis", whatIsWrong: message,
+    whyItMatters: "A professional claim must have at least one diagnosis.",
+    correction: "Select the supported diagnosis documented for this service.",
+  };
+
 
   if (value.includes("subscriber") || value.includes("member id") || value.includes("member number")) {
     return {
@@ -41,6 +60,16 @@ export function getClaimErrorGuidance(message: string): ClaimErrorGuidance | nul
       whyItMatters: "Subscriber and member information must match the payer's enrollment record before the claim can be accepted.",
       correction: "Review the patient's active coverage and correct the member ID, subscriber relationship, or subscriber demographics identified by the rejection.",
     };
+  }
+  if (/\bline\s*#?\s*\d+/i.test(message) && (value.includes("service date") || value.includes("date of service"))) {
+    return { target: "claim_lines", field: "service_date", actionLabel: "Correct Line Service Date",
+      whatIsWrong: message, whyItMatters: "Service-line dates identify when the billed procedure occurred.",
+      correction: "Correct the identified line's service date." };
+  }
+  if (value.includes("service date through") || value.includes("end date") || value.includes("dos through")) {
+    return { target: "service_date_to", actionLabel: "Correct End Service Date", whatIsWrong: message,
+      whyItMatters: "The claim requires a complete service-date range.",
+      correction: "Correct the through-date field on this claim." };
   }
   if (value.includes("service date") || value.includes("date of service")) {
     return {
@@ -63,16 +92,18 @@ export function getClaimErrorGuidance(message: string): ClaimErrorGuidance | nul
   if (value.includes("place of service") || value.includes("pos code")) {
     return {
       target: "claim_lines",
-      actionLabel: "Fix Claim Line",
+      field: "place_of_service",
+      actionLabel: "Correct Place of Service",
       whatIsWrong: message,
       whyItMatters: "Place of service is reported on the professional service line and can affect coverage and reimbursement.",
       correction: "Correct the place-of-service code on the affected service line.",
     };
   }
-  if (value.includes("claim line") && (value.includes("cpt") || value.includes("hcpcs"))) {
+  if ((value.includes("claim line") || /\bline\s*#?\s*\d+/i.test(message)) && (value.includes("cpt") || value.includes("hcpcs"))) {
     return {
       target: "claim_lines",
-      actionLabel: "Fix Claim Line",
+      field: "cpt_code",
+      actionLabel: "Correct CPT / HCPCS",
       whatIsWrong: message,
       whyItMatters: "CPT/HCPCS identifies the service being billed. Missing or invalid procedure information prevents accurate adjudication.",
       correction: "Correct the procedure code on the affected service line.",
@@ -81,25 +112,28 @@ export function getClaimErrorGuidance(message: string): ClaimErrorGuidance | nul
   if (value.includes("modifier") || value.includes("procedure code")) {
     return {
       target: "claim_lines",
-      actionLabel: "Fix Claim Line",
+      field: value.includes("modifier 2") || value.includes("modifier2") ? "modifier2" : value.includes("modifier") ? "modifier1" : "cpt_code",
+      actionLabel: "Correct Procedure / Modifier",
       whatIsWrong: message,
       whyItMatters: "Procedure and modifier information identifies the billed service and how it was performed.",
       correction: "Review the affected claim line and correct the CPT/HCPCS code or modifier.",
     };
   }
-  if (value.includes("claim line") && value.includes("units")) {
+  if ((value.includes("claim line") || /\bline\s*#?\s*\d+/i.test(message)) && value.includes("units")) {
     return {
       target: "claim_lines",
-      actionLabel: "Fix Claim Line",
+      field: "units",
+      actionLabel: "Correct Units",
       whatIsWrong: message,
       whyItMatters: "Units tell the payer how much of the service was provided and are required to calculate the billed service correctly.",
       correction: "Enter the correct units for the affected service line.",
     };
   }
-  if (value.includes("claim line") && value.includes("charge")) {
+  if ((value.includes("claim line") || /\bline\s*#?\s*\d+/i.test(message)) && value.includes("charge")) {
     return {
       target: "claim_lines",
-      actionLabel: "Fix Claim Line",
+      field: "charge_amount_cents",
+      actionLabel: "Correct Line Charge",
       whatIsWrong: message,
       whyItMatters: "Each billed service line requires a valid charge amount for adjudication.",
       correction: "Correct the charge on the affected service line.",
@@ -108,6 +142,7 @@ export function getClaimErrorGuidance(message: string): ClaimErrorGuidance | nul
   if (value.includes("diagnosis pointer")) {
     return {
       target: "claim_lines",
+      field: "diagnosis_pointer",
       actionLabel: "Correct Diagnosis Pointer",
       whatIsWrong: message,
       whyItMatters: "The diagnosis pointer connects a billed service line to the diagnosis that supports the service.",
@@ -203,5 +238,34 @@ export function getClaimRejectionIssue(input: {
   const segment = String(raw.segment ?? raw.segment_id ?? raw.segment_name ?? raw.ik3_segment_id ?? "").trim();
   const guidance = getClaimErrorGuidance(message) ?? (segment ? segmentGuidance(segment, message) : null);
   if (!guidance) return null;
-  return { ...guidance, code, acknowledgementType };
+  const match = message.match(/\b(?:claim |service )?line\s*#?\s*(\d+)\b/i);
+  const rawLine = Number(raw.line_number ?? raw.service_line_number ?? 0);
+  const lineNumber = rawLine > 0 && Number.isInteger(rawLine) ? rawLine : match ? Number(match[1]) : undefined;
+  const element = String(raw.element ?? raw.element_id ?? "").toUpperCase();
+  const field = element.includes("SV101") ? "cpt_code" : element.includes("SV102") ? "charge_amount_cents" : element.includes("SV104") ? "units" : guidance.field;
+  return { ...guidance, field, lineNumber, code, acknowledgementType };
+}
+
+/** Derive exact missing fields from the claim rather than guessing a clearinghouse location. */
+export function deriveClaimValidationIssues(claim: Record<string, unknown>, lines: Record<string, unknown>[], diagnoses: Record<string, unknown>[]): string[] {
+  const issues: string[] = [];
+  if (!claim.client_id) issues.push("Patient is missing.");
+  if (!claim.payer_id) issues.push("Payer is missing.");
+  if (!claim.rendering_provider_id) issues.push("Rendering provider is missing.");
+  if (!claim.billing_provider_id) issues.push("Billing provider is missing.");
+  if (!claim.service_date_from) issues.push("Service date is missing.");
+  if (!claim.service_date_to) issues.push("Service date through is missing.");
+  if (Number(claim.total_charge_cents ?? 0) <= 0) issues.push("Claim charge must be greater than zero.");
+  if (!lines.length) issues.push("At least one claim line is required.");
+  if (!diagnoses.length) issues.push("At least one diagnosis is required.");
+  lines.forEach((line, index) => {
+    const label = "Line " + (index + 1);
+    if (!line.service_date) issues.push(label + ": Service date is missing.");
+    if (!String(line.cpt_code ?? "").trim()) issues.push(label + ": CPT/HCPCS is missing.");
+    if (Number(line.units ?? 0) <= 0) issues.push(label + ": Units must be greater than zero.");
+    if (Number(line.charge_amount_cents ?? 0) <= 0) issues.push(label + ": Charge must be greater than zero.");
+    if (!String(line.diagnosis_pointer ?? "").trim()) issues.push(label + ": Diagnosis pointer is missing.");
+    if (!/^\d{2}$/.test(String(line.place_of_service ?? ""))) issues.push(label + ": Place of service must be two digits.");
+  });
+  return issues;
 }

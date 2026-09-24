@@ -5,7 +5,7 @@ import { WorkDrawer } from "../../components/work-drawer";
 import { StatusBadge } from "../../components/status-badge";
 import { money, shortDate } from "../../lib/format";
 import { Icd10SearchInput } from "../coding/Icd10SearchInput";
-import { getClaimRejectionIssue, type ClaimCorrectionTarget } from "./claim-error-guidance";
+import { deriveClaimValidationIssues, getClaimRejectionIssue, type ClaimCorrectionTarget } from "./claim-error-guidance";
 import {
   getClaimWorkReferenceData,
   saveClaimIdentityFields,
@@ -52,6 +52,7 @@ function formFrom(record?: Record<string, unknown>): DrawerForm {
     client_id: text(record?.client_id, ""),
     payer_id: text(record?.payer_id, ""),
     rendering_provider_id: text(record?.rendering_provider_id, ""),
+    billing_provider_id: text(record?.billing_provider_id, ""),
     patient_control_number: text(record?.patient_control_number, ""),
     payer_claim_number: text(record?.payer_claim_number, ""),
     service_date_from: text(record?.service_date_from, "").slice(0, 10),
@@ -163,18 +164,28 @@ export function RejectionWorkDrawer({
     setNotice(null);
 
     try {
+      // Validate new required rows before any partial database write.
+      for (const [index, line] of lines.entries()) {
+        if (line.id.startsWith("new:") && (!line.service_date || !line.cpt_code.trim() || line.units <= 0 || line.charge_amount_cents <= 0)) {
+          throw new Error("Line " + (index + 1) + ": Complete service date, CPT/HCPCS, positive units, and charge.");
+        }
+      }
+      if (diagnoses.some((row) => row.id.startsWith("new:") && !row.diagnosis_code.trim())) {
+        throw new Error("Select an ICD-10-CM diagnosis before saving.");
+      }
       await saveClaimIdentityFields(activeClaim.id, form);
       await saveClaimLineCorrections(activeClaim.id, lines);
       await saveClaimDiagnosisCorrections(activeClaim.id, diagnoses);
 
       const result = await saveClaimWorkFields(activeClaim.id, form, revalidate || resubmit);
       const blocked = "ok" in result && result.ok === false && Boolean(result.blocked);
+      if ("ok" in result && !result.ok && !result.blocked) throw new Error(result.message);
 
       const work = await getClaimWorkData(activeClaim.id);
       applyWork(work);
 
       if (blocked) {
-        setNotice("The correction was saved, but revalidation still found items that require attention.");
+        setNotice("The correction was saved, but revalidation still found items that require attention: " + ("details" in result && Array.isArray(result.details) ? result.details.join(" ") : ""));
         return;
       }
 
@@ -204,38 +215,58 @@ export function RejectionWorkDrawer({
     direction === "previous" ? onPrevious?.() : onNext?.();
   }
 
-  function focusTarget(target: ClaimCorrectionTarget) {
+  function focusTarget(target: ClaimCorrectionTarget, field?: string, lineNumber?: number) {
+    if (target === "patient" && form.client_id) {
+      navigate(`/clients/${form.client_id}?tab=demographics`);
+      return;
+    }
     if (target === "subscriber") {
       if (form.client_id) navigate(`/clients/${form.client_id}?tab=coverage`);
       return;
     }
 
     const id = target === "claim_lines"
-      ? "rejection-field-claim-lines"
+      ? field && lineNumber && lineNumber <= lines.length
+        ? `rejection-line-${lineNumber}-${field}`
+        : "rejection-field-claim-lines"
       : target === "diagnoses"
         ? "rejection-field-diagnoses"
         : `rejection-field-${target}`;
 
     window.setTimeout(() => {
       const container = document.getElementById(id);
-      const control = container?.querySelector<HTMLElement>("input, select, textarea, button");
+      const control = container?.matches("input, select, textarea")
+        ? container as HTMLElement
+        : container?.querySelector<HTMLElement>("input, select, textarea, button");
       container?.scrollIntoView({ behavior: "smooth", block: "center" });
       control?.focus();
     }, 0);
   }
 
-  const rejectedResponses = (workData?.responses ?? []).filter(
+  const isValidationHold = String(workData?.claim?.claim_status ?? activeClaim.claimStatus) === "validation_failed";
+  const rejectedResponses = isValidationHold ? [] : (workData?.responses ?? []).filter(
     (row) => String(row.response_status ?? "").toLowerCase() === "rejected",
   );
-  const rejectionIssues = rejectedResponses.slice(0, 1).map((row) => ({
-    message: text(row.response_message, "Clearinghouse rejected the claim for correction."),
-    code: text(row.response_code, ""),
-    issue: getClaimRejectionIssue({
-      responseCode: row.response_code,
-      responseMessage: row.response_message,
-      rawResponse: row.raw_response,
-    }),
-  }));
+  const rejectionIssues = rejectedResponses.slice(0, 1).flatMap((row) =>
+    text(row.response_message, "Clearinghouse rejected the claim for correction.")
+      .split(/(?<=\.)\s+/).filter(Boolean).map((message) => ({
+        message,
+        code: text(row.response_code, ""),
+        issue: getClaimRejectionIssue({
+          responseCode: row.response_code,
+          responseMessage: message,
+          rawResponse: row.raw_response,
+        }),
+      })),
+  );
+  const validationMessages = isValidationHold && workData
+    ? deriveClaimValidationIssues(workData.claim, workData.lines, workData.diagnoses)
+    : [];
+  for (const message of [...validationMessages, ...messages]) {
+    if (!rejectionIssues.some((entry) => entry.message === message)) {
+      rejectionIssues.push({ message, code: "", issue: getClaimRejectionIssue({ responseMessage: message }) });
+    }
+  }
 
   if (!rejectionIssues.length) {
     for (const message of (messages.length ? messages : ["Clearinghouse rejected the claim for correction."])) {
@@ -306,8 +337,8 @@ export function RejectionWorkDrawer({
           <section className="thera-card">
             <div className="thera-card-header">
               <div>
-                <h2>Clearinghouse rejection</h2>
-                <p>Fix the claim field identified by the rejection, then revalidate before resubmission.</p>
+                <h2>{isValidationHold ? "Claim validation hold" : "Clearinghouse rejection"}</h2>
+                <p>{isValidationHold ? "Correct the current validation errors before preparing this claim." : "Fix the field identified by the clearinghouse, then revalidate before resubmission."}</p>
               </div>
             </div>
 
@@ -315,7 +346,7 @@ export function RejectionWorkDrawer({
               {rejectionIssues.map(({ message, code, issue }, index) => (
                 <div key={`${code}-${message}-${index}`} className="thera-card">
                   <div className="thera-filter-row" style={{ justifyContent: "space-between" }}>
-                    <strong>{code ? `Rejection ${code}` : "Rejection"}</strong>
+                    <strong>{code ? `Rejection ${code}` : isValidationHold ? "Validation issue" : "Rejection"}</strong>
                     {issue?.acknowledgementType ? (
                       <span className="thera-table-subtext">{issue.acknowledgementType}</span>
                     ) : null}
@@ -324,7 +355,7 @@ export function RejectionWorkDrawer({
 
                   {issue ? (
                     <>
-                      <div className="thera-table-subtext" style={{ marginTop: 8 }}>Why it rejected</div>
+                      <div className="thera-table-subtext" style={{ marginTop: 8 }}>Why it matters</div>
                       <div>{issue.whyItMatters}</div>
                       <div className="thera-table-subtext" style={{ marginTop: 8 }}>Correction needed</div>
                       <div>{issue.correction}</div>
@@ -332,7 +363,7 @@ export function RejectionWorkDrawer({
                         type="button"
                         className="thera-action secondary"
                         style={{ marginTop: 10 }}
-                        onClick={() => focusTarget(issue.target)}
+                        onClick={() => focusTarget(issue.target, issue.field, issue.lineNumber)}
                       >
                         {issue.actionLabel}
                       </button>
@@ -381,6 +412,14 @@ export function RejectionWorkDrawer({
                       {personName(row)}{row.credentials ? `, ${String(row.credentials)}` : ""}
                     </option>
                   ))}
+                </select>
+              </label>
+
+              <label id="rejection-field-billing_provider">
+                Billing provider
+                <select className="thera-input" value={form.billing_provider_id} onChange={(e) => field("billing_provider_id", e.target.value)}>
+                  <option value="">Select billing provider</option>
+                  {(refs?.providers ?? []).map((row) => <option key={row.id} value={row.id}>{personName(row)}</option>)}
                 </select>
               </label>
 
@@ -433,40 +472,45 @@ export function RejectionWorkDrawer({
                   <div className="thera-form-grid" style={{ marginTop: 10 }}>
                     <label>
                       DOS
-                      <input className="thera-input" type="date" value={line.service_date} onChange={(e) => setLines((current) => current.map((row) => row.id === line.id ? { ...row, service_date: e.target.value } : row))} />
+                      <input id={`rejection-line-${index + 1}-service_date`} className="thera-input" type="date" value={line.service_date} onChange={(e) => setLines((current) => current.map((row) => row.id === line.id ? { ...row, service_date: e.target.value } : row))} />
                     </label>
                     <label>
                       CPT / HCPCS
-                      <input className="thera-input" value={line.cpt_code} onChange={(e) => setLines((current) => current.map((row) => row.id === line.id ? { ...row, cpt_code: e.target.value } : row))} />
+                      <input id={`rejection-line-${index + 1}-cpt_code`} className="thera-input" value={line.cpt_code} onChange={(e) => setLines((current) => current.map((row) => row.id === line.id ? { ...row, cpt_code: e.target.value } : row))} />
                     </label>
                     <label>
                       Modifier 1
-                      <input className="thera-input" value={line.modifier1} onChange={(e) => setLines((current) => current.map((row) => row.id === line.id ? { ...row, modifier1: e.target.value } : row))} />
+                      <input id={`rejection-line-${index + 1}-modifier1`} className="thera-input" value={line.modifier1} onChange={(e) => setLines((current) => current.map((row) => row.id === line.id ? { ...row, modifier1: e.target.value } : row))} />
                     </label>
                     <label>
                       Modifier 2
-                      <input className="thera-input" value={line.modifier2} onChange={(e) => setLines((current) => current.map((row) => row.id === line.id ? { ...row, modifier2: e.target.value } : row))} />
+                      <input id={`rejection-line-${index + 1}-modifier2`} className="thera-input" value={line.modifier2} onChange={(e) => setLines((current) => current.map((row) => row.id === line.id ? { ...row, modifier2: e.target.value } : row))} />
                     </label>
                     <label>
                       Diagnosis pointer
-                      <input className="thera-input" value={line.diagnosis_pointer} onChange={(e) => setLines((current) => current.map((row) => row.id === line.id ? { ...row, diagnosis_pointer: e.target.value } : row))} />
+                      <input id={`rejection-line-${index + 1}-diagnosis_pointer`} className="thera-input" value={line.diagnosis_pointer} onChange={(e) => setLines((current) => current.map((row) => row.id === line.id ? { ...row, diagnosis_pointer: e.target.value } : row))} />
                     </label>
                     <label>
                       Place of service
-                      <input className="thera-input" value={line.place_of_service} onChange={(e) => setLines((current) => current.map((row) => row.id === line.id ? { ...row, place_of_service: e.target.value } : row))} />
+                      <input id={`rejection-line-${index + 1}-place_of_service`} className="thera-input" value={line.place_of_service} onChange={(e) => setLines((current) => current.map((row) => row.id === line.id ? { ...row, place_of_service: e.target.value } : row))} />
                     </label>
                     <label>
                       Units
-                      <input className="thera-input" type="number" min="0" step="1" value={line.units} onChange={(e) => setLines((current) => current.map((row) => row.id === line.id ? { ...row, units: Number(e.target.value) } : row))} />
+                      <input id={`rejection-line-${index + 1}-units`} className="thera-input" type="number" min="0" step="1" value={line.units} onChange={(e) => setLines((current) => current.map((row) => row.id === line.id ? { ...row, units: Number(e.target.value) } : row))} />
                     </label>
                     <label>
                       Charge
-                      <input className="thera-input" type="number" min="0" step="0.01" value={(line.charge_amount_cents / 100).toFixed(2)} onChange={(e) => setLines((current) => current.map((row) => row.id === line.id ? { ...row, charge_amount_cents: Math.round(Number(e.target.value || 0) * 100) } : row))} />
+                      <input id={`rejection-line-${index + 1}-charge_amount_cents`} className="thera-input" type="number" min="0" step="0.01" value={(line.charge_amount_cents / 100).toFixed(2)} onChange={(e) => setLines((current) => current.map((row) => row.id === line.id ? { ...row, charge_amount_cents: Math.round(Number(e.target.value || 0) * 100) } : row))} />
                     </label>
                   </div>
                 </div>
               ))}
-              {!lines.length ? <div className="thera-state">No claim lines are attached to this claim.</div> : null}
+              {!lines.length ? <div className="thera-state">No claim lines are attached to this claim. Add a line below.</div> : null}
+              <button type="button" className="thera-action secondary" onClick={() => setLines((current) => [...current, {
+                id: "new:" + crypto.randomUUID(), service_date: form.service_date_from,
+                cpt_code: "", modifier1: "", modifier2: "", diagnosis_pointer: "1",
+                place_of_service: "11", units: 1, charge_amount_cents: 0,
+              }])}>+ Add Service Line</button>
             </div>
           </section>
 
@@ -495,7 +539,10 @@ export function RejectionWorkDrawer({
                   </div>
                 </div>
               ))}
-              {!diagnoses.length ? <div className="thera-state">No diagnoses are attached to this claim.</div> : null}
+              {!diagnoses.length ? <div className="thera-state">No diagnoses are attached to this claim. Add a diagnosis below.</div> : null}
+              <button type="button" className="thera-action secondary" onClick={() => setDiagnoses((current) => [...current, {
+                id: "new:" + crypto.randomUUID(), diagnosis_code: "", pointer_order: current.length + 1,
+              }])}>+ Add Diagnosis</button>
             </div>
           </section>
         </div>

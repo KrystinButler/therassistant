@@ -5,6 +5,7 @@ import {
   type Row,
 } from "../../lib/tenant-data-client";
 import { getClaimSubmissionData } from "../claims/repository";
+import { resolvePayerEdiConfig } from "./payer-edi-defaults";
 import type {
   BatchOutputData,
   ClaimOutputItem,
@@ -137,7 +138,7 @@ export async function getClaimPreviewData(claimId: string): Promise<{
   const provider = providers[0] ?? null;
   const payer = payers[0] ?? null;
   const policy = choosePrimaryPolicy(policies, clientId, payerId);
-  const edi = read837PConfig(tenantRows[0]?.settings);
+  const edi = resolvePayerEdiConfig(read837PConfig(tenantRows[0]?.settings), payers);
 
   return {
     edi,
@@ -248,5 +249,5 @@ export async function getBatchExportData(batchId: string): Promise<BatchOutputDa
     };
   });
 
-  return { batch, edi, claims };
+  return { batch, edi: resolvePayerEdiConfig(edi, payers), claims };
 }

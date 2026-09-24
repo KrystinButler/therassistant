@@ -1,4 +1,6 @@
 import { useEffect, useState } from "react";
+import { Link } from "wouter";
+import { resolvePayerEdiConfig } from "../domains/billing/payer-edi-defaults";
 
 import {
   getCurrentTenantId,
@@ -13,7 +15,6 @@ import {
   read837PConfig,
 } from "../domains/billing/claim-output-repository";
 import {
-  CLAIM_FILING_INDICATORS,
   type Edi837PConfig,
 } from "../domains/billing/claim-output";
 
@@ -63,12 +64,6 @@ export function PracticeConfigurationPage() {
         setPracticeLocationId(String(location?.id ?? ""));
         setLocationName(String(location?.name ?? `${currentTenantName} Primary Location`));
         const config = read837PConfig(tenants[0]?.settings);
-        const payerIds = { ...config.payerIds };
-        for (const payer of payerRows) {
-          if (!payerIds[payer.id] && payer.clearinghouse_payer_id) {
-            payerIds[payer.id] = String(payer.clearinghouse_payer_id);
-          }
-        }
         setForm({
           ...config,
           billingProviderName: config.billingProviderName || String(entity?.legal_name ?? entity?.dba_name ?? ""),
@@ -81,7 +76,6 @@ export function PracticeConfigurationPage() {
           state: config.state || String(location?.state ?? ""),
           postalCode: config.postalCode || String(location?.postal_code ?? ""),
           contactPhone: config.contactPhone || String(location?.phone ?? ""),
-          payerIds,
         });
         setPayers(payerRows);
       } catch (err) {
@@ -96,39 +90,6 @@ export function PracticeConfigurationPage() {
 
   function update<K extends keyof Edi837PConfig>(key: K, value: Edi837PConfig[K]) {
     setForm((current) => current ? { ...current, [key]: value } : current);
-  }
-
-  function updatePayerId(payerId: string, value: string) {
-    if (!form) return;
-    setForm({
-      ...form,
-      payerIds: {
-        ...form.payerIds,
-        [payerId]: value,
-      },
-    });
-  }
-
-  function updateClaimFilingIndicator(payerId: string, value: string) {
-    if (!form) return;
-    setForm({
-      ...form,
-      claimFilingIndicators: {
-        ...form.claimFilingIndicators,
-        [payerId]: value,
-      },
-    });
-  }
-
-  function updateEraPayerIdentifier(payerId: string, value: string) {
-    if (!form) return;
-    setForm({
-      ...form,
-      eraPayerIdentifiers: {
-        ...form.eraPayerIdentifiers,
-        [payerId]: value,
-      },
-    });
   }
 
   async function save() {
@@ -219,6 +180,11 @@ export function PracticeConfigurationPage() {
   if (error && !form) return <div className="thera-state error">{error}</div>;
   if (!form) return <div className="thera-state error">Practice configuration is unavailable.</div>;
 
+  // Values come from the shared payer catalog each time this screen loads.
+  // Practice-specific overrides remain in the saved EDI configuration.
+  const routing = resolvePayerEdiConfig(form, payers);
+  const readyOutboundCount = payers.filter((payer) => Boolean(routing.payerIds[payer.id])).length;
+
   return (
     <>
       <div className="thera-page-header split">
@@ -297,55 +263,40 @@ export function PracticeConfigurationPage() {
           </div>
         </section>
 
-        <section className="thera-card">
-          <div className="thera-card-header">
+        <section className="thera-card" aria-labelledby="colorado-payer-routing">
+          <div className="thera-card-header split">
             <div>
-              <h2>Payer Claim Configuration</h2>
-              <p>Configure outbound 837P routing separately from the inbound ERA payer identifier. THERASSISTANT will not assume these identifiers are the same.</p>
+              <div className="thera-eyebrow">SHARED COLORADO REFERENCE</div>
+              <h2 id="colorado-payer-routing">Colorado Payer Claim Routing</h2>
+              <p>Claim-filing categories and available payer IDs are loaded automatically from the shared catalog. This is not a practice setup task. Outbound 837P and inbound ERA identifiers remain separate.</p>
             </div>
+            <span className="thera-table-subtext">{readyOutboundCount} of {payers.length} outbound payer IDs available</span>
           </div>
+          {readyOutboundCount < payers.length && (
+            <div className="thera-alert" role="status" style={{ marginBottom: 12 }}>
+              {payers.length - readyOutboundCount} payer ID{payers.length - readyOutboundCount === 1 ? "" : "s"} not yet loaded in the shared catalog. Those clearinghouse-specific routes need central verification; they are not invented or marked ready.
+            </div>
+          )}
           <div className="thera-table-wrap">
             <table className="thera-table">
-              <thead><tr><th>Payer</th><th>Type</th><th>837P Payer ID</th><th>Claim Filing Indicator</th><th>ERA Payer ID</th></tr></thead>
+              <thead><tr><th>Payer</th><th>Claim Filing</th><th>837P Routing ID</th><th>ERA Identifier</th><th>Catalog Status</th></tr></thead>
               <tbody>
-                {payers.map((payer) => (
-                  <tr key={payer.id}>
-                    <td>{String(payer.name ?? payer.id)}</td>
-                    <td>{String(payer.payer_type ?? "—").replaceAll("_", " ")}</td>
-                    <td>
-                      <input
-                        className="thera-input"
-                        value={form.payerIds[payer.id] ?? ""}
-                        onChange={(event) => updatePayerId(payer.id, event.target.value)}
-                        aria-label={`${String(payer.name ?? "Payer")} EDI payer ID`}
-                      />
-                    </td>
-                    <td>
-                      <select
-                        className="thera-input"
-                        value={form.claimFilingIndicators[payer.id] ?? ""}
-                        onChange={(event) => updateClaimFilingIndicator(payer.id, event.target.value)}
-                        aria-label={`${String(payer.name ?? "Payer")} claim filing indicator`}
-                      >
-                        <option value="">Select</option>
-                        {CLAIM_FILING_INDICATORS.map(([code, label]) => (
-                          <option key={code} value={code}>{code} — {label}</option>
-                        ))}
-                      </select>
-                    </td>
-                    <td>
-                      <input
-                        className="thera-input"
-                        value={form.eraPayerIdentifiers[payer.id] ?? ""}
-                        onChange={(event) => updateEraPayerIdentifier(payer.id, event.target.value)}
-                        aria-label={`${String(payer.name ?? "Payer")} ERA payer ID`}
-                      />
-                    </td>
-                  </tr>
-                ))}
+                {payers.map((payer) => {
+                  const filing = routing.claimFilingIndicators[payer.id] ?? "";
+                  const outbound = routing.payerIds[payer.id] ?? "";
+                  const inbound = routing.eraPayerIdentifiers[payer.id] ?? "";
+                  return <tr key={payer.id}>
+                    <td><Link className="thera-table-link" href={"/payers/" + payer.id}>{String(payer.name ?? "Payer")}</Link></td>
+                    <td>{filing || "Needs classification"}<div className="thera-table-subtext">{form.claimFilingIndicators[payer.id] ? "Existing partner override" : filing ? "Colorado catalog default" : "No safe category default"}</div></td>
+                    <td>{outbound || "Not in shared catalog"}<div className="thera-table-subtext">{form.payerIds[payer.id] ? "Existing partner override" : outbound ? "Shared reference value" : "Awaiting partner-specific mapping"}</div></td>
+                    <td>{inbound || "Not in shared catalog"}<div className="thera-table-subtext">{inbound ? "Existing partner mapping" : "Kept separate from outbound ID"}</div></td>
+                    <td><span className="thera-table-subtext">{outbound && filing ? "Available for partner validation" : "Central catalog review needed"}</span></td>
+                  </tr>;
+                })}
               </tbody>
             </table>
           </div>
+          <p className="thera-muted" style={{ marginTop: 10 }}>These mappings are centrally maintained. A catalog value alone is not proof of clearinghouse enrollment, acceptance, or a verified plan-specific route.</p>
         </section>
 
         <div className="thera-muted">

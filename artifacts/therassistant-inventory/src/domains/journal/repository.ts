@@ -1,12 +1,16 @@
 import { tenantInsert, tenantUpdate, type Row } from "../../lib/tenant-data-client";
+import { getSession } from "../../lib/supabase-client";
 import { buildJournalEntryValues, type JournalEntryInput } from "../portal/workflow";
 
 type DataRow = Row & { id: string };
 
-export function addJournalEntry(patientId: string, input: JournalEntryInput) {
+export async function addJournalEntry(patientId: string, input: JournalEntryInput) {
+  const session = await getSession();
+  if (!session?.user?.id) throw new Error("An authenticated staff identity is required.");
   return tenantInsert<DataRow>("patient_journal_entries", {
     client_id: patientId,
     ...buildJournalEntryValues(input),
+    recorded_by_staff_user_id: session.user.id,
   });
 }
 

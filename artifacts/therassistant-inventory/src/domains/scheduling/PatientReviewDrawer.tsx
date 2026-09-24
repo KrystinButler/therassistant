@@ -204,10 +204,10 @@ export function PatientReviewDrawer({ appointment, open, onOpenChange, onEditApp
           {loading && !review ? <div className="thera-state">Loading patient review...</div> : null}
 
           {review ? <div className="patient-review-sections">
-            <ReviewSection icon={<ClipboardList size={15} />} title="Check-In Summary" action={<span className="patient-review-source-tag">Patient submitted</span>}>
+            <ReviewSection icon={<ClipboardList size={15} />} title="Check-In Summary" wide action={<span className="patient-review-source-tag">{review.hasSubmittedPreVisit ? "Patient submitted" : "Chart context"}</span>}>
               <Definition label="Focus Today" value={review.focus} />
-              <Definition label="Patient's Mood" value={review.mood} />
-              <div className="patient-review-definition"><span>Recent Changes</span>{review.changes.length ? <ul>{review.changes.map((item) => <li key={item}>{item}</li>)}</ul> : <p>No recent changes submitted.</p>}</div>
+              <Definition label="Patient's Mood" value={review.mood} empty={review.mood === "No mood update submitted."} />
+              <div className="patient-review-definition"><span>Recent Changes</span>{review.changes.length ? <ul>{review.changes.map((item) => <li key={item}>{item}</li>)}</ul> : <p className="patient-review-empty-value">No recent changes submitted.</p>}</div>
               {review.additionalContext ? <Definition label="Additional Context" value={review.additionalContext} /> : null}
             </ReviewSection>
 
@@ -229,7 +229,7 @@ export function PatientReviewDrawer({ appointment, open, onOpenChange, onEditApp
             </ReviewSection>
 
             <ReviewSection icon={<ShieldCheck size={15} />} title="Safety Review">
-              <div className={`patient-review-highlight ${review.safety === true ? "warning" : "positive"}`}><CheckCircle2 size={18} /><div><strong>{review.safety === true ? "Safety concern documented" : review.safety === false ? "No safety concerns" : "Safety review not submitted"}</strong><p>{review.safetyText ? review.safetyText : review.safety === true ? "Review the documented risk information before the session." : review.safety === false ? "No risk factors reported in the latest check-in." : "Review available chart information before the session."}</p></div></div>
+              <div className={`patient-review-highlight ${review.safety === true ? "warning" : review.safety === false ? "positive" : "neutral"}`}><CheckCircle2 size={18} /><div><strong>{review.safety === true ? "Safety concern documented" : review.safety === false ? "No safety concerns" : "Safety review not submitted"}</strong><p>{review.safetyText ? review.safetyText : review.safety === true ? "Review the documented risk information before the session." : review.safety === false ? "No risk factors reported in the latest check-in." : "Review available chart information before the session."}</p></div></div>
             </ReviewSection>
 
             <ReviewSection icon={<CheckCircle2 size={15} />} title="Visit Readiness">
@@ -247,10 +247,10 @@ export function PatientReviewDrawer({ appointment, open, onOpenChange, onEditApp
   );
 }
 
-function ReviewSection({ icon, title, action, children }: { icon: React.ReactNode; title: string; action?: React.ReactNode; children: React.ReactNode }) {
-  return <section className="patient-review-section"><div className="patient-review-section-title"><span>{icon}</span><strong>{title}</strong><div>{action}</div></div><div className="patient-review-section-body">{children}</div></section>;
+function ReviewSection({ icon, title, action, children, wide = false }: { icon: React.ReactNode; title: string; action?: React.ReactNode; children: React.ReactNode; wide?: boolean }) {
+  return <section className={wide ? "patient-review-section wide" : "patient-review-section"}><div className="patient-review-section-title"><span className="patient-review-section-icon">{icon}</span><strong>{title}</strong><div>{action}</div></div><div className={wide ? "patient-review-section-body checkin" : "patient-review-section-body"}>{children}</div></section>;
 }
 
-function Definition({ label, value }: { label: string; value: string }) {
-  return <div className="patient-review-definition"><span>{label}</span><p>{value}</p></div>;
+function Definition({ label, value, empty = false }: { label: string; value: string; empty?: boolean }) {
+  return <div className="patient-review-definition"><span>{label}</span><p className={empty ? "patient-review-empty-value" : undefined}>{value}</p></div>;
 }

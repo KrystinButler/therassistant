@@ -2,9 +2,11 @@ import {
   tenantInsert,
   tenantSelect,
   tenantUpdate,
+  tenantDelete,
   type Row,
 } from "../../lib/tenant-data-client";
 import { createChargeFromEncounter } from "../billing/repository";
+import { matchingServiceLineExists, validateServiceLineValues, type ServiceLineValues } from "../encounters/service-line-validation";
 import { saveStructuredClinicalData } from "./fast-charting-repository";
 import type { StructuredSelections } from "./fast-charting";
 import { updateEncounter } from "../encounters/repository";
@@ -150,31 +152,42 @@ export async function addEncounterDiagnosis(
   });
 }
 
-export async function addEncounterServiceLine(
-  encounterId: string,
-  values: {
-    cptCode: string;
-    modifier1?: string;
-    modifier2?: string;
-    units: number;
-    chargeAmountCents: number;
-    placeOfService: string;
-  },
-) {
-  if (!values.cptCode.trim()) throw new Error("CPT/HCPCS code is required.");
-  if (values.units <= 0) throw new Error("Units must be greater than zero.");
-  if (values.chargeAmountCents < 0) throw new Error("Charge amount cannot be negative.");
-
+async function assertUnbilledLine(encounterId: string, lineId: string): Promise<DataRow> {
+  const [encounters, lines, charges] = await Promise.all([
+    tenantSelect<DataRow>("encounters", { id: `eq.${encounterId}`, limit: "1" }),
+    tenantSelect<DataRow>("encounter_service_lines", { id: `eq.${lineId}`, encounter_id: `eq.${encounterId}`, limit: "1" }),
+    tenantSelect<DataRow>("charge_capture_items", { service_line_id: `eq.${lineId}` }),
+  ]);
+  if (!encounters.length || !lines.length) throw new Error("Service line not found in this practice's encounter.");
+  if (charges.some((charge) => charge.charge_status !== "voided"))
+    throw new Error("This service line is already charge-captured. Correct its billing record instead.");
+  return lines[0];
+}
+export async function addEncounterServiceLine(encounterId: string, values: ServiceLineValues) {
+  validateServiceLineValues(values);
+  const [encounters, existing] = await Promise.all([
+    tenantSelect<DataRow>("encounters", { id: `eq.${encounterId}`, limit: "1" }),
+    tenantSelect<DataRow>("encounter_service_lines", { encounter_id: `eq.${encounterId}` }),
+  ]);
+  if (!encounters.length) throw new Error("Encounter not found in this practice.");
+  if (matchingServiceLineExists(existing, values))
+    throw new Error("Matching service line already exists. Edit the existing entry to prevent duplicate charges.");
   return tenantInsert<DataRow>("encounter_service_lines", {
-    encounter_id: encounterId,
-    cpt_hcpcs_code: values.cptCode.trim().toUpperCase(),
-    modifier1: values.modifier1?.trim().toUpperCase() || null,
-    modifier2: values.modifier2?.trim().toUpperCase() || null,
-    units: values.units,
-    charge_amount_cents: values.chargeAmountCents,
-    place_of_service_code: values.placeOfService || null,
-    ready_for_claim: false,
+    encounter_id: encounterId, cpt_hcpcs_code: values.cptCode, modifier1: values.modifier1 || null,
+    units: values.units, charge_amount_cents: values.chargeAmountCents, place_of_service_code: values.placeOfService, ready_for_claim: false,
   });
+}
+export async function updateEncounterServiceLine(encounterId: string, lineId: string, values: ServiceLineValues) {
+  validateServiceLineValues(values);
+  await assertUnbilledLine(encounterId, lineId);
+  return tenantUpdate<DataRow>("encounter_service_lines", lineId, {
+    cpt_hcpcs_code: values.cptCode, modifier1: values.modifier1 || null,
+    units: values.units, charge_amount_cents: values.chargeAmountCents, place_of_service_code: values.placeOfService, ready_for_claim: false,
+  });
+}
+export async function removeEncounterServiceLine(encounterId: string, lineId: string): Promise<void> {
+  await assertUnbilledLine(encounterId, lineId);
+  await tenantDelete("encounter_service_lines", lineId);
 }
 
 export async function signEncounterNote(

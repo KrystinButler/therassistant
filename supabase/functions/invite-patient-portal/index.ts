@@ -50,12 +50,12 @@ function namedKey(currentName: string, legacyName: string) {
 const SUPABASE_URL = requiredEnv("SUPABASE_URL");
 const PUBLISHABLE_KEY = namedKey("SUPABASE_PUBLISHABLE_KEYS", "SUPABASE_ANON_KEY");
 const SECRET_KEY = namedKey("SUPABASE_SECRET_KEYS", "SUPABASE_SERVICE_ROLE_KEY");
-const PORTAL_BASE_URL = requiredEnv("PORTAL_BASE_URL").replace(/\/+$/, "");
+const PORTAL_BASE_URL = (Deno.env.get("PORTAL_BASE_URL")?.trim() || "https://therassistant.vercel.app").replace(/\/+$/, "");
 const PORTAL_ORIGIN = new URL(PORTAL_BASE_URL).origin;
 
-function corsHeaders() {
+function corsHeaders(origin = PORTAL_ORIGIN) {
   return {
-    "Access-Control-Allow-Origin": PORTAL_ORIGIN,
+    "Access-Control-Allow-Origin": origin,
     "Access-Control-Allow-Headers": "authorization, apikey, content-type",
     "Access-Control-Allow-Methods": "POST, OPTIONS",
     "Content-Type": "application/json",
@@ -63,21 +63,19 @@ function corsHeaders() {
   };
 }
 
-function json(payload: Record<string, unknown>, status: number) {
-  return new Response(JSON.stringify(payload), {
-    status,
-    headers: corsHeaders(),
-  });
-}
-
 Deno.serve(async (req: Request) => {
   const origin = req.headers.get("Origin");
-  if (origin && origin !== PORTAL_ORIGIN) {
-    return json({ error: "Origin is not allowed." }, 403);
-  }
+  const allowedOrigin = !origin || origin === PORTAL_ORIGIN
+    || origin === "https://therassistant.vercel.app"
+    || origin === "https://therassistant-therassistant-1064.vercel.app"
+    || /^https:\/\/therassistant-[a-z0-9-]+-therassistant-1064\.vercel\.app$/.test(origin);
+  if (!allowedOrigin) return new Response(JSON.stringify({ error: "Origin is not allowed." }), { status: 403, headers: corsHeaders() });
+  const requestOrigin = origin || PORTAL_ORIGIN;
+  const json = (payload: Record<string, unknown>, status: number) =>
+    new Response(JSON.stringify(payload), { status, headers: corsHeaders(requestOrigin) });
 
   if (req.method === "OPTIONS") {
-    return new Response(null, { status: 204, headers: corsHeaders() });
+    return new Response(null, { status: 204, headers: corsHeaders(requestOrigin) });
   }
 
   if (req.method !== "POST") {

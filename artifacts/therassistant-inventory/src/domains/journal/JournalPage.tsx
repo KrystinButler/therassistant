@@ -21,6 +21,7 @@ type JournalEntry = DataRow & {
   entry_status?: string | null;
   submitted_at?: string | null;
   reviewed_at?: string | null;
+  recorded_by_staff_user_id?: string | null;
 };
 
 type ReviewFilter = "needs_review" | "flagged" | "reviewed" | "all";
@@ -191,7 +192,7 @@ export function JournalPage() {
                     <p>
                       {entry.entry_date ? shortDate(String(entry.entry_date)) : entry.submitted_at ? dateTime(String(entry.submitted_at)) : "—"}
                       {entry.mood ? ` · ${String(entry.mood)}` : ""}
-                      {" · Patient-authored"}
+                      {" · "}{entry.recorded_by_staff_user_id ? "Patient-reported (staff transcribed)" : "Patient-authored"}
                     </p>
                   </div>
                   <StatusBadge value={String(entry.review_status ?? "unreviewed")} />
