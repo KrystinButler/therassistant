@@ -7,6 +7,7 @@ export type ServiceGuardrailInput = {
   billingPath?: string | null;
   billingType?: string | null;
   provider?: Record<string, any> | null;
+  documentedPsychotherapyMinutes?: number | null;
   appointment?: Record<string, any> | null;
 };
 
@@ -47,7 +48,8 @@ function scheduledMinutes(appointment: Record<string, any> | null | undefined): 
 function documentedPsychotherapyMinutes(input: ServiceGuardrailInput): number | null {
   // Only an explicit documented psychotherapy duration counts. An appointment
   // slot and the total time of an E/M visit cannot establish psychotherapy time.
-  return numericMinutes(input.note?.psychotherapy_minutes)
+  return numericMinutes(input.documentedPsychotherapyMinutes)
+    ?? numericMinutes(input.note?.psychotherapy_minutes)
     ?? numericMinutes(input.note?.face_to_face_psychotherapy_minutes)
     ?? numericMinutes(input.encounter.psychotherapy_minutes);
 }
