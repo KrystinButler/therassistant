@@ -1,6 +1,7 @@
 import type { ReadinessCheck } from "./types";
 import { evaluateFundingGuardrails } from "../billing/billing-guardrails";
 import { evaluateServiceGuardrails } from "../billing/service-guardrails";
+import { evaluatePayerBillingRules, type PayerRuleResource } from "../billing/payer-billing-rules";
 
 export type BillingReadinessInput = {
   encounter: Record<string, any>;
@@ -17,6 +18,10 @@ export type BillingReadinessInput = {
   provider?: Record<string, any> | null;
   documentedPsychotherapyMinutes?: number | null;
   appointment?: Record<string, any> | null;
+  payerId?: string | null;
+  payerPlanId?: string | null;
+  payerBillingRules?: PayerRuleResource[];
+  serviceDate?: string | null;
 };
 
 export type BillingReadiness = {
@@ -43,6 +48,7 @@ export function evaluateBillingReadiness(input: BillingReadinessInput): BillingR
   const insuranceClaim = billingPath === "insurance_claim";
   checks.push(...evaluateFundingGuardrails(input));
   checks.push(...evaluateServiceGuardrails(input));
+  checks.push(...evaluatePayerBillingRules(input));
 
   if (!input.note || !["signed", "locked"].includes(String(input.note.note_status))) {
     checks.push(result("note_unsigned", "Clinical Note", "fail", true, "The clinical note is not signed.", "Complete and sign the encounter note."));
