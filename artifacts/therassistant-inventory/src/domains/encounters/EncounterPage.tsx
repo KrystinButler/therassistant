@@ -41,6 +41,30 @@ import "./encounter-page.css";
 
 type EncounterDetail = Awaited<ReturnType<typeof getEncounterDetail>>;
 type ContextTab = "lastVisit" | "treatment" | "journal" | "documents";
+const noteLayouts: Record<string, { title: string; sections: string[] }> = {
+ psychotherapy: { title: "Psychotherapy Progress Note", sections: ["Session focus", "Interventions", "Patient response", "Progress toward goals", "Risk assessment", "Plan"] },
+ assessment: { title: "Clinical Assessment", sections: ["Presenting concerns", "History", "Mental status", "Diagnostic assessment", "Risk / safety", "Recommendations"] },
+ intake: { title: "Intake Note", sections: ["Chief concern", "History", "Psychosocial context", "Mental status", "Risk / safety", "Initial plan"] },
+ crisis: { title: "Crisis Note", sections: ["Presenting crisis", "Safety assessment", "Immediate interventions", "Response", "Disposition", "Safety plan"] },
+ case_management: { title: "Case Management Note", sections: ["Service need", "Care coordination", "Resources", "Response", "Follow-up"] },
+ medication_management: { title: "Medication Management Note", sections: ["Symptoms", "Adherence", "Side effects", "Mental status", "Risk assessment", "Medication plan"] },
+ other: { title: "Clinical Note", sections: ["Reason for visit", "Findings", "Intervention", "Response", "Plan"] },
+};
+function noteTypeForService(value: string): string {
+ const service = value.toLowerCase();
+ if (service.includes("crisis")) return "crisis";
+ if (/medication|psychiatric/.test(service)) return "medication_management";
+ if (/assessment|intake|evaluation/.test(service)) return "assessment";
+ if (service.includes("case management")) return "case_management";
+ return "psychotherapy";
+}
+function sessionMinutes(start: string, end: string): number | null {
+ if (!start || !end) return null;
+ const [sh, sm] = start.split(":").map(Number);
+ const [eh, em] = end.split(":").map(Number);
+ const minutes = eh * 60 + em - sh * 60 - sm;
+ return Number.isFinite(minutes) && minutes > 0 && minutes <= 1440 ? minutes : null;
+}
 
 function personName(row?: Record<string, any> | null) {
   if (!row) return "—";
@@ -81,6 +105,8 @@ export function EncounterPage() {
   const [message, setMessage] = useState<string | null>(null);
   const [noteText, setNoteText] = useState("");
   const [noteType, setNoteType] = useState("psychotherapy");
+  const [psychStart, setPsychStart] = useState("");
+  const [psychStop, setPsychStop] = useState("");
   const [goalAddressed, setGoalAddressed] = useState("");
   const [diagnosisCode, setDiagnosisCode] = useState("");
   const [diagnosisDescription, setDiagnosisDescription] = useState("");
@@ -114,7 +140,7 @@ export function EncounterPage() {
       setCarryForwardContext(fastCharting.current?.carryForwardContext ?? {});
       setPriorStructuredContext(fastCharting.prior);
       setNoteText(String(note?.note_text ?? ""));
-      setNoteType(String(note?.note_type ?? "psychotherapy"));
+      setNoteType(String(note?.note_type ?? noteTypeForService(String(result.appointment?.service_type ?? result.encounter.service_type ?? ""))));
       setGoalAddressed(String(note?.goal_addressed ?? ""));
       const clientMetadata =
         result.client?.metadata && typeof result.client.metadata === "object"
@@ -305,6 +331,16 @@ export function EncounterPage() {
   const journalInsert = buildJournalNoteInsert(sharedJournal);
   const duration = appointmentDuration(data.appointment);
   const activeGoalText = displayText(activeGoal, ["goal_text", "description", "goal", "title"], "");
+  const noteLayout = noteLayouts[noteType] ?? noteLayouts.other;
+  const calculatedMinutes = sessionMinutes(psychStart, psychStop);
+  function updateSessionTime(start: string, stop: string) {
+    setPsychStart(start); setPsychStop(stop);
+    setStructuredSelections((current) => ({ ...current, psychotherapyMinutes: sessionMinutes(start, stop) }));
+  }
+  function changeNoteType(value: string) {
+    setNoteType(value);
+    if (["assessment", "intake", "psychotherapy"].includes(value)) setStructuredSelections((current) => ({ ...current, templateType: value === "psychotherapy" ? "standard_therapy" : "intake" }));
+  }
   const visitFocus = preVisit.focus || goalAddressed || activeGoalText || "No patient focus was submitted for this visit.";
 
   const completionChecks = [
@@ -477,11 +513,11 @@ export function EncounterPage() {
             {note && <StatusBadge value={String(note.note_status)} />}
           </div>
           <div className="encounter-note-controls">
-            <label><div className="thera-field-label">Actual psychotherapy minutes</div><input className="thera-input" type="number" min={1} max={1440} step={1} value={structuredSelections.psychotherapyMinutes ?? ""} disabled={signed} onChange={(event) => { const text = event.target.value; const minutes = Number(text); setStructuredSelections((current) => ({ ...current, psychotherapyMinutes: text && Number.isInteger(minutes) && minutes >= 1 && minutes <= 1440 ? minutes : null })); }} placeholder="Actual direct psychotherapy time" /><small>Use actual psychotherapy time, not the scheduled visit length or E/M time.</small></label>
-            <label><div className="thera-field-label">Note Type</div><select className="thera-input" value={noteType} disabled={signed} onChange={(event) => setNoteType(event.target.value)}><option value="psychotherapy">Psychotherapy</option><option value="assessment">Assessment</option><option value="intake">Intake</option><option value="crisis">Crisis</option><option value="case_management">Case Management</option><option value="medication_management">Medication Management</option><option value="other">Other</option></select></label>
-            <label><div className="thera-field-label">Goal / Objective Addressed</div><input className="thera-input" value={goalAddressed} disabled={signed} onChange={(event) => setGoalAddressed(event.target.value)} placeholder="Goal or objective addressed" /></label>
+            {noteType === "psychotherapy" && <div className="encounter-session-time"><label>Psychotherapy start<input type="time" className="thera-input" value={psychStart} disabled={signed} onChange={(event) => updateSessionTime(event.target.value, psychStop)} /></label><label>Psychotherapy stop<input type="time" className="thera-input" value={psychStop} disabled={signed} onChange={(event) => updateSessionTime(psychStart, event.target.value)} /></label><span aria-live="polite">Actual psychotherapy: {calculatedMinutes === null ? "Enter start and stop" : calculatedMinutes + " minutes (calculated)"}</span></div>}
+            <label><div className="thera-field-label">Note Type</div><select className="thera-input" value={noteType} disabled={signed} onChange={(event) => changeNoteType(event.target.value)}><option value="psychotherapy">Psychotherapy</option><option value="assessment">Assessment</option><option value="intake">Intake</option><option value="crisis">Crisis</option><option value="case_management">Case Management</option><option value="medication_management">Medication Management</option><option value="other">Other</option></select></label>
+            <label><div className="thera-field-label">Treatment Plan — Goal / Objective</div><select className="thera-input" value={goalAddressed} disabled={signed} onChange={(event) => setGoalAddressed(event.target.value)}><option value="">Select a goal</option>{activeGoals.map((goal) => { const label = displayText(goal, ["goal_text", "description", "goal", "title"], "Goal"); return <option key={goal.id} value={label}>{label}</option>; })}{goalAddressed && !activeGoals.some((goal) => displayText(goal, ["goal_text", "description", "goal", "title"], "Goal") === goalAddressed) && <option value={goalAddressed}>{goalAddressed} (previous selection)</option>}</select>{activeGoals.length === 0 && <small>No linked treatment-plan goals. Add a goal in the patient's treatment plan.</small>}</label>
           </div>
-          <div className="encounter-editor-wrap"><label><div className="thera-field-label">Session / SOAP Note</div><textarea ref={noteRef} className="thera-input encounter-note-editor" value={noteText} disabled={signed} onChange={(event) => handleNoteChange(event.target.value, event.target.selectionStart)} placeholder="Document subjective/objective findings, assessment, interventions, response, plan, risk, and relevant clinical context. Type / for quick inserts." /></label>{showSlashMenu && !signed && <div className="encounter-slash-menu"><div>QUICK INSERTS</div><button type="button" onClick={() => injectQuickText("Risk Assessment: Client denies suicidal or homicidal ideation. No acute safety concerns reported.")}>Risk: Standard Negative</button><button type="button" onClick={() => injectQuickText("Mental Status: Alert and oriented x4. Appearance and behavior appropriate. Speech normal. Thought process linear and goal directed.")}>MSE: Within Normal Limits</button><button type="button" onClick={() => injectQuickText("Intervention: Supportive psychotherapy, reflective listening, validation, and collaborative problem solving were utilized.")}>Intervention: Supportive</button></div>}</div>
+          <div className="encounter-note-guidance"><strong>{noteLayout.title} — documentation sections</strong><span>{noteLayout.sections.join(" · ")}</span></div><div className="encounter-editor-wrap"><label><div className="thera-field-label">{noteLayout.title}</div><textarea ref={noteRef} className="thera-input encounter-note-editor" value={noteText} disabled={signed} onChange={(event) => handleNoteChange(event.target.value, event.target.selectionStart)} placeholder={noteLayout.sections.join(" · ") + ". Type / for quick inserts."} /></label>{showSlashMenu && !signed && <div className="encounter-slash-menu"><div>QUICK INSERTS</div><button type="button" onClick={() => injectQuickText("Risk Assessment: Client denies suicidal or homicidal ideation. No acute safety concerns reported.")}>Risk: Standard Negative</button><button type="button" onClick={() => injectQuickText("Mental Status: Alert and oriented x4. Appearance and behavior appropriate. Speech normal. Thought process linear and goal directed.")}>MSE: Within Normal Limits</button><button type="button" onClick={() => injectQuickText("Intervention: Supportive psychotherapy, reflective listening, validation, and collaborative problem solving were utilized.")}>Intervention: Supportive</button></div>}</div>
           <FastChartingPanel signed={signed} phrases={smartPhrases} selections={structuredSelections} generatedNarrative={generatedNarrative} priorContext={priorStructuredContext} noteSimilarity={noteSimilarity} onSelectionsChange={setStructuredSelections} onInsertNarrative={() => injectIntoNote("\n" + generatedNarrative + "\n")} onInsertPhrase={injectIntoNote} onCarryForward={carryForwardStructured} onCreatePhrase={addSmartPhrase} />
           {!signed && <div className="encounter-note-actions"><button type="button" className="thera-action" disabled={saving || !noteText.trim()} onClick={() => void saveNote()}>{saving ? "Saving..." : "Save Note"}</button><span>Saving does not sign or lock the clinical record.</span></div>}
           {signed && data.signatures[0] && <div className="thera-alert" style={{ marginTop: 12 }}>Signed {dateTime(String(data.signatures[0].signed_at ?? ""))} by {String(data.signatures[0].signature_text ?? "provider")}</div>}
@@ -507,8 +543,8 @@ export function EncounterPage() {
         <section className="thera-card thera-span-2">
           <div className="thera-card-header">
             <div>
-              <div className="thera-eyebrow">FUNDING → BILLING PATH</div>
-              <h2>Funding Source</h2>
+              <div className="thera-eyebrow">OPTIONAL BILLING SETTINGS</div>
+              <h2>Billing Responsibility</h2>
               <p>Set who is financially responsible for this encounter. This routing is separate from the signed clinical note and never starts a claim by itself.</p>
             </div>
             <StatusBadge value={String(encounter.billing_path ?? billingPathForFundingSource(fundingSourceType))} />
