@@ -210,8 +210,27 @@ const repository: BillingRepository = {
     });
   },
 
-  createCharge(values) {
-    return tenantInsert<DataRow>("charge_capture_items", values);
+  async createCharge(values) {
+    try {
+      return await tenantInsert<DataRow>("charge_capture_items", values);
+    } catch (error) {
+      // Two concurrent requests can read the same empty service line. Return
+      // the already-created charge only for this exact uniqueness conflict;
+      // never overwrite a charge that may already have entered claim processing.
+      const message = error instanceof Error ? error.message : "";
+      if (!message.includes('"23505"') ||
+          !message.includes("uq_charge_capture_active_service_line") ||
+          !values.service_line_id) throw error;
+      const existing = await tenantSelect<DataRow>("charge_capture_items", {
+        service_line_id: `eq.${String(values.service_line_id)}`,
+        charge_status: "neq.voided",
+        limit: "1",
+      });
+      if (!existing[0] || String(existing[0].encounter_id) !== String(values.encounter_id)) {
+        throw error;
+      }
+      return existing[0];
+    }
   },
 
   updateCharge(id, values) {
