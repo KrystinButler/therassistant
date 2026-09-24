@@ -149,3 +149,25 @@ test("verified status alone cannot hold claims without an effective date or HTTP
     assert.ok(checks.some(c => c.code === "payer_rule_unverified_verified-rule"));
   }
 });
+
+test("verified payer rules never leak to a different payer even when code and plan IDs match", () => {
+  const checks = evaluatePayerBillingRules({
+    ...base, payerId: "unrelated-payer",
+    serviceLines: [{ ...line, units: 4, modifier1: null }],
+  });
+  assert.deepEqual(checks, []);
+});
+
+test("expired verification never turns a payer-wide requirement into an automatic hold", () => {
+  const payerWide: PayerRuleResource = {
+    ...verified, id: "stale-wide", payer_plan_id: null,
+    review_due_at: "2026-09-22",
+    rule_config: { procedure_code: "90834", max_units: 1 },
+  };
+  const checks = evaluatePayerBillingRules({
+    ...base, payerBillingRules: [payerWide],
+    serviceLines: [{ ...line, units: 2 }],
+  });
+  assert.equal(checks.some(c => c.blocking), false);
+  assert.ok(checks.some(c => c.code === "payer_rule_unverified_stale-wide"));
+});
