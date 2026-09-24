@@ -42,8 +42,9 @@ test("Schedule opens a new-appointment drawer and returns to the schedule", asyn
   await page.goto("/schedule");
   await page.getByRole("button", { name: "+ Appointment" }).click();
   await expect(page.getByRole("heading", { name: "New Appointment" })).toBeVisible();
-  await expect(page.getByLabel("Patient")).toBeVisible();
-  await expect(page.getByLabel("Provider")).toBeVisible();
+  const drawer = page.getByRole("dialog");
+  await expect(drawer.getByRole("combobox", { name: "Patient", exact: true })).toBeVisible();
+  await expect(drawer.getByRole("combobox", { name: "Provider", exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Cancel" }).click();
   await expectWorkspace(page, "My Schedule");
   expect(new URL(page.url()).pathname).toBe("/schedule");
@@ -79,7 +80,7 @@ test("Payments opens the post-payment drawer without posting", async ({ page }) 
   await page.getByRole("spinbutton", { name: "Amount", exact: true }).fill("10.00");
   await expect(page.getByRole("button", { name: "Post Payment" })).toBeEnabled();
   await page.getByRole("button", { name: "Cancel" }).click();
-  await expectWorkspace(page, "Payments");
+  await expectWorkspace(page, "Payment Posting");
 });
 
 test("Credentialing uses production data access and opens enrollment work when records exist", async ({
