@@ -68,6 +68,16 @@ export function ClaimsPage() {
     void load();
   }, []);
 
+  useEffect(() => {
+    const requested = new URLSearchParams(window.location.search).get("claim");
+    if (!requested) return;
+    const found = rows.find((claim) => claim.id === requested);
+    if (!found) return;
+    setPayerId(String(found.payer_id ?? "unassigned"));
+    setTab(getClaimsTab({ deferred: found.deferred, submittedAt: found.submittedAt, serviceDate: found.service_date_from ? String(found.service_date_from) : null, hasPayerResponse: found.hasPayerResponse }));
+    setActiveClaimId(found.id);
+  }, [rows]);
+
   const payerQueues = useMemo(() => {
     const values = new Map<string, { id: string; name: string; count: number }>();
     for (const claim of rows) {

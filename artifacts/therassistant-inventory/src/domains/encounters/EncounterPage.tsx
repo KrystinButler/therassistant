@@ -791,6 +791,21 @@ export function EncounterPage() {
         <section className="thera-card" id="encounter-diagnoses"><div className="thera-card-header"><div><div className="thera-eyebrow">CLINICAL CONTEXT</div><h2>Diagnoses</h2></div></div>{data.diagnoses.length > 0 && <div className="thera-table-wrap"><table className="thera-table"><thead><tr><th>Code</th><th>Description</th><th>Primary</th></tr></thead><tbody>{data.diagnoses.map((diagnosis) => <tr key={diagnosis.id}><td><strong>{String(diagnosis.diagnosis_code)}</strong></td><td>{String(diagnosis.diagnosis_description ?? "—")}</td><td>{diagnosis.is_primary ? "Yes" : "No"}</td></tr>)}</tbody></table></div>}{!signed && <div className="encounter-compact-form"><Icd10SearchInput code={diagnosisCode} description={diagnosisDescription} serviceDate={serviceDate} onSelect={(result) => { setDiagnosisCode(result.code); if (result.name) setDiagnosisDescription(result.name); }} /><input className="thera-input" placeholder="Diagnosis description" value={diagnosisDescription} onChange={(event) => setDiagnosisDescription(event.target.value)} /><button type="button" className="thera-action secondary" disabled={saving || !diagnosisCode.trim()} onClick={() => void addDiagnosis()}>+ Add Diagnosis</button></div>}</section>
         <section className="thera-card" id="encounter-coding-service">
           <div className="thera-card-header split"><div><div className="thera-eyebrow">CLAIM CORRECTIONS</div><h2>Coding & Service</h2><p>Correct rejected or held claim fields in the revenue-cycle workqueue; signed clinical notes stay locked.</p></div><Link href="/rejections" className="thera-action secondary">Open Rejections →</Link></div>
+          <div className="encounter-claim-actions" role="group" aria-label="Correct and release claims">
+            {data.claims.length ? data.claims.map((claim) => {
+              const status = String(claim.claim_status ?? "draft");
+              const rejected = ["rejected", "validation_failed"].includes(status);
+              const ready = ["draft", "ready_for_validation", "ready_for_batch"].includes(status);
+              const href = rejected ? `/rejections?claim=${encodeURIComponent(String(claim.id))}`
+                : ready ? `/billing/charges?tab=unbatched&claim=${encodeURIComponent(String(claim.id))}`
+                : `/claims?claim=${encodeURIComponent(String(claim.id))}`;
+              return <div key={String(claim.id)} className="encounter-linked-claim">
+                <div><strong>{String(claim.patient_control_number ?? "Claim")}</strong><StatusBadge value={status} /></div>
+                <Link className="thera-action secondary" href={href}>{rejected ? "Correct Held Claim" : ready ? "Validate / Batch Claim" : "Work Claim"} →</Link>
+              </div>;
+            }) : <div className="encounter-linked-claim"><span>No claim has been generated for this encounter.</span><Link className="thera-action secondary" href={`/billing/charges?tab=blocked&encounter=${encodeURIComponent(encounterId)}`}>Review Billing Issues →</Link></div>}
+            <p>Corrections are made to the actual claim in revenue-cycle workqueues, never by changing a signed clinical note.</p>
+          </div>
           <div className="encounter-coding-summary">
             <Field label="Scheduled Time" value={duration ? `${duration} minutes` : "Not available"} />
             <Field label="Visit Location" value={String(encounter.location_type ?? "—").replaceAll("_", " ")} />

@@ -102,6 +102,7 @@ export async function getEncounterDetail(encounterId: string) {
     appointmentRows,
     diagnoses,
     serviceLines,
+    claims: linkedClaims,
     readinessChecks,
     notes,
     treatmentPlans,
@@ -158,7 +159,7 @@ export async function getEncounterDetail(encounterId: string) {
     : [];
   const policy = first(policyRows);
 
-  const [payerRows, planRows, goalRows, signatures] = await Promise.all([
+  const [payerRows, planRows, goalRows, signatures, linkedClaims] = await Promise.all([
     encounter.payer_id
       ? referenceSelect<DataRow>("payers", { id: `eq.${String(encounter.payer_id)}`, limit: "1" })
       : Promise.resolve([]),
@@ -177,6 +178,7 @@ export async function getEncounterDetail(encounterId: string) {
           order: "signed_at.desc",
         })
       : Promise.resolve([]),
+    tenantSelect<DataRow>("professional_claims", { source_encounter_id: `eq.${encounterId}`, order: "created_at.desc" }),
   ]);
 
   return {
