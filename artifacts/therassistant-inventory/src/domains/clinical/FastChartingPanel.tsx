@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import "./fast-charting-panel.css";
 import {
   NOTE_SIMILARITY_REVIEW_THRESHOLD,
@@ -22,6 +22,7 @@ import {
 
 type Props = {
   signed: boolean;
+  noteType: string;
   phrases: SmartPhrase[];
   selections: StructuredSelections;
   generatedNarrative: string;
@@ -49,6 +50,7 @@ function ChoiceButton({ active, label, onClick, disabled }: { active: boolean; l
 
 export function FastChartingPanel(props: Props) {
   const [showPhraseForm, setShowPhraseForm] = useState(false);
+  const [advancedOpen, setAdvancedOpen] = useState(false);
   const [shortcut, setShortcut] = useState("");
   const [label, setLabel] = useState("");
   const [content, setContent] = useState("");
@@ -103,48 +105,57 @@ export function FastChartingPanel(props: Props) {
     }
   }
 
-  const template = documentationTemplateById(props.selections.templateType);
+  const hasSpecialty = !["standard_therapy", "intake"].includes(props.selections.templateType);
+  const specialty = hasSpecialty ? documentationTemplateById(props.selections.templateType) : null;
+  const baseTemplate: DocumentationTemplate = ["assessment", "intake"].includes(props.noteType) ? "intake" : "standard_therapy";
 
-  return <div style={{ display: "grid", gap: 12, marginTop: 12 }}>
-    <div className="thera-card" style={{ padding: 12 }}>
-      <div className="thera-filter-row" style={{ justifyContent: "space-between", alignItems: "flex-start" }}>
-        <div>
-          <strong>Note Template & Guidance</strong>
-          <div className="thera-table-subtext">Template context changes the prompts shown here. It does not change billing, diagnosis, or signing rules.</div>
-        </div>
-      </div>
-      <div className="thera-form-grid" style={{ marginTop: 10 }}>
-        <label>
-          Documentation Template
-          <select
-            className="thera-input"
-            disabled={props.signed}
-            value={props.selections.templateType}
-            onChange={(event) => setTemplate(event.target.value as DocumentationTemplate)}
-          >
-            {DOCUMENTATION_TEMPLATES.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}
+  useEffect(() => {
+    if (hasSpecialty || props.selections.clinicalTags.length > 0) setAdvancedOpen(true);
+  }, [hasSpecialty, props.selections.clinicalTags.length]);
+
+  return <div className="fast-chart-tools">
+    <section className="fast-chart-advanced" aria-labelledby="fast-chart-advanced-heading">
+      <button type="button" className="fast-chart-advanced-toggle"
+        aria-expanded={advancedOpen} aria-controls="fast-chart-advanced-content"
+        onClick={() => setAdvancedOpen((open) => !open)}>
+        <span>
+          <strong id="fast-chart-advanced-heading">Specialty Modules & Clinical Tags</strong>
+          <small>Optional. Your Note Type above controls the main note layout.</small>
+        </span>
+        <span className="fast-chart-advanced-state">
+          {specialty ? specialty.label : props.selections.clinicalTags.length
+            ? `${props.selections.clinicalTags.length} tag${props.selections.clinicalTags.length === 1 ? "" : "s"} selected`
+            : "None selected"}
+          <span aria-hidden="true">{advancedOpen ? "▴" : "▾"}</span>
+        </span>
+      </button>
+      {advancedOpen && <div id="fast-chart-advanced-content" className="fast-chart-advanced-content">
+        <label className="fast-chart-specialty-field">
+          Specialty module
+          <select className="thera-input" disabled={props.signed}
+            value={hasSpecialty ? props.selections.templateType : baseTemplate}
+            onChange={(event) => setTemplate(event.target.value as DocumentationTemplate)}>
+            <option value={baseTemplate}>None — use Note Type above</option>
+            {DOCUMENTATION_TEMPLATES.filter((item) => item.id !== "standard_therapy" && item.id !== "intake")
+              .map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}
           </select>
+          <small>Choose a specialty only when this encounter requires additional fields. Billing codes are managed separately.</small>
         </label>
-        <div>
-          <div className="thera-field-label">Template Guidance</div>
-          <div className="thera-field-value">{template.description}</div>
-          <div className="thera-table-subtext" style={{ marginTop: 4 }}>{template.prompts.join(" · ")}</div>
-        </div>
-      </div>
-      <div style={{ marginTop: 12 }}>
-        <div className="thera-field-label">Clinical Tags</div>
-        <div className="thera-table-subtext">Clinician-selected chart context only. Tags do not automatically assign diagnoses or billing codes.</div>
-        <div className="thera-filter-row" style={{ marginTop: 8, flexWrap: "wrap" }}>
-          {CLINICAL_TAG_OPTIONS.map((tag) => <ChoiceButton
-            key={tag.id}
-            active={props.selections.clinicalTags.includes(tag.id)}
-            disabled={props.signed}
-            label={tag.label}
-            onClick={() => toggleClinicalTag(tag.id)}
-          />)}
-        </div>
-      </div>
-    </div>
+        <fieldset className="fast-chart-tags">
+          <legend>Clinical tags <span>(optional)</span></legend>
+          <p>Add clinician-assessed context. Tags never automatically assign a diagnosis or procedure code.</p>
+          <div className="fast-chart-choice-list" role="group" aria-label="Clinical tags">
+            {CLINICAL_TAG_OPTIONS.map((tag) => <ChoiceButton
+              key={tag.id}
+              active={props.selections.clinicalTags.includes(tag.id)}
+              disabled={props.signed}
+              label={tag.label}
+              onClick={() => toggleClinicalTag(tag.id)}
+            />)}
+          </div>
+        </fieldset>
+      </div>}
+    </section>
 
     {props.selections.templateType === "forensic" && (
       <ForensicSpecialtyPanel
