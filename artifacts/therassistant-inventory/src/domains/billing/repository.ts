@@ -8,7 +8,11 @@ import {
 import type { BillingReadinessInput } from "../readiness/evaluate-billing-readiness";
 import {
   fundingSourceLabel,
+  fundingSubtypeOptions,
+  FUNDING_SOURCE_OPTIONS,
+  billingPathForFundingSource,
   resolveEncounterFunding,
+  type FundingSourceType,
 } from "./funding-source";
 import {
   createChargeFromEncounterWorkflow,
@@ -307,4 +311,27 @@ export async function getBillingQueueData() {
   }
 
   return { encounters: encounterRows, charges, chargesByEncounter };
+}
+
+/** Billing-owned settings: existing charges and signed clinical notes are never rewritten. */
+export async function updateEncounterFundingForBilling(id: string, input: {
+  source: FundingSourceType; subtype: string; responsibleEntity: string; reference: string; notes: string;
+}) {
+  const source = input.source;
+  if (!FUNDING_SOURCE_OPTIONS.some((item) => item.id === source)) throw new Error("Choose a valid funding source.");
+  if (input.subtype && !fundingSubtypeOptions(source).some((item) => item.id === input.subtype)) {
+    throw new Error("The funding subtype is not valid for this funding source.");
+  }
+  const existing = await tenantSelect<DataRow>("encounters", { id: `eq.${id}`, limit: "1" });
+  if (!existing[0]) throw new Error("This encounter is not accessible in the current practice.");
+  return tenantUpdate<DataRow>("encounters", id, {
+    funding_source_type: source,
+    funding_source_subtype: input.subtype || null,
+    billing_path: billingPathForFundingSource(source),
+    funding_context: {
+      responsible_entity: input.responsibleEntity.trim() || null,
+      reference: input.reference.trim() || null,
+      notes: input.notes.trim() || null,
+    },
+  });
 }
