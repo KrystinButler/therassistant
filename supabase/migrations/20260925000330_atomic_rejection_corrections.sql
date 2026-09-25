@@ -173,7 +173,7 @@ begin
     where request_id=p_request_id and tenant_id=v_claim.tenant_id;
   return v_result;
 end;
-$function$
+$function$;
 
 revoke all on function public.rcm_save_rejection_corrections(uuid,uuid,jsonb,jsonb,jsonb,boolean) from public,anon,authenticated;
 grant execute on function public.rcm_save_rejection_corrections(uuid,uuid,jsonb,jsonb,jsonb,boolean) to authenticated;
