@@ -406,6 +406,8 @@ export function EncounterPage() {
 
   const encounter = data.encounter;
   const serviceDate = String(encounter.started_at ?? "").slice(0, 10);
+  const billedLineIds = new Set(data.chargeLines.filter((charge) => charge.charge_status !== "voided").map((charge) => String(charge.service_line_id)));
+  const canEditUnbilledServices = data.claims.length === 0;
   const note = data.notes[0];
   const currentTreatmentPlan = data.treatmentPlans.find((plan) => String(plan.id) === focusedTreatmentPlanId)
     ?? data.treatmentPlans.find((plan) => ["active", "signed"].includes(String(plan.status ?? "")))
@@ -813,21 +815,21 @@ export function EncounterPage() {
             <Field label="Payer" value={String(data.payer?.name ?? "—")} />
           </div>
           <div className="encounter-saved-services">
-            <div className="thera-card-header"><div><h3>Recorded service lines ({data.serviceLines.length})</h3><p>Review existing lines before creating another. Unbilled lines can be corrected here.</p></div></div>
+            <div className="thera-card-header"><div><h3>Recorded service lines ({data.serviceLines.length})</h3><p>Unbilled service lines can be corrected even after note signature. Charge-captured lines must be corrected in the billing or rejections workqueue.</p></div></div>
             {data.serviceLines.length ? <div className="thera-table-wrap"><table className="thera-table">
-              <thead><tr><th>CPT / HCPCS</th><th>Modifier</th><th>Units</th><th>POS</th><th>Charge</th>{!signed && <th>Actions</th>}</tr></thead>
+              <thead><tr><th>CPT / HCPCS</th><th>Modifier</th><th>Units</th><th>POS</th><th>Charge</th>{canEditUnbilledServices && <th>Actions</th>}</tr></thead>
               <tbody>{data.serviceLines.map((line) => <tr key={String(line.id)}>
                 <td><strong>{String(line.cpt_hcpcs_code ?? "—")}</strong></td><td>{String(line.modifier1 ?? "—")}</td>
                 <td>{String(line.units ?? 1)}</td><td>{String(line.place_of_service_code ?? "—")}</td>
                 <td>{Number(line.charge_amount_cents ?? 0) > 0 ? money(Number(line.charge_amount_cents)) : <span className="encounter-service-warning">Missing charge</span>}</td>
-                {!signed && <td><div className="thera-filter-row">
-                  <button type="button" className="thera-action secondary" disabled={saving} onClick={() => editServiceLine(line)}>Edit</button>
-                  <button type="button" className="thera-action secondary" disabled={saving} onClick={() => void removeServiceLine(String(line.id))}>Remove</button>
+                {canEditUnbilledServices && <td><div className="thera-filter-row">
+                  <button type="button" className="thera-action secondary" disabled={saving || billedLineIds.has(String(line.id))} onClick={() => editServiceLine(line)}>Edit</button>
+                  <button type="button" className="thera-action secondary" disabled={saving || billedLineIds.has(String(line.id))} onClick={() => void removeServiceLine(String(line.id))}>Remove</button>{billedLineIds.has(String(line.id)) && <Link className="thera-link" href="/billing/charges">Open charge →</Link>}
                 </div></td>}
               </tr>)}</tbody>
             </table></div> : <div className="thera-empty">No service lines recorded for this visit.</div>}
           </div>
-          {!signed && <div className="encounter-service-editor" id="encounter-service-editor">
+          {canEditUnbilledServices && <div className="encounter-service-editor" id="encounter-service-editor">
             <div className="thera-card-header split"><div><h3>{editingServiceLineId ? "Edit service line" : "Add service line"}</h3><p>Enter the code, units, place of service and a charge greater than $0.</p></div>
               {editingServiceLineId && <button className="thera-action secondary" type="button" disabled={saving} onClick={resetServiceEditor}>Cancel edit</button>}
             </div>
