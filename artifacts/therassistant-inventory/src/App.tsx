@@ -29,6 +29,7 @@ import { PatientPortalGate } from "./domains/portal/PatientPortalGate";
 import { PatientPortalLoginPage } from "./domains/portal/PatientPortalLoginPage";
 import { PatientPortalPage } from "./domains/portal/PatientPortalPage";
 import { PatientPortalRecoveryPage } from "./domains/portal/PatientPortalRecoveryPage";
+import { StaffPortalPreviewPage } from "./domains/portal/StaffPortalPreviewPage";
 import {
   isPatientPortalPath,
   PORTAL_ACTIVATE,
@@ -88,6 +89,7 @@ function StaffRoutes() {
         <Route path="/schedule"><SchedulePage /></Route>
         <Route path="/clinical"><ClinicalPage /></Route>
         <Route path="/journal"><JournalPage /></Route>
+        <Route path="/portal-preview"><StaffPortalPreviewPage /></Route>
         <Route path="/eligibility"><EligibilityPage /></Route>
         <Route path="/authorizations"><Redirect to="/eligibility" /></Route>
         <Route path="/billing"><BillingHubPage /></Route>

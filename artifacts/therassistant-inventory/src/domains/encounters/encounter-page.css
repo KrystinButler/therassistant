@@ -699,3 +699,15 @@
 .encounter-previsit-answers strong{font-size:.64rem;color:var(--thera-sage-dark)}
 .encounter-previsit-answers span{overflow-wrap:anywhere;font-size:.73rem;color:var(--thera-text);white-space:pre-wrap}
 @media(max-width:600px){.encounter-previsit-import{padding:11px}.encounter-previsit-import>button{width:100%;justify-content:center}}
+
+/* Keep signing available within the note editor without a separate readiness dashboard. */
+.encounter-inline-signature{display:grid;gap:8px;padding:12px 15px;background:#f3f8f2;border-top:1px solid var(--thera-border)}
+.encounter-inline-signature .encounter-sign-row{display:flex;align-items:flex-end;justify-content:space-between;gap:10px;flex-wrap:wrap}
+.encounter-inline-signature .encounter-sign-row label{display:grid;gap:6px;flex:1;min-width:185px;font-size:.7rem}
+.encounter-inline-signature .encounter-sign-row input{max-width:350px;width:100%}
+.encounter-inline-signature p{margin:0;font-size:.68rem;line-height:1.5;color:var(--thera-muted)}
+@media(max-width:580px){.encounter-inline-signature .encounter-sign-row{align-items:stretch;flex-direction:column}.encounter-inline-signature .encounter-sign-row label,.encounter-inline-signature .encounter-sign-row input{width:100%;max-width:none}}
+
+.encounter-claim-actions{display:grid;gap:8px;padding:11px 13px;margin:8px 0;border:1px solid #cddfd0;border-radius:8px;background:#f6faf5}
+.encounter-linked-claim{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:9px;font-size:.72rem}
+.encounter-linked-claim>div{display:flex;align-items:center;gap:9px;flex-wrap:wrap}.encounter-claim-actions>p{margin:3px 0 0;color:var(--thera-muted);font-size:.67rem;line-height:1.5}

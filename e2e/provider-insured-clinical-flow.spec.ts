@@ -19,21 +19,22 @@ test("provider completes the synthetic insured visit for billing", async ({ page
     "Synthetic insured psychotherapy progress note. Client participated in psychotherapy and collaborative problem solving. No acute safety concerns were reported. Continue the current plan of care.",
   );
 
-  const diagnosisReady = page.getByText(/\d+ diagnosis record\(s\) connected\./);
-  if (!(await diagnosisReady.isVisible().catch(() => false))) {
+  // Signed documentation no longer includes a separate billing-readiness summary.
+  const recordedDiagnoses = page.locator("#encounter-diagnoses tbody tr");
+  if ((await recordedDiagnoses.count()) === 0) {
     await page.getByPlaceholder("Search ICD-10-CM code or diagnosis").fill("F41.1");
     await page.getByPlaceholder("Diagnosis description").fill("Generalized anxiety disorder");
     await page.getByRole("button", { name: "+ Add Diagnosis" }).click();
     await expect(page.getByText("Diagnosis added to encounter.")).toBeVisible({ timeout: 15_000 });
-    await expect(page.getByText(/1 diagnosis record\(s\) connected\./)).toBeVisible();
+    await expect(recordedDiagnoses).toHaveCount(1);
   }
 
-  const serviceLineReady = page.getByText(/\d+ service line\(s\) connected\./);
-  if (!(await serviceLineReady.isVisible().catch(() => false))) {
+  const recordedServices = page.locator("#encounter-coding-service .encounter-saved-services tbody tr");
+  if ((await recordedServices.count()) === 0) {
     await page.getByRole("spinbutton", { name: "Service charge" }).fill("150.00");
     await page.getByRole("button", { name: "+ Add Service Line" }).click();
     await expect(page.getByText("Unbilled service line added.")).toBeVisible({ timeout: 15_000 });
-    await expect(page.getByText(/1 service line\(s\) connected\./)).toBeVisible();
+    await expect(recordedServices).toHaveCount(1);
   }
 
   await page.getByPlaceholder("Provider signature").fill("Jamie Parker, LCSW");

@@ -18,7 +18,7 @@ export function billingCorrectionLink(issue: Issue, encounterId: string, clientI
       value.includes("modifier") || value.includes("units") || value.includes("charge amount") || value.includes("pos code"))
     return { href: encounter + "#encounter-coding-service", label: "Open coding and service fields" };
   if (value.includes("funding") || value.includes("billing path") || value.includes("responsible party"))
-    return { href: encounter + "#encounter-billing-source", label: "Open billing responsibility" };
+    return { href: "/billing/charges?tab=blocked&encounter=" + encodeURIComponent(encounterId), label: "Review billing responsibility in Charge Capture" };
   if ((value.includes("eligib") || value.includes("coverage") || value.includes("subscriber") || value.includes("member id")) && clientId)
     return { href: "/clients/" + encodeURIComponent(clientId) + "?tab=coverage", label: "Open patient coverage" };
   if (value.includes("provider_enrollment") || value.includes("provider enrollment") || value.includes("participation"))

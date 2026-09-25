@@ -214,27 +214,20 @@ console.log("Synthetic isolation verified for distinct staff, provider, and pati
 
 const primaryTenant = "10000000-0000-4000-8000-000000000002";
 
-// Verify the staff-transcribed journal path using the same JWT/RLS boundary as the browser.
+// Journal creation is patient-only. Test the real authenticated staff role at
+// the Data API boundary, rather than inferring authorization from a hidden UI.
 const journalInput = {
   tenant_id: primaryTenant,
   client_id: IDS.insuredPatient,
-  entry_text: "Synthetic patient-reported text transcribed by staff.",
+  entry_text: "Synthetic staff journal creation must be denied.",
   entry_date: new Date().toISOString().slice(0, 10),
   author_type: "patient",
   visibility: "shared_with_provider",
   recorded_by_staff_user_id: staff.userId,
   entry_status: "submitted",
 };
-const journalSaved = await request("/rest/v1/patient_journal_entries?select=id,recorded_by_staff_user_id", {
-  method: "POST",
-  token: staff.token,
-  body: journalInput,
-  prefer: "return=representation",
-});
-assert(journalSaved.payload?.[0]?.recorded_by_staff_user_id === staff.userId,
-  "Staff could not create a properly attributed, shared patient journal entry.");
-
 for (const [label, overrides] of [
+  ["shared journal", {}],
   ["private journal", { visibility: "private" }],
   ["forged recorder", { recorded_by_staff_user_id: provider.userId }],
   ["cross-tenant journal", { client_id: IDS.otherPatient }],
@@ -247,21 +240,9 @@ for (const [label, overrides] of [
     allowFailure: true,
   });
   assert(!denied.response.ok || denied.payload?.length === 0,
-    "RLS allowed staff to create a " + label + ".");
+    "Patient-only journal restriction allowed staff to create a " + label + ".");
 }
-
-const clinicianJournal = await request(
-  "/rest/v1/patient_journal_entries?select=id,recorded_by_staff_user_id&id=eq." + journalSaved.payload[0].id,
-  { token: provider.token },
-);
-assert(clinicianJournal.payload?.[0]?.recorded_by_staff_user_id === staff.userId,
-  "Clinician could not retrieve a shared, staff-transcribed journal entry.");
-
-const patientJournalDirect = await request("/rest/v1/patient_journal_entries?select=id&id=eq." + journalSaved.payload[0].id, {
-  token: patient.token,
-});
-assert(patientJournalDirect.payload?.length === 0,
-  "Patient portal principal bypassed its restricted journal RPC by directly reading staff tables.");
+console.log("Synthetic staff cannot author patient journal entries; patient-only authoring remains enforced.");
 
 // Exercise an actual private Storage upload/download, not a metadata-only document.
 const proofText = "%PDF-1.4\n1 0 obj\n<< /Type /Catalog >>\nendobj\ntrailer\n<< /Root 1 0 R >>\n%%EOF";

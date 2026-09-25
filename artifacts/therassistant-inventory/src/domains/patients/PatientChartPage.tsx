@@ -4,6 +4,7 @@ import { Link, useRoute } from "wouter";
 import { StatusBadge } from "../../components/status-badge";
 import { dateTime, money, shortDate } from "../../lib/format";
 import { getClientChartRelationships } from "../clients/repository";
+import { billingCorrectionLink } from "../billing/billing-correction-links";
 import { DocumentsPanel } from "../documents/DocumentsPanel";
 import { InsurancePanel } from "../insurance/InsurancePanel";
 import { JournalPanel } from "../journal/JournalPanel";
@@ -95,7 +96,7 @@ export function PatientChartPage() {
     {tab === "documents" && <DocumentsPanel chart={chart} onChanged={load} />}
     {tab === "engagement" && <>
       <JournalPanel chart={chart} onChanged={load} />
-      <PortalCheckIn chart={chart} />
+      <PortalCheckIn chart={chart} onEditDemographics={() => setTab("demographics")} />
     </>}
     {tab === "demographics" && <DemographicsPanel chart={chart} onChanged={load} />}
   </>;
@@ -116,16 +117,35 @@ function Appointments({ chart }: { chart: PatientChart }) { return <Table title=
 function Encounters({ rows }: { rows: Array<Record<string, unknown> & { id: string }> }) { return <Table title="Encounters" rows={rows} columns={[["Started","started_at","datetime"],["Provider","providerName"],["Payer","payerName"],["Clinical","encounter_status","status"],["Billing","billing_status","status"],["Charges","chargeCount"],["Claims","claimCount"]]} action={(row) => <Link className="thera-action secondary" href={`/encounters/${row.id}`}>Open Encounter</Link>} />; }
 function ClinicalNotes({ chart }: { chart: PatientChart }) { return <Table title="Clinical Notes" rows={chart.clinicalNotes} columns={[["Service Date","service_date","date"],["Provider","providerName"],["Type","note_type"],["Status","note_status","status"],["Signed","signed_at","datetime"]]} />; }
 function Diagnoses({ chart }: { chart: PatientChart }) { return <Table title="Patient Diagnoses" rows={chart.diagnoses} columns={[["Code","diagnosis_code"],["Description","description"],["Status","diagnosis_status","status"],["Onset","onset_date","date"],["Resolved","resolved_date","date"]]} />; }
-function Charges({ chart }: { chart: PatientChart }) { return <Table title="Charges" rows={chart.charges} columns={[["DOS","service_date","date"],["CPT","cpt_code"],["Provider","providerName"],["Payer","payerName"],["Charge","charge_amount_cents","money"],["Status","charge_status","status"]]} />; }
+function Charges({ chart }: { chart: PatientChart }) {
+  function correct(row: Record<string, unknown> & { id: string }) {
+    const status = String(row.charge_status ?? "");
+    if (!["blocked", "validation_failed", "held", "error"].includes(status)) return null;
+    const reason = String(row.block_reason ?? row.blocking_reason ?? "Charge held for billing review.");
+    const encounterId = String(row.encounter_id ?? "");
+    const suggested = encounterId ? billingCorrectionLink({ message: reason }, encounterId, chart.patient.id) : null;
+    const href = suggested?.href ?? `/billing/charges?tab=blocked&charge=${encodeURIComponent(row.id)}`;
+    return { href, label: suggested?.label ?? "Review charge hold", reason };
+  }
+  return <Table title="Charges" rows={chart.charges} columns={[["DOS","service_date","date"],["CPT","cpt_code"],["Provider","providerName"],["Payer","payerName"],["Charge","charge_amount_cents","money"],["Status","charge_status","status"]]}
+    cellLink={(row,key) => key === "charge_status" ? correct(row) : null}
+    action={(row) => {
+      const issue = correct(row);
+      return issue ? <Link href={issue.href} className="thera-action secondary" title={issue.reason}>Fix: {issue.label} →</Link>
+        : <Link href="/billing/charges" className="thera-action secondary">Charge Capture</Link>;
+    }} />;
+}
 function Claims({ chart }: { chart: PatientChart }) { return <Table title="Claims" rows={chart.claims} columns={[["DOS","service_date_from","date"],["Control #","patient_control_number"],["Payer","payerName"],["Charge","total_charge_cents","money"],["Status","claim_status","status"]]} action={(row) => <Link className="thera-action secondary" href={`/claims/${row.id}`}>Claim 360</Link>} />; }
 function Payments({ chart }: { chart: PatientChart }) { return <div className="thera-detail-grid"><Table title="Payments" rows={chart.payments} columns={[["Date","payment_date","date"],["Payer","payerName"],["Trace","trace_number"],["Amount","amount_cents","money"],["Status","posting_status","status"]]} /><section className="thera-card"><h2>Balance Summary</h2><div className="thera-kpi-value">{money(chart.openBalanceCents)}</div><p>Current open patient/claim balance from the patient balance summary.</p></section></div>; }
 function DenialsAppeals({ chart }: { chart: PatientChart }) { return <div className="thera-detail-grid"><Table title="Denials" rows={chart.denials} columns={[["Date","denial_date","date"],["Payer","payerName"],["CARC","carc_code"],["RARC","rarc_code"],["Amount","amount_cents","money"],["Status","denial_status","status"]]} /><Table title="Appeals" rows={chart.appeals} columns={[["Created","created_at","datetime"],["Level","appeal_level"],["Status","appeal_status","status"],["Deadline","deadline_date","date"],["Outcome","outcome"]]} /></div>; }
 
 function WorkItems({ rows }: { rows: Array<Record<string, unknown> & { id: string }> }) { return <Table title="Linked Work Items" rows={rows} columns={[["Created","created_at","datetime"],["Type","workqueue_type"],["Title","title"],["Priority","priority","status"],["Status","workqueue_status","status"]]} action={() => <Link className="thera-action secondary" href="/work-center">Work Center</Link>} />; }
-function PortalCheckIn({ chart }: { chart: PatientChart }) { return <div className="thera-detail-grid"><PortalAccessPanel clientId={chart.patient.id} /><Table title="Check-In History" rows={chart.checkins} columns={[["Created","created_at","datetime"],["On My Way","on_my_way_at","datetime"],["Arrived","arrived_at","datetime"],["Checked In","checked_in_at","datetime"]]} /></div>; }
+function PortalCheckIn({ chart, onEditDemographics }: { chart: PatientChart; onEditDemographics: () => void }) { return <div className="thera-detail-grid"><PortalAccessPanel clientId={chart.patient.id} onEditDemographics={onEditDemographics} /><Table title="Check-In History" rows={chart.checkins} columns={[["Created","created_at","datetime"],["On My Way","on_my_way_at","datetime"],["Arrived","arrived_at","datetime"],["Checked In","checked_in_at","datetime"]]} /></div>; }
 
-function Table({ title, rows, columns, action }: { title: string; rows: Array<Record<string, unknown> & { id: string }>; columns: Array<[string,string,string?]>; action?: (row: Record<string, unknown> & { id: string }) => React.ReactNode }) {
-  return <section className="thera-card thera-span-2"><div className="thera-card-header"><div><h2>{title}</h2><p>{rows.length} record{rows.length === 1 ? "" : "s"}</p></div></div>{rows.length ? <div className="thera-table-wrap"><table className="thera-table"><thead><tr>{columns.map(([label]) => <th key={label}>{label}</th>)}{action && <th>Action</th>}</tr></thead><tbody>{rows.map((row) => <tr key={row.id}>{columns.map(([label,key,format]) => <td key={`${row.id}-${key}`}>{renderValue(row[key], format)}</td>)}{action && <td>{action(row)}</td>}</tr>)}</tbody></table></div> : <div className="thera-empty">No {title.toLowerCase()}.</div>}</section>;
+function Table({ title, rows, columns, action, cellLink }: { title: string; rows: Array<Record<string, unknown> & { id: string }>; columns: Array<[string,string,string?]>; action?: (row: Record<string, unknown> & { id: string }) => React.ReactNode; cellLink?: (row: Record<string, unknown> & { id: string }, key: string) => { href: string; label: string; reason: string } | null }) {
+  return <section className="thera-card thera-span-2"><div className="thera-card-header"><div><h2>{title}</h2><p>{rows.length} record{rows.length === 1 ? "" : "s"}</p></div></div>{rows.length ? <div className="thera-table-wrap"><table className="thera-table"><thead><tr>{columns.map(([label]) => <th key={label}>{label}</th>)}{action && <th>Action</th>}</tr></thead><tbody>{rows.map((row) => <tr key={row.id}>{columns.map(([label,key,format]) => <td key={`${row.id}-${key}`}>{cellLink?.(row, key)
+  ? <Link href={cellLink(row,key)!.href} className="thera-table-link" title={cellLink(row,key)!.reason} aria-label={`Fix ${cellLink(row,key)!.label}: ${cellLink(row,key)!.reason}`}>{renderValue(row[key], format)}</Link>
+  : renderValue(row[key], format)}</td>)}{action && <td>{action(row)}</td>}</tr>)}</tbody></table></div> : <div className="thera-empty">No {title.toLowerCase()}.</div>}</section>;
 }
 function renderValue(value: unknown, format?: string) { if (format === "status") return <StatusBadge value={String(value ?? "unknown")} />; if (format === "money") return money(Number(value ?? 0)); if (format === "date") return value ? shortDate(String(value)) : "—"; if (format === "datetime") return value ? dateTime(String(value)) : "—"; return String(value ?? "—"); }
 function Metric({ label, value }: { label: string; value: string | number }) { return <div className="thera-metric-card"><div className="thera-metric-label">{label}</div><div className="thera-metric-value">{value}</div></div>; }

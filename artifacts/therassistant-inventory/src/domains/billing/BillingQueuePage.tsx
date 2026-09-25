@@ -20,7 +20,9 @@ import { archiveBatch837PArtifact } from "./claim-artifact-repository";
 import {
   createChargeFromEncounter,
   getBillingQueueData,
+  updateEncounterFundingForBilling,
 } from "./repository";
+import { BillingResponsibilityPanel, type BillingFundingInput } from "./BillingResponsibilityPanel";
 
 type BillingData = Awaited<ReturnType<typeof getBillingQueueData>>;
 type ClaimsData = Awaited<ReturnType<typeof getClaimSubmissionData>>;
@@ -29,12 +31,16 @@ type ChargesTab = "ready" | "blocked" | "program" | "private-pay" | "unbatched" 
 
 export function BillingQueuePage() {
   const [data, setData] = useState<ChargesData | null>(null);
-  const [tab, setTab] = useState<ChargesTab>("ready");
+  const [tab, setTab] = useState<ChargesTab>(() => {
+    const requested = new URLSearchParams(window.location.search).get("tab");
+    return requested === "blocked" || requested === "unbatched" ? requested : "ready";
+  });
   const [loading, setLoading] = useState(true);
   const [savingId, setSavingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [correctionLinks, setCorrectionLinks] = useState<BillingCorrectionLink[]>([]);
   const [message, setMessage] = useState<string | null>(null);
+  const [fundingEncounterId, setFundingEncounterId] = useState<string | null>(() => new URLSearchParams(window.location.search).get("encounter"));
 
   async function load() {
     setLoading(true);
@@ -451,6 +457,10 @@ export function BillingQueuePage() {
       {error && <div className="thera-state error" style={{ marginBottom: 12 }}>{error}{correctionLinks.length > 0 && <BillingCorrectionActions links={correctionLinks} />}</div>}
       {message && <div className="thera-alert" style={{ marginBottom: 12 }}>{message}{!error && correctionLinks.length > 0 && <BillingCorrectionActions links={correctionLinks} />}</div>}
       {loading && <div className="thera-state">Loading Charges...</div>}
+      {!loading && data && fundingEncounterId && (() => { const target = data.billing.encounters.find((row) => row.id === fundingEncounterId); return target ? <BillingResponsibilityPanel key={target.id} encounter={target}
+        onCancel={() => setFundingEncounterId(null)}
+        onSave={async (values: BillingFundingInput) => { await updateEncounterFundingForBilling(target.id, values); await load(); setMessage("Billing responsibility updated. Existing charges and signed notes were not modified."); setFundingEncounterId(null); }} />
+        : <div className="thera-state error">The requested encounter was not found in this practice.</div>; })()}
 
       {!loading && data && tab === "ready" && (
         <EncounterTable
@@ -461,6 +471,7 @@ export function BillingQueuePage() {
           onCharge={(id) => void runEncounterAction(id, "charge")}
           enableBatch
           onBatchCharge={(ids) => void runBatchCreateCharges(ids)}
+          onEditFunding={setFundingEncounterId}
         />
       )}
 
@@ -471,6 +482,7 @@ export function BillingQueuePage() {
           savingId={savingId}
           onAudit={(id) => void runEncounterAction(id, "audit")}
           onCharge={(id) => void runEncounterAction(id, "charge")}
+          onEditFunding={setFundingEncounterId}
         />
       )}
 
@@ -551,6 +563,7 @@ function EncounterTable({
   onCharge,
   enableBatch = false,
   onBatchCharge,
+  onEditFunding,
 }: {
   rows: BillingData["encounters"];
   data: BillingData;
@@ -559,6 +572,7 @@ function EncounterTable({
   onCharge: (id: string) => void;
   enableBatch?: boolean;
   onBatchCharge?: (ids: string[]) => void;
+  onEditFunding?: (id: string) => void;
 }) {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   useEffect(() => { setSelectedIds(new Set()); }, [rows, enableBatch]);
@@ -603,7 +617,7 @@ function EncounterTable({
                 <td><StatusBadge value={String(row.billing_status)} /></td>
                 <td>{row.blockingChecks.length ? <><StatusBadge value="blocked" /><div className="thera-table-subtext">{row.blockingChecks.map((check, index) => { const link = billingCorrectionLink(check, row.id, String(row.client_id ?? "")); return <div key={String(check.id ?? index)} style={{ marginTop: 4 }}>{String(check.message)} {link && <Link className="thera-link" href={link.href}>{link.label} →</Link>}</div>; })}</div></> : "—"}</td>
                 <td>{row.advisoryChecks.length ? <><StatusBadge value="needs_review" /><div className="thera-table-subtext">{row.advisoryChecks.map((check) => String(check.message)).join(" · ")}</div></> : "—"}</td>
-                <td><div className="thera-filter-row"><Link className="thera-action secondary" href={`/encounters/${row.id}`}>Open Encounter</Link><button type="button" className="thera-action secondary" disabled={Boolean(savingId)} onClick={() => onAudit(row.id)}>Run Audit</button>{canCharge && <button type="button" className="thera-action" disabled={Boolean(savingId)} onClick={() => onCharge(row.id)}>Create Charge</button>}</div></td>
+                <td><div className="thera-filter-row"><Link className="thera-action secondary" href={`/encounters/${row.id}`}>Open Encounter</Link>{onEditFunding && <button type="button" className="thera-action secondary" disabled={Boolean(savingId)} onClick={() => onEditFunding(row.id)}>Billing Responsibility</button>}<button type="button" className="thera-action secondary" disabled={Boolean(savingId)} onClick={() => onAudit(row.id)}>Run Audit</button>{canCharge && <button type="button" className="thera-action" disabled={Boolean(savingId)} onClick={() => onCharge(row.id)}>Create Charge</button>}</div></td>
               </tr>;
             })}
           </tbody>

@@ -21,6 +21,7 @@ test("charge errors, queue checks and encounter targets are connected end to end
   const rejections = readFileSync(new URL("../src/domains/claims/RejectionsPage.tsx", import.meta.url), "utf8");
   assert.match(billing, /BillingCorrectionActions/);
   assert.match(billing, /rejections\?claim=/);
-  for (const target of ["encounter-signature", "encounter-diagnoses", "encounter-coding-service", "encounter-billing-source"]) assert.ok(encounter.includes('id="' + target + '"'));
+  for (const target of ["encounter-signature", "encounter-diagnoses", "encounter-coding-service"]) assert.ok(encounter.includes('id="' + target + '"'));
+  assert.equal(billingCorrectionLink({code:"funding_missing"}, "one")?.href, "/billing/charges?tab=blocked&encounter=one");
   assert.match(rejections, /new URLSearchParams\(window\.location\.search\)\.get\("claim"\)/);
 });
