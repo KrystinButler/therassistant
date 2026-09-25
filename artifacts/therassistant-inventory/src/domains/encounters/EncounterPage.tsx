@@ -42,6 +42,7 @@ import {
   withClinicalSourceImport,
 } from "./clinical-source-context";
 import { getEncounterDetail, updateEncounter } from "./repository";
+import { createChargeFromEncounter } from "../billing/repository";
 import { scheduledSessionTime } from "./scheduled-session-time";
 import { noteTypeForService } from "./service-note-template";
 import "./encounter-page.css";
@@ -313,11 +314,18 @@ export function EncounterPage() {
       setServiceError(err instanceof Error ? err.message : "Review service-line details.");
       return;
     }
+    const correctingBlockedCharge = Boolean(editingServiceLineId && data?.chargeLines.some((charge) =>
+      String(charge.service_line_id) === editingServiceLineId && charge.charge_status === "blocked"));
     const success = await withSave(
-      () => editingServiceLineId
-        ? updateEncounterServiceLine(encounterId, editingServiceLineId, values)
-        : addEncounterServiceLine(encounterId, values),
-      editingServiceLineId ? "Unbilled service line updated." : "Unbilled service line added.",
+      async () => {
+        if (editingServiceLineId) await updateEncounterServiceLine(encounterId, editingServiceLineId, values);
+        else await addEncounterServiceLine(encounterId, values);
+        if (correctingBlockedCharge) {
+          const result = await createChargeFromEncounter(encounterId);
+          if (!result.ok) throw new Error("Service line saved, but charge reconciliation did not complete. Use Reconcile Charges or review Billing.");
+        }
+      },
+      correctingBlockedCharge ? "Service line corrected and existing blocked charges reconciled." : editingServiceLineId ? "Service line updated." : "Service line added.",
       true,
       setServiceError,
     );
@@ -406,7 +414,8 @@ export function EncounterPage() {
 
   const encounter = data.encounter;
   const serviceDate = String(encounter.started_at ?? "").slice(0, 10);
-  const billedLineIds = new Set(data.chargeLines.filter((charge) => charge.charge_status !== "voided").map((charge) => String(charge.service_line_id)));
+  const billedLineIds = new Set(data.chargeLines.filter((charge) => !["blocked", "voided"].includes(String(charge.charge_status))).map((charge) => String(charge.service_line_id)));
+  const removableLineIds = new Set(data.serviceLines.filter((line) => !data.chargeLines.some((charge) => String(charge.service_line_id) === String(line.id) && charge.charge_status !== "voided")).map((line) => String(line.id)));
   const canEditUnbilledServices = data.claims.length === 0;
   const note = data.notes[0];
   const currentTreatmentPlan = data.treatmentPlans.find((plan) => String(plan.id) === focusedTreatmentPlanId)
@@ -792,7 +801,10 @@ export function EncounterPage() {
       <div className="encounter-lower-grid">
         <section className="thera-card" id="encounter-diagnoses"><div className="thera-card-header"><div><div className="thera-eyebrow">CLINICAL CONTEXT</div><h2>Diagnoses</h2></div></div>{data.diagnoses.length > 0 && <div className="thera-table-wrap"><table className="thera-table"><thead><tr><th>Code</th><th>Description</th><th>Primary</th></tr></thead><tbody>{data.diagnoses.map((diagnosis) => <tr key={diagnosis.id}><td><strong>{String(diagnosis.diagnosis_code)}</strong></td><td>{String(diagnosis.diagnosis_description ?? "—")}</td><td>{diagnosis.is_primary ? "Yes" : "No"}</td></tr>)}</tbody></table></div>}{!signed && <div className="encounter-compact-form"><Icd10SearchInput code={diagnosisCode} description={diagnosisDescription} serviceDate={serviceDate} onSelect={(result) => { setDiagnosisCode(result.code); if (result.name) setDiagnosisDescription(result.name); }} /><input className="thera-input" placeholder="Diagnosis description" value={diagnosisDescription} onChange={(event) => setDiagnosisDescription(event.target.value)} /><button type="button" className="thera-action secondary" disabled={saving || !diagnosisCode.trim()} onClick={() => void addDiagnosis()}>+ Add Diagnosis</button></div>}</section>
         <section className="thera-card" id="encounter-coding-service">
-          <div className="thera-card-header split"><div><div className="thera-eyebrow">CLAIM CORRECTIONS</div><h2>Coding & Service</h2><p>Correct rejected or held claim fields in the revenue-cycle workqueue; signed clinical notes stay locked.</p></div><Link href="/rejections" className="thera-action secondary">Open Rejections →</Link></div>
+          <div className="thera-card-header split"><div><div className="thera-eyebrow">CLAIM CORRECTIONS</div><h2>Coding & Service</h2><p>Correct rejected or held claim fields in the revenue-cycle workqueue; signed clinical notes stay locked.</p></div><div className="thera-filter-row">{data.chargeLines.some((charge) => charge.charge_status === "blocked") && <button type="button" className="thera-action secondary" disabled={saving} onClick={() => void withSave(async () => {
+            const result = await createChargeFromEncounter(encounterId);
+            if (!result.ok) throw new Error(result.details?.join(" ") || result.message);
+          }, "Existing charges reconciled against the corrected service lines.")}>Reconcile Charges</button>}<Link href="/rejections" className="thera-action secondary">Open Rejections →</Link></div></div>
           <div className="encounter-claim-actions" role="group" aria-label="Correct and release claims">
             {data.claims.length ? data.claims.map((claim) => {
               const status = String(claim.claim_status ?? "draft");
@@ -815,7 +827,7 @@ export function EncounterPage() {
             <Field label="Payer" value={String(data.payer?.name ?? "—")} />
           </div>
           <div className="encounter-saved-services">
-            <div className="thera-card-header"><div><h3>Recorded service lines ({data.serviceLines.length})</h3><p>Unbilled service lines can be corrected even after note signature. Charge-captured lines must be corrected in the billing or rejections workqueue.</p></div></div>
+            <div className="thera-card-header"><div><h3>Recorded service lines ({data.serviceLines.length})</h3><p>Unbilled and blocked charge source lines can be corrected after signing. Existing claims and posted charges remain locked.</p></div></div>
             {data.serviceLines.length ? <div className="thera-table-wrap"><table className="thera-table">
               <thead><tr><th>CPT / HCPCS</th><th>Modifier</th><th>Units</th><th>POS</th><th>Charge</th>{canEditUnbilledServices && <th>Actions</th>}</tr></thead>
               <tbody>{data.serviceLines.map((line) => <tr key={String(line.id)}>
@@ -824,7 +836,7 @@ export function EncounterPage() {
                 <td>{Number(line.charge_amount_cents ?? 0) > 0 ? money(Number(line.charge_amount_cents)) : <span className="encounter-service-warning">Missing charge</span>}</td>
                 {canEditUnbilledServices && <td><div className="thera-filter-row">
                   <button type="button" className="thera-action secondary" disabled={saving || billedLineIds.has(String(line.id))} onClick={() => editServiceLine(line)}>Edit</button>
-                  <button type="button" className="thera-action secondary" disabled={saving || billedLineIds.has(String(line.id))} onClick={() => void removeServiceLine(String(line.id))}>Remove</button>{billedLineIds.has(String(line.id)) && <Link className="thera-link" href="/billing/charges">Open charge →</Link>}
+                  <button type="button" className="thera-action secondary" disabled={saving || !removableLineIds.has(String(line.id))} onClick={() => void removeServiceLine(String(line.id))}>Remove</button>{billedLineIds.has(String(line.id)) && <Link className="thera-link" href="/billing/charges">Open charge →</Link>}
                 </div></td>}
               </tr>)}</tbody>
             </table></div> : <div className="thera-empty">No service lines recorded for this visit.</div>}
@@ -838,7 +850,7 @@ export function EncounterPage() {
               <label>Modifier (optional) <input className="thera-input" maxLength={2} placeholder="e.g., 95" value={modifier1} onChange={(event) => setModifier1(event.target.value.toUpperCase())} /></label>
               <label>Units <input aria-label="Service units" className="thera-input" type="number" min={1} step={1} value={units} onChange={(event) => setUnits(Number(event.target.value))} /></label>
               <label>Place of service <PlaceOfServiceSearchInput code={placeOfService} onSelect={(result) => setPlaceOfService(result.code)} /></label>
-              <label>Charge ($) <input aria-label="Service charge" className="thera-input" type="number" step="0.01" min="0.01" placeholder="0.00" value={chargeDollars} onChange={(event) => setChargeDollars(event.target.value)} /></label>
+              <label>Charge ($) <input id="encounter-charge-amount" aria-label="Service charge" className="thera-input" type="number" step="0.01" min="0.01" placeholder="0.00" value={chargeDollars} onChange={(event) => setChargeDollars(event.target.value)} /></label>
               <div className="encounter-service-submit"><button type="button" className="thera-action" disabled={saving} onClick={() => void addServiceLine()}>
                 {saving ? "Saving…" : editingServiceLineId ? "Save Service Line" : "+ Add Service Line"}
               </button></div>
