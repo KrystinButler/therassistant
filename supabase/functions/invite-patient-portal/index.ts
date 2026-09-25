@@ -207,7 +207,7 @@ Deno.serve(async (req: Request) => {
     return json(
       {
         error: duplicate
-          ? "An account already exists for this email. Staff must verify the patient identity and connect the existing account through an authorized enrollment workflow; accounts are never linked automatically."
+          ? "An account already exists for this email. If it is a staff login, save a separate patient email and press Send Portal Invite again. Existing nonstaff accounts require verified patient enrollment; accounts are never linked automatically."
           : inviteError?.message ?? "Unable to send patient portal invitation.",
         ...(duplicate ? { code: "existing_auth_account", action: "staff_identity_review" } : {}),
       },

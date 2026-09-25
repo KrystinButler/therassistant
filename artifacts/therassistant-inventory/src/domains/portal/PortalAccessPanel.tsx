@@ -9,12 +9,13 @@ import {
   type ClientPortalAccess,
 } from "./staff-portal-access";
 
-export function PortalAccessPanel({ clientId }: { clientId: string }) {
+export function PortalAccessPanel({ clientId, onEditDemographics }: { clientId: string; onEditDemographics?: () => void }) {
   const [access, setAccess] = useState<ClientPortalAccess | null>(null);
   const [loading, setLoading] = useState(true);
   const [working, setWorking] = useState<"invite" | "revoke" | "restore" | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [emailConflict, setEmailConflict] = useState(false);
 
   async function load() {
     setLoading(true);
@@ -36,6 +37,7 @@ export function PortalAccessPanel({ clientId }: { clientId: string }) {
 
   async function invite() {
     setWorking("invite");
+    setEmailConflict(false);
     setError(null);
     setNotice(null);
     try {
@@ -43,11 +45,9 @@ export function PortalAccessPanel({ clientId }: { clientId: string }) {
       setNotice("Patient portal invitation sent.");
       await load();
     } catch (err) {
-      setError(
-        err instanceof Error
-          ? err.message
-          : "Unable to send portal invitation.",
-      );
+      const message = err instanceof Error ? err.message : "Unable to send portal invitation.";
+      setEmailConflict(/account already exists|staff login/i.test(message));
+      setError(message);
     } finally {
       setWorking(null);
     }
@@ -111,6 +111,7 @@ export function PortalAccessPanel({ clientId }: { clientId: string }) {
           {error}
         </div>
       ) : null}
+      {emailConflict && <div className="thera-alert" style={{ marginBottom: 14 }}><strong>Existing account: choose a separate patient identity</strong><p>If the saved email belongs to a staff account, the patient must use their own email. If it is a different existing account, enrollment requires verified email ownership. Staff cannot assign another user’s account to a patient.</p>{onEditDemographics && <button type="button" className="thera-action" onClick={onEditDemographics}>Update Patient Email →</button>}</div>}
       {notice ? (
         <div className="thera-state" style={{ marginBottom: 12 }}>
           {notice}

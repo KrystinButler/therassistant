@@ -96,7 +96,7 @@ export function PatientChartPage() {
     {tab === "documents" && <DocumentsPanel chart={chart} onChanged={load} />}
     {tab === "engagement" && <>
       <JournalPanel chart={chart} onChanged={load} />
-      <PortalCheckIn chart={chart} />
+      <PortalCheckIn chart={chart} onEditDemographics={() => setTab("demographics")} />
     </>}
     {tab === "demographics" && <DemographicsPanel chart={chart} onChanged={load} />}
   </>;
@@ -140,7 +140,7 @@ function Payments({ chart }: { chart: PatientChart }) { return <div className="t
 function DenialsAppeals({ chart }: { chart: PatientChart }) { return <div className="thera-detail-grid"><Table title="Denials" rows={chart.denials} columns={[["Date","denial_date","date"],["Payer","payerName"],["CARC","carc_code"],["RARC","rarc_code"],["Amount","amount_cents","money"],["Status","denial_status","status"]]} /><Table title="Appeals" rows={chart.appeals} columns={[["Created","created_at","datetime"],["Level","appeal_level"],["Status","appeal_status","status"],["Deadline","deadline_date","date"],["Outcome","outcome"]]} /></div>; }
 
 function WorkItems({ rows }: { rows: Array<Record<string, unknown> & { id: string }> }) { return <Table title="Linked Work Items" rows={rows} columns={[["Created","created_at","datetime"],["Type","workqueue_type"],["Title","title"],["Priority","priority","status"],["Status","workqueue_status","status"]]} action={() => <Link className="thera-action secondary" href="/work-center">Work Center</Link>} />; }
-function PortalCheckIn({ chart }: { chart: PatientChart }) { return <div className="thera-detail-grid"><PortalAccessPanel clientId={chart.patient.id} /><Table title="Check-In History" rows={chart.checkins} columns={[["Created","created_at","datetime"],["On My Way","on_my_way_at","datetime"],["Arrived","arrived_at","datetime"],["Checked In","checked_in_at","datetime"]]} /></div>; }
+function PortalCheckIn({ chart, onEditDemographics }: { chart: PatientChart; onEditDemographics: () => void }) { return <div className="thera-detail-grid"><PortalAccessPanel clientId={chart.patient.id} onEditDemographics={onEditDemographics} /><Table title="Check-In History" rows={chart.checkins} columns={[["Created","created_at","datetime"],["On My Way","on_my_way_at","datetime"],["Arrived","arrived_at","datetime"],["Checked In","checked_in_at","datetime"]]} /></div>; }
 
 function Table({ title, rows, columns, action, cellLink }: { title: string; rows: Array<Record<string, unknown> & { id: string }>; columns: Array<[string,string,string?]>; action?: (row: Record<string, unknown> & { id: string }) => React.ReactNode; cellLink?: (row: Record<string, unknown> & { id: string }, key: string) => { href: string; label: string; reason: string } | null }) {
   return <section className="thera-card thera-span-2"><div className="thera-card-header"><div><h2>{title}</h2><p>{rows.length} record{rows.length === 1 ? "" : "s"}</p></div></div>{rows.length ? <div className="thera-table-wrap"><table className="thera-table"><thead><tr>{columns.map(([label]) => <th key={label}>{label}</th>)}{action && <th>Action</th>}</tr></thead><tbody>{rows.map((row) => <tr key={row.id}>{columns.map(([label,key,format]) => <td key={`${row.id}-${key}`}>{cellLink?.(row, key)
