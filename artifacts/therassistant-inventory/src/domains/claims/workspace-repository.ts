@@ -1,5 +1,6 @@
 import {
   tenantInsert,
+  tenantRpc,
   tenantSelect,
   tenantUpdate,
   tenantUpdateExact,
@@ -9,6 +10,7 @@ import {
 import { calculateOpenBalance } from "../ar/aging";
 import { isRecoveryAdjustment } from "../ar/variance";
 import { validateClaim } from "./repository";
+import type { ClaimIdentityValues } from "./claim-work-identity";
 import { isRetryableRejection } from "./workqueues";
 
 type DataRow = Row & { id: string };
@@ -41,6 +43,19 @@ export async function getClaimWorkData(claimId: string): Promise<ClaimWorkData |
     tenantSelect<DataRow>("professional_claim_lines", { claim_id: `eq.${claimId}`, order: "service_date.asc" }), tenantSelect<DataRow>("claim_diagnoses", { claim_id: `eq.${claimId}`, order: "pointer_order.asc" }), tenantSelect<DataRow>("submission_responses", { claim_id: `eq.${claimId}`, order: "created_at.desc" }), tenantSelect<DataRow>("denials", { claim_id: `eq.${claimId}`, order: "created_at.desc" }), tenantSelect<DataRow>("appeals", { claim_id: `eq.${claimId}`, order: "created_at.desc" }), tenantSelect<DataRow>("workqueue_items", { source_object_type: "eq.claim", source_object_id: `eq.${claimId}`, order: "created_at.desc" }), tenantSelect<DataRow>("claim_status_history", { claim_id: `eq.${claimId}`, order: "created_at.desc" }),
   ]);
   return { claim, lines, diagnoses, responses, denials, appeals, workItems, history };
+}
+
+/** One RLS-enforced PostgreSQL transaction. A stable request ID makes retries safe when a response is lost. */
+export function saveAtomicRejectionCorrections(
+  claimId: string, requestId: string, values: ClaimWorkFieldValues & ClaimIdentityValues,
+  lines: ClaimLineCorrection[], diagnoses: ClaimDiagnosisCorrection[], revalidate: boolean,
+) {
+  return tenantRpc<{ claim_id: string; saved: boolean; replayed: boolean }>(
+    "rcm_save_rejection_corrections", {
+      p_claim_id: claimId, p_request_id: requestId, p_values: values,
+      p_lines: lines, p_diagnoses: diagnoses, p_revalidate: revalidate,
+    },
+  );
 }
 
 export async function saveClaimWorkFields(claimId: string, values: ClaimWorkFieldValues, revalidate = false) {
