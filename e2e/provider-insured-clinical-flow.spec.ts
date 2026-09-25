@@ -41,8 +41,7 @@ test("provider completes the synthetic insured visit for billing", async ({ page
   await expect(signButton).toBeEnabled({ timeout: 15_000 });
   await signButton.click();
 
-  await expect(
-    page.getByText("Clinical note signed and locked. THERASSISTANT handed the encounter to Charge Capture", { exact: false }),
-  ).toBeVisible({ timeout: 15_000 });
-  await expect(signedHandoff).toBeVisible();
+  // Assert the durable locked-note handoff rather than the removed toast text.
+  await expect(signedHandoff).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByRole("link", { name: "Open Charge Capture" })).toBeVisible();
 });

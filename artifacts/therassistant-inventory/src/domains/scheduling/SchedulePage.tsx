@@ -334,12 +334,12 @@ export function SchedulePage() {
           <div className="schedule-appointment-section-heading"><span>01</span><div><h3 id="schedule-form-people">Patient & provider</h3><p>Select the patient and clinician for this visit.</p></div></div>
           <div className="schedule-appointment-fields">
             <label>Patient <span className="schedule-required">Required</span>
-              <select className="thera-input" required value={form.clientId} onChange={(e) => setForm({ ...form, clientId: e.target.value })}>
+              <select className="thera-input" aria-label="Patient" required value={form.clientId} onChange={(e) => setForm({ ...form, clientId: e.target.value })}>
                 <option value="">Choose patient</option>{data.clients.map((client) => <option key={client.id} value={client.id}>{personName(client)}</option>)}
               </select>
             </label>
             <label>Rendering provider <span className="schedule-required">Required</span>
-              <select className="thera-input" required disabled={clinicianView} value={form.providerId} onChange={(e) => setForm({ ...form, providerId: e.target.value })}>
+              <select className="thera-input" aria-label="Provider" required disabled={clinicianView} value={form.providerId} onChange={(e) => setForm({ ...form, providerId: e.target.value })}>
                 <option value="">Choose provider</option>{data.providers.map((provider) => <option key={provider.id} value={provider.id}>{personName(provider)}{provider.credentials ? `, ${provider.credentials}` : ""}</option>)}
               </select>
               {clinicianView && <small>Linked to your signed-in clinician profile.</small>}

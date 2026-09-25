@@ -36,11 +36,8 @@ test("provider completes a synthetic visit from schedule through signed note and
   await expect(signButton).toBeEnabled({ timeout: 15_000 });
   await signButton.click();
 
-  await expect(
-    page.getByText(
-      "Clinical note signed and locked. THERASSISTANT handed the encounter to Charge Capture",
-      { exact: false },
-    ),
-  ).toBeVisible({ timeout: 15_000 });
-  await expect(signedHandoff).toBeVisible();
+  // Signing is accepted only when the persisted, locked clinical handoff is displayed.
+  // The previous transient success message was retired in favor of nonblocking billing follow-up.
+  await expect(signedHandoff).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByRole("link", { name: "Open Charge Capture" })).toBeVisible();
 });
