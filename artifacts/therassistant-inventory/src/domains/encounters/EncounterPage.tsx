@@ -833,7 +833,7 @@ export function EncounterPage() {
               <tbody>{data.serviceLines.map((line) => <tr key={String(line.id)}>
                 <td><strong>{String(line.cpt_hcpcs_code ?? "—")}</strong></td><td>{String(line.modifier1 ?? "—")}</td>
                 <td>{String(line.units ?? 1)}</td><td>{String(line.place_of_service_code ?? "—")}</td>
-                <td>{Number(line.charge_amount_cents ?? 0) > 0 ? money(Number(line.charge_amount_cents)) : <span className="encounter-service-warning">Missing charge</span>}</td>
+                <td>{Number(line.charge_amount_cents ?? 0) > 0 ? money(Number(line.charge_amount_cents)) : <><span className="encounter-service-warning">Missing charge</span>{canEditUnbilledServices && !billedLineIds.has(String(line.id)) && <button type="button" className="thera-link" disabled={saving} onClick={() => { editServiceLine(line); window.setTimeout(() => document.getElementById("encounter-charge-amount")?.focus(), 0); }}>Fix amount →</button>}</>}</td>
                 {canEditUnbilledServices && <td><div className="thera-filter-row">
                   <button type="button" className="thera-action secondary" disabled={saving || billedLineIds.has(String(line.id))} onClick={() => editServiceLine(line)}>Edit</button>
                   <button type="button" className="thera-action secondary" disabled={saving || !removableLineIds.has(String(line.id))} onClick={() => void removeServiceLine(String(line.id))}>Remove</button>{billedLineIds.has(String(line.id)) && <Link className="thera-link" href="/billing/charges">Open charge →</Link>}
