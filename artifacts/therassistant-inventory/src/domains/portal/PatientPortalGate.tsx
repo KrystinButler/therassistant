@@ -5,7 +5,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { useLocation } from "wouter";
+import { Link, useLocation } from "wouter";
 
 import { useAuth } from "../../auth/auth-context";
 import {
@@ -33,15 +33,18 @@ function PortalRedirect({ to }: { to: string }) {
 function AccessUnavailable({
   message,
   onSignOut,
+  showPreview = false,
 }: {
   message: string;
   onSignOut: () => Promise<void>;
+  showPreview?: boolean;
 }) {
   return (
     <main className="thera-main" style={{ minHeight: "100vh", display: "grid", placeItems: "center", padding: 24 }}>
       <section className="thera-card" style={{ width: "min(520px, 100%)" }}>
         <h1>Patient portal access unavailable</h1>
         <p>{message}</p>
+        {showPreview && <div className="thera-alert" style={{ marginBottom: 15 }}><strong>Signed in with a staff account?</strong><p>Patient portal access requires a separately invited patient identity. Use the staff-only synthetic preview without switching your account, or open patient sign-in in a private browser window with a separate invited test-patient identity.</p><Link href="/portal-preview" className="thera-action">Open Staff Portal Preview</Link></div>}
         <button
           type="button"
           className="thera-action secondary"
@@ -111,8 +114,9 @@ export function PatientPortalGate({ children }: { children: ReactNode }) {
   if (!context) {
     return (
       <AccessUnavailable
-        message="This account is not linked to an active patient portal invitation."
+        message="This account has no active patient portal invitation. Staff and patient accounts have separate access."
         onSignOut={signOut}
+        showPreview
       />
     );
   }

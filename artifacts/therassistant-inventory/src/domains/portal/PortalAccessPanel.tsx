@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Link } from "wouter";
 
 import {
   getClientPortalAccess,
@@ -101,6 +102,7 @@ export function PortalAccessPanel({ clientId }: { clientId: string }) {
         <div>
           <h2>Patient Portal</h2>
           <p>Manage the patient identity that can access the secure portal.</p>
+          <Link className="thera-link" href="/portal-preview">Preview the patient interface using synthetic information →</Link>
         </div>
       </div>
 
@@ -119,7 +121,7 @@ export function PortalAccessPanel({ clientId }: { clientId: string }) {
         <>
           <p><strong>Status:</strong> Not enrolled</p>
           <p className="thera-muted">
-            Send a secure invitation to the email currently saved on the patient record.
+            Send a secure invitation to the patient’s email. If that email is also used for staff access, the patient needs a separate email and account; staff logins never become patient identities.
           </p>
           <button
             className="thera-action"
