@@ -114,7 +114,7 @@ export function PatientPortalGate({ children }: { children: ReactNode }) {
   if (!context) {
     return (
       <AccessUnavailable
-        message="This account has no active patient portal invitation. Staff and patient accounts have separate access."
+        message="This account is not linked to an active patient portal invitation. Staff and patient accounts have separate access."
         onSignOut={signOut}
         showPreview
       />
