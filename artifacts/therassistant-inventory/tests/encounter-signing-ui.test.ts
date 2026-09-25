@@ -32,7 +32,7 @@ test("diagnosis and service-line saves preserve an unsaved clinical draft", () =
   assert.match(source.slice(diagnosisStart, diagnosisEnd), /"Diagnosis added to encounter\.",\s*true,/);
   const serviceHandler = source.slice(serviceStart, serviceEnd);
   assert.match(serviceHandler, /withSave\(/);
-  assert.match(serviceHandler, /editingServiceLineId \? "Unbilled service line updated\." : "Unbilled service line added\.",\s*true,/);
+  assert.match(serviceHandler, /true,\s*setServiceError,/);
   assert.match(serviceHandler, /updateEncounterServiceLine/);
 });
 
