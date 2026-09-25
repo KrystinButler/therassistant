@@ -53,7 +53,9 @@ test("edge function keeps admin credentials server-side and uses current key env
 
 test("edge function does not auto-link an unrelated existing Auth account", () => {
   const source = readFileSync(indexPath, "utf8");
-  assert.match(source, /It was not linked automatically/);
+  assert.match(source, /accounts are never linked automatically/);
+  assert.match(source, /existing_auth_account/);
+  assert.match(source, /staff_identity_review/);
   assert.doesNotMatch(source, /listUsers\(/);
 });
 
