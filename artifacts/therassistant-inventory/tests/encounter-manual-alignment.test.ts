@@ -16,7 +16,6 @@ test("encounter follows the manual's provider preparation-to-documentation flow"
     "Cite Check-In",
     "Cite Journal",
     "Coding & Service",
-    "Documentation Readiness & Signature",
     "Signed clinical record → Charge Capture",
   ]) {
     assert.match(encounter, new RegExp(label.replace(/[.*+?^$\{\}()|[\]\\]/g, "\\$&")));
@@ -26,6 +25,9 @@ test("encounter follows the manual's provider preparation-to-documentation flow"
 test("billing follow-up is explicitly nonblocking for clinical signature", () => {
   assert.match(encounter, /Billing follow-up never prevents completion of the clinical record/);
   assert.match(encounter, /You may still sign the clinical note/);
+  assert.doesNotMatch(encounter, /Documentation Readiness & Signature/);
+  assert.doesNotMatch(encounter, /<ExternalSummaryPanel/);
+  assert.doesNotMatch(encounter, /id="encounter-billing-source"/);
   assert.doesNotMatch(encounter, /disabled=\{[^}]*billingFollowUpCount/);
 });
 

@@ -15,7 +15,6 @@ import { buildPatientReviewCheckIn } from "../scheduling/patient-review-model";
 import { treatmentPlanAlert } from "../treatment-plans/workflow";
 import { getTreatmentPlanWorkspace } from "../treatment-plans/repository";
 import { EncounterTreatmentPlanComposer } from "../treatment-plans/EncounterTreatmentPlanComposer";
-import { ExternalSummaryPanel } from "../clinical/ExternalSummaryPanel";
 import { FastChartingPanel } from "../clinical/FastChartingPanel";
 import { SessionTimelinePanel } from "../clinical/SessionTimelinePanel";
 import { createSmartPhrase, getFastChartingContext, getSmartPhrases } from "../clinical/fast-charting-repository";
@@ -742,6 +741,14 @@ export function EncounterPage() {
               <div id="encounter-progress-note-hint" className="encounter-editor-meta"><strong>{noteWordCount} words</strong><span aria-hidden="true">·</span><span>Type / for quick inserts</span><span aria-hidden="true">·</span><span>{signed ? "Signed note is locked" : "Save to keep your draft"}</span></div>
               {!signed && <button type="button" className="thera-action encounter-editor-save" disabled={saving || !noteText.trim()} onClick={() => void saveNote()}>{saving ? "Saving..." : "Save Note"}</button>}
             </div>
+            <div className="encounter-inline-signature" id="encounter-signature">
+              {signed ? <div className="encounter-signed-handoff"><div><strong>Signed clinical record → Charge Capture</strong><span>The note is locked. All claim and charge corrections remain available in revenue-cycle workqueues.</span></div><Link href="/billing/charges" className="thera-action secondary">Open Charge Capture</Link></div> : <>
+                <div className="encounter-sign-row"><label><span className="thera-field-label">Rendering Provider Signature</span><input ref={signatureRef} className="thera-input" value={signatureText} onChange={(event) => setSignatureText(event.target.value)} placeholder="Provider signature" /></label>
+                  <button type="button" className="thera-action" disabled={saving} onClick={() => void sign()}>{saving ? "Signing…" : "Sign & Lock Note"}</button></div>
+                {!noteText.trim() && <button type="button" className="thera-action secondary" onClick={() => { noteRef.current?.scrollIntoView({ behavior: "smooth", block: "center" }); noteRef.current?.focus({ preventScroll: true }); }}>Go to Note Editor</button>}
+                <p className="thera-table-subtext">Billing follow-up never prevents completion of the clinical record. You may still sign the clinical note when a claim has outstanding corrections.</p>
+              </>}
+            </div>
           </div>
           <FastChartingPanel signed={signed} noteType={noteType} phrases={smartPhrases} selections={structuredSelections} generatedNarrative={generatedNarrative} priorContext={priorStructuredContext} noteSimilarity={noteSimilarity} onSelectionsChange={setStructuredSelections} onInsertNarrative={() => injectIntoNote("\n" + generatedNarrative + "\n")} onInsertPhrase={injectIntoNote} onCarryForward={carryForwardStructured} onCreatePhrase={addSmartPhrase} />
           
@@ -781,63 +788,9 @@ export function EncounterPage() {
       </div>
 
       <div className="encounter-lower-grid">
-        <section className="thera-card thera-span-2" id="encounter-billing-source">
-          <div className="thera-card-header">
-            <div>
-              <div className="thera-eyebrow">OPTIONAL BILLING SETTINGS</div>
-              <h2>Billing Responsibility</h2>
-              <p>Set who is financially responsible for this encounter. This routing is separate from the signed clinical note and never starts a claim by itself.</p>
-            </div>
-            <StatusBadge value={String(encounter.billing_path ?? billingPathForFundingSource(fundingSourceType))} />
-          </div>
-          <div className="thera-form-grid">
-            <label>
-              Funding source
-              <select className="thera-input" value={fundingSourceType} onChange={(event) => { setFundingSourceType(event.target.value as FundingSourceType); setFundingSourceSubtype(""); }}>
-                {FUNDING_SOURCE_OPTIONS.map((option) => <option key={option.id} value={option.id}>{option.label}</option>)}
-              </select>
-            </label>
-            <label>
-              Funding subtype
-              <select className="thera-input" value={fundingSourceSubtype} onChange={(event) => setFundingSourceSubtype(event.target.value)}>
-                <option value="">Not specified</option>
-                {fundingSubtypeOptions(fundingSourceType).map((option) => <option key={option.id} value={option.id}>{option.label}</option>)}
-              </select>
-            </label>
-            <div>
-              <div className="thera-field-label">Billing path</div>
-              <div className="thera-field-value">{billingPathLabel(billingPathForFundingSource(fundingSourceType))}</div>
-              <div className="thera-table-subtext">Insurance creates claim-ready charges only after billing validation. Program funding is kept out of CMS-1500/837P claim creation. Private pay routes to patient/private responsibility.</div>
-            </div>
-            {fundingSourceType === "insurance" ? (
-              <div>
-                <div className="thera-field-label">Current payer</div>
-                <div className="thera-field-value">{String(data.payer?.name ?? "No payer selected")}</div>
-                <div className="thera-table-subtext">{String(data.plan?.name ?? data.policy?.member_id ?? "")}</div>
-              </div>
-            ) : (
-              <label>
-                Responsible entity / party
-                <input className="thera-input" value={fundingResponsibleEntity} onChange={(event) => setFundingResponsibleEntity(event.target.value)} placeholder={fundingSourceType === "government_program" ? "Agency, court, program, or contractor" : "Patient, family member, attorney, or law firm"} />
-              </label>
-            )}
-            {fundingSourceType !== "insurance" && <label>
-              Contract / voucher / reference
-              <input className="thera-input" value={fundingReference} onChange={(event) => setFundingReference(event.target.value)} />
-            </label>}
-            <label style={{ gridColumn: "1 / -1" }}>
-              Funding notes
-              <input className="thera-input" value={fundingNotes} onChange={(event) => setFundingNotes(event.target.value)} placeholder="Optional billing-routing context; do not place clinical narrative here." />
-            </label>
-          </div>
-          <div className="thera-filter-row" style={{ marginTop: 10, justifyContent: "space-between", alignItems: "center" }}>
-            <span className="thera-table-subtext">Saving a funding path affects future charge routing only; it does not silently rewrite an existing charge, claim, code, or signed note.</span>
-            <button type="button" className="thera-action" disabled={saving} onClick={() => void saveFundingPath()}>Save Funding Path</button>
-          </div>
-        </section>
         <section className="thera-card" id="encounter-diagnoses"><div className="thera-card-header"><div><div className="thera-eyebrow">CLINICAL CONTEXT</div><h2>Diagnoses</h2></div></div>{data.diagnoses.length > 0 && <div className="thera-table-wrap"><table className="thera-table"><thead><tr><th>Code</th><th>Description</th><th>Primary</th></tr></thead><tbody>{data.diagnoses.map((diagnosis) => <tr key={diagnosis.id}><td><strong>{String(diagnosis.diagnosis_code)}</strong></td><td>{String(diagnosis.diagnosis_description ?? "—")}</td><td>{diagnosis.is_primary ? "Yes" : "No"}</td></tr>)}</tbody></table></div>}{!signed && <div className="encounter-compact-form"><Icd10SearchInput code={diagnosisCode} description={diagnosisDescription} serviceDate={serviceDate} onSelect={(result) => { setDiagnosisCode(result.code); if (result.name) setDiagnosisDescription(result.name); }} /><input className="thera-input" placeholder="Diagnosis description" value={diagnosisDescription} onChange={(event) => setDiagnosisDescription(event.target.value)} /><button type="button" className="thera-action secondary" disabled={saving || !diagnosisCode.trim()} onClick={() => void addDiagnosis()}>+ Add Diagnosis</button></div>}</section>
         <section className="thera-card" id="encounter-coding-service">
-          <div className="thera-card-header"><div><div className="thera-eyebrow">CODE</div><h2>Coding & Service</h2></div></div>
+          <div className="thera-card-header split"><div><div className="thera-eyebrow">CLAIM CORRECTIONS</div><h2>Coding & Service</h2><p>Correct rejected or held claim fields in the revenue-cycle workqueue; signed clinical notes stay locked.</p></div><Link href="/rejections" className="thera-action secondary">Open Rejections →</Link></div>
           <div className="encounter-coding-summary">
             <Field label="Scheduled Time" value={duration ? `${duration} minutes` : "Not available"} />
             <Field label="Visit Location" value={String(encounter.location_type ?? "—").replaceAll("_", " ")} />
@@ -876,30 +829,6 @@ export function EncounterPage() {
             {serviceError && <div className="thera-state error" role="alert" style={{ marginTop: 9 }}>{serviceError}</div>}
           </div>}
         </section>
-        <section className="thera-card thera-span-2 encounter-sign-card" id="encounter-signature"><div className="thera-card-header"><div><div className="thera-eyebrow">REVIEW → SIGN</div><h2>Documentation Readiness & Signature</h2><p>Billing follow-up never prevents completion of the clinical record.</p></div><StatusBadge value={billingFollowUpCount ? "billing_follow_up" : "ready"} /></div><div className="encounter-readiness-grid">{completionChecks.map((check) => <div className="encounter-readiness-item" key={check.label}><StatusBadge value={check.status} /><div><strong>{check.label}</strong><span>{check.detail}</span></div></div>)}</div><div className="encounter-nonblocking-note">{billingFollowUpCount ? `${billingFollowUpCount} item(s) still need billing/coding follow-up. You may still sign the clinical note; THERASSISTANT will route those issues outside the clinical workflow.` : "The clinical record and current billing details are ready for handoff."}</div>{signed ? <div className="encounter-signed-handoff"><div><strong>Signed clinical record → Charge Capture</strong><span>The note is locked. Billing/coding corrections can continue without changing provider documentation.</span></div><Link href="/billing/charges" className="thera-action">Open Charge Capture</Link></div> : <div className="encounter-sign-block">
-          <div className="encounter-sign-guidance" aria-live="polite">
-            {!noteText.trim() ? <><strong>Clinical note required</strong><span>Write the visit note before signing. Billing information is not required.</span>
-              <button type="button" className="thera-action secondary" onClick={() => { noteRef.current?.scrollIntoView({ behavior: "smooth", block: "center" }); noteRef.current?.focus({ preventScroll: true }); }}>Go to Note Editor ↑</button></>
-              : !signatureText.trim() ? <><strong>Add your signature</strong><span>The note is ready; enter the rendering provider's signature.</span></>
-              : <><strong>Ready to sign</strong><span>Sign & Lock will save your latest note text and lock the clinical record. Billing review happens afterward.</span></>}
-          </div>
-          <div className="encounter-sign-row"><label><div className="thera-field-label">Rendering Provider Signature</div><input ref={signatureRef} className="thera-input" value={signatureText} onChange={(event) => setSignatureText(event.target.value)} placeholder="Provider signature" /></label>
-            <button type="button" className="thera-action" disabled={saving} onClick={() => void sign()}>{saving ? "Signing…" : "Sign & Lock Note"}</button>
-          </div>
-        </div>}</section>
-        {signed && <ExternalSummaryPanel input={{
-          patientName: personName(data.client),
-          providerName: personName(data.provider),
-          serviceDate,
-          serviceType: String(encounter.service_type ?? data.appointment?.service_type ?? "Clinical Service"),
-          attendanceStatus: String(data.appointment?.appointment_status ?? encounter.encounter_status ?? "completed"),
-          goalAddressed: goalAddressed || activeGoalText,
-          selections: structuredSelections,
-          diagnoses: data.diagnoses.map((diagnosis) => ({
-            code: String(diagnosis.diagnosis_code ?? ""),
-            description: diagnosis.diagnosis_description ? String(diagnosis.diagnosis_description) : null,
-          })).filter((diagnosis) => diagnosis.code),
-        }} />}
       </div>
     </>
   );
