@@ -102,7 +102,6 @@ export async function getEncounterDetail(encounterId: string) {
     appointmentRows,
     diagnoses,
     serviceLines,
-    linkedClaims,
     readinessChecks,
     notes,
     treatmentPlans,
