@@ -2,10 +2,11 @@ import { useEffect, useState, type FormEvent } from "react";
 import { useLocation } from "wouter";
 
 import { useAuth } from "../../auth/auth-context";
-import { PORTAL_HOME, PORTAL_RECOVER } from "./routes";
+import { PORTAL_ACTIVATE, PORTAL_HOME, PORTAL_RECOVER } from "./routes";
+import { getMyPortalContext } from "./portal-client";
 
 export function PatientPortalLoginPage() {
-  const { session, signIn, requestPasswordReset } = useAuth();
+  const { session, signIn, signOut, requestPasswordReset } = useAuth();
   const [, navigate] = useLocation();
   const [mode, setMode] = useState<"signin" | "reset">("signin");
   const [email, setEmail] = useState("");
@@ -13,12 +14,23 @@ export function PatientPortalLoginPage() {
   const [working, setWorking] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [checkingExistingSession, setCheckingExistingSession] = useState(Boolean(session));
 
   useEffect(() => {
-    if (session && session.flowType !== "recovery") {
-      navigate(PORTAL_HOME, { replace: true });
+    let active = true;
+    if (!session || session.flowType === "recovery") {
+      setCheckingExistingSession(false);
+      return () => { active = false; };
     }
-  }, [navigate, session]);
+    setCheckingExistingSession(true);
+    void getMyPortalContext().then((context) => {
+      if (!active) return;
+      if (context?.status === "invited") navigate(PORTAL_ACTIVATE, { replace: true });
+      else if (context?.status === "active") navigate(PORTAL_HOME, { replace: true });
+      else setCheckingExistingSession(false);
+    }).catch(() => { if (active) setCheckingExistingSession(false); });
+    return () => { active = false; };
+  }, [navigate, session?.access_token, session?.flowType]);
 
   async function submit(event: FormEvent) {
     event.preventDefault();
@@ -52,6 +64,22 @@ export function PatientPortalLoginPage() {
       setWorking(false);
     }
   }
+
+  if (checkingExistingSession) return <div className="thera-state">Checking patient account...</div>;
+  if (session && session.flowType !== "recovery") return (
+    <main className="thera-main" style={{ minHeight: "100vh", display: "grid", placeItems: "center", padding: 24 }}>
+      <section className="thera-card" style={{ width: "min(440px, 100%)" }}>
+        <h1>Switch to a patient account</h1>
+        <p>This browser is already signed in, but this session is not linked to an active patient portal invitation. Patient and staff accounts must remain separate.</p>
+        <p>To test the actual journal and check-in, sign in as a separately invited test patient. Signing out here also ends the staff session in this browser; alternatively, open this page in a private browser window.</p>
+        {error && <div className="thera-state error" role="alert">{error}</div>}
+        <button type="button" className="thera-action" disabled={working} onClick={() => {
+          setWorking(true); setError(null);
+          void signOut().catch((err) => setError(err instanceof Error ? err.message : "Unable to sign out.")).finally(() => setWorking(false));
+        }}>{working ? "Signing out..." : "Sign out and enter patient credentials"}</button>
+      </section>
+    </main>
+  );
 
   return (
     <main className="thera-main" style={{ minHeight: "100vh", display: "grid", placeItems: "center", padding: 24 }}>
