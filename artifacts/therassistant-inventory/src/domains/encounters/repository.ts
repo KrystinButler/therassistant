@@ -180,6 +180,14 @@ export async function getEncounterDetail(encounterId: string) {
     tenantSelect<DataRow>("professional_claims", { source_encounter_id: `eq.${encounterId}`, order: "created_at.desc" }),
   ]);
 
+  // Keep billing-only service-line edits available after the clinical note is signed.
+  // A charge-captured line must instead be corrected in its revenue-cycle workqueue.
+  const chargeLines = serviceLines.length
+    ? await tenantSelect<DataRow>("charge_capture_items", {
+        service_line_id: `in.(${serviceLines.map((row) => row.id).join(",")})`,
+      })
+    : [];
+
   return {
     encounter,
     client: first(clientRows),
@@ -190,6 +198,7 @@ export async function getEncounterDetail(encounterId: string) {
     plan: first(planRows),
     diagnoses,
     serviceLines,
+    chargeLines,
     claims: linkedClaims,
     readinessChecks,
     notes,
