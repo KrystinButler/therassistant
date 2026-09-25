@@ -152,15 +152,17 @@ export async function addEncounterDiagnosis(
   });
 }
 
-async function assertUnbilledLine(encounterId: string, lineId: string): Promise<DataRow> {
-  const [encounters, lines, charges] = await Promise.all([
+async function assertUnbilledLine(encounterId: string, lineId: string, allowBlockedCorrection = false): Promise<DataRow> {
+  const [encounters, lines, charges, claims] = await Promise.all([
     tenantSelect<DataRow>("encounters", { id: `eq.${encounterId}`, limit: "1" }),
     tenantSelect<DataRow>("encounter_service_lines", { id: `eq.${lineId}`, encounter_id: `eq.${encounterId}`, limit: "1" }),
     tenantSelect<DataRow>("charge_capture_items", { service_line_id: `eq.${lineId}` }),
+    tenantSelect<DataRow>("professional_claims", { source_encounter_id: `eq.${encounterId}`, limit: "1" }),
   ]);
   if (!encounters.length || !lines.length) throw new Error("Service line not found in this practice's encounter.");
-  if (charges.some((charge) => charge.charge_status !== "voided"))
-    throw new Error("This service line is already charge-captured. Correct its billing record instead.");
+  if (claims.length) throw new Error("This encounter has an existing claim. Correct it in Rejections or Claims instead.");
+  if (charges.some((charge) => charge.charge_status !== "voided" && !(allowBlockedCorrection && charge.charge_status === "blocked")))
+    throw new Error("This service line has a downstream charge that cannot be edited here. Open the revenue-cycle workqueue.");
   return lines[0];
 }
 export async function addEncounterServiceLine(encounterId: string, values: ServiceLineValues) {
@@ -179,7 +181,7 @@ export async function addEncounterServiceLine(encounterId: string, values: Servi
 }
 export async function updateEncounterServiceLine(encounterId: string, lineId: string, values: ServiceLineValues) {
   validateServiceLineValues(values);
-  await assertUnbilledLine(encounterId, lineId);
+  await assertUnbilledLine(encounterId, lineId, true);
   return tenantUpdate<DataRow>("encounter_service_lines", lineId, {
     cpt_hcpcs_code: values.cptCode, modifier1: values.modifier1 || null,
     units: values.units, charge_amount_cents: values.chargeAmountCents, place_of_service_code: values.placeOfService, ready_for_claim: false,
