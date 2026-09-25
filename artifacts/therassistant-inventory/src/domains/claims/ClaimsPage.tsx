@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { Link } from "wouter";
 
 import { StatusBadge } from "../../components/status-badge";
 import { money, shortDate } from "../../lib/format";
@@ -167,6 +168,7 @@ export function ClaimsPage() {
           <div className="thera-eyebrow">GET PAID · PAYER FOLLOW-UP</div>
           <h1>Claims & A/R Follow-Up</h1>
           <p>Work outstanding payer claims by response status and age while keeping the claim connected to the patient, encounter, submission history, balance, and next action.</p>
+          <Link className="thera-action secondary" href="/rejections">Rejections & Validation Holds →</Link>
         </div>
       </div>
 
