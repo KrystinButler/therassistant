@@ -122,6 +122,7 @@ export function AppShell({ children }: Props) {
   return (
     <ClientSearchContext.Provider value={submittedClientSearch}>
     <div className="thera-app cw-app">
+      <a className="cw-skip-link" href="#main-content">Skip to main content</a>
       <header className="cw-global-header">
         <div className="cw-global-brand-area">
           <button
@@ -129,6 +130,7 @@ export function AppShell({ children }: Props) {
             type="button"
             aria-label={mobileOpen ? "Close navigation" : "Open navigation"}
             aria-expanded={mobileOpen}
+            aria-controls="primary-navigation"
             onClick={() => setMobileOpen((open) => !open)}
           >
             {mobileOpen ? <X size={22} /> : <Menu size={22} />}
@@ -191,7 +193,7 @@ export function AppShell({ children }: Props) {
       {mobileOpen ? (
         <button type="button" className="cw-backdrop" aria-label="Close navigation" onClick={() => setMobileOpen(false)} />
       ) : null}
-      <aside className={mobileOpen ? "thera-sidebar cw-sidebar mobile-open" : "thera-sidebar cw-sidebar"}>
+      <aside id="primary-navigation" className={mobileOpen ? "thera-sidebar cw-sidebar mobile-open" : "thera-sidebar cw-sidebar"}>
         <nav className="cw-navigation" aria-label="Primary navigation">
           {navigation.map((group, index) => (
             <div className="cw-nav-group" key={group.label || "primary"}>
@@ -214,7 +216,7 @@ export function AppShell({ children }: Props) {
         </div>
       </aside>
 
-      <main className="thera-main cw-main">
+      <main id="main-content" tabIndex={-1} className="thera-main cw-main">
         <div className="cw-mobile-context">{currentPage}</div>
         <section className="thera-content cw-content">{children}</section>
       </main>

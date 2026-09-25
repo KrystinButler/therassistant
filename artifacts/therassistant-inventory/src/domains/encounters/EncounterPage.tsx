@@ -755,7 +755,7 @@ export function EncounterPage() {
           {signed && data.signatures[0] && <div className="thera-alert" style={{ marginTop: 12 }}>Signed {dateTime(String(data.signatures[0].signed_at ?? ""))} by {String(data.signatures[0].signature_text ?? "provider")}</div>}
         </section>
         <aside className={contextOpen ? "encounter-context-rail open" : "encounter-context-rail"}>
-          <div className="encounter-context-tabs" role="tablist" aria-label="Clinical context">
+          <div className="encounter-context-tabs" role="group" aria-label="Clinical context">
             <ContextButton active={contextTab === "lastVisit"} label="Last Visit" short="LV" onClick={() => { setContextTab("lastVisit"); setContextOpen(true); }} />
             <ContextButton active={contextTab === "treatment"} label="Treatment Plan" short="TP" onClick={() => { setContextTab("treatment"); setContextOpen(true); }} />
             <ContextButton active={contextTab === "journal"} label="Journal" short="JR" onClick={() => { setContextTab("journal"); setContextOpen(true); }} />
@@ -850,7 +850,7 @@ export function EncounterPage() {
 }
 
 function ContextButton({ active, label, short, onClick }: { active: boolean; label: string; short: string; onClick: () => void }) {
-  return <button type="button" role="tab" aria-selected={active} title={label} className={active ? "encounter-context-tab active" : "encounter-context-tab"} onClick={onClick}><span>{short}</span><small>{label}</small></button>;
+  return <button type="button" aria-pressed={active} aria-label={label} title={label} className={active ? "encounter-context-tab active" : "encounter-context-tab"} onClick={onClick}><span aria-hidden="true">{short}</span><small>{label}</small></button>;
 }
 
 function Field({ label, value }: { label: string; value: React.ReactNode }) {

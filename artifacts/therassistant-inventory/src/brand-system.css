@@ -1,18 +1,18 @@
-/* Shared THERASSISTANT visual language: compact Inter, forest and sage. */
+/* Shared THERASSISTANT visual language: compact Inter, navy and sage. */
 :root {
   --app-font-sans: Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
   --app-font-serif: Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
-  --thera-navy:#173927;--thera-navy-deep:#143021;--thera-blue:#50785b;
+  --thera-navy:#203848;--thera-navy-deep:#17303f;--thera-blue:#50785b;
   --thera-blue-soft:#eff4ee;--thera-sage:#a4b6a6;--thera-sage-dark:#587763;
   --thera-cream:#f7f5ef;--thera-paper:#fff;--thera-border:#e0e7df;
-  --thera-text:#253b31;--thera-muted:#63766a;
-  --pj-navy:#173927;--pj-slate:#4c6555;--pj-teal:#668b75;
+  --thera-text:#294354;--thera-muted:#63766a;
+  --pj-navy:#203848;--pj-slate:#4c6555;--pj-teal:#668b75;
   --pj-sage:#a4b6a6;--pj-mist:#eff4ee;--pj-border:#e0e7df;--pj-bg:#f7f5ef;
-  --background:45 31% 97%;--foreground:145 33% 20%;--border:130 14% 89%;
-  --primary:145 33% 20%;--primary-foreground:0 0% 100%;
-  --secondary:130 17% 88%;--secondary-foreground:145 33% 20%;
+  --background:45 31% 97%;--foreground:205 38% 20%;--border:130 14% 89%;
+  --primary:205 38% 20%;--primary-foreground:0 0% 100%;
+  --secondary:130 17% 88%;--secondary-foreground:205 38% 20%;
   --muted:45 22% 95%;--muted-foreground:145 10% 42%;
-  --accent:135 14% 67%;--accent-foreground:145 33% 20%;--ring:135 14% 50%;
+  --accent:135 14% 67%;--accent-foreground:205 38% 20%;--ring:135 14% 50%;
 }
 html{font-size:14px;-webkit-text-size-adjust:100%;text-size-adjust:100%}
 body{font-family:var(--app-font-sans);font-size:13px;line-height:1.5;background:var(--thera-cream);color:var(--thera-text)}
@@ -22,49 +22,49 @@ h1,.thera-page-header h1,.schedule-header h1,.cw-dashboard-heading h1{font-size:
 h2,.thera-card h2,.cw-panel-header h2{font-size:16px;line-height:1.35}
 h3,.thera-card h3{font-size:14px}
 :where(.thera-content,.cw-content,.pj-main,.pci-main){min-width:0}
-:where(.thera-app,.cw-app) :where(.thera-card,.thera-metric-card,.cw-panel,.cw-summary-card,.schedule-card,.encounter-focus-banner,.pci-appointment-card){border-color:#e0e7df;box-shadow:0 2px 10px #1739270a}
+:where(.thera-app,.cw-app) :where(.thera-card,.thera-metric-card,.cw-panel,.cw-summary-card,.schedule-card,.encounter-focus-banner,.pci-appointment-card){border-color:#e0e7df;box-shadow:0 2px 10px #2038480a}
 :where(.thera-app,.cw-app) :where(.thera-page-header p,.thera-card p,.cw-dashboard-heading p){font-size:12px;color:#63766a}
 :where(.thera-app,.cw-app) :where(.thera-action,.cw-panel-link,.thera-link){font-size:12px}
 :where(.thera-app,.cw-app) :where(.thera-table,.cw-table,.schedule-table){font-size:11px}
 :where(.thera-app,.cw-app) :where(.thera-table th,.cw-table th,.schedule-table th){background:#f4f6f1;color:#395b45}
 :where(.thera-app,.cw-app) :where(.thera-table td,.cw-table td,.schedule-table td){border-bottom-color:#e9eee7}
 :where(.thera-app,.cw-app) :where(.thera-badge,.thera-eyebrow,.cw-nav-heading){font-size:10px;letter-spacing:.035em}
-:where(.thera-app,.cw-app) :where(.thera-metric-value,.cw-summary-number){font-size:24px;color:#173927}
+:where(.thera-app,.cw-app) :where(.thera-metric-value,.cw-summary-number){font-size:24px;color:#203848}
 :where(.thera-app,.cw-app) :where(.thera-input,select,textarea){border-color:#dce5dc}
 :where(.thera-app,.cw-app) :where(button,input,select,textarea,a):focus-visible{outline:2px solid #789b7c;outline-offset:2px}
 .cw-app{background:#f7f5ef;grid-template-columns:236px minmax(0,1fr);grid-template-rows:67px minmax(calc(100vh - 67px),auto)}
 .cw-global-header{height:67px;grid-template-columns:236px minmax(220px,1fr) auto}
-.cw-sidebar{top:67px;height:calc(100vh - 67px);background:#19392c}
+.cw-sidebar{top:67px;height:calc(100vh - 67px);background:#1e3b4a}
 .cw-nav-link{min-height:43px;gap:13px;font-size:12px;padding:0 16px}
 .cw-nav-link svg{width:17px;height:17px}
-.cw-nav-link.active{background:#a4b6a6;color:#153325}
-.cw-nav-link.active svg{color:#153325}
+.cw-nav-link.active{background:#a4b6a6;color:#17303f}
+.cw-nav-link.active svg{color:#17303f}
 .cw-wordmark-type strong{font-size:12px;letter-spacing:.11em;font-weight:750}
 .cw-wordmark-type small{font-size:9px;letter-spacing:.22em}
 .cw-brand-emblem{width:36px;height:36px;flex:0 0 36px;object-fit:contain;border-radius:4px;mix-blend-mode:multiply}
 .cw-global-search{height:36px;max-width:430px}
 .cw-global-search input{font-size:12px}
 .cw-search-submit{display:grid;place-items:center;border:0;background:transparent;color:#375a42;padding:3px;cursor:pointer}
-.cw-avatar{background:#19392c;width:35px;height:35px;font-size:12px}
+.cw-avatar{background:#1e3b4a;width:35px;height:35px;font-size:12px}
 .cw-profile-copy strong{font-size:11px}.cw-profile-copy small{font-size:10px}
 .cw-content{padding:20px 23px 46px}
 .cw-dashboard{gap:13px}
 .cw-dashboard-heading{position:relative;isolation:isolate;overflow:hidden;padding:7px 4px 14px;border-bottom:1px solid #e2e9dd}
 .cw-dashboard-heading::before{content:"";position:absolute;z-index:-1;pointer-events:none;width:280px;height:132px;right:-15px;top:-25px;background:url("/brand/background-pattern.webp") center/contain no-repeat;opacity:.18}
-.cw-dashboard-heading h1{font-size:clamp(21px,2vw,26px);color:#173927}
+.cw-dashboard-heading h1{font-size:clamp(21px,2vw,26px);color:#203848}
 .cw-dashboard-heading p{font-size:12px}.cw-dashboard-date{font-size:11px}
 .cw-summary-grid{gap:11px}.cw-summary-card{min-height:99px;gap:10px;padding:15px 13px}
 .cw-summary-label{font-size:11px}.cw-summary-number{font-size:25px}
-.cw-summary-icon{width:45px;height:45px;flex-basis:45px;color:#173927}
+.cw-summary-icon{width:45px;height:45px;flex-basis:45px;color:#203848}
 .cw-summary-icon svg{width:23px;height:23px}
 .cw-summary-copy small{font-size:10px}.cw-summary-arrow{width:15px;right:9px}
 .cw-panel{padding:14px 13px}.cw-panel-header{margin-bottom:10px}
-.cw-panel-header h2{font-size:15px;color:#173927}.cw-panel-link{font-size:11px;color:#375a42}
+.cw-panel-header h2{font-size:15px;color:#203848}.cw-panel-link{font-size:11px;color:#375a42}
 .cw-table{font-size:11px}.cw-table th{font-size:10px}.cw-table td{height:40px;padding:7px}
 .cw-task-row{min-height:51px}.cw-alert-row{min-height:48px}
 .cw-task-copy strong,.cw-alert-copy strong{font-size:11px}
 .cw-task-copy small,.cw-alert-copy small{font-size:10px}
-.schedule-header h1,.schedule-row td:nth-child(2) strong,.schedule-time{color:#173927!important}
+.schedule-header h1,.schedule-row td:nth-child(2) strong,.schedule-time{color:#203848!important}
 .schedule-header p,.schedule-row td:nth-child(2) span{color:#63766a}
 .schedule-card,.schedule-date-controls{border-color:#dce5da}
 .schedule-date-controls,.schedule-date-controls button{color:#355943}
@@ -78,7 +78,7 @@ h3,.thera-card h3{font-size:14px}
 .pci-appointment-card{border-color:#dce5da}
 .pci-appointment-block>svg{color:#50785b}
 .pci-progress button>span.current,.pci-status-dot.current{background:#355943;border-color:#355943}
-:where(.pci-main,.pj-main) :where(h1,h2,h3){color:#173927}
+:where(.pci-main,.pj-main) :where(h1,h2,h3){color:#203848}
 .cw-mobile-search-toggle{display:none}
 :where(.thera-content,.cw-content,.pci-main,.pj-main) :where(.thera-table-wrap,.schedule-table-wrap,.cw-table-scroll,[role="tablist"]){max-width:100%;overflow-x:auto;-webkit-overflow-scrolling:touch}
 :where(.thera-content,.cw-content) :where(.thera-page-header.split,.schedule-header,.schedule-toolbar){flex-wrap:wrap}
@@ -106,9 +106,9 @@ h3,.thera-card h3{font-size:14px}
 .cw-wordmark-type strong{font-size:11px;letter-spacing:.05em}
 .cw-wordmark-type small{font-size:8px;letter-spacing:.17em}
 .cw-global-search{display:none}
-.cw-global-search.mobile-search-open{display:flex;position:absolute;left:8px;right:8px;top:62px;z-index:82;width:auto;max-width:none;height:45px;border:1px solid #a3bca6;background:#fff;border-radius:9px;box-shadow:0 10px 26px #14302120}
+.cw-global-search.mobile-search-open{display:flex;position:absolute;left:8px;right:8px;top:62px;z-index:82;width:auto;max-width:none;height:45px;border:1px solid #a3bca6;background:#fff;border-radius:9px;box-shadow:0 10px 26px #17303f20}
 .cw-global-search.mobile-search-open input{font-size:16px}
-.cw-mobile-search-toggle{display:grid;place-items:center;width:42px;height:42px;background:transparent;border:0;color:#173927}
+.cw-mobile-search-toggle{display:grid;place-items:center;width:42px;height:42px;background:transparent;border:0;color:#203848}
 .cw-header-actions{gap:1px;padding:0}
 .cw-alert-link,.cw-profile-trigger{min-width:38px;min-height:42px}
 .cw-sidebar{top:58px;height:calc(100dvh - 58px)}.cw-backdrop{inset:58px 0 0}
@@ -139,3 +139,68 @@ h3,.thera-card h3{font-size:14px}
 
 /* Extend the shared typeface to every app shell, including patient-facing pages. */
 .thera-app,.cw-app,.pj-main,.pci-main{font-family:var(--app-font-sans)}
+
+
+/* Production audit: shared controls also apply to portalled drawers. */
+.thera-action {
+  display: inline-flex; align-items: center; justify-content: center; gap: 7px;
+  min-height: 36px; max-width: 100%; padding: 8px 12px;
+  border: 1px solid var(--thera-navy); border-radius: 7px;
+  background: var(--thera-navy); color: #fff;
+  font: 600 12px/1.4 var(--app-font-sans); text-align: center;
+  text-decoration: none; white-space: normal; cursor: pointer;
+}
+.thera-action.secondary { background: #fff; color: var(--thera-navy); border-color: #a8bbb5; }
+.thera-action:hover:not(:disabled) { background: var(--thera-navy-deep); color: #fff; }
+.thera-action.secondary:hover:not(:disabled) { background: #eff4f1; color: var(--thera-navy); }
+.thera-action:disabled { opacity: .55; cursor: not-allowed; }
+.thera-action:focus-visible, [role="dialog"] :is(button,a,input,textarea,select):focus-visible,
+.pj-app :is(button,a,input,textarea,select):focus-visible { outline: 3px solid #2d72b5; outline-offset: 2px; }
+.thera-drawer-close { z-index: 10; display: grid; place-items: center; width: 36px; height: 36px; background: #fff; color: #203848; }
+.thera-card-header, .thera-filter-row { min-width: 0; flex-wrap: wrap; }
+.thera-card, .thera-metric-card { min-width: 0; }
+.thera-page-header h1, .thera-card h2, .thera-card h3 { font-weight: 650; }
+.thera-alert { padding: 12px 14px; border: 1px solid var(--thera-border); border-left: 3px solid var(--thera-sage-dark); border-radius: 8px; background: #f0f5f2; }
+.cw-skip-link { position: fixed; top: 8px; left: 8px; z-index: 100; padding: 10px 14px; border-radius: 6px; color: #fff; background: #203848; transform: translateY(-160%); }
+.cw-skip-link:focus { transform: none; }
+.encounter-context-tab small { display: block; font-size: 10px; line-height: 1.25; overflow-wrap: anywhere; }
+.encounter-context-rail { grid-template-columns: 76px minmax(0,1fr); background: #f6f9f8; }
+.encounter-context-rail:not(.open) { grid-template-columns: 76px; }
+.encounter-context-tab { padding: 7px 3px; }
+.encounter-context-content { scrollbar-gutter: stable; }
+/* Patient text remains compact, but never 7–9px for meaningful content. */
+.pj-app :is(.pj-entry-body p,.pj-provider-bio,.pj-prompts button,.pj-side-detail small,.pj-provider small,.pj-muted,.pj-privacy,.pj-tags span,.pj-emergency span,.pj-entry-date small) { font-size: 12px; line-height: 1.5; }
+.pj-app :is(.pj-entry-body>strong,.pj-side-detail strong,.pj-provider strong,.pj-emergency strong,.pj-outline-button) { font-size: 12px; }
+.pj-app :is(.pj-card h2,.pj-side-card h2) { font-size: 14px; }
+.pj-app :is(.pj-primary-button,.pj-outline-button,.pj-prompts button) { min-height: 40px; }
+@media (max-width:1100px) and (min-width:761px) {
+  .encounter-console { grid-template-columns: repeat(2,minmax(0,1fr)); }
+  .encounter-context-rail.open { position: static; grid-template-columns: 76px minmax(0,1fr); width: auto; margin-left: 0; box-shadow: none; }
+}
+@media (max-width:900px) {
+  .cw-sidebar:not(.mobile-open) { visibility: hidden; }
+  .cw-sidebar.mobile-open { visibility: visible; }
+}
+@media (max-width:760px) {
+  .encounter-context-rail, .encounter-context-rail.open, .encounter-context-rail:not(.open) { grid-template-columns: minmax(0,1fr); }
+  .encounter-context-tabs { flex-wrap: wrap; }
+  .encounter-context-tab { flex: 1 1 64px; }
+  .pj-layout .pj-sidebar, .pci-layout .pj-sidebar { display: block; padding: 8px 12px; border-right: 0; border-bottom: 1px solid var(--pj-border); }
+  .pj-sidebar > :not(.pj-nav) { display: none; }
+  .pj-nav { display: flex; flex-wrap: wrap; margin: 0; gap: 4px; }
+  .pj-nav a { min-height: 44px; padding: 8px 10px; font-size: 12px; }
+  [role="dialog"] :is(input,select,textarea) { font-size: 16px!important; }
+  [role="dialog"] :is(.thera-action,.thera-drawer-close), .thera-action { min-height: 44px; }
+  .thera-work-drawer-body { padding: 14px; }
+  .thera-work-drawer-footer { padding: 12px 14px; }
+  .thera-work-drawer-footer .thera-action { flex: 1 1 auto; }
+}
+@media (prefers-reduced-motion:reduce) {
+  *, *::before, *::after { scroll-behavior: auto!important; animation-duration: .01ms!important; transition-duration: .01ms!important; }
+}
+
+.pj-app :is(.pj-label,.pj-mood small,.pj-info-note,.pj-save-state,.pj-counter,
+.pci-appointment-block span,.pci-progress button small,.pci-section-state,.pci-summary small,
+.pci-review-banner span,.pci-review-item strong,.pci-review-item small) { font-size: 12px; line-height: 1.5; }
+.pj-app :is(input,select,textarea) { font-size: 14px; }
+@media(max-width:760px) { .pj-app :is(input,select,textarea) { font-size: 16px!important; } }

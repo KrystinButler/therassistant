@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { Link } from "wouter";
 
 import { StatusBadge } from "../../components/status-badge";
 import { money, shortDate } from "../../lib/format";
@@ -188,6 +189,7 @@ export function RejectionsPage() {
           <div className="thera-eyebrow">REVENUE CYCLE</div>
           <h1>Rejections & Validation Holds</h1>
           <p>Correct claim-validation holds and clearinghouse rejections in one editable workqueue. Select an error to jump to its field.</p>
+          <Link className="thera-action secondary" href="/claims">Claims & A/R Follow-Up →</Link>
         </div>
       </div>
 

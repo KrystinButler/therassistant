@@ -274,10 +274,10 @@ export function SchedulePage() {
         <button type="button" className="schedule-today" onClick={() => setAnchor(new Date())}>Today</button>
       </div>
       <div className="schedule-toolbar-right">
-        <div className="schedule-view-tabs">{(["day", "week", "month"] as ViewMode[]).map((mode) => <button key={mode} type="button" className={view === mode ? "active" : ""} onClick={() => setView(mode)}>{mode[0].toUpperCase() + mode.slice(1)}</button>)}</div>
+        <div className="schedule-view-tabs">{(["day", "week", "month"] as ViewMode[]).map((mode) => <button key={mode} type="button" aria-pressed={view === mode} className={view === mode ? "active" : ""} onClick={() => setView(mode)}>{mode[0].toUpperCase() + mode.slice(1)}</button>)}</div>
         {clinicianView
           ? <div className={signedInProvider ? "schedule-provider-identity" : "schedule-provider-identity unlinked"}><span>Provider</span><strong>{signedInProvider ? personName(signedInProvider) : "Profile not linked"}</strong></div>
-          : <select className="thera-input schedule-provider-filter" value={providerFilter} onChange={(e) => setProviderFilter(e.target.value)}><option value="">All providers</option>{(data?.providers ?? []).map((provider) => <option key={provider.id} value={provider.id}>{personName(provider)}</option>)}</select>}
+          : <select aria-label="Filter by provider" className="thera-input schedule-provider-filter" value={providerFilter} onChange={(e) => setProviderFilter(e.target.value)}><option value="">All providers</option>{(data?.providers ?? []).map((provider) => <option key={provider.id} value={provider.id}>{personName(provider)}</option>)}</select>}
       </div>
     </section>
 
