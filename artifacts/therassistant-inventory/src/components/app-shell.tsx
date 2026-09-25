@@ -36,7 +36,7 @@ const navigation: NavGroup[] = [
       { label: "Credentialing", href: "/credentialing", icon: ClipboardList },
       { label: "Patient Journal", href: "/journal", icon: BookOpenText },
       { label: "Portal Preview", href: "/portal-preview", icon: ExternalLink },
-      { label: "Patient Portal Login", href: PORTAL_LOGIN, icon: ExternalLink, external: true },
+      { label: "Patient Portal", href: PORTAL_LOGIN, icon: ExternalLink, external: true },
       { label: "Work Center", href: "/work-center", icon: BriefcaseBusiness },
     ],
   },
