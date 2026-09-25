@@ -27,7 +27,9 @@ export function decideInviteAction(status: ExistingAccessStatus) {
   return "invite" as const;
 }
 
-export function isExistingUserError(message: string | null | undefined) {
+export function isExistingUserError(message: string | null | undefined, code?: string | null) {
+  // Auth uses stable machine-readable codes; message matching is a fallback.
+  if (["email_exists", "user_already_exists", "identity_already_exists"].includes(String(code ?? "").trim().toLowerCase())) return true;
   const normalized = String(message ?? "").trim().toLowerCase();
   if (!normalized) return false;
 

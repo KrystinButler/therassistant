@@ -8,7 +8,9 @@ import { WorkDrawer } from "../../components/work-drawer";
 import { updateAppointment } from "./appointment-edit";
 import { PatientReviewDrawer } from "./PatientReviewDrawer";
 import { createAppointment, getScheduleData, type ScheduleAppointment, type ScheduleData } from "./repository";
+import { noteTemplateLabelForService } from "../encounters/service-note-template";
 import "./schedule-page.css";
+import "./schedule-appointment-drawer.css";
 
 type ViewMode = "day" | "week" | "month";
 type FormState = {
@@ -132,6 +134,7 @@ export function SchedulePage() {
   const [baseline, setBaseline] = useState<FormState | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
   const [selectedAppointment, setSelectedAppointment] = useState<ScheduleAppointment | null>(null);
   const [clockNow, setClockNow] = useState(() => Date.now());
 
@@ -207,13 +210,21 @@ export function SchedulePage() {
   }
 
   function openNew() {
-    const next = { ...initialForm };
+    const selectedDate = new Date(anchor);
+    const pad = (value: number) => String(value).padStart(2, "0");
+    const next = {
+      ...initialForm,
+      providerId: clinicianView ? signedInProvider?.id ?? "" : providerFilter,
+      date: `${selectedDate.getFullYear()}-${pad(selectedDate.getMonth() + 1)}-${pad(selectedDate.getDate())}`,
+    };
+    setFormError(null);
     setEditingId(null); setForm(next); setBaseline({ ...next });
   }
 
   function openEdit(appointment: ScheduleAppointment) {
     const next = formFrom(appointment);
     setSelectedAppointment(null);
+    setFormError(null);
     setEditingId(appointment.id); setForm(next); setBaseline({ ...next });
   }
 
@@ -235,13 +246,13 @@ export function SchedulePage() {
 
   async function saveAppointment() {
     if (!form) return;
-    setSaving(true); setError(null);
+    setSaving(true); setFormError(null);
     try {
       if (editingId) await updateAppointment(editingId, form);
       else await createAppointment(form);
       closeEditDrawer();
       await load();
-    } catch (err) { setError(err instanceof Error ? err.message : "Unable to save appointment."); }
+    } catch (err) { setFormError(err instanceof Error ? err.message : "Unable to save appointment."); }
     finally { setSaving(false); }
   }
 
@@ -316,15 +327,57 @@ export function SchedulePage() {
 
     <PatientReviewDrawer appointment={selectedAppointment} open={Boolean(selectedAppointment)} onOpenChange={(open) => { if (!open) closeReview(); }} onEditAppointment={selectedAppointment ? () => openEdit(selectedAppointment) : undefined} />
 
-    {form && data && <WorkDrawer open={Boolean(form)} onOpenChange={(open) => { if (!open) closeEditDrawer(); }} dirty={dirty} title={editingId ? "Edit Appointment" : "New Appointment"} subtitle={editingId ? `${data.appointments.find((row) => row.id === editingId)?.clientName ?? "Patient"} · ${data.appointments.find((row) => row.id === editingId)?.providerName ?? "Provider"}` : "Schedule by patient and provider name"} footer={<div className="thera-filter-row" style={{ justifyContent: "space-between" }}><button type="button" className="thera-action secondary" onClick={closeEditDrawer}>Cancel</button><button type="button" className="thera-action" disabled={saving || !form.clientId || !form.providerId || !form.date || !form.time} onClick={() => void saveAppointment()}>{saving ? "Saving..." : editingId ? "Save Appointment" : "Schedule Appointment"}</button></div>}>
-      <div className="thera-form-grid">
-        <label>Patient<select className="thera-input" value={form.clientId} onChange={(e) => setForm({ ...form, clientId: e.target.value })}><option value="">Select patient</option>{data.clients.map((client) => <option key={client.id} value={client.id}>{personName(client)}</option>)}</select></label>
-        <label>Provider<select className="thera-input" value={form.providerId} onChange={(e) => setForm({ ...form, providerId: e.target.value })}><option value="">Select provider</option>{data.providers.map((provider) => <option key={provider.id} value={provider.id}>{personName(provider)}{provider.credentials ? `, ${provider.credentials}` : ""}</option>)}</select></label>
-        <label>Date<input className="thera-input" type="date" value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} /></label>
-        <label>Time<input className="thera-input" type="time" value={form.time} onChange={(e) => setForm({ ...form, time: e.target.value })} /></label>
-        <label>Duration<select className="thera-input" value={form.durationMinutes} onChange={(e) => setForm({ ...form, durationMinutes: Number(e.target.value) })}><option value={30}>30 minutes</option><option value={45}>45 minutes</option><option value={60}>60 minutes</option><option value={90}>90 minutes</option></select></label>
-        <label>Location<select className="thera-input" value={form.locationType} onChange={(e) => setForm({ ...form, locationType: e.target.value as FormState["locationType"] })}><option value="telehealth">Telehealth</option><option value="in_person">In Person</option><option value="phone">Phone</option><option value="community">Community</option><option value="home">Home</option><option value="school">School</option><option value="other">Other</option></select></label>
-        <label>Service Type<select className="thera-input" value={form.serviceType} onChange={(e) => { const service = SERVICE_TYPES.find((item) => item.name === e.target.value); setForm({ ...form, serviceType: e.target.value, cptCode: service?.code ?? form.cptCode }); }}><option value="">Select service</option>{SERVICE_TYPES.map((service) => <option key={service.name} value={service.name}>{service.name}</option>)}{form.serviceType && !SERVICE_TYPES.some((service) => service.name === form.serviceType) && <option value={form.serviceType}>{form.serviceType}</option>}</select><small>Sets the starting encounter note template. Billing codes are managed outside scheduling.</small></label>
+    {form && data && <WorkDrawer open={Boolean(form)} onOpenChange={(open) => { if (!open) closeEditDrawer(); }} dirty={dirty} title={editingId ? "Edit Appointment" : "New Appointment"} subtitle={editingId ? `${data.appointments.find((row) => row.id === editingId)?.clientName ?? "Patient"} · ${data.appointments.find((row) => row.id === editingId)?.providerName ?? "Provider"}` : "Schedule by patient and provider name"} footer={<div className="thera-filter-row" style={{ justifyContent: "space-between" }}><button type="button" className="thera-action secondary" onClick={() => { if (!dirty || window.confirm("Discard unsaved appointment changes?")) closeEditDrawer(); }}>Cancel</button><button type="button" className="thera-action" disabled={saving || !form.clientId || !form.providerId || !form.date || !form.time} onClick={() => void saveAppointment()}>{saving ? "Saving..." : editingId ? "Save Appointment" : "Schedule Appointment"}</button></div>}>
+      <div className="schedule-appointment-form">
+        {formError && <div className="thera-state error" role="alert">{formError}</div>}
+        <section className="schedule-appointment-section" aria-labelledby="schedule-form-people">
+          <div className="schedule-appointment-section-heading"><span>01</span><div><h3 id="schedule-form-people">Patient & provider</h3><p>Select the patient and clinician for this visit.</p></div></div>
+          <div className="schedule-appointment-fields">
+            <label>Patient <span className="schedule-required">Required</span>
+              <select className="thera-input" aria-label="Patient" required value={form.clientId} onChange={(e) => setForm({ ...form, clientId: e.target.value })}>
+                <option value="">Choose patient</option>{data.clients.map((client) => <option key={client.id} value={client.id}>{personName(client)}</option>)}
+              </select>
+            </label>
+            <label>Rendering provider <span className="schedule-required">Required</span>
+              <select className="thera-input" aria-label="Provider" required disabled={clinicianView} value={form.providerId} onChange={(e) => setForm({ ...form, providerId: e.target.value })}>
+                <option value="">Choose provider</option>{data.providers.map((provider) => <option key={provider.id} value={provider.id}>{personName(provider)}{provider.credentials ? `, ${provider.credentials}` : ""}</option>)}
+              </select>
+              {clinicianView && <small>Linked to your signed-in clinician profile.</small>}
+            </label>
+          </div>
+        </section>
+        <section className="schedule-appointment-section" aria-labelledby="schedule-form-when">
+          <div className="schedule-appointment-section-heading"><span>02</span><div><h3 id="schedule-form-when">Date & time</h3><p>Appointment duration appears on the encounter and supports session-time review.</p></div></div>
+          <div className="schedule-appointment-fields when">
+            <label>Date<input className="thera-input" type="date" required value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} /></label>
+            <label>Start time<input className="thera-input" type="time" required value={form.time} onChange={(e) => setForm({ ...form, time: e.target.value })} /></label>
+            <label>Duration<select className="thera-input" value={form.durationMinutes} onChange={(e) => setForm({ ...form, durationMinutes: Number(e.target.value) })}>
+              <option value={30}>30 min</option><option value={45}>45 min</option><option value={60}>60 min</option><option value={90}>90 min</option>
+            </select></label>
+          </div>
+        </section>
+        <section className="schedule-appointment-section" aria-labelledby="schedule-form-visit">
+          <div className="schedule-appointment-section-heading"><span>03</span><div><h3 id="schedule-form-visit">Visit details</h3><p>Choose the service and location. Procedure coding is managed during charge capture, not here.</p></div></div>
+          <div className="schedule-appointment-fields">
+            <label>Service type
+              <select className="thera-input" value={form.serviceType} onChange={(e) => {
+                const service = SERVICE_TYPES.find((item) => item.name === e.target.value);
+                setForm({ ...form, serviceType: e.target.value, cptCode: service ? service.code : form.cptCode });
+              }}>
+                <option value="">Choose service</option>{SERVICE_TYPES.map((service) => <option value={service.name} key={service.name}>{service.name}</option>)}
+                {form.serviceType && !SERVICE_TYPES.some((service) => service.name === form.serviceType) && <option value={form.serviceType}>{form.serviceType}</option>}
+              </select>
+              <small>Starting note template: <strong>{form.serviceType ? noteTemplateLabelForService(form.serviceType) : "Choose a service"}</strong></small>
+            </label>
+            <label>Visit location
+              <select className="thera-input" value={form.locationType} onChange={(e) => setForm({ ...form, locationType: e.target.value as FormState["locationType"] })}>
+                <option value="telehealth">Telehealth</option><option value="in_person">Office / in person</option><option value="phone">Phone</option>
+                <option value="community">Community</option><option value="home">Home</option><option value="school">School</option><option value="other">Other</option>
+              </select>
+            </label>
+          </div>
+        </section>
+        <div className="schedule-appointment-note"><strong>Clinical documentation stays independent.</strong><span>Scheduling creates the appointment only. Notes, charges and payer rules remain separate.</span></div>
       </div>
     </WorkDrawer>}
   </>;

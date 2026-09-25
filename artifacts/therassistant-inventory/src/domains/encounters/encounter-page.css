@@ -669,3 +669,33 @@
 .encounter-time-adjustment>span{grid-column:1/-1;font-size:.65rem;color:var(--thera-muted)}
 .encounter-time-adjustment>button{grid-column:1/-1;justify-self:start}
 @media(max-width:600px){.encounter-scheduled-time{padding:10px}.encounter-time-adjustment{grid-template-columns:minmax(0,1fr)}}
+
+/* In-context treatment-plan authoring without leaving the clinical note. */
+.encounter-plan-heading{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:7px}
+.encounter-plan-heading-actions{display:flex;align-items:center;flex-wrap:wrap;gap:7px}
+.encounter-plan-heading-actions .thera-action{font-size:.64rem;padding:5px 9px}
+.encounter-treatment-section{display:grid;gap:10px}
+.encounter-treatment-section .encounter-context-source{display:grid;gap:5px}
+.encounter-treatment-section .encounter-context-source strong{font-size:.73rem;line-height:1.5}
+.encounter-treatment-section .encounter-context-source small{font-size:.65rem}
+.encounter-add-plan-goal{justify-self:start}
+.encounter-plan-empty{color:var(--thera-muted);font-size:.72rem}
+.encounter-goal-create-link{display:inline;border:0;background:transparent;color:var(--thera-sage-dark);font:inherit;font-weight:700;text-decoration:underline;cursor:pointer}
+#encounter-treatment-plans{scroll-margin-top:85px}
+
+.encounter-plan-switcher{display:grid;gap:5px;font-size:.68rem;font-weight:700;color:var(--thera-navy)}
+.encounter-plan-switcher .thera-input{max-width:100%;min-width:0;font-size:.74rem}
+
+/* Patient-authored pre-visit responses are visible and importable beside the note editor. */
+.encounter-previsit-import{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:11px;padding:12px 15px;border-top:1px solid var(--thera-border);background:#f4f8f1}
+.encounter-previsit-import-copy{flex:1;min-width:175px}
+.encounter-previsit-import-copy>strong{display:block;margin-top:3px;font-size:.76rem;color:var(--thera-navy)}
+.encounter-previsit-import-copy>p{max-width:570px;margin:3px 0 0;color:var(--thera-muted);font-size:.67rem;line-height:1.45}
+.encounter-previsit-import>button{flex:0 0 auto;font-size:.7rem;min-height:35px}
+.encounter-previsit-preview{margin-top:7px;max-width:560px}
+.encounter-previsit-preview summary{color:var(--thera-sage-dark);font-size:.67rem;font-weight:650;cursor:pointer;text-decoration:underline;text-underline-offset:2px}
+.encounter-previsit-answers{display:grid;gap:8px;max-height:210px;overflow-y:auto;margin-top:9px;padding:10px;background:#fff;border:1px solid var(--thera-border);border-radius:8px}
+.encounter-previsit-answers div{display:grid;gap:2px;min-width:0}
+.encounter-previsit-answers strong{font-size:.64rem;color:var(--thera-sage-dark)}
+.encounter-previsit-answers span{overflow-wrap:anywhere;font-size:.73rem;color:var(--thera-text);white-space:pre-wrap}
+@media(max-width:600px){.encounter-previsit-import{padding:11px}.encounter-previsit-import>button{width:100%;justify-content:center}}

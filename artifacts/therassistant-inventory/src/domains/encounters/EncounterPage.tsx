@@ -13,6 +13,8 @@ import {
 } from "../clinical/repository";
 import { buildPatientReviewCheckIn } from "../scheduling/patient-review-model";
 import { treatmentPlanAlert } from "../treatment-plans/workflow";
+import { getTreatmentPlanWorkspace } from "../treatment-plans/repository";
+import { EncounterTreatmentPlanComposer } from "../treatment-plans/EncounterTreatmentPlanComposer";
 import { ExternalSummaryPanel } from "../clinical/ExternalSummaryPanel";
 import { FastChartingPanel } from "../clinical/FastChartingPanel";
 import { SessionTimelinePanel } from "../clinical/SessionTimelinePanel";
@@ -42,6 +44,7 @@ import {
 } from "./clinical-source-context";
 import { getEncounterDetail, updateEncounter } from "./repository";
 import { scheduledSessionTime } from "./scheduled-session-time";
+import { noteTypeForService } from "./service-note-template";
 import "./encounter-page.css";
 
 type EncounterDetail = Awaited<ReturnType<typeof getEncounterDetail>>;
@@ -55,14 +58,6 @@ const noteLayouts: Record<string, { title: string; sections: string[] }> = {
  medication_management: { title: "Medication Management Note", sections: ["Symptoms", "Adherence", "Side effects", "Mental status", "Risk assessment", "Medication plan"] },
  other: { title: "Clinical Note", sections: ["Reason for visit", "Findings", "Intervention", "Response", "Plan"] },
 };
-function noteTypeForService(value: string): string {
- const service = value.toLowerCase();
- if (service.includes("crisis")) return "crisis";
- if (/medication|psychiatric/.test(service)) return "medication_management";
- if (/assessment|intake|evaluation/.test(service)) return "assessment";
- if (service.includes("case management")) return "case_management";
- return "psychotherapy";
-}
 function sessionMinutes(start: string, end: string): number | null {
  if (!start || !end) return null;
  const [sh, sm] = start.split(":").map(Number);
@@ -98,6 +93,8 @@ export function EncounterPage() {
   const [data, setData] = useState<EncounterDetail | null>(null);
   const [contextTab, setContextTab] = useState<ContextTab>("lastVisit");
   const [contextOpen, setContextOpen] = useState(true);
+  const [planComposer, setPlanComposer] = useState<{ mode: "plan" | "goal"; planId?: string } | null>(null);
+  const [focusedTreatmentPlanId, setFocusedTreatmentPlanId] = useState<string | null>(null);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [showSlashMenu, setShowSlashMenu] = useState(false);
   const [showPhraseMenu, setShowPhraseMenu] = useState(false);
@@ -254,6 +251,19 @@ export function EncounterPage() {
     }
   }
 
+  async function refreshEncounterTreatmentPlans(goalText?: string, focusId?: string) {
+    // Update only the treatment-plan slice. Reloading the whole encounter would
+    // overwrite unsaved clinical documentation and may overfetch journal rows.
+    const plans = await getTreatmentPlanWorkspace(String(data?.encounter.client_id ?? ""));
+    setData((current) => current ? {
+      ...current,
+      treatmentPlans: plans,
+      treatmentPlanGoals: plans.flatMap((plan) => plan.goals),
+    } : current);
+    if (goalText && !signed) setGoalAddressed(goalText);
+    if (focusId) setFocusedTreatmentPlanId(focusId);
+  }
+
   async function saveNote() {
     await withSave(
       () => saveClinicalNote(encounterId, { noteType, noteText, goalAddressed, structuredSelections, generatedNarrative, carryForwardContext }),
@@ -398,9 +408,9 @@ export function EncounterPage() {
   const encounter = data.encounter;
   const serviceDate = String(encounter.started_at ?? "").slice(0, 10);
   const note = data.notes[0];
-  const currentTreatmentPlan = data.treatmentPlans.find((plan) =>
-    ["active", "signed"].includes(String(plan.status ?? "")),
-  ) ?? data.treatmentPlans[0] ?? null;
+  const currentTreatmentPlan = data.treatmentPlans.find((plan) => String(plan.id) === focusedTreatmentPlanId)
+    ?? data.treatmentPlans.find((plan) => ["active", "signed"].includes(String(plan.status ?? "")))
+    ?? data.treatmentPlans[0] ?? null;
   const activeGoals = currentTreatmentPlan
     ? data.treatmentPlanGoals.filter((goal) => goal.treatment_plan_id === currentTreatmentPlan.id)
     : [];
@@ -417,11 +427,20 @@ export function EncounterPage() {
       )
     : null;
 
-  const currentCheckin = data.checkins.find(
-    (row) => String(row.appointment_id ?? "") === String(encounter.appointment_id ?? ""),
-  ) ?? null;
+  // A check-in must belong to this exact scheduled visit. Never import a
+  // different visit’s answers into an unscheduled encounter.
+  const currentCheckin = encounter.appointment_id
+    ? data.checkins.find((row) => String(row.appointment_id ?? "") === String(encounter.appointment_id)) ?? null
+    : null;
   const preVisit = buildPatientReviewCheckIn(currentCheckin);
   const preVisitInsert = buildPreVisitNoteInsert(preVisit);
+  const preVisitAlreadyImported = Boolean(preVisitInsert) && (noteText.includes(preVisitInsert) || (
+    Array.isArray(carryForwardContext.source_imports) && carryForwardContext.source_imports.some((item) =>
+      Boolean(item && typeof item === "object" && !Array.isArray(item) &&
+        (item as Record<string, unknown>).source_type === "pre_visit_checkin" &&
+        String((item as Record<string, unknown>).source_id ?? "") === String(currentCheckin?.id ?? ""))
+    )
+  ));
   const sharedJournal = latestSharedJournalEntry(data.journalEntries);
   const journalInsert = buildJournalNoteInsert(sharedJournal);
   const duration = appointmentDuration(data.appointment);
@@ -550,7 +569,7 @@ export function EncounterPage() {
   }
 
   function importPreVisit() {
-    if (signed || !preVisitInsert) return;
+    if (signed || !preVisitInsert || preVisitAlreadyImported) return;
     setNoteText((current) => appendClinicalSource(current, preVisitInsert));
     setCarryForwardContext((current) =>
       withClinicalSourceImport(
@@ -561,7 +580,8 @@ export function EncounterPage() {
     if (!goalAddressed.trim() && preVisit.treatmentGoal) {
       setGoalAddressed(preVisit.treatmentGoal);
     }
-    setMessage("Patient-reported check-in content was inserted with source provenance for provider review. It remains editable until signature.");
+    setMessage("Patient-reported check-in answers were inserted with source provenance. Review them before signing.");
+    requestAnimationFrame(() => { noteRef.current?.scrollIntoView({ behavior: "smooth", block: "center" }); noteRef.current?.focus({ preventScroll: true }); });
   }
 
   function importJournal() {
@@ -666,7 +686,7 @@ export function EncounterPage() {
               {!signed && <small>Scheduled duration is not evidence of actual psychotherapy time. Confirm or correct it before billing; the clinical note may still be signed.</small>}
             </div>}
             <label><div className="thera-field-label">Note Type</div><select className="thera-input" value={noteType} disabled={signed} onChange={(event) => changeNoteType(event.target.value)}><option value="psychotherapy">Psychotherapy</option><option value="assessment">Assessment</option><option value="intake">Intake</option><option value="crisis">Crisis</option><option value="case_management">Case Management</option><option value="medication_management">Medication Management</option><option value="other">Other</option></select></label>
-            <label><div className="thera-field-label">Treatment Plan — Goal / Objective</div><select className="thera-input" value={goalAddressed} disabled={signed} onChange={(event) => setGoalAddressed(event.target.value)}><option value="">Select a goal</option>{activeGoals.map((goal) => { const label = displayText(goal, ["goal_text", "description", "goal", "title"], "Goal"); return <option key={goal.id} value={label}>{label}</option>; })}{goalAddressed && !activeGoals.some((goal) => displayText(goal, ["goal_text", "description", "goal", "title"], "Goal") === goalAddressed) && <option value={goalAddressed}>{goalAddressed} (previous selection)</option>}</select>{activeGoals.length === 0 && <small>No linked treatment-plan goals. Add a goal in the patient's treatment plan.</small>}</label>
+            <label><div className="thera-field-label">Treatment Plan — Goal / Objective</div><select className="thera-input" value={goalAddressed} disabled={signed} onChange={(event) => setGoalAddressed(event.target.value)}><option value="">Select a goal</option>{activeGoals.map((goal) => { const label = displayText(goal, ["goal_text", "description", "goal", "title"], "Goal"); return <option key={goal.id} value={label}>{label}</option>; })}{goalAddressed && !activeGoals.some((goal) => displayText(goal, ["goal_text", "description", "goal", "title"], "Goal") === goalAddressed) && <option value={goalAddressed}>{goalAddressed} (previous selection)</option>}</select>{activeGoals.length === 0 && <small>No linked treatment-plan goals. <button type="button" className="encounter-goal-create-link" onClick={() => { setContextTab("treatment"); setContextOpen(true); setPlanComposer(currentTreatmentPlan ? { mode: "goal", planId: String(currentTreatmentPlan.id) } : { mode: "plan" }); }}>Create a treatment plan or goal →</button></small>}</label>
           </div>
           <SessionTimelinePanel signed={signed} selections={structuredSelections} onSelectionsChange={setStructuredSelections} onInsertPhrase={injectIntoNote} />
           <div className="encounter-editor-surface">
@@ -675,6 +695,27 @@ export function EncounterPage() {
               <span className={signed ? "encounter-editor-status signed" : noteHasUnsavedText ? "encounter-editor-status unsaved" : "encounter-editor-status"}>
                 {signed ? "Signed · Read only" : noteHasUnsavedText ? "Unsaved changes" : "Draft"}
               </span>
+            </div>
+            <div className="encounter-previsit-import" aria-label="Patient pre-visit check-in">
+              <div className="encounter-previsit-import-copy">
+                <span className="thera-eyebrow">PATIENT-REPORTED · PRE-VISIT CHECK-IN</span>
+                <strong>{preVisit.hasSubmittedPreVisit ? "Submitted patient answers" : "No check-in submitted for this visit"}</strong>
+                <p>{preVisit.hasSubmittedPreVisit ? "Import the patient's own responses with source attribution. Review and edit before signing." : "A submitted check-in linked to this appointment will appear here."}</p>
+                {preVisit.hasSubmittedPreVisit && <details className="encounter-previsit-preview"><summary>Preview patient answers</summary>
+                  <div className="encounter-previsit-answers">
+                    {preVisit.focus && <div><strong>Focus</strong><span>{preVisit.focus}</span></div>}
+                    {preVisit.mood && <div><strong>Since last visit</strong><span>{preVisit.mood}</span></div>}
+                    {preVisit.changes.length > 0 && <div><strong>Important changes</strong><span>{preVisit.changes.join("; ")}</span></div>}
+                    {preVisit.safetyText && <div><strong>Patient's safety response</strong><span>{preVisit.safetyText}</span></div>}
+                    {preVisit.treatmentGoal && <div><strong>Patient's goal</strong><span>{preVisit.treatmentGoal}</span></div>}
+                    {preVisit.additionalContext && <div><strong>Additional context</strong><span>{preVisit.additionalContext}</span></div>}
+                  </div>
+                </details>}
+              </div>
+              <button type="button" className={preVisitAlreadyImported ? "thera-action secondary" : "thera-action"}
+                disabled={signed || !preVisitInsert || preVisitAlreadyImported} onClick={importPreVisit}>
+                {preVisitAlreadyImported ? "Answers imported" : "Import Answers into Note"}
+              </button>
             </div>
             <div className="encounter-editor-toolbar" role="toolbar" aria-label="Progress note writing tools">
               <div className="encounter-section-tools">
@@ -695,14 +736,14 @@ export function EncounterPage() {
             </div>
             <div className="encounter-editor-wrap">
               <textarea id="encounter-progress-note-editor" ref={noteRef} className="thera-input encounter-note-editor" value={noteText} disabled={signed} aria-describedby="encounter-progress-note-hint" onChange={(event) => handleNoteChange(event.target.value, event.target.selectionStart)} onKeyDown={(event) => { if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "s") { event.preventDefault(); if (!saving && !signed && noteText.trim()) void saveNote(); } }} placeholder={`Document the ${noteLayout.title.toLowerCase()} here. Use Insert section to structure your note.`} spellCheck />
-              {showSlashMenu && !signed && <div className="encounter-slash-menu"><div>QUICK INSERTS</div><button type="button" onClick={() => injectQuickText("Risk Assessment: Client denies suicidal or homicidal ideation. No acute safety concerns reported.")}>Risk: Standard Negative</button><button type="button" onClick={() => injectQuickText("Mental Status: Alert and oriented x4. Appearance and behavior appropriate. Speech normal. Thought process linear and goal directed.")}>MSE: Within Normal Limits</button><button type="button" onClick={() => injectQuickText("Intervention: Supportive psychotherapy, reflective listening, validation, and collaborative problem solving were utilized.")}>Intervention: Supportive</button></div>}
+              {showSlashMenu && !signed && <div className="encounter-slash-menu"><div>QUICK INSERTS</div><button type="button" onClick={() => injectQuickText("Risk Assessment (clinician-confirmed):\nSuicidal ideation: [assess and document]\nHomicidal ideation: [assess and document]\nRelevant risks and protective factors: [document findings]\nSafety plan or follow-up, if indicated: [document]")}>Risk: Assessment Template</button><button type="button" onClick={() => injectQuickText("Mental Status Examination (clinician-confirmed):\nAppearance / behavior: [observed]\nOrientation: [assessed]\nSpeech: [observed]\nThought process and content: [assessed]\nMood and affect: [assessed]\nOther relevant findings: [document]")}>MSE: Findings Template</button><button type="button" onClick={() => injectQuickText("Intervention: Supportive psychotherapy, reflective listening, validation, and collaborative problem solving were utilized.")}>Intervention: Supportive</button></div>}
             </div>
             <div className="encounter-editor-footer">
               <div id="encounter-progress-note-hint" className="encounter-editor-meta"><strong>{noteWordCount} words</strong><span aria-hidden="true">·</span><span>Type / for quick inserts</span><span aria-hidden="true">·</span><span>{signed ? "Signed note is locked" : "Save to keep your draft"}</span></div>
               {!signed && <button type="button" className="thera-action encounter-editor-save" disabled={saving || !noteText.trim()} onClick={() => void saveNote()}>{saving ? "Saving..." : "Save Note"}</button>}
             </div>
           </div>
-          <FastChartingPanel signed={signed} phrases={smartPhrases} selections={structuredSelections} generatedNarrative={generatedNarrative} priorContext={priorStructuredContext} noteSimilarity={noteSimilarity} onSelectionsChange={setStructuredSelections} onInsertNarrative={() => injectIntoNote("\n" + generatedNarrative + "\n")} onInsertPhrase={injectIntoNote} onCarryForward={carryForwardStructured} onCreatePhrase={addSmartPhrase} />
+          <FastChartingPanel signed={signed} noteType={noteType} phrases={smartPhrases} selections={structuredSelections} generatedNarrative={generatedNarrative} priorContext={priorStructuredContext} noteSimilarity={noteSimilarity} onSelectionsChange={setStructuredSelections} onInsertNarrative={() => injectIntoNote("\n" + generatedNarrative + "\n")} onInsertPhrase={injectIntoNote} onCarryForward={carryForwardStructured} onCreatePhrase={addSmartPhrase} />
           
           {signed && data.signatures[0] && <div className="thera-alert" style={{ marginTop: 12 }}>Signed {dateTime(String(data.signatures[0].signed_at ?? ""))} by {String(data.signatures[0].signature_text ?? "provider")}</div>}
         </section>
@@ -715,8 +756,24 @@ export function EncounterPage() {
             <button type="button" className="encounter-context-collapse" onClick={() => setContextOpen((open) => !open)} aria-label={contextOpen ? "Collapse clinical context" : "Expand clinical context"}>{contextOpen ? "›" : "‹"}</button>
           </div>
           {contextOpen && <div className="encounter-context-content">
-            {contextTab === "lastVisit" && <><div className="encounter-context-heading"><div><span>LAST VISIT</span><h3>Prior Session Context</h3></div></div><div className="encounter-context-section"><Field label="Current visit focus" value={visitFocus} /><Field label="Goal / objective" value={goalAddressed || activeGoalText || "—"} />{preVisit.hasSubmittedPreVisit && <div className="encounter-context-source"><strong>Pre-Visit Check-In</strong>{preVisit.focus && <p>{preVisit.focus}</p>}{preVisit.mood && <small>Since last visit: {preVisit.mood}</small>}{!signed && preVisitInsert && <button type="button" className="thera-action secondary" onClick={importPreVisit}>Cite Check-In</button>}</div>}<div className="encounter-context-source"><strong>Previous clinical note</strong><p>{data.notes.length > 1 ? String(data.notes[1]?.note_text ?? "No prior note text available.") : "No earlier signed note is available in this encounter record."}</p></div></div></>}
-            {contextTab === "treatment" && <><div className="encounter-context-heading"><div><span>GOLDEN THREAD</span><h3>Treatment Plan</h3></div>{treatmentPlanReadiness && <StatusBadge value={treatmentPlanReadiness.code} />}</div><div className="encounter-context-section">{activeGoals.length ? activeGoals.map((goal) => { const goalText = displayText(goal, ["goal_text", "description", "goal", "title"], "Goal"); return <div className="encounter-context-goal" key={goal.id}><div><strong>{goalText}</strong><small>{String(goal.goal_status ?? goal.status ?? "active").replaceAll("_", " ")}</small></div>{!signed && <button type="button" onClick={() => injectIntoNote(`\nProgress regarding treatment goal: ${goalText}\nIntervention: \nPatient response/progress: \n`)}>Cite →</button>}</div>; }) : <div className="thera-empty">No active treatment-plan goals are linked.</div>}</div></>}
+            {contextTab === "lastVisit" && <><div className="encounter-context-heading"><div><span>LAST VISIT</span><h3>Prior Session Context</h3></div></div><div className="encounter-context-section"><Field label="Current visit focus" value={visitFocus} /><Field label="Goal / objective" value={goalAddressed || activeGoalText || "—"} />{preVisit.hasSubmittedPreVisit && <div className="encounter-context-source"><strong>Pre-Visit Check-In</strong>{preVisit.focus && <p>{preVisit.focus}</p>}{preVisit.mood && <small>Since last visit: {preVisit.mood}</small>}{!signed && preVisitInsert && <button type="button" className="thera-action secondary" onClick={importPreVisit} disabled={preVisitAlreadyImported}>{preVisitAlreadyImported ? "Imported" : "Cite Check-In"}</button>}</div>}<div className="encounter-context-source"><strong>Previous clinical note</strong><p>{data.notes.length > 1 ? String(data.notes[1]?.note_text ?? "No prior note text available.") : "No earlier signed note is available in this encounter record."}</p></div></div></>}
+            {contextTab === "treatment" && <><div className="encounter-context-heading encounter-plan-heading" id="encounter-treatment-plans"><div><span>GOLDEN THREAD</span><h3>Treatment Plan</h3></div><div className="encounter-plan-heading-actions">{treatmentPlanReadiness && <StatusBadge value={treatmentPlanReadiness.code} />}<button type="button" className="thera-action secondary" aria-label="Create treatment plan for this patient" onClick={() => setPlanComposer({ mode: "plan" })}>+ New Plan</button></div></div><div className="encounter-context-section encounter-treatment-section">
+                {data.treatmentPlans.length > 1 && <label className="encounter-plan-switcher">Select plan<select className="thera-input" value={String(currentTreatmentPlan?.id ?? "")} onChange={(event) => setFocusedTreatmentPlanId(event.target.value)}>{data.treatmentPlans.map((plan) => <option value={String(plan.id)} key={String(plan.id)}>{String(plan.plan_text ?? "Treatment Plan").slice(0, 58)} · {String(plan.status ?? "draft")}</option>)}</select></label>}
+                {currentTreatmentPlan ? <div className="encounter-context-source">
+                  <strong>{String(currentTreatmentPlan.plan_text ?? "Treatment plan")}</strong>
+                  <small>Effective {shortDate(String(currentTreatmentPlan.effective_date ?? ""))} · {String(currentTreatmentPlan.status ?? "draft").replaceAll("_", " ")}</small>
+                  {Boolean(currentTreatmentPlan.review_due_date) && <small>Review due {shortDate(String(currentTreatmentPlan.review_due_date))}</small>}
+                </div> : <div className="thera-empty">No treatment plan on file. Create a draft here without leaving the encounter.</div>}
+                {activeGoals.map((goal) => { const goalText = displayText(goal, ["goal_text", "description", "goal", "title"], "Goal"); return <div className="encounter-context-goal" key={goal.id}><div><strong>{goalText}</strong><small>{String(goal.goal_status ?? goal.status ?? "active").replaceAll("_", " ")}</small></div>{!signed && <button type="button" onClick={() => injectIntoNote(`\nProgress regarding treatment goal: ${goalText}\nIntervention: \nPatient response/progress: \n`)}>Cite →</button>}</div>; })}
+                {!activeGoals.length && currentTreatmentPlan && <p className="encounter-plan-empty">No goals recorded for the current plan.</p>}
+                {currentTreatmentPlan && <button type="button" className="thera-action secondary encounter-add-plan-goal" onClick={() => setPlanComposer({ mode: "goal", planId: String(currentTreatmentPlan.id) })}>+ Add Goal / Objective</button>}
+                {planComposer && <EncounterTreatmentPlanComposer key={planComposer.mode + (planComposer.planId ?? "")}
+                  mode={planComposer.mode} existingPlanId={planComposer.planId}
+                  patientId={String(encounter.client_id)} defaultProviderId={String(encounter.provider_id ?? "")} serviceDate={serviceDate}
+                  onCancel={() => setPlanComposer(null)}
+                  onPlanPersisted={async (planId) => { await refreshEncounterTreatmentPlans(undefined, planId); }}
+                  onSaved={async (planId, goalText) => { await refreshEncounterTreatmentPlans(goalText, planId); setPlanComposer(null); }} />}
+              </div></>}
             {contextTab === "journal" && <><div className="encounter-context-heading"><div><span>PATIENT CONTEXT</span><h3>Journal</h3></div></div><div className="encounter-context-section">{sharedJournal ? <div className="encounter-context-source"><Field label="Entry Date" value={shortDate(String(sharedJournal.entry_date ?? sharedJournal.created_at ?? ""))} /><p>{String(sharedJournal.entry_text ?? "")}</p>{!signed && journalInsert && <button type="button" className="thera-action secondary" onClick={importJournal}>Cite Journal</button>}</div> : <div className="thera-empty">No journal entry is shared with the provider.</div>}</div></>}
             {contextTab === "documents" && <><div className="encounter-context-heading"><div><span>CHART CONTEXT</span><h3>Documents</h3></div></div><div className="encounter-context-section">{data.documents.length ? data.documents.slice(0,12).map((document) => <div className="encounter-document-row" key={document.id}><div><strong>{String(document.file_name ?? "Document")}</strong><small>{String(document.document_type ?? "other").replaceAll("_", " ")} · {shortDate(String(document.created_at ?? ""))}</small></div><StatusBadge value={String(document.document_status ?? "uploaded")} /></div>) : <div className="thera-empty">No patient documents are indexed.</div>}<Link href={`/clients/${String(encounter.client_id)}`} className="thera-action secondary">Open Patient Documents</Link></div></>}
           </div>}

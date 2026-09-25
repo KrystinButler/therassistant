@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation } from "wouter";
 
 import { WorkDrawer } from "../../components/work-drawer";
@@ -8,16 +8,13 @@ import { Icd10SearchInput } from "../coding/Icd10SearchInput";
 import { deriveClaimValidationIssues, getClaimRejectionIssue, type ClaimCorrectionTarget } from "./claim-error-guidance";
 import {
   getClaimWorkReferenceData,
-  saveClaimIdentityFields,
   type ClaimIdentityValues,
 } from "./claim-work-identity";
 import type { ClaimWorkRecord } from "./claim-work-drawer";
-import { createBatch } from "./repository";
+import { createBatch, validateClaim } from "./repository";
 import {
   getClaimWorkData,
-  saveClaimDiagnosisCorrections,
-  saveClaimLineCorrections,
-  saveClaimWorkFields,
+  saveAtomicRejectionCorrections,
   type ClaimDiagnosisCorrection,
   type ClaimLineCorrection,
   type ClaimWorkData,
@@ -107,6 +104,8 @@ export function RejectionWorkDrawer({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [resubmissionPrepared, setResubmissionPrepared] = useState(false);
+  const pendingCorrectionRef = useRef<{ fingerprint: string; id: string } | null>(null);
 
   const dirty = useMemo(
     () => JSON.stringify(form) !== JSON.stringify(baseline)
@@ -134,6 +133,8 @@ export function RejectionWorkDrawer({
     setLoading(true);
     setError(null);
     setNotice(null);
+    setResubmissionPrepared(false);
+    pendingCorrectionRef.current = null;
 
     void Promise.all([getClaimWorkData(claim.id), getClaimWorkReferenceData()])
       .then(([work, referenceData]) => {
@@ -173,16 +174,22 @@ export function RejectionWorkDrawer({
       if (diagnoses.some((row) => row.id.startsWith("new:") && !row.diagnosis_code.trim())) {
         throw new Error("Select an ICD-10-CM diagnosis before saving.");
       }
-      await saveClaimIdentityFields(activeClaim.id, form);
-      await saveClaimLineCorrections(activeClaim.id, lines);
-      await saveClaimDiagnosisCorrections(activeClaim.id, diagnoses);
-
-      const result = await saveClaimWorkFields(activeClaim.id, form, revalidate || resubmit);
+      // Reuse the request ID if a network failure hides the result of a committed save.
+      const fingerprint = JSON.stringify({ claim: activeClaim.id, form, lines, diagnoses, revalidate: revalidate || resubmit });
+      const pending = pendingCorrectionRef.current;
+      const requestId = pending?.fingerprint === fingerprint ? pending.id : crypto.randomUUID();
+      pendingCorrectionRef.current = { fingerprint, id: requestId };
+      await saveAtomicRejectionCorrections(activeClaim.id, requestId, form, lines, diagnoses, revalidate || resubmit);
+      const result = revalidate || resubmit ? await validateClaim(activeClaim.id) : { kind: "success" as const };
       const blocked = "ok" in result && result.ok === false && Boolean(result.blocked);
-      if ("ok" in result && !result.ok && !result.blocked) throw new Error(result.message);
+      if ("ok" in result && !result.ok && !result.blocked) {
+        setError("Corrections were saved, but revalidation could not finish: " + result.message + " Retry to revalidate.");
+        return;
+      }
 
       const work = await getClaimWorkData(activeClaim.id);
       applyWork(work);
+      pendingCorrectionRef.current = null;
 
       if (blocked) {
         setNotice("The correction was saved, but revalidation still found items that require attention: " + ("details" in result && Array.isArray(result.details) ? result.details.join(" ") : ""));
@@ -197,6 +204,7 @@ export function RejectionWorkDrawer({
         if (!batch.ok) {
           throw new Error(batch.message || "Unable to create corrected-claim submission batch.");
         }
+        setResubmissionPrepared(true);
         setNotice("The rejection cleared. The corrected claim is ready in a new 837P batch for resubmission.");
       } else if (revalidate) {
         setNotice("The rejection correction was saved and the claim passed revalidation.");
@@ -210,6 +218,11 @@ export function RejectionWorkDrawer({
     }
   }
 
+  function navigateSafely(path: string) {
+    if (dirty && !window.confirm("Discard unsaved claim corrections and leave this claim?")) return;
+    navigate(path);
+  }
+
   function move(direction: "previous" | "next") {
     if (dirty && !window.confirm("Discard unsaved changes and move to another rejected claim?")) return;
     direction === "previous" ? onPrevious?.() : onNext?.();
@@ -217,11 +230,11 @@ export function RejectionWorkDrawer({
 
   function focusTarget(target: ClaimCorrectionTarget, field?: string, lineNumber?: number) {
     if (target === "patient" && form.client_id) {
-      navigate(`/clients/${form.client_id}?tab=demographics`);
+      navigateSafely(`/clients/${form.client_id}?tab=demographics`);
       return;
     }
     if (target === "subscriber") {
-      if (form.client_id) navigate(`/clients/${form.client_id}?tab=coverage`);
+      if (form.client_id) navigateSafely(`/clients/${form.client_id}?tab=coverage`);
       return;
     }
 
@@ -301,7 +314,7 @@ export function RejectionWorkDrawer({
         <button
           type="button"
           className="thera-action"
-          disabled={saving}
+          disabled={saving || resubmissionPrepared}
           onClick={() => void save(true, true)}
         >
           Prepare Resubmission
@@ -323,7 +336,7 @@ export function RejectionWorkDrawer({
       onNext={() => move("next")}
       previousDisabled={previousDisabled}
       nextDisabled={nextDisabled}
-      openFullRecord={() => navigate(`/claims/${activeClaim.id}`)}
+      openFullRecord={() => navigateSafely(`/claims/${activeClaim.id}`)}
       openFullRecordLabel="Open Full Claim 360"
       footer={footer}
     >
@@ -370,7 +383,8 @@ export function RejectionWorkDrawer({
                     </>
                   ) : (
                     <div className="thera-table-subtext" style={{ marginTop: 8 }}>
-                      No field mapping is available for this clearinghouse message yet. Open Claim 360 to review the raw response.
+                      No exact field mapping is available for this clearinghouse message. Review the raw acknowledgement before editing.
+                      <button type="button" className="thera-action secondary" onClick={() => navigateSafely(`/claims/${activeClaim.id}`)}>Open raw response in Claim 360</button>
                     </div>
                   )}
                 </div>

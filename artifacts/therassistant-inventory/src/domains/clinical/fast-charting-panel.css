@@ -32,3 +32,23 @@
 @media(max-width:930px){.fast-chart-findings-grid{grid-template-columns:minmax(0,1fr)}.fast-chart-evaluation{grid-column:auto}}
 @media(max-width:540px){.fast-chart-findings{padding:12px}.fast-chart-fieldset{padding:10px}.fast-chart-evaluation{grid-template-columns:minmax(0,1fr)}.fast-chart-choice{font-size:.69rem;padding:6px 9px}}
 @media(prefers-reduced-motion:reduce){.fast-chart-choice{transition:none}}
+
+/* Optional specialty details replace a redundant second note-template guidance panel. */
+.fast-chart-tools{display:grid;gap:12px;margin-top:12px}
+.fast-chart-advanced{min-width:0;overflow:hidden;border:1px solid var(--thera-border);border-radius:9px;background:#fff}
+.fast-chart-advanced-toggle{display:flex;align-items:center;justify-content:space-between;gap:13px;width:100%;min-width:0;padding:12px 15px;border:0;background:var(--thera-cream);font:inherit;text-align:left;cursor:pointer}
+.fast-chart-advanced-toggle>span:first-child{display:grid;gap:4px;min-width:0}
+.fast-chart-advanced-toggle strong{font-size:.76rem;font-weight:750;color:var(--thera-navy)}
+.fast-chart-advanced-toggle small{font-size:.67rem;color:var(--thera-muted);line-height:1.45}
+.fast-chart-advanced-toggle:focus-visible{outline:3px solid var(--thera-sage);outline-offset:-3px}
+.fast-chart-advanced-state{display:inline-flex;align-items:center;gap:9px;flex:0 0 auto;color:var(--thera-sage-dark);font-size:.68rem;font-weight:700}
+.fast-chart-advanced-state span{font-size:.84rem}
+.fast-chart-advanced-content{display:grid;gap:15px;padding:14px 15px;border-top:1px solid var(--thera-border)}
+.fast-chart-specialty-field{display:grid;gap:7px;min-width:0;color:var(--thera-navy);font-size:.72rem;font-weight:700}
+.fast-chart-specialty-field .thera-input{width:100%;min-width:0;max-width:360px;font-size:.75rem}
+.fast-chart-specialty-field small{max-width:540px;color:var(--thera-muted);font-size:.67rem;font-weight:450;line-height:1.45}
+.fast-chart-tags{display:grid;gap:10px;min-width:0;margin:0;padding:12px;border:1px solid var(--thera-border);border-radius:8px;background:#fbfdfa}
+.fast-chart-tags legend{padding:0 5px;color:var(--thera-navy);font-size:.7rem;font-weight:750}
+.fast-chart-tags legend span{color:var(--thera-muted);font-weight:450}
+.fast-chart-tags p{margin:0;color:var(--thera-muted);font-size:.67rem;line-height:1.5}
+@media(max-width:650px){.fast-chart-advanced-toggle{align-items:start;flex-direction:column;padding:11px}.fast-chart-advanced-state{width:100%;justify-content:space-between}.fast-chart-advanced-content{padding:11px}}

@@ -118,7 +118,10 @@ test("Providers opens an add-provider drawer without saving", async ({ page }) =
   await page.getByLabel("First Name").fill("E2E");
   await page.getByLabel("Last Name").fill("Provider");
   await expect(page.getByRole("button", { name: "Save Provider" })).toBeEnabled();
+  // The redesigned form requires confirmation before discarding dirty inputs.
+  page.once("dialog", (dialog) => dialog.accept());
   await page.getByRole("button", { name: "Cancel" }).click();
+  await expect(page.getByRole("heading", { name: "Add Provider" })).toBeHidden();
   await expectWorkspace(page, "Providers");
 });
 

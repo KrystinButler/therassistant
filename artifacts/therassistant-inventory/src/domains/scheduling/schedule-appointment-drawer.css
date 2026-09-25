@@ -1,0 +1,18 @@
+/* Appointment drawer uses distinct steps, compact Inter controls and a mobile-friendly field grid. */
+.schedule-appointment-form{display:grid;gap:16px;min-width:0}
+.schedule-appointment-section{min-width:0;padding:17px;border:1px solid var(--thera-border);border-radius:11px;background:#fff;box-shadow:0 2px 10px rgba(29,57,40,.035)}
+.schedule-appointment-section-heading{display:flex;align-items:start;gap:11px;margin-bottom:17px;padding-bottom:13px;border-bottom:1px solid #e0e9e1}
+.schedule-appointment-section-heading>span{display:grid;place-items:center;width:28px;height:28px;flex:0 0 auto;border-radius:7px;background:#e7f0e7;color:var(--thera-sage-dark);font-size:.72rem;font-weight:800}
+.schedule-appointment-section-heading h3{margin:0;color:var(--thera-navy);font-size:.9rem;font-weight:750}
+.schedule-appointment-section-heading p{margin:3px 0 0;font-size:.72rem;color:var(--thera-muted);line-height:1.4}
+.schedule-appointment-fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:15px}
+.schedule-appointment-fields.when{grid-template-columns:1.15fr 1fr .8fr}
+.schedule-appointment-fields label{display:grid;align-content:start;gap:6px;min-width:0;color:var(--thera-navy);font-size:.73rem;font-weight:700}
+.schedule-appointment-fields .thera-input{width:100%;min-width:0;min-height:40px;font-size:.77rem}
+.schedule-appointment-fields label small{display:block;font-size:.67rem;font-weight:450;line-height:1.45;color:var(--thera-muted)}
+.schedule-appointment-fields label small strong{font-weight:750;color:var(--thera-sage-dark)}
+.schedule-required{display:inline-block;justify-self:start;margin-left:4px;color:var(--thera-muted);font-size:.62rem;font-weight:500}
+.schedule-appointment-note{display:grid;gap:3px;padding:12px 15px;border-left:3px solid var(--thera-sage);border-radius:7px;background:#f1f7f1}
+.schedule-appointment-note strong{color:var(--thera-navy);font-size:.75rem}.schedule-appointment-note span{color:var(--thera-muted);font-size:.69rem;line-height:1.45}
+@media(max-width:750px){.schedule-appointment-form{gap:11px}.schedule-appointment-section{padding:13px}.schedule-appointment-fields.when{grid-template-columns:repeat(2,minmax(0,1fr))}.schedule-appointment-fields.when label:last-child{grid-column:1/-1}}
+@media(max-width:540px){.schedule-appointment-fields,.schedule-appointment-fields.when{grid-template-columns:minmax(0,1fr)}.schedule-appointment-fields.when label:last-child{grid-column:auto}}
