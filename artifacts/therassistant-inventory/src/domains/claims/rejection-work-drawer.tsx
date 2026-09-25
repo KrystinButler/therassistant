@@ -210,6 +210,11 @@ export function RejectionWorkDrawer({
     }
   }
 
+  function navigateSafely(path: string) {
+    if (dirty && !window.confirm("Discard unsaved claim corrections and leave this claim?")) return;
+    navigate(path);
+  }
+
   function move(direction: "previous" | "next") {
     if (dirty && !window.confirm("Discard unsaved changes and move to another rejected claim?")) return;
     direction === "previous" ? onPrevious?.() : onNext?.();
@@ -217,11 +222,11 @@ export function RejectionWorkDrawer({
 
   function focusTarget(target: ClaimCorrectionTarget, field?: string, lineNumber?: number) {
     if (target === "patient" && form.client_id) {
-      navigate(`/clients/${form.client_id}?tab=demographics`);
+      navigateSafely(`/clients/${form.client_id}?tab=demographics`);
       return;
     }
     if (target === "subscriber") {
-      if (form.client_id) navigate(`/clients/${form.client_id}?tab=coverage`);
+      if (form.client_id) navigateSafely(`/clients/${form.client_id}?tab=coverage`);
       return;
     }
 
@@ -323,7 +328,7 @@ export function RejectionWorkDrawer({
       onNext={() => move("next")}
       previousDisabled={previousDisabled}
       nextDisabled={nextDisabled}
-      openFullRecord={() => navigate(`/claims/${activeClaim.id}`)}
+      openFullRecord={() => navigateSafely(`/claims/${activeClaim.id}`)}
       openFullRecordLabel="Open Full Claim 360"
       footer={footer}
     >
@@ -370,7 +375,8 @@ export function RejectionWorkDrawer({
                     </>
                   ) : (
                     <div className="thera-table-subtext" style={{ marginTop: 8 }}>
-                      No field mapping is available for this clearinghouse message yet. Open Claim 360 to review the raw response.
+                      No exact field mapping is available for this clearinghouse message. Review the raw acknowledgement before editing.
+                      <button type="button" className="thera-action secondary" onClick={() => navigateSafely(`/claims/${activeClaim.id}`)}>Open raw response in Claim 360</button>
                     </div>
                   )}
                 </div>
