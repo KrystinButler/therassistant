@@ -699,3 +699,11 @@
 .encounter-previsit-answers strong{font-size:.64rem;color:var(--thera-sage-dark)}
 .encounter-previsit-answers span{overflow-wrap:anywhere;font-size:.73rem;color:var(--thera-text);white-space:pre-wrap}
 @media(max-width:600px){.encounter-previsit-import{padding:11px}.encounter-previsit-import>button{width:100%;justify-content:center}}
+
+/* Keep signing available within the note editor without a separate readiness dashboard. */
+.encounter-inline-signature{display:grid;gap:8px;padding:12px 15px;background:#f3f8f2;border-top:1px solid var(--thera-border)}
+.encounter-inline-signature .encounter-sign-row{display:flex;align-items:flex-end;justify-content:space-between;gap:10px;flex-wrap:wrap}
+.encounter-inline-signature .encounter-sign-row label{display:grid;gap:6px;flex:1;min-width:185px;font-size:.7rem}
+.encounter-inline-signature .encounter-sign-row input{max-width:350px;width:100%}
+.encounter-inline-signature p{margin:0;font-size:.68rem;line-height:1.5;color:var(--thera-muted)}
+@media(max-width:580px){.encounter-inline-signature .encounter-sign-row{align-items:stretch;flex-direction:column}.encounter-inline-signature .encounter-sign-row label,.encounter-inline-signature .encounter-sign-row input{width:100%;max-width:none}}

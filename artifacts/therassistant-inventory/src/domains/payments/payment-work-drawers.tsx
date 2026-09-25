@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { WorkDrawer } from "../../components/work-drawer";
+import "./post-payment-drawer.css";
 import { StatusBadge } from "../../components/status-badge";
 import { dateTime, money, shortDate } from "../../lib/format";
 import type { getPaymentsWorkspaceData } from "./repository";
@@ -12,24 +13,63 @@ function value(input: unknown, fallback = "—") { return input == null || input
 function Fact({ label, children }: { label: string; children: React.ReactNode }) { return <div><div className="thera-table-subtext">{label}</div><strong>{children}</strong></div>; }
 
 export function PostPaymentDrawer({ open, onOpenChange, data, saving, onSave }: { open: boolean; onOpenChange: (open: boolean) => void; data: Data; saving: boolean; onSave: (source: "insurance" | "patient", form: PaymentForm) => Promise<void> | void }) {
-  const [source, setSource] = useState<"insurance" | "patient">("insurance"); const [form, setForm] = useState<PaymentForm>(blankPaymentForm);
+  const [source, setSource] = useState<"insurance" | "patient">("insurance");
+  const [form, setForm] = useState<PaymentForm>(blankPaymentForm);
   useEffect(() => { if (open) { setSource("insurance"); setForm(blankPaymentForm); } }, [open]);
   const dirty = useMemo(() => source !== "insurance" || JSON.stringify(form) !== JSON.stringify(blankPaymentForm), [source, form]);
   const selectedClaim = data.claims.find((row) => row.id === form.claimId);
-  const footer = <div className="thera-filter-row" style={{ justifyContent: "space-between" }}><button type="button" className="thera-action secondary" onClick={() => onOpenChange(false)}>Cancel</button><button type="button" className="thera-action" disabled={saving || Number(form.amount) <= 0} onClick={() => void onSave(source, form)}>{saving ? "Posting..." : "Post Payment"}</button></div>;
-  return <WorkDrawer open={open} onOpenChange={onOpenChange} dirty={dirty} title="Post Payment" subtitle="Record and allocate a payment without leaving the payment workspace." footer={footer}>
-    <div className="thera-form-grid">
-      <label>Payment source<select className="thera-input" value={source} onChange={(e) => setSource(e.target.value as "insurance" | "patient")}><option value="insurance">Insurance payment</option><option value="patient">Patient payment</option></select></label>
-      <label>Amount<input className="thera-input" type="number" min="0" step="0.01" value={form.amount} onChange={(e) => setForm((v) => ({ ...v, amount: e.target.value }))} /></label>
-      <label>Payment method<select className="thera-input" value={form.method} onChange={(e) => setForm((v) => ({ ...v, method: e.target.value }))}><option value="manual">Manual</option><option value="eft">EFT</option><option value="ach">ACH</option><option value="check">Check</option><option value="credit_card">Credit card</option><option value="debit_card">Debit card</option><option value="cash">Cash</option><option value="portal">Portal</option></select></label>
-      {source === "patient" ? <label>Patient<select className="thera-input" value={form.clientId} onChange={(e) => setForm((v) => ({ ...v, clientId: e.target.value }))}><option value="">Select patient</option>{data.clients.map((row) => <option key={row.id} value={row.id}>{[row.first_name, row.last_name].filter(Boolean).join(" ")}</option>)}</select></label> : <label>Payer<select className="thera-input" value={form.payerId} onChange={(e) => setForm((v) => ({ ...v, payerId: e.target.value }))}><option value="">Payer from claim</option>{data.payers.map((row) => <option key={row.id} value={row.id}>{String(row.name ?? "Payer")}</option>)}</select></label>}
-      <label>{source === "patient" ? "Patient balance / claim allocation" : "Initial claim allocation"}<select className="thera-input" value={form.claimId} onChange={(e) => setForm((v) => ({ ...v, claimId: e.target.value }))}><option value="">{source === "patient" ? "Apply to patient balance" : "Leave unapplied"}</option>{data.claims.filter((row) => !["voided", "reversed", "paid"].includes(String(row.claim_status))).map((row) => <option key={row.id} value={row.id}>{String(row.patient_control_number ?? "Claim")} · {row.clientName}</option>)}</select></label>
-      <label>Allocation amount<input className="thera-input" type="number" min="0" step="0.01" value={form.allocation} placeholder={form.claimId || (source === "patient" && form.clientId) ? form.amount || "0.00" : "Unapplied"} disabled={!form.claimId && !(source === "patient" && form.clientId)} onChange={(e) => setForm((v) => ({ ...v, allocation: e.target.value }))} /></label>
-      <label>Trace number<input className="thera-input" value={form.trace} onChange={(e) => setForm((v) => ({ ...v, trace: e.target.value }))} /></label><label>Check number<input className="thera-input" value={form.check} onChange={(e) => setForm((v) => ({ ...v, check: e.target.value }))} /></label>
-      <label style={{ gridColumn: "1 / -1" }}>Notes<textarea className="thera-input" rows={5} value={form.notes} onChange={(e) => setForm((v) => ({ ...v, notes: e.target.value }))} /></label>
+  const amount = Number(form.amount);
+  const allocation = form.allocation ? Number(form.allocation) : amount;
+  const invalidAllocation = Boolean(form.allocation) && (!Number.isFinite(allocation) || allocation < 0 || allocation > amount);
+  const eligibleClaims = data.claims.filter((row) =>
+    !["voided", "reversed", "paid"].includes(String(row.claim_status))
+    && (source === "insurance" ? !form.payerId || !row.payer_id || row.payer_id === form.payerId : !form.clientId || row.client_id === form.clientId)
+  );
+  const footer = <div className="thera-filter-row" style={{ justifyContent: "space-between" }}>
+    <button type="button" className="thera-action secondary" onClick={() => onOpenChange(false)}>Cancel</button>
+    <button type="button" className="thera-action" disabled={saving || !Number.isFinite(amount) || amount <= 0 || invalidAllocation || (source === "patient" && !form.clientId && !selectedClaim)} onClick={() => void onSave(source, form)}>{saving ? "Posting..." : "Post Payment"}</button>
+  </div>;
+  return <WorkDrawer open={open} onOpenChange={onOpenChange} dirty={dirty} title="Post Payment"
+    subtitle="Record the payment first; assign it to the correct patient or claim before posting." footer={footer}>
+    <div className="post-payment-form">
+      <section className="post-payment-section" aria-labelledby="payment-step-received">
+        <div className="post-payment-section-title"><span>01</span><div><h3 id="payment-step-received">Payment received</h3><p>Identify the source, total amount and payment method.</p></div></div>
+        <div className="post-payment-field-grid">
+          <label>Payment source<select className="thera-input" value={source} onChange={(e) => {
+            const next = e.target.value as "insurance" | "patient";
+            setSource(next); setForm((current) => ({ ...blankPaymentForm, amount: current.amount, method: next === "patient" ? "credit_card" : "eft" }));
+          }}><option value="insurance">Insurance</option><option value="patient">Patient / self-pay</option></select></label>
+          <label>Amount ($)<input className="thera-input" aria-label="Amount" type="number" min="0.01" step="0.01" required value={form.amount} placeholder="0.00" onChange={(e) => setForm((v) => ({ ...v, amount: e.target.value }))} /></label>
+          <label>Payment method<select className="thera-input" value={form.method} onChange={(e) => setForm((v) => ({ ...v, method: e.target.value }))}><option value="manual">Manual entry</option><option value="eft">EFT</option><option value="ach">ACH</option><option value="check">Check</option><option value="credit_card">Credit card</option><option value="debit_card">Debit card</option><option value="cash">Cash</option><option value="portal">Patient portal</option></select></label>
+        </div>
+      </section>
+      <section className="post-payment-section" aria-labelledby="payment-step-apply">
+        <div className="post-payment-section-title"><span>02</span><div><h3 id="payment-step-apply">Apply to account</h3><p>{source === "patient" ? "Select the patient and optionally their claim." : "Select a payer and optionally allocate to a claim. Unapplied funds remain available for later reconciliation."}</p></div></div>
+        <div className="post-payment-field-grid">
+          {source === "patient" ? <label>Patient <span className="post-payment-required">Required</span>
+            <select className="thera-input" value={form.clientId} onChange={(e) => setForm((v) => ({ ...v, clientId: e.target.value, claimId: "", allocation: "" }))}><option value="">Choose patient</option>{data.clients.map((row) => <option key={row.id} value={row.id}>{[row.first_name, row.last_name].filter(Boolean).join(" ")}</option>)}</select>
+          </label> : <label>Payer
+            <select className="thera-input" value={form.payerId} onChange={(e) => setForm((v) => ({ ...v, payerId: e.target.value, claimId: "", allocation: "" }))}><option value="">Choose payer or leave unapplied</option>{data.payers.map((row) => <option key={row.id} value={row.id}>{String(row.name ?? "Payer")}</option>)}</select>
+          </label>}
+          <label>Claim allocation<select className="thera-input" value={form.claimId} onChange={(e) => setForm((v) => ({ ...v, claimId: e.target.value, allocation: "", clientId: e.target.value ? String(data.claims.find((row) => row.id === e.target.value)?.client_id ?? v.clientId) : v.clientId, payerId: e.target.value ? String(data.claims.find((row) => row.id === e.target.value)?.payer_id ?? v.payerId) : v.payerId }))}>
+            <option value="">No specific claim — hold unapplied</option>
+            {eligibleClaims.map((row) => <option key={row.id} value={row.id}>{String(row.patient_control_number ?? "Claim")} · {row.clientName}</option>)}
+          </select></label>
+          <label>Amount to apply ($)<input className="thera-input" type="number" min="0" step="0.01" value={form.allocation} placeholder={form.claimId || (source === "patient" && form.clientId) ? form.amount || "0.00" : "Unapplied"} disabled={!form.claimId && !(source === "patient" && form.clientId)} onChange={(e) => setForm((v) => ({ ...v, allocation: e.target.value }))} /></label>
+        </div>
+        {invalidAllocation && <div className="thera-state error" role="alert">Allocated amount must be between $0 and the total payment.</div>}
+        {selectedClaim && <div className="post-payment-claim"><strong>{selectedClaim.clientName}</strong><span>{selectedClaim.payerName} · {value(selectedClaim.patient_control_number)} · {money(Number(selectedClaim.total_charge_cents ?? 0))}</span></div>}
+      </section>
+      <section className="post-payment-section" aria-labelledby="payment-step-reference">
+        <div className="post-payment-section-title"><span>03</span><div><h3 id="payment-step-reference">Reference & audit trail</h3><p>Enter the payment identifier and any posting instructions.</p></div></div>
+        <div className="post-payment-field-grid">
+          <label>Trace number<input className="thera-input" value={form.trace} onChange={(e) => setForm((v) => ({ ...v, trace: e.target.value }))} /></label>
+          <label>Check number<input className="thera-input" value={form.check} onChange={(e) => setForm((v) => ({ ...v, check: e.target.value }))} /></label>
+          <label className="post-payment-wide">Internal notes<textarea className="thera-input" rows={3} value={form.notes} onChange={(e) => setForm((v) => ({ ...v, notes: e.target.value }))} /></label>
+        </div>
+      </section>
+      <p className="post-payment-footnote">Payment posting does not transmit claims. If one payment covers multiple claims, post it once and use Apply Payment for remaining unapplied funds.</p>
     </div>
-    {selectedClaim && <section className="thera-card"><h2>Selected claim</h2><div className="thera-form-grid"><Fact label="Patient">{selectedClaim.clientName}</Fact><Fact label="Payer">{selectedClaim.payerName}</Fact><Fact label="Claim">{value(selectedClaim.patient_control_number)}</Fact><Fact label="Charge">{money(Number(selectedClaim.total_charge_cents ?? 0))}</Fact></div></section>}
-    <div className="thera-alert" style={{ marginTop: 16 }}>Patient payments without a selected claim apply to the patient’s open balance, including self-pay charges. If a payment covers multiple insurance claims, post it and use Apply Payment for any remaining unapplied amount.</div>
   </WorkDrawer>;
 }
 

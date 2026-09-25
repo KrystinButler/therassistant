@@ -1,0 +1,14 @@
+.post-payment-form{display:grid;gap:13px;min-width:0}
+.post-payment-section{display:grid;gap:13px;min-width:0;border:1px solid var(--thera-border);border-radius:10px;padding:15px;background:#fff}
+.post-payment-section-title{display:flex;align-items:flex-start;gap:10px;padding-bottom:11px;border-bottom:1px solid var(--thera-border)}
+.post-payment-section-title>span{display:grid;place-items:center;width:28px;height:28px;flex:none;border-radius:7px;background:#e6f1e9;color:var(--thera-sage-dark);font-size:.69rem;font-weight:800}
+.post-payment-section-title h3{margin:1px 0 3px;color:var(--thera-navy);font-size:.86rem}
+.post-payment-section-title p{margin:0;color:var(--thera-muted);font-size:.69rem;line-height:1.45}
+.post-payment-field-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.post-payment-field-grid label{min-width:0;display:grid;align-content:start;gap:5px;color:var(--thera-navy);font-size:.72rem;font-weight:700}
+.post-payment-field-grid .thera-input{width:100%;min-width:0;min-height:39px;font-size:.76rem}
+.post-payment-wide{grid-column:1/-1}.post-payment-required{font-size:.62rem;color:#66766e;font-weight:450}
+.post-payment-claim{display:grid;gap:4px;border:1px solid #b9d1bc;border-radius:8px;background:#f2f8f2;padding:10px 12px;font-size:.72rem}
+.post-payment-claim strong{color:var(--thera-navy)}.post-payment-claim span{color:var(--thera-muted)}
+.post-payment-footnote{margin:0;padding:11px 12px;border-left:3px solid var(--thera-sage);background:#f5f9f4;color:var(--thera-muted);font-size:.68rem;line-height:1.5}
+@media(max-width:620px){.post-payment-section{padding:12px}.post-payment-field-grid{grid-template-columns:minmax(0,1fr)}.post-payment-wide{grid-column:auto}}
