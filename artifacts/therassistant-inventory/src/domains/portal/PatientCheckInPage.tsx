@@ -116,6 +116,7 @@ export function PatientCheckInPage() {
   const [visitQuestions, setVisitQuestions] = useState<VisitQuestions>(emptyQuestions);
   const [consents, setConsents] = useState<Consents>(emptyConsents);
   const [submittedAt, setSubmittedAt] = useState("");
+  const [appointmentUnavailable, setAppointmentUnavailable] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -126,7 +127,7 @@ export function PatientCheckInPage() {
         const result = await getPatientPortalData();
         if (!active) return;
         const appointment = result.upcomingAppointments.find((row) => row.id === appointmentId);
-        if (!appointment) throw new Error("This appointment is not available for pre-visit check-in.");
+        if (!appointment) throw new Error("This appointment is no longer open for pre-visit check-in. It may be completed, cancelled, rescheduled, or in the past.");
         const checkin = result.checkins.find((row) => String(row.appointment_id ?? "") === appointmentId);
         const preVisit = recordOf(recordOf(checkin?.responses).pre_visit);
         const demographicsDone = preVisit.demographics_confirmed === true;
@@ -136,6 +137,7 @@ export function PatientCheckInPage() {
         const submitted = String(preVisit.submitted_at ?? "");
 
         setData(result);
+        setAppointmentUnavailable(false);
         setDemographicsConfirmed(demographicsDone);
         setInsuranceConfirmed(insuranceDone);
         setVisitQuestions(loadedQuestions);
@@ -171,7 +173,13 @@ export function PatientCheckInPage() {
       if (preVisit.submitted_at) setSubmittedAt(String(preVisit.submitted_at));
       return true;
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Unable to save pre-visit check-in.");
+      const message = err instanceof Error ? err.message : "Unable to save pre-visit check-in.";
+      if (message.includes("Appointment is unavailable")) {
+        setAppointmentUnavailable(true);
+        setError("This appointment is no longer available for pre-visit check-in. Return to your portal to select another scheduled visit, or contact your practice if the status is incorrect.");
+      } else {
+        setError(message);
+      }
       return false;
     } finally {
       setWorking(null);
@@ -226,7 +234,7 @@ export function PatientCheckInPage() {
   }
 
   if (loading) return <div className="pj-loading">Loading pre-visit check-in...</div>;
-  if (!data || !appointment) return <div className="pj-loading pj-error">{error ?? "Pre-visit check-in is unavailable."}</div>;
+  if (!data || !appointment || appointmentUnavailable) return <main className="pj-app pci-unavailable-page"><section className="pci-unavailable-card" role="alert"><CalendarDays size={28} aria-hidden="true" /><h1>Check-in is unavailable</h1><p>{error ?? "This appointment is not open for pre-visit check-in. Please select an upcoming scheduled visit."}</p><Link href={PORTAL_HOME} className="pj-primary-button">Return to patient portal</Link></section></main>;
 
   const patientDisplayName = patientName(data.patient);
   const stepStatuses = [
