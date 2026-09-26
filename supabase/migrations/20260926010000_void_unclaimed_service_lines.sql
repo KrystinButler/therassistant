@@ -54,7 +54,8 @@ begin
     'service_line_id',p_service_line_id,'voided_charge_count',v_voided);
 end;
 $function$;
-revoke all on function private.void_unclaimed_service_line_impl(uuid,uuid) from public, anon, authenticated;
+revoke all on function private.void_unclaimed_service_line_impl(uuid,uuid) from public, anon;
+grant execute on function private.void_unclaimed_service_line_impl(uuid,uuid) to authenticated;
 create or replace function public.void_unclaimed_service_line(
   p_encounter_id uuid,p_service_line_id uuid
 ) returns jsonb language sql security invoker set search_path = ''
