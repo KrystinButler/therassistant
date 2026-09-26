@@ -15,3 +15,11 @@ test("patient portal gate explains separate staff and patient identities",()=>{
  assert.match(gate,/Open Staff Portal Preview/);
  assert.match(gate,/Patient portal access requires a separately invited patient identity/);
 });
+
+test("admin can invite a separate synthetic patient for actual portal testing",()=>{
+ assert.match(view,/invitePatientPortal/);
+ assert.match(view,/Create \/ Invite Synthetic Test Patient/);
+ assert.match(view,/practice_admin/);
+ assert.match(view,/synthetic: true/);
+ assert.doesNotMatch(view,/portalRpc|getPatientPortalData|getMyPortalContext/);
+});

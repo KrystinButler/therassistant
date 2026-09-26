@@ -28,8 +28,8 @@ test("provider completes a synthetic visit from schedule through signed note and
   if ((await recordedServices.count()) === 0) {
     await page.getByRole("spinbutton", { name: "Service charge" }).fill("150.00");
     await page.getByRole("button", { name: "+ Add Service Line" }).click();
-    await expect(page.getByText("Unbilled service line added.")).toBeVisible({ timeout: 15_000 });
-    await expect(recordedServices).toHaveCount(1);
+    // Confirm the service was actually saved instead of relying on obsolete toast text.
+    await expect(recordedServices).toHaveCount(1, { timeout: 15_000 });
   }
 
   await page.getByPlaceholder("Provider signature").fill("Jamie Parker, LCSW");

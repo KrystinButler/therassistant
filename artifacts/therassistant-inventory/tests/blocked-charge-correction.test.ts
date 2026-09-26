@@ -6,11 +6,14 @@ import { createChargeFromEncounterWorkflow } from "../src/domains/billing/workfl
 const clinical = readFileSync(new URL("../src/domains/clinical/repository.ts", import.meta.url), "utf8");
 const encounter = readFileSync(new URL("../src/domains/encounters/EncounterPage.tsx", import.meta.url), "utf8");
 
-test("only blocked source charges with no claims can be corrected; captured charges cannot be removed", () => {
-  assert.match(clinical, /allowBlockedCorrection && charge\.charge_status === "blocked"/);
+test("blocked and ready-for-claim charges can be corrected before claim creation, but captured charges remain locked", () => {
+  assert.match(clinical, /allowBlockedCorrection && \["blocked", "ready_for_claim"\]/);
   assert.match(clinical, /if \(claims\.length\) throw new Error/);
   assert.match(clinical, /assertUnbilledLine\(encounterId, lineId, true\)/);
   assert.match(encounter, /removableLineIds/);
+  assert.match(encounter, /voidPreclaimServiceLine/);
+  assert.match(encounter, /Recheck Billing/);
+  assert.match(encounter, /!signed \|\| data\.claims\.length === 0/);
   assert.match(encounter, /disabled=\{saving \|\| !removableLineIds\.has/);
 });
 

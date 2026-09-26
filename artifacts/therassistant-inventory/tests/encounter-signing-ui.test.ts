@@ -29,7 +29,8 @@ test("diagnosis and service-line saves preserve an unsaved clinical draft", () =
   const serviceEnd = source.indexOf("async function sign()", serviceStart);
 
   assert.ok(helperStart >= 0 && draftCapture > helperStart && draftRestore > draftCapture);
-  assert.match(source.slice(diagnosisStart, diagnosisEnd), /"Diagnosis added to encounter\.",\s*true,/);
+  assert.match(source.slice(diagnosisStart, diagnosisEnd), /"Diagnosis added and billing readiness refreshed\."/);
+  assert.match(source.slice(diagnosisStart, diagnosisEnd), /true,\s*\);/);
   const serviceHandler = source.slice(serviceStart, serviceEnd);
   assert.match(serviceHandler, /withSave\(/);
   assert.match(serviceHandler, /true,\s*setServiceError,/);

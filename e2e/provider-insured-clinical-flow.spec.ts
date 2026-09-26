@@ -25,16 +25,17 @@ test("provider completes the synthetic insured visit for billing", async ({ page
     await page.getByPlaceholder("Search ICD-10-CM code or diagnosis").fill("F41.1");
     await page.getByPlaceholder("Diagnosis description").fill("Generalized anxiety disorder");
     await page.getByRole("button", { name: "+ Add Diagnosis" }).click();
-    await expect(page.getByText("Diagnosis added to encounter.")).toBeVisible({ timeout: 15_000 });
-    await expect(recordedDiagnoses).toHaveCount(1);
+    // Verify the persisted diagnosis, not transient success-message wording.
+    await expect(recordedDiagnoses).toHaveCount(1, { timeout: 15_000 });
+    await expect(recordedDiagnoses.first()).toContainText("F41.1");
   }
 
   const recordedServices = page.locator("#encounter-coding-service .encounter-saved-services tbody tr");
   if ((await recordedServices.count()) === 0) {
     await page.getByRole("spinbutton", { name: "Service charge" }).fill("150.00");
     await page.getByRole("button", { name: "+ Add Service Line" }).click();
-    await expect(page.getByText("Unbilled service line added.")).toBeVisible({ timeout: 15_000 });
-    await expect(recordedServices).toHaveCount(1);
+    // The actual service line must persist after billing-readiness reevaluation.
+    await expect(recordedServices).toHaveCount(1, { timeout: 15_000 });
   }
 
   await page.getByPlaceholder("Provider signature").fill("Jamie Parker, LCSW");
