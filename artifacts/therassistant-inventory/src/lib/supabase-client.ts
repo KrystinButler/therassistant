@@ -216,8 +216,37 @@ export async function updatePasswordForCurrentSession(
   allowedFlow: "invite" | "recovery",
 ) {
   const session = await getSession();
-  if (!session?.access_token || session.flowType !== allowedFlow) {
-    throw new Error("A valid authentication flow is required.");
+  if (!session?.access_token) {
+    throw new Error("Sign in with your patient invitation before creating a password.");
+  }
+
+  if (allowedFlow === "invite") {
+    // URL fragments can lose type=invite if Supabase falls back to its Site URL.
+    // Never trust a browser flag by itself: verify the pending invitation and
+    // email against the authenticated user's server-side portal mapping.
+    const verification = await fetch(`${SUPABASE_URL}/rest/v1/rpc/get_my_client_portal_context`, {
+      method: "POST",
+      headers: {
+        apikey: SUPABASE_PUBLISHABLE_KEY,
+        Authorization: `Bearer ${session.access_token}`,
+        "Content-Type": "application/json",
+      },
+      body: "{}",
+    });
+    if (!verification.ok) {
+      throw new Error("Unable to verify your pending patient invitation.");
+    }
+    const context = await verification.json() as
+      | { status?: string; invited_email?: string }
+      | null;
+    const matchingEmail = Boolean(session.user?.email)
+      && String(context?.invited_email ?? "").trim().toLowerCase()
+        === String(session.user.email).trim().toLowerCase();
+    if (context?.status !== "invited" || !matchingEmail) {
+      throw new Error("This account does not have a pending patient invitation.");
+    }
+  } else if (session.flowType !== allowedFlow) {
+    throw new Error("A valid password recovery session is required.");
   }
 
   const response = await fetch(`${SUPABASE_URL}/auth/v1/user`, {
