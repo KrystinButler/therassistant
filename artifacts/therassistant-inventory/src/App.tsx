@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { Route, Switch, useLocation, useRoute } from "wouter";
 
 import { AuthProvider, useAuth } from "./auth/auth-context";
@@ -30,6 +30,7 @@ import { PatientPortalLoginPage } from "./domains/portal/PatientPortalLoginPage"
 import { PatientPortalPage } from "./domains/portal/PatientPortalPage";
 import { PatientPortalRecoveryPage } from "./domains/portal/PatientPortalRecoveryPage";
 import { StaffPortalPreviewPage } from "./domains/portal/StaffPortalPreviewPage";
+import { getMyPortalContext } from "./domains/portal/portal-client";
 import {
   isPatientPortalPath,
   PORTAL_ACTIVATE,
@@ -159,7 +160,36 @@ function PatientPortalRoutes() {
 
 function ApplicationRoutes() {
   const [location] = useLocation();
-  return isPatientPortalPath(location) ? <PatientPortalRoutes /> : <StaffGate />;
+  const { session, loading } = useAuth();
+  const [pendingInviteAtRoot, setPendingInviteAtRoot] = useState<boolean | null>(null);
+  const patientRoute = isPatientPortalPath(location);
+
+  // Supabase can return an accepted email invitation to its configured Site URL
+  // instead of redirectTo. Never send an invitation session into the staff gate.
+  useEffect(() => {
+    let active = true;
+    if (loading || !session || patientRoute || !["/", "/login"].includes(location) || session.flowType) {
+      setPendingInviteAtRoot(false);
+      return () => { active = false; };
+    }
+    setPendingInviteAtRoot(null);
+    void getMyPortalContext().then((context) => {
+      if (!active) return;
+      const matchingEmail = Boolean(session.user?.email)
+        && String(context?.invited_email ?? "").trim().toLowerCase()
+          === String(session.user.email).trim().toLowerCase();
+      setPendingInviteAtRoot(context?.status === "invited" && matchingEmail);
+    }).catch(() => { if (active) setPendingInviteAtRoot(false); });
+    return () => { active = false; };
+  }, [loading, location, patientRoute, session?.access_token, session?.flowType, session?.user?.email]);
+
+  if (!patientRoute && session?.flowType === "invite") return <Redirect to={PORTAL_ACTIVATE} />;
+  if (!patientRoute && pendingInviteAtRoot === true) return <Redirect to={PORTAL_ACTIVATE} />;
+  if (!patientRoute && !loading && session && !session.flowType
+      && ["/", "/login"].includes(location) && pendingInviteAtRoot === null) {
+    return <div className="thera-state">Checking patient invitation...</div>;
+  }
+  return patientRoute ? <PatientPortalRoutes /> : <StaffGate />;
 }
 
 export default function App() {
