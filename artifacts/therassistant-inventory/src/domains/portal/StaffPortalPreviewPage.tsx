@@ -23,7 +23,7 @@ export function StaffPortalPreviewPage() {
   async function createSyntheticPortalInvite() {
     if (!tenantId || !canProvision || working) return;
     const destination = email.trim().toLowerCase();
-    if (!/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(destination)) {
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(destination)) {
       setError("Enter a valid email address you control for a separate test-patient account.");
       return;
     }

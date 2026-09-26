@@ -18,7 +18,7 @@ test("patient portal gate explains separate staff and patient identities",()=>{
 
 test("admin can invite a separate synthetic patient for actual portal testing",()=>{
  assert.match(view,/invitePatientPortal/);
- assert.match(view,/Create \\/ Invite Synthetic Test Patient/);
+ assert.match(view,/Create \/ Invite Synthetic Test Patient/);
  assert.match(view,/practice_admin/);
  assert.match(view,/synthetic: true/);
  assert.doesNotMatch(view,/portalRpc|getPatientPortalData|getMyPortalContext/);
