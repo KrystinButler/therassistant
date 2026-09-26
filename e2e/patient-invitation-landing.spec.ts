@@ -4,7 +4,7 @@ const supabaseUrl = (
   process.env.E2E_SUPABASE_URL ??
   process.env.VITE_SUPABASE_URL ??
   "https://lpjwfdvaxobewxcklenl.supabase.co"
-).replace(/\\/$/, "");
+).replace(new RegExp("/$"), "");
 
 for (const [label, inviteType] of [
   ["invite fragment", "&type=invite"],
