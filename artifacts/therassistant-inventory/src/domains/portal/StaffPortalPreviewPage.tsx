@@ -1,42 +1,81 @@
 import { useState } from "react";
 import { Link } from "wouter";
 import { useTenant } from "../../auth/tenant-context";
-import { authenticatedFetch, SUPABASE_URL } from "../../lib/supabase-client";
+import { useAuth } from "../../auth/auth-context";
+import { tenantInsert, tenantSelect, type Row } from "../../lib/tenant-data-client";
+import { getClientPortalAccess, invitePatientPortal } from "./staff-portal-access";
 import { PORTAL_HOME, PORTAL_JOURNAL, PORTAL_LOGIN } from "./routes";
 
-type TestCredentials = { email: string; password: string; login_path: string; patient_id: string };
+type TestPatient = Row & { id: string; metadata?: Record<string, unknown> };
+type TestProvider = Row & { id: string };
+type TestAppointment = Row & { id: string };
 
 /** Staff synthetic preview: never loads actual patient records or calls patient RPCs. */
 export function StaffPortalPreviewPage() {
   const { tenantId, roles } = useTenant();
+  const { user } = useAuth();
+  const [email, setEmail] = useState("");
   const canProvision = roles.some((role) => ["practice_admin", "billing_company_admin"].includes(role));
   const [working, setWorking] = useState(false);
-  const [credentials, setCredentials] = useState<TestCredentials | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  async function provisionTestPatient() {
+  async function createSyntheticPortalInvite() {
     if (!tenantId || !canProvision || working) return;
-    setWorking(true);
-    setCredentials(null);
-    setError(null);
+    const destination = email.trim().toLowerCase();
+    if (!/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(destination)) {
+      setError("Enter a valid email address you control for a separate test-patient account.");
+      return;
+    }
+    if (destination === String(user?.email ?? "").trim().toLowerCase()) {
+      setError("Staff accounts cannot sign in as patients. Use a different email address or separate inbox alias you control.");
+      return;
+    }
+    setWorking(true); setNotice(null); setError(null);
     try {
-      const response = await authenticatedFetch(SUPABASE_URL + "/functions/v1/provision-test-patient", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ tenant_id: tenantId }),
-      });
-      const body = await response.json() as Partial<TestCredentials> & { error?: string };
-      if (!response.ok || !body.email || !body.password) {
-        throw new Error(body.error || "Unable to provision a synthetic test-patient login.");
+      const providers = await tenantSelect<TestProvider>("providers", { limit: "1" });
+      if (!providers[0]) throw new Error("Set up a provider before enrolling a synthetic test patient.");
+      const matches = await tenantSelect<TestPatient>("clients", { email: "eq." + destination, limit: "10" });
+      if (matches.some((patient) => patient.metadata?.synthetic !== true || patient.metadata?.portal_test !== true)) {
+        throw new Error("This email is already used for a non-test patient. Use a dedicated test email.");
       }
-      setCredentials({
-        email: body.email,
-        password: body.password,
-        login_path: PORTAL_LOGIN,
-        patient_id: body.patient_id || "",
+      let patientId = matches[0]?.id;
+      if (!patientId) {
+        const patient = await tenantInsert<TestPatient>("clients", {
+          first_name: "Taylor", last_name: "Synthetic Test Patient",
+          email: destination, date_of_birth: "1990-01-01",
+          client_status: "active", registration_status: "complete",
+          metadata: { synthetic: true, portal_test: true, billing_type: "self_pay" },
+        });
+        patientId = patient.id;
+      }
+      const upcoming = await tenantSelect<TestAppointment>("appointments", {
+        client_id: "eq." + patientId, starts_at: "gte." + new Date().toISOString(),
+        order: "starts_at.asc", limit: "1",
       });
+      if (!upcoming.length) {
+        const start = new Date(Date.now() + 24 * 60 * 60 * 1000);
+        await tenantInsert<TestAppointment>("appointments", {
+          client_id: patientId, provider_id: providers[0].id,
+          starts_at: start.toISOString(),
+          ends_at: new Date(start.getTime() + 60 * 60 * 1000).toISOString(),
+          appointment_status: "scheduled", location_type: "telehealth",
+          service_type: "psychotherapy", notes: "Synthetic portal test; not a real patient visit.",
+        });
+      }
+      const access = await getClientPortalAccess(patientId);
+      if (!access) {
+        await invitePatientPortal(patientId);
+        setNotice("Secure invitation sent. Open your separate test inbox, activate the account, then sign in to the actual patient portal.");
+      } else {
+        setNotice(access.status === "active"
+          ? "The synthetic account is active. Sign in with that patient account or use the password-reset option."
+          : access.status === "invited"
+            ? "An invitation is already pending. Check your separate test inbox."
+            : "This synthetic account is revoked. Restore it from the test patient's chart.");
+      }
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Unable to create a test-patient login.");
+      setError(cause instanceof Error ? cause.message : "Unable to set up the synthetic patient.");
     } finally {
       setWorking(false);
     }
@@ -51,23 +90,25 @@ export function StaffPortalPreviewPage() {
     </div>
     <section className="thera-card" aria-label="Actual patient portal test access" style={{ marginBottom: 17 }}>
       <div className="thera-card-header"><div><h2>Test the real patient portal</h2>
-        <p>Use a private browser window to keep your staff account signed in. Admins may generate a separate synthetic patient login with one future test appointment; actual patient data is never impersonated.</p></div></div>
-      {canProvision ? <button type="button" className="thera-action" disabled={working || !tenantId} onClick={() => void provisionTestPatient()}>
-        {working ? "Creating test login…" : "Create / Reset Synthetic Patient Login"}
-      </button> : <p className="thera-muted">Ask a practice administrator to create a synthetic test patient. Staff cannot override real patient authentication.</p>}
+        <p>Use a private browser window to keep your staff account signed in. Admins can enroll a separate synthetic patient by invitation and add a future test appointment; actual patient data is never impersonated.</p></div></div>
+      {canProvision ? <div className="thera-filter-row">
+        <label htmlFor="synthetic-portal-email">Test-patient email</label>
+        <input id="synthetic-portal-email" className="thera-input" type="email" autoComplete="off"
+          value={email} onChange={(event) => setEmail(event.target.value)}
+          placeholder="An inbox or alias you control, separate from staff login" />
+        <button type="button" className="thera-action" disabled={working || !tenantId || !email.trim()}
+          onClick={() => void createSyntheticPortalInvite()}>
+          {working ? "Sending invitation…" : "Create / Invite Synthetic Test Patient"}
+        </button>
+      </div> : <p className="thera-muted">Ask an administrator to invite a synthetic test patient. Staff login is never a patient login.</p>}
       {error && <div className="thera-state error" role="alert">{error}</div>}
-      {credentials && <div className="thera-alert" role="status" style={{ marginTop: 14 }}>
-        <strong>Synthetic patient login (shown only on this screen until you leave)</strong>
-        <p>Test email: <code>{credentials.email}</code></p>
-        <p>Temporary password: <code>{credentials.password}</code></p>
-        <p>Open a private browser window, use the email and password above, then test the real Journal and Pre-Visit Check-In. Generating the login again replaces its previous password.</p>
-        <a href={PORTAL_LOGIN} className="thera-action" target="_blank" rel="noopener noreferrer">Open actual patient portal ↗</a>
-        <button type="button" className="thera-action secondary" onClick={() => setCredentials(null)}>Hide credentials</button>
+      {notice && <div className="thera-alert" role="status" style={{ marginTop: 14 }}>{notice}
+        <a href={PORTAL_LOGIN} className="thera-action secondary" target="_blank" rel="noopener noreferrer">Open actual patient sign-in ↗</a>
       </div>}
     </section>
     <section className="thera-alert" role="note" style={{ marginBottom: 17 }}>
       <strong>Testing actual patient workflows</strong>
-      <p>Open the real portal in a private browser window and sign in as your separately provisioned synthetic patient. The staff-only preview cannot save journal or check-in data.</p>
+      <p>Activate the secure invitation in your separate test email, then sign in as that synthetic patient in a private browser window. The actual portal supports journal and pre-visit check-in; this preview does not save data.</p>
     </section>
     <div className="thera-metric-grid" style={{ marginBottom: 17 }}>
       <Metric label="Upcoming appointments" value="1" /><Metric label="Active coverage" value="Sample" />
