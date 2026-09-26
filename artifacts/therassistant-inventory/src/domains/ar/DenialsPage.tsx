@@ -80,6 +80,32 @@ export function DenialsPage() {
     void load();
   }, []);
 
+  // Open the exact denial (or its linked claim) when arriving from Work Center.
+  useEffect(() => {
+    if (!data) return;
+    const params = new URLSearchParams(window.location.search);
+    const denialId = params.get("denial");
+    const claimId = params.get("claim");
+    const appealId = params.get("appeal");
+    const appeal = appealId ? data.appeals.find((row) => row.id === appealId) : undefined;
+    const target = data.denials.find((row) =>
+      isActive(row) && (denialId
+        ? row.id === denialId
+        : appeal
+          ? row.id === String(appeal.denial_id ?? "")
+          : claimId
+            ? String(row.claim_id ?? "") === claimId
+            : false),
+    );
+    if (target) {
+      setPayerId(String(target.payer_id ?? ""));
+      setTab(appealId ? "appeals" : denialTab(target));
+      if (!appealId) setDenialWork(target);
+    } else if (params.get("tab") === "appeals") {
+      setTab("appeals");
+    }
+  }, [data]);
+
   const activeRows = useMemo(() => (data?.denials ?? []).filter(isActive), [data]);
   const payerOptions = useMemo(() => {
     const seen = new Set<string>();
