@@ -38,7 +38,12 @@ const toCents = (value: string) => Math.round(Number(value || 0) * 100);
 export function PaymentsPage() {
   const [data, setData] = useState<Data | null>(null);
   const [exceptionData, setExceptionData] = useState<ExceptionData | null>(null);
-  const [tab, setTab] = useState<Tab>("insurance");
+  const [tab, setTab] = useState<Tab>(() => {
+    const requested = new URLSearchParams(window.location.search).get("tab");
+    return ["insurance", "patient", "era", "unapplied", "adjustments", "underpayments", "recovery"].includes(requested ?? "")
+      ? requested as Tab
+      : "insurance";
+  });
   const [loading, setLoading] = useState(true);
   const [savingId, setSavingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -73,6 +78,19 @@ export function PaymentsPage() {
   useEffect(() => {
     void load();
   }, []);
+
+  // A payment exception should open the actual payment, not a generic list.
+  useEffect(() => {
+    const requested = new URLSearchParams(window.location.search).get("payment");
+    if (!data || !requested) return;
+    const target = data.payments.find((payment) => payment.id === requested);
+    if (!target) return;
+    const status = String(target.payment_status ?? "");
+    setTab(["unapplied", "partially_applied"].includes(status)
+      ? "unapplied"
+      : target.payment_source === "patient" ? "patient" : "insurance");
+    setPaymentDetail(target);
+  }, [data]);
 
   const acceptedClaims = useMemo(
     () => (data?.claims ?? []).filter((claim) => claim.claim_status === "accepted"),
