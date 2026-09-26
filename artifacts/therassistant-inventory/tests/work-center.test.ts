@@ -165,6 +165,29 @@ test("RCM work items open their owning queues and exact correction records", () 
   );
 });
 
+test("actual billing and ERA queue types open the field needing attention", () => {
+  assert.equal(
+    workRouteForWorkItem("encounter", "enc-1", "missing_documentation"),
+    "/encounters/enc-1#encounter-progress-note-editor",
+  );
+  assert.equal(
+    workRouteForWorkItem("encounter", "enc-1", "eligibility_issue", { clientId: "client-1" }),
+    "/clients/client-1?tab=coverage",
+  );
+  assert.equal(
+    workRouteForWorkItem("encounter", "enc-1", "credentialing_issue"),
+    "/payers-contracts",
+  );
+  assert.equal(
+    workRouteForWorkItem("era", "era-1", "unmatched_era"),
+    "/payments?tab=era",
+  );
+  assert.equal(
+    workRouteForWorkItem("claim", "claim-1", "payment_posting_issue"),
+    "/payments?tab=unapplied",
+  );
+});
+
 test("source records remain reachable separately from exception destinations", () => {
   assert.equal(sourceRouteForWorkItem("encounter", "enc-1"), "/encounters/enc-1");
   assert.equal(sourceRouteForWorkItem("claim_batch", "batch-1"), "/billing/charges?tab=batches");
