@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { useLocation } from "wouter";
 
 import { useAuth } from "../../auth/auth-context";
@@ -6,8 +6,8 @@ import {
   clearAuthFlowType,
   updatePasswordForCurrentSession,
 } from "../../lib/supabase-client";
-import { activateMyPortalAccess } from "./portal-client";
-import { PORTAL_HOME, PORTAL_LOGIN } from "./routes";
+import { activateMyPortalAccess, getMyPortalContext } from "./portal-client";
+import { PORTAL_HOME, PORTAL_LOGIN, PORTAL_RECOVER } from "./routes";
 
 export function PatientPortalActivatePage() {
   const { session } = useAuth();
@@ -17,12 +17,47 @@ export function PatientPortalActivatePage() {
   const [working, setWorking] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  if (!session || session.flowType !== "invite") {
+  const [invitation, setInvitation] = useState<"checking" | "invited" | "unavailable">("checking");
+
+  useEffect(() => {
+    let active = true;
+    if (!session || session.flowType === "recovery") {
+      setInvitation("unavailable");
+      if (session?.flowType === "recovery") navigate(PORTAL_RECOVER, { replace: true });
+      return () => { active = false; };
+    }
+    setInvitation("checking");
+    setError(null);
+    // A successful email verification may arrive without type=invite when the
+    // Supabase Site URL is used. The authoritative identity is the server-side
+    // patient invitation mapped to the authenticated user's email, not the URL.
+    void getMyPortalContext().then((context) => {
+      if (!active) return;
+      if (context?.status === "active") {
+        navigate(PORTAL_HOME, { replace: true });
+        return;
+      }
+      const matchingEmail = Boolean(session.user?.email)
+        && String(context?.invited_email ?? "").trim().toLowerCase()
+          === String(session.user.email).trim().toLowerCase();
+      setInvitation(context?.status === "invited" && matchingEmail ? "invited" : "unavailable");
+    }).catch((cause) => {
+      if (!active) return;
+      setError(cause instanceof Error ? cause.message : "Could not verify your invitation.");
+      setInvitation("unavailable");
+    });
+    return () => { active = false; };
+  }, [session?.access_token, session?.flowType, session?.user?.email, navigate]);
+
+  if (session && invitation === "checking") {
+    return <div className="thera-state">Verifying your patient invitation...</div>;
+  }
+  if (!session || invitation !== "invited") {
     return (
       <main className="thera-main" style={{ minHeight: "100vh", display: "grid", placeItems: "center", padding: 24 }}>
         <section className="thera-card" style={{ width: "min(520px, 100%)" }}>
           <h1>Invitation unavailable</h1>
-          <p>The invitation is missing, expired, or has already been completed. Contact the practice if you need a new invitation.</p>
+          <p>{error ?? "This session is not linked to a pending patient invitation. If you just accepted your invitation, open the patient sign-in page in the same browser, or request assistance from the practice."}</p>
           <button type="button" className="thera-action secondary" onClick={() => navigate(PORTAL_LOGIN, { replace: true })}>
             Patient portal sign in
           </button>
