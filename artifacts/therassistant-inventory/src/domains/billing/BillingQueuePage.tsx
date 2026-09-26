@@ -33,7 +33,9 @@ export function BillingQueuePage() {
   const [data, setData] = useState<ChargesData | null>(null);
   const [tab, setTab] = useState<ChargesTab>(() => {
     const requested = new URLSearchParams(window.location.search).get("tab");
-    return requested === "blocked" || requested === "unbatched" ? requested : "ready";
+    return ["ready", "blocked", "program", "private-pay", "unbatched", "batches", "submitted"].includes(requested ?? "")
+      ? requested as ChargesTab
+      : "ready";
   });
   const [loading, setLoading] = useState(true);
   const [savingId, setSavingId] = useState<string | null>(null);
@@ -41,6 +43,7 @@ export function BillingQueuePage() {
   const [correctionLinks, setCorrectionLinks] = useState<BillingCorrectionLink[]>([]);
   const [message, setMessage] = useState<string | null>(null);
   const [fundingEncounterId, setFundingEncounterId] = useState<string | null>(() => new URLSearchParams(window.location.search).get("encounter"));
+  const [focusEncounterId] = useState<string | null>(() => new URLSearchParams(window.location.search).get("focus"));
 
   async function load() {
     setLoading(true);
@@ -62,6 +65,13 @@ export function BillingQueuePage() {
   useEffect(() => {
     void load();
   }, []);
+
+  useEffect(() => {
+    if (loading || !focusEncounterId || !["ready", "blocked"].includes(tab)) return;
+    const row = document.getElementById(`billing-encounter-${focusEncounterId}`);
+    row?.scrollIntoView({ block: "center" });
+    row?.focus({ preventScroll: true });
+  }, [loading, focusEncounterId, tab, data]);
 
   const groups = useMemo(() => {
     if (!data) {
@@ -472,6 +482,7 @@ export function BillingQueuePage() {
           enableBatch
           onBatchCharge={(ids) => void runBatchCreateCharges(ids)}
           onEditFunding={setFundingEncounterId}
+          focusEncounterId={focusEncounterId}
         />
       )}
 
@@ -483,6 +494,7 @@ export function BillingQueuePage() {
           onAudit={(id) => void runEncounterAction(id, "audit")}
           onCharge={(id) => void runEncounterAction(id, "charge")}
           onEditFunding={setFundingEncounterId}
+          focusEncounterId={focusEncounterId}
         />
       )}
 
@@ -564,6 +576,7 @@ function EncounterTable({
   enableBatch = false,
   onBatchCharge,
   onEditFunding,
+  focusEncounterId,
 }: {
   rows: BillingData["encounters"];
   data: BillingData;
@@ -573,6 +586,7 @@ function EncounterTable({
   enableBatch?: boolean;
   onBatchCharge?: (ids: string[]) => void;
   onEditFunding?: (id: string) => void;
+  focusEncounterId?: string | null;
 }) {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   useEffect(() => { setSelectedIds(new Set()); }, [rows, enableBatch]);
@@ -603,7 +617,7 @@ function EncounterTable({
             {rows.map((row) => {
               const charges = data.chargesByEncounter.get(row.id) ?? [];
               const canCharge = row.billing_status === "ready" && !row.blockingChecks.length && !charges.length;
-              return <tr key={row.id}>
+              return <tr key={row.id} id={`billing-encounter-${row.id}`} tabIndex={row.id === focusEncounterId ? -1 : undefined} style={{ backgroundColor: row.id === focusEncounterId ? "rgba(79, 126, 93, 0.12)" : undefined }}>
                 {enableBatch && <td><input type="checkbox" aria-label={`Select ${row.clientName} encounter`} checked={canCharge && selectedIds.has(row.id)} disabled={!canCharge || Boolean(savingId)} onChange={(event) => setSelectedIds((current) => {
                   const next = new Set(current);
                   if (event.target.checked) next.add(row.id); else next.delete(row.id);
