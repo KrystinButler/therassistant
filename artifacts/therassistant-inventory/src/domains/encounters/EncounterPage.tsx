@@ -8,6 +8,7 @@ import {
   addEncounterServiceLine,
   updateEncounterServiceLine,
   removeEncounterServiceLine,
+  voidPreclaimServiceLine,
   saveClinicalNote,
   signEncounterNote,
 } from "../clinical/repository";
@@ -42,7 +43,7 @@ import {
   withClinicalSourceImport,
 } from "./clinical-source-context";
 import { getEncounterDetail, updateEncounter } from "./repository";
-import { createChargeFromEncounter } from "../billing/repository";
+import { createChargeFromEncounter, routeEncounterToBilling } from "../billing/repository";
 import { scheduledSessionTime } from "./scheduled-session-time";
 import { noteTypeForService } from "./service-note-template";
 import "./encounter-page.css";
@@ -272,17 +273,23 @@ export function EncounterPage() {
   }
 
   async function addDiagnosis() {
-    await withSave(
-      () => addEncounterDiagnosis(encounterId, {
-        diagnosisCode,
-        diagnosisDescription,
-        isPrimary: (data?.diagnoses.length ?? 0) === 0,
-      }),
-      "Diagnosis added to encounter.",
+    if (data?.diagnoses.some((row) => String(row.diagnosis_code ?? "").toUpperCase() === diagnosisCode.trim().toUpperCase())) {
+      setError("This diagnosis is already attached to the encounter. Choose a different diagnosis or review the existing billing diagnosis.");
+      return;
+    }
+    const success = await withSave(
+      async () => {
+        await addEncounterDiagnosis(encounterId, {
+          diagnosisCode, diagnosisDescription,
+          isPrimary: (data?.diagnoses.length ?? 0) === 0,
+        });
+        const result = await routeEncounterToBilling(encounterId);
+        if (!result.ok && !result.blocked) throw new Error(result.message);
+      },
+      signed ? "Billing diagnosis added and billing readiness refreshed. The signed clinical note was not changed." : "Diagnosis added and billing readiness refreshed.",
       true,
     );
-    setDiagnosisCode("");
-    setDiagnosisDescription("");
+    if (success) { setDiagnosisCode(""); setDiagnosisDescription(""); }
   }
 
   function editServiceLine(line: EncounterDetail["serviceLines"][number]) {
@@ -307,35 +314,46 @@ export function EncounterPage() {
     let values;
     try {
       values = normalizedServiceLine({ cptCode: serviceCode, modifier1, units, chargeDollars, placeOfService });
-      if (!editingServiceLineId && matchingServiceLineExists(data?.serviceLines ?? [], values)) {
+      const otherLines = (data?.serviceLines ?? []).filter((line) => String(line.id) !== editingServiceLineId);
+      if (matchingServiceLineExists(otherLines, values)) {
         throw new Error("This encounter already has that procedure, modifier and place of service. Edit the existing line instead of adding a duplicate.");
       }
     } catch (err) {
       setServiceError(err instanceof Error ? err.message : "Review service-line details.");
       return;
     }
-    const correctingBlockedCharge = Boolean(editingServiceLineId && data?.chargeLines.some((charge) =>
-      String(charge.service_line_id) === editingServiceLineId && charge.charge_status === "blocked"));
+    const correctingPreclaimCharge = Boolean(editingServiceLineId && data?.chargeLines.some((charge) =>
+      String(charge.service_line_id) === editingServiceLineId && ["blocked", "ready_for_claim"].includes(String(charge.charge_status))));
     const success = await withSave(
       async () => {
         if (editingServiceLineId) await updateEncounterServiceLine(encounterId, editingServiceLineId, values);
         else await addEncounterServiceLine(encounterId, values);
-        if (correctingBlockedCharge) {
+        if (signed || correctingPreclaimCharge) {
           const result = await createChargeFromEncounter(encounterId);
-          if (!result.ok) throw new Error("Service line saved, but charge reconciliation did not complete. Use Reconcile Charges or review Billing.");
+          if (!result.ok && !result.blocked) throw new Error("Service line saved, but charge reconciliation failed: " + result.message);
+        } else {
+          const result = await routeEncounterToBilling(encounterId);
+          if (!result.ok && !result.blocked) throw new Error(result.message);
         }
       },
-      correctingBlockedCharge ? "Service line corrected and existing blocked charges reconciled." : editingServiceLineId ? "Service line updated." : "Service line added.",
+      correctingPreclaimCharge ? "Unclaimed service line corrected and charges reconciled." : editingServiceLineId ? "Service line updated and billing rechecked." : "Service line added and billing rechecked.",
       true,
       setServiceError,
     );
     if (success) resetServiceEditor();
   }
   async function removeServiceLine(lineId: string) {
-    if (!window.confirm("Remove this unbilled service line? This cannot be undone.")) return;
+    if (!window.confirm("Remove this unclaimed source line and void its pre-claim charge, if present? This does not change signed documentation, submitted claims, or payments.")) return;
+    const hasPreclaimCharge = Boolean(data?.chargeLines.some((charge) =>
+      String(charge.service_line_id) === lineId && ["blocked", "ready_for_claim"].includes(String(charge.charge_status))));
     const success = await withSave(
-      () => removeEncounterServiceLine(encounterId, lineId),
-      "Unbilled service line removed.",
+      async () => {
+        if (hasPreclaimCharge) await voidPreclaimServiceLine(encounterId, lineId);
+        else await removeEncounterServiceLine(encounterId, lineId);
+        const result = await routeEncounterToBilling(encounterId);
+        if (!result.ok && !result.blocked) throw new Error(result.message);
+      },
+      hasPreclaimCharge ? "Unclaimed charge voided, source line removed, and billing rechecked." : "Unbilled service line removed and billing rechecked.",
       true,
       setServiceError,
     );
@@ -414,8 +432,9 @@ export function EncounterPage() {
 
   const encounter = data.encounter;
   const serviceDate = String(encounter.started_at ?? "").slice(0, 10);
-  const billedLineIds = new Set(data.chargeLines.filter((charge) => !["blocked", "voided"].includes(String(charge.charge_status))).map((charge) => String(charge.service_line_id)));
-  const removableLineIds = new Set(data.serviceLines.filter((line) => !data.chargeLines.some((charge) => String(charge.service_line_id) === String(line.id) && charge.charge_status !== "voided")).map((line) => String(line.id)));
+  const billedLineIds = new Set(data.chargeLines.filter((charge) => !["blocked", "ready_for_claim", "voided"].includes(String(charge.charge_status))).map((charge) => String(charge.service_line_id)));
+  const removableLineIds = new Set(data.serviceLines.filter((line) => !data.chargeLines.some((charge) =>
+    String(charge.service_line_id) === String(line.id) && !["blocked", "ready_for_claim", "voided"].includes(String(charge.charge_status)))).map((line) => String(line.id)));
   const canEditUnbilledServices = data.claims.length === 0;
   const note = data.notes[0];
   const currentTreatmentPlan = data.treatmentPlans.find((plan) => String(plan.id) === focusedTreatmentPlanId)
@@ -799,12 +818,15 @@ export function EncounterPage() {
       </div>
 
       <div className="encounter-lower-grid">
-        <section className="thera-card" id="encounter-diagnoses"><div className="thera-card-header"><div><div className="thera-eyebrow">CLINICAL CONTEXT</div><h2>Diagnoses</h2></div></div>{data.diagnoses.length > 0 && <div className="thera-table-wrap"><table className="thera-table"><thead><tr><th>Code</th><th>Description</th><th>Primary</th></tr></thead><tbody>{data.diagnoses.map((diagnosis) => <tr key={diagnosis.id}><td><strong>{String(diagnosis.diagnosis_code)}</strong></td><td>{String(diagnosis.diagnosis_description ?? "—")}</td><td>{diagnosis.is_primary ? "Yes" : "No"}</td></tr>)}</tbody></table></div>}{!signed && <div className="encounter-compact-form"><Icd10SearchInput code={diagnosisCode} description={diagnosisDescription} serviceDate={serviceDate} onSelect={(result) => { setDiagnosisCode(result.code); if (result.name) setDiagnosisDescription(result.name); }} /><input className="thera-input" placeholder="Diagnosis description" value={diagnosisDescription} onChange={(event) => setDiagnosisDescription(event.target.value)} /><button type="button" className="thera-action secondary" disabled={saving || !diagnosisCode.trim()} onClick={() => void addDiagnosis()}>+ Add Diagnosis</button></div>}</section>
+        <section className="thera-card" id="encounter-diagnoses"><div className="thera-card-header"><div><div className="thera-eyebrow">CLINICAL CONTEXT</div><h2>Diagnoses</h2></div></div>{data.diagnoses.length > 0 && <div className="thera-table-wrap"><table className="thera-table"><thead><tr><th>Code</th><th>Description</th><th>Primary</th></tr></thead><tbody>{data.diagnoses.map((diagnosis) => <tr key={diagnosis.id}><td><strong>{String(diagnosis.diagnosis_code)}</strong></td><td>{String(diagnosis.diagnosis_description ?? "—")}</td><td>{diagnosis.is_primary ? "Yes" : "No"}</td></tr>)}</tbody></table></div>}{(!signed || data.claims.length === 0) && <div className="encounter-compact-form">{signed && <p className="thera-table-subtext">Add a billing diagnosis without unlocking or altering the signed clinical note. Verify that the diagnosis is supported by the documented assessment.</p>}<Icd10SearchInput code={diagnosisCode} description={diagnosisDescription} serviceDate={serviceDate} onSelect={(result) => { setDiagnosisCode(result.code); if (result.name) setDiagnosisDescription(result.name); }} /><input className="thera-input" placeholder="Diagnosis description" value={diagnosisDescription} onChange={(event) => setDiagnosisDescription(event.target.value)} /><button type="button" className="thera-action secondary" disabled={saving || !diagnosisCode.trim()} onClick={() => void addDiagnosis()}>+ Add Diagnosis</button></div>}</section>
         <section className="thera-card" id="encounter-coding-service">
           <div className="thera-card-header split"><div><div className="thera-eyebrow">CLAIM CORRECTIONS</div><h2>Coding & Service</h2><p>Correct rejected or held claim fields in the revenue-cycle workqueue; signed clinical notes stay locked.</p></div><div className="thera-filter-row">{data.chargeLines.some((charge) => charge.charge_status === "blocked") && <button type="button" className="thera-action secondary" disabled={saving} onClick={() => void withSave(async () => {
             const result = await createChargeFromEncounter(encounterId);
             if (!result.ok) throw new Error(result.details?.join(" ") || result.message);
-          }, "Existing charges reconciled against the corrected service lines.")}>Reconcile Charges</button>}<Link href="/rejections" className="thera-action secondary">Open Rejections →</Link></div></div>
+          }, "Existing charges reconciled against the corrected service lines.")}>Reconcile Charges</button>}<button type="button" className="thera-action secondary" disabled={saving} onClick={() => void withSave(async () => {
+             const result = await routeEncounterToBilling(encounterId);
+             if (!result.ok && !result.blocked) throw new Error(result.message);
+           }, "Billing readiness rechecked against current encounter data.", true)}>Recheck Billing</button><Link href="/rejections" className="thera-action secondary">Open Rejections →</Link></div></div>
           <div className="encounter-claim-actions" role="group" aria-label="Correct and release claims">
             {data.claims.length ? data.claims.map((claim) => {
               const status = String(claim.claim_status ?? "draft");
@@ -827,7 +849,7 @@ export function EncounterPage() {
             <Field label="Payer" value={String(data.payer?.name ?? "—")} />
           </div>
           <div className="encounter-saved-services">
-            <div className="thera-card-header"><div><h3>Recorded service lines ({data.serviceLines.length})</h3><p>Unbilled and blocked charge source lines can be corrected after signing. Existing claims and posted charges remain locked.</p></div></div>
+            <div className="thera-card-header"><div><h3>Recorded service lines ({data.serviceLines.length})</h3><p>Unclaimed source lines—including ready-for-claim charges—can be edited or voided after signing. Submitted claims and posted balances remain locked.</p></div></div>
             {data.serviceLines.length ? <div className="thera-table-wrap"><table className="thera-table">
               <thead><tr><th>CPT / HCPCS</th><th>Modifier</th><th>Units</th><th>POS</th><th>Charge</th>{canEditUnbilledServices && <th>Actions</th>}</tr></thead>
               <tbody>{data.serviceLines.map((line) => <tr key={String(line.id)}>

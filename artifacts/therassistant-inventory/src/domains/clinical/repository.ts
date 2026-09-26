@@ -3,6 +3,7 @@ import {
   tenantSelect,
   tenantUpdate,
   tenantDelete,
+  tenantRpc,
   type Row,
 } from "../../lib/tenant-data-client";
 import { createChargeFromEncounter } from "../billing/repository";
@@ -161,7 +162,7 @@ async function assertUnbilledLine(encounterId: string, lineId: string, allowBloc
   ]);
   if (!encounters.length || !lines.length) throw new Error("Service line not found in this practice's encounter.");
   if (claims.length) throw new Error("This encounter has an existing claim. Correct it in Rejections or Claims instead.");
-  if (charges.some((charge) => charge.charge_status !== "voided" && !(allowBlockedCorrection && charge.charge_status === "blocked")))
+  if (charges.some((charge) => charge.charge_status !== "voided" && !(allowBlockedCorrection && ["blocked", "ready_for_claim"].includes(String(charge.charge_status)))))
     throw new Error("This service line has a downstream charge that cannot be edited here. Open the revenue-cycle workqueue.");
   return lines[0];
 }
@@ -190,6 +191,14 @@ export async function updateEncounterServiceLine(encounterId: string, lineId: st
 export async function removeEncounterServiceLine(encounterId: string, lineId: string): Promise<void> {
   await assertUnbilledLine(encounterId, lineId);
   await tenantDelete("encounter_service_lines", lineId);
+}
+
+/** Atomically voids unclaimed charges and removes their source line under tenant/claim guards. */
+export function voidPreclaimServiceLine(encounterId: string, lineId: string) {
+  return tenantRpc<{ voided: boolean; encounter_id: string; service_line_id: string }>(
+    "void_unclaimed_service_line",
+    { p_encounter_id: encounterId, p_service_line_id: lineId },
+  );
 }
 
 export async function signEncounterNote(
