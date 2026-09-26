@@ -143,7 +143,7 @@ export function workRouteForWorkItem(
   type: string,
   id: string,
   workqueueType: string,
-  related: { encounterId?: string; claimId?: string } = {},
+  related: { encounterId?: string; claimId?: string; clientId?: string } = {},
 ) {
   const queue = workqueueType.trim().toLowerCase();
   const encounterId = type === "encounter" ? id : related.encounterId;
@@ -152,6 +152,15 @@ export function workRouteForWorkItem(
 
   if (queue.startsWith("billing_readiness") || queue === "charge_validation") {
     return `/billing/charges?tab=blocked${encounterId ? `&focus=${queryId(encounterId)}` : ""}`;
+  }
+  if (queue === "eligibility_issue") {
+    return related.clientId ? `/clients/${queryId(related.clientId)}?tab=coverage` : "/eligibility";
+  }
+  if (queue === "credentialing_issue" && type === "encounter") {
+    return "/payers-contracts";
+  }
+  if (queue === "missing_documentation" && encounterId) {
+    return `/encounters/${queryId(encounterId)}#encounter-progress-note-editor`;
   }
   if (queue === "charge_capture" || queue === "charges_ready") {
     return `/billing/charges?tab=ready${encounterId ? `&focus=${queryId(encounterId)}` : ""}`;
@@ -181,12 +190,13 @@ export function workRouteForWorkItem(
   if (["recoupment", "refund", "recovery"].includes(queue)) {
     return "/payments?tab=recovery";
   }
-  if (queue === "payment_exception" || queue === "unapplied_payment") {
+  if (["payment_exception", "unapplied_payment", "payment_posting_issue"].includes(queue)) {
+    if (type === "era") return "/payments?tab=era";
     return type === "payment"
       ? `/payments?payment=${queryId(id)}`
       : "/payments?tab=unapplied";
   }
-  if (queue === "era_match_exception" || queue === "era_import") {
+  if (["era_match_exception", "era_import", "unmatched_era"].includes(queue)) {
     return "/payments?tab=era";
   }
   if (["documentation", "clinical_documentation", "unsigned_note"].includes(queue) && encounterId) {
@@ -372,6 +382,7 @@ export async function getWorkCenterData() {
       ...context,
       sourceRoute: sourceRouteForWorkItem(sourceType, sourceId),
       workRoute: workRouteForWorkItem(sourceType, sourceId, String(item.workqueue_type ?? ""), {
+        clientId: context.clientId,
         encounterId: sourceType === "charge"
           ? String(chargesById.get(sourceId)?.encounter_id ?? "")
           : undefined,
