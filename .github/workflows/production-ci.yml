@@ -174,6 +174,9 @@ jobs:
       - name: Install Playwright Chromium
         run: pnpm exec playwright install --with-deps chromium
 
+      - name: FHIR browser runtime
+        run: pnpm run test:fhir:browser
+
       - name: Browser E2E
         run: pnpm test:e2e
 
