@@ -115,7 +115,7 @@ immutable
 set search_path = pg_catalog
 as $$
   select encode(
-    digest(
+    extensions.digest(
       convert_to(
         coalesce(p_previous_hash, '') || '|' ||
         jsonb_build_object(
