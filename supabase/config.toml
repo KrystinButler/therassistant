@@ -11,3 +11,6 @@ enable_signup = false
 [auth.email]
 enable_signup = true
 enable_confirmations = false
+
+[functions.smart-oauth-token]
+verify_jwt = false
