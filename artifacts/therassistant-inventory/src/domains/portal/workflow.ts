@@ -13,13 +13,23 @@ export type PortalDataInput = {
   now?: Date;
 };
 
+// Match private.portal_save_previsit_checkin_impl and record_client_checkin_impl.
+// A future date alone does not make a completed appointment eligible.
+const unavailableCheckInStatuses = new Set([
+  "in_session", "completed", "cancelled", "no_show", "late_cancel", "rescheduled",
+]);
+
+export function isPreVisitEligibleAppointment(appointment: PortalRow, now = new Date()) {
+  const startsAt = new Date(String(appointment.starts_at ?? ""));
+  return Number.isFinite(startsAt.getTime())
+    && startsAt >= now
+    && !unavailableCheckInStatuses.has(String(appointment.appointment_status ?? ""));
+}
+
 export function buildPatientPortalData(input: PortalDataInput) {
   const now = input.now ?? new Date();
   const upcomingAppointments = input.appointments
-    .filter((row) => {
-      const startsAt = new Date(String(row.starts_at ?? ""));
-      return Number.isFinite(startsAt.getTime()) && startsAt >= now && !["cancelled", "no_show"].includes(String(row.appointment_status ?? ""));
-    })
+    .filter((row) => isPreVisitEligibleAppointment(row, now))
     .sort((a, b) => String(a.starts_at ?? "").localeCompare(String(b.starts_at ?? "")));
 
   const visibleDocuments = input.documents.filter((row) =>
@@ -123,4 +133,10 @@ export function buildJournalEntryValues(input: JournalEntryInput, now = new Date
     entry_status: entryStatus,
     submitted_at: entryStatus === "submitted" ? now.toISOString() : null,
   };
+}
+
+
+// Progress describes persisted answers, not merely populated form controls.
+export function isResponseSaved(saved: Record<string, unknown> | null, current: Record<string, unknown>) {
+  return saved !== null && Object.entries(current).every(([key, value]) => saved[key] === value);
 }

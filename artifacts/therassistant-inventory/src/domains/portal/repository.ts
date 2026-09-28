@@ -58,9 +58,12 @@ export function addPortalJournalEntry(input: JournalEntryInput) {
 }
 
 export async function getPatientPortalData() {
-  const [payload, provider] = await Promise.all([
+  const [payload, providerResult] = await Promise.all([
     portalRpc<PatientPortalAggregate>("get_my_patient_portal_data"),
-    portalRpc<DataRow | null>("get_my_portal_provider_summary"),
+    portalRpc<DataRow | null>("get_my_portal_provider_summary").then(
+      (provider) => ({ provider, unavailable: false }),
+      () => ({ provider: null, unavailable: true }),
+    ),
   ]);
 
   if (!payload.patient) {
@@ -80,6 +83,8 @@ export async function getPatientPortalData() {
   return {
     ...portalData,
     treatmentGoals: payload.treatmentGoals,
-    provider,
+    provider: providerResult.provider,
+    providerUnavailable: providerResult.unavailable,
   };
 }
+
