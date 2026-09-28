@@ -110,6 +110,7 @@ function isForbiddenIp(address: string): boolean {
 
 async function validatedJwksUrl(raw: string): Promise<{ url: URL; address: string; family: 4 | 6 }> {
   const url = new URL(raw);
+  const hostname = url.hostname.replace(/^\\[|\\]$/g, "");
 
   if (
     url.protocol !== "https:" ||
@@ -117,13 +118,14 @@ async function validatedJwksUrl(raw: string): Promise<{ url: URL; address: strin
     url.password ||
     url.hash ||
     (url.port && url.port !== "443") ||
-    url.hostname === "localhost" ||
-    url.hostname.endsWith(".local")
+    hostname === "localhost" ||
+    hostname.endsWith(".local") ||
+    net.isIP(hostname) !== 0
   ) {
     throw new Error("Registered JWKS URI is not permitted.");
   }
 
-  const resolved = await lookup(url.hostname, { all: true, verbatim: true });
+  const resolved = await lookup(hostname, { all: true, verbatim: true });
   if (!resolved.length || resolved.some((entry) => isForbiddenIp(entry.address))) {
     throw new Error("Registered JWKS URI does not resolve to a public address.");
   }
@@ -147,17 +149,16 @@ async function fetchJwks(uri: string, forceRefresh = false): Promise<unknown> {
     const request = https.request(
       {
         protocol: "https:",
-        hostname: url.hostname,
+        hostname: address,
+        family,
         port: 443,
         path: `${url.pathname}${url.search}`,
         method: "GET",
         servername: url.hostname,
         headers: {
+          Host: url.host,
           Accept: "application/jwk-set+json, application/json",
           "User-Agent": "THERASSISTANT-SMART-Gateway/1.0",
-        },
-        lookup: (_hostname, _options, callback) => {
-          callback(null, address, family);
         },
       },
       (response) => {
@@ -202,7 +203,7 @@ async function fetchJwks(uri: string, forceRefresh = false): Promise<unknown> {
 }
 
 async function registeredClient(clientId: string): Promise<SmartClientRow | null> {
-  const result = await pool.query<SmartClientRow>(
+  const result = await pool.query(
     `
       select client_id, jwks_uri, allowed_scopes, allowed_algorithms
       from private.smart_backend_clients
@@ -213,7 +214,7 @@ async function registeredClient(clientId: string): Promise<SmartClientRow | null
     [clientId],
   );
 
-  return result.rows[0] ?? null;
+  return (result.rows[0] as SmartClientRow | undefined) ?? null;
 }
 
 function allowedAlgorithms(value: string[]): SupportedSmartAlgorithm[] {
@@ -244,7 +245,11 @@ router.post("/oauth/token", async (req: Request, res: Response) => {
       return oauthError(res, 400, "invalid_request", "client_assertion_type is invalid.");
     }
 
-    if (typeof body.client_assertion !== "string" || !body.client_assertion.trim()) {
+    if (
+      typeof body.client_assertion !== "string" ||
+      !body.client_assertion.trim() ||
+      body.client_assertion.length > 16_384
+    ) {
       return oauthError(res, 400, "invalid_request", "client_assertion is required.");
     }
 
