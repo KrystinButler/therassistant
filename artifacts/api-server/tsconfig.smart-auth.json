@@ -1,0 +1,15 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "incremental": false
+  },
+  "include": [
+    "src/lib/smart-backend-auth.ts",
+    "src/routes/smart-oauth.ts"
+  ],
+  "references": [
+    {
+      "path": "../../lib/db"
+    }
+  ]
+}
