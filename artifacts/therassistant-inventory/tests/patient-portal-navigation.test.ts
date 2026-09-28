@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { PORTAL_LOGIN, isPatientPortalPath } from "../src/domains/portal/routes";
+import { PORTAL_ACTIVATE, PORTAL_HOME, PORTAL_LOGIN, isPatientPortalPath, rootPatientPortalDestination } from "../src/domains/portal/routes";
 
 test("staff navigation exposes the actual patient portal in a separate tab",()=>{
   const shell=readFileSync(new URL("../src/components/app-shell.tsx",import.meta.url),"utf8");
@@ -19,4 +19,13 @@ test("staff journal offers direct patient portal testing without treating staff 
   assert.match(page,/href=\{PORTAL_LOGIN\}/);
   assert.match(gate,/getMyPortalContext\(\)/);
   assert.match(gate,/This account is not linked to an active patient portal invitation/);
+});
+
+test("Site URL fallback chooses patient routes only for matching nonstaff identities", () => {
+  const email = { invitedEmail: "patient@example.invalid", authenticatedEmail: "PATIENT@example.invalid" };
+  assert.equal(rootPatientPortalDestination({ ...email, status: "invited", hasActiveStaffMembership: false }), PORTAL_ACTIVATE);
+  assert.equal(rootPatientPortalDestination({ ...email, status: "active", hasActiveStaffMembership: false }), PORTAL_HOME);
+  assert.equal(rootPatientPortalDestination({ ...email, status: "active", hasActiveStaffMembership: true }), null);
+  assert.equal(rootPatientPortalDestination({ ...email, authenticatedEmail: "other@example.invalid", status: "invited", hasActiveStaffMembership: false }), null);
+  assert.equal(rootPatientPortalDestination({ ...email, status: "revoked", hasActiveStaffMembership: false }), null);
 });
