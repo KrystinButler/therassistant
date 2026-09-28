@@ -17,7 +17,7 @@ function base64url(value: unknown) {
 function makeJwt(
   header: Record<string, unknown>,
   payload: Record<string, unknown>,
-  privateKey: Parameters<typeof sign>[2],
+  privateKey: any,
   algorithm: string,
   dsaEncoding?: "ieee-p1363",
 ) {
@@ -166,5 +166,6 @@ test("SMART v2 system scopes are accepted and v1 read syntax is rejected", () =>
     ["system/Practitioner.rs", "system/Patient.r"],
   );
 
+  assert.deepEqual(parseRequestedScopes("system/*.rs"), ["system/*.rs"]);
   assert.throws(() => parseRequestedScopes("system/Practitioner.read"));
 });
