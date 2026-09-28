@@ -1,3 +1,4 @@
+import { PractitionerRoleImport } from "./PractitionerRoleImport";
 import { useEffect, useMemo, useState } from "react";
 
 import { StatusBadge } from "../../components/status-badge";
@@ -637,6 +638,8 @@ export function ImportsPage() {
         </div>
         <button type="button" className="thera-action secondary" onClick={downloadTemplate}>Download Template</button>
       </div>
+
+      <PractitionerRoleImport />
 
       {error && <div className="thera-state error" style={{ marginBottom: 12 }}>{error}</div>}
       {message && <div className="thera-alert" style={{ marginBottom: 12 }}>{message}</div>}
