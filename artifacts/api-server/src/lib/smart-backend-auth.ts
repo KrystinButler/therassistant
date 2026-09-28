@@ -199,7 +199,7 @@ export function parseRequestedScopes(scope: unknown): string[] {
 
   const scopes = [...new Set(scope.trim().split(/\s+/))];
 
-  if (scopes.some((item) => !/^system\/[A-Za-z][A-Za-z0-9]*\.[cruds*]+$/.test(item))) {
+  if (scopes.some((item) => !/^system\/(?:\\*|[A-Za-z][A-Za-z0-9]*)\.[cruds*]+$/.test(item))) {
     throw new Error("Requested scope is not a valid SMART v2 system scope.");
   }
 
