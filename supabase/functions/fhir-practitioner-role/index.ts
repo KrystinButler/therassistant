@@ -15,6 +15,8 @@ Deno.serve(async (req: Request) => {
   const origin = req.headers.get("origin");
   const allowed =
     !origin ||
+    origin === "http://127.0.0.1:4173" ||
+    origin === "http://localhost:4173" ||
     origin === "https://therassistant.vercel.app" ||
     origin === "https://therassistant-therassistant-1064.vercel.app" ||
     /^https:\/\/therassistant-[a-z0-9-]+-therassistant-1064\.vercel\.app$/.test(

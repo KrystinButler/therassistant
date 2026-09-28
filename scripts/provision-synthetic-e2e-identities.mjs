@@ -69,6 +69,7 @@ const IDS = {
   entity: "11000000-0000-4000-8000-000000000001",
   location: "12000000-0000-4000-8000-000000000001",
   provider: "20000000-0000-4000-8000-000000000001",
+  directoryProvider: "20000000-0000-4000-8000-000000000099",
   patient: "40000000-0000-4000-8000-000000000001",
   insuredPatient: "40000000-0000-4000-8000-000000000002",
   appointment: "50000000-0000-4000-8000-000000000001",
@@ -143,6 +144,20 @@ await upsert("providers", [{
   taxonomy_code: "1041C0700X",
   email: identities.provider.email,
   phone: "303-555-0101",
+  primary_specialty: "Behavioral Health",
+}]);
+
+await upsert("providers", [{
+  id: IDS.directoryProvider,
+  tenant_id: IDS.tenant,
+  first_name: "Directory",
+  last_name: "Tester",
+  credentials: "LCSW",
+  provider_status: "active",
+  individual_npi: "1234567893",
+  taxonomy_code: "1041C0700X",
+  email: "directory.provider@example.test",
+  phone: "303-555-0198",
   primary_specialty: "Behavioral Health",
 }]);
 
