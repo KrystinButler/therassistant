@@ -5,6 +5,7 @@ import {
 
 import healthRouter from "./health";
 import inventoryRouter from "./inventory";
+import smartOauthRouter from "./smart-oauth";
 
 import dashboardRouter from "./dashboard";
 import clientsRouter from "./clients";
@@ -23,6 +24,7 @@ const router: IRouter = Router();
 
 router.use(healthRouter);
 router.use(inventoryRouter);
+router.use(smartOauthRouter);
 
 router.use(dashboardRouter);
 router.use(clientsRouter);
