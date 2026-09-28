@@ -1,9 +1,13 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+
+const repoFile = (path: string) =>
+  fileURLToPath(new URL(`../../../${path}`, import.meta.url));
 
 test("production routes SMART token endpoint before the SPA fallback", () => {
-  const vercel = JSON.parse(readFileSync("vercel.json", "utf8"));
+  const vercel = JSON.parse(readFileSync(repoFile("vercel.json"), "utf8"));
   assert.ok(Array.isArray(vercel.rewrites));
   assert.deepEqual(vercel.rewrites[0], {
     source: "/api/oauth/token",
@@ -18,10 +22,10 @@ test("production routes SMART token endpoint before the SPA fallback", () => {
 
 test("SMART OAuth Edge Function uses custom client assertion auth", () => {
   const source = readFileSync(
-    "supabase/functions/smart-oauth-token/index.ts",
+    repoFile("supabase/functions/smart-oauth-token/index.ts"),
     "utf8",
   );
-  const config = readFileSync("supabase/config.toml", "utf8");
+  const config = readFileSync(repoFile("supabase/config.toml"), "utf8");
 
   assert.match(
     source,
