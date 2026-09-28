@@ -3,7 +3,7 @@
 import { test, expect } from '@playwright/test';
 import { readFileSync } from 'node:fs';
 import { stripTypeScriptTypes } from 'node:module';
-const source = stripTypeScriptTypes(readFileSync(new URL('../../artifacts/api-server/src/fhir/practitioner-role.ts', import.meta.url), 'utf8'));
+const source = stripTypeScriptTypes(readFileSync(new URL('../../supabase/functions/fhir-practitioner-role/normalizer.ts', import.meta.url), 'utf8'));
 for (const reverse of [false, true]) test(`browser preserves independent contacts (reverse=${reverse})`, async ({ page }) => {
   const result = await page.evaluate(async ({ source, reverse }) => {
     const url = URL.createObjectURL(new Blob([source], {type:'text/javascript'}));

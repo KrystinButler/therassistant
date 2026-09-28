@@ -4,12 +4,14 @@ on:
     paths:
       - 'artifacts/api-server/src/fhir/**'
       - 'tests/fhir/**'
+      - 'supabase/functions/fhir-practitioner-role/**'
       - '.github/workflows/fhir-validation.yml'
   push:
     branches: [main]
     paths:
       - 'artifacts/api-server/src/fhir/**'
       - 'tests/fhir/**'
+      - 'supabase/functions/fhir-practitioner-role/**'
       - '.github/workflows/fhir-validation.yml'
 permissions:
   contents: read
@@ -21,4 +23,4 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '24'
-      - run: node --test tests/fhir/practitioner-role.test.ts
+      - run: node --test tests/fhir/*.test.ts

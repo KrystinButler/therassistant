@@ -1,6 +1,6 @@
 # PractitionerRole directory validation
 
-Implemented: a dependency-free TypeScript normalization boundary plus 52 node:test cases and three Playwright browser-runtime regression cases. This is **not yet a live directory ingestion feature**.
+Implemented: a dependency-free TypeScript normalization boundary plus 59 node:test cases and three Playwright browser-runtime regression cases. The live integration adds an authenticated Supabase Edge Function and an Administration → Imports & Migration upload panel.
 
 ## Run
 
@@ -13,7 +13,7 @@ The browser tests run the actual normalizer in Chromium with synthetic inputs. T
 
 ## Contract
 
-`artifacts/api-server/src/fhir/practitioner-role.ts` exports `normalizePractitionerRole(payload, dependencies)` and structured `PractitionerRoleValidationError` errors with `code` and `field`.
+`supabase/functions/fhir-practitioner-role/normalizer.ts` exports `normalizePractitionerRole(payload, dependencies)` and structured `PractitionerRoleValidationError` errors with `code` and `field`.
 
 Pass a trusted, versioned NUCC membership function through `taxonomyExists` and record its release in `taxonomyVersion`. The caller must check the code's effective status in that release. Lookup outages propagate to the caller rather than being misreported as invalid provider input. The small test code list is synthetic test infrastructure only; it is not the production taxonomy catalog.
 
@@ -23,20 +23,23 @@ NUCC coding is selected from each specialty concept; multiple specialties are re
 
 NPI checksum validation does not verify issuance, ownership, enrollment, or credentialing. Null-tolerant normalization is a directory adapter policy, not a claim that null collections are valid FHIR JSON.
 
-## Live integration still required
+## Live integration
 
-The inspected main branch has no PractitionerRole ingestion endpoint, role persistence model, or NUCC reference dataset. Before enabling imports:
+`supabase/functions/fhir-practitioner-role` hosts the canonical normalizer, the import service, and the authenticated HTTP entrypoint. The Edge Function validates user sessions, checks practice write access, validates the payload, requires exactly one matching existing provider NPI within that tenant, and calls a service-only atomic save RPC. The RPC rechecks actor membership and provider/tenant/NPI alignment. Database writes cannot be called directly by browser users; RLS restricts reads to practice staff.
 
-1. Load and verify an official versioned NUCC release and connect the lookup.
-2. Implement an authenticated, tenant-authorized import service with atomic storage, source provenance, and duplicate protection. Persist role-specific multi-value contacts rather than overwriting the provider's single email/phone fields.
-3. Map controlled validation errors to a 4xx OperationOutcome; treat lookup outages separately. Never expose raw infrastructure errors.
-4. Add synthetic-tenant API/database/browser end-to-end tests covering authorization, cross-tenant denial, invalid input, persistence, retry, and display.
+The import panel accepts one PractitionerRole JSON resource (maximum 250 KB), shows a validation preview, and saves only after the user clicks Save provider role. Source name plus external role ID provides idempotent update behavior within each practice. Role-specific contacts and specialties remain separate from provider-profile fields. The original role resource, importing user, and timestamps are retained. Recent imports display up to 50 records.
 
-No production data, schema, API routes, or UI behavior are changed by this commit.
+The bundled membership set contains 883 codes from the official NUCC 25.1 CSV, which NUCC also lists for January 2026. Its URL and SHA-256 are recorded in taxonomy.ts. It is a pinned reference release, not an automatically refreshed feed. Before changing releases, verify effective dates and regenerate the set from the official CSV. External directory polling and automatic CAQH connectivity are not included; this workflow imports files supplied by staff.
+
+## Verification
+
+- 59 Node validation/service tests pass.
+- 508 existing EHR regression tests pass.
+- Phase 3 TypeScript checking and frontend production build pass.
+- Live transactional SQL checks pass for staff authorization, cross-tenant denial, patient denial, contact persistence, and duplicate prevention. All synthetic data was rolled back.
+- Live Edge Function rejects unauthenticated HTTP requests with 401.
+- The three standalone Chromium tests remain unexecuted because the browser download failed. A signed-in browser import is not claimed as verified.
 
 References:
 - https://hl7.org/fhir/R4/practitionerrole.html
-- https://hl7.org/fhir/R4/practitioner.html
-- https://www.nucc.org/index.php/code-sets-mainmenu-41/provider-taxonomy-mainmenu-40
-
-Verification in implementation environment: 52 Node tests passed; strict TypeScript checking passed for the module and test files. Playwright discovers all three cases, but browser execution is blocked because Chromium downloads return an invalid/truncated archive. No browser pass or full application build is claimed.
+- https://www.nucc.org/index.php/code-sets-mainmenu-41/provider-taxonomy-mainmenu-40/csv-mainmenu-57

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { normalizePractitionerRole, PractitionerRoleValidationError, NPI_SYSTEM, NUCC_SYSTEM } from '../../artifacts/api-server/src/fhir/practitioner-role.ts';
+import { normalizePractitionerRole, PractitionerRoleValidationError, NPI_SYSTEM, NUCC_SYSTEM } from '../../supabase/functions/fhir-practitioner-role/normalizer.ts';
 
 // Synthetic fixtures: checksum validity does not establish provider identity.
 export const fixture = () => ({
