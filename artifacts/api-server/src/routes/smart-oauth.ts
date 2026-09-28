@@ -5,6 +5,7 @@ import net from "node:net";
 import { Router, type Request, type Response } from "express";
 import { pool } from "@workspace/db";
 
+import { logger } from "../lib/logger";
 import {
   SMART_CLIENT_ASSERTION_TYPE,
   parseCompactJwt,
@@ -395,7 +396,7 @@ router.post("/oauth/token", async (req: Request, res: Response) => {
       scope: scopes.join(" "),
     });
   } catch (error) {
-    req.log?.error?.({ error }, "SMART Backend Services token exchange failed");
+    logger.error({ error }, "SMART Backend Services token exchange failed");
     return oauthError(
       res,
       500,
