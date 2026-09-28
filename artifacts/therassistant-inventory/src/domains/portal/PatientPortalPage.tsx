@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   ArrowRight, BookOpenText, CalendarDays, CheckCircle2, ChevronRight,
   ClipboardCheck, Clock3, CreditCard, FileText, Heart, Home,
@@ -7,7 +7,7 @@ import {
 import { Link } from "wouter";
 
 import { dateTime, money } from "../../lib/format";
-import { getPatientPortalData } from "./repository";
+import { getPatientPortalData, recordCheckIn } from "./repository";
 import { PORTAL_HOME, PORTAL_JOURNAL, portalCheckInPath } from "./routes";
 import "./patient-journal.css";
 import "./patient-home.css";
@@ -56,6 +56,8 @@ export function PatientPortalPage() {
   const [data, setData] = useState<PortalData | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [working, setWorking] = useState<string | null>(null);
+  const arrivalPending = useRef(false);
   const [error, setError] = useState<string | null>(null);
 
   async function load(initial = false) {
@@ -75,9 +77,36 @@ export function PatientPortalPage() {
 
   useEffect(() => { void load(true); }, []);
 
-  if (loading) return <div className="pj-loading">Loading your patient portal...</div>;
-  if (!data) return <main className="pj-loading pj-error" role="alert">{error ?? "Your patient portal is unavailable."}</main>;
+  async function checkIn(appointmentId: string, step: "on_my_way" | "arrived" | "checked_in") {
+    if (arrivalPending.current) return;
+    arrivalPending.current = true;
+    setWorking(`${appointmentId}-${step}`);
+    setError(null);
+    try {
+      await recordCheckIn(appointmentId, step);
+      await load();
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Unable to update arrival. Please try again.");
+    } finally {
+      arrivalPending.current = false;
+      setWorking(null);
+    }
+  }
 
+  if (loading) return <div className="pj-loading">Loading your patient portal...</div>;
+  if (!data) return <main className="pj-loading pj-error" role="alert">{error ?? "Your patient portal is unavailable."}<button type="button" className="pj-primary-button" onClick={() => void load(true)}>Try again</button></main>;
+
+  return <PatientPortalView data={data} refreshing={refreshing} error={error} working={working} load={load} checkIn={checkIn} />;
+}
+
+export function PatientPortalView({ data, refreshing, error, working, load, checkIn }: {
+  data: PortalData;
+  refreshing: boolean;
+  error: string | null;
+  working: string | null;
+  load: () => void;
+  checkIn: (appointmentId: string, step: "on_my_way" | "arrived" | "checked_in") => Promise<void>;
+}) {
   const next = data.upcomingAppointments[0];
   const relatedCheckIn = next
     ? data.checkins.find((row) => String(row.appointment_id ?? "") === next.id)
@@ -137,7 +166,7 @@ export function PatientPortalPage() {
 
           <section className="ph-next" id="appointments" aria-labelledby="ph-next-title">
             <div className="ph-next-decoration" aria-hidden="true" />
-            <div className="ph-next-top"><span><CalendarDays size={17} aria-hidden="true" /> YOUR NEXT APPOINTMENT</span>{next && <span className="ph-status">Scheduled</span>}</div>
+            <div className="ph-next-top"><span><CalendarDays size={17} aria-hidden="true" /> YOUR NEXT APPOINTMENT</span>{next && <span className="ph-status">{appointmentStatus(next.appointment_status)}</span>}</div>
             {next ? <>
               <h2 id="ph-next-title">{appointmentDate(next.starts_at)}</h2>
               <p className="ph-next-time"><Clock3 size={17} aria-hidden="true" /> {appointmentTime(next.starts_at)} – {appointmentTime(next.ends_at)}</p>
@@ -147,8 +176,9 @@ export function PatientPortalPage() {
               </div>
               <div className="ph-next-bottom">
                 <div className="ph-checkin-state">{preVisitSubmitted ? <CheckCircle2 size={18} /> : <ClipboardCheck size={18} />}{preVisitSubmitted ? "Your pre-visit questions have been submitted." : preVisitStarted ? "Your pre-visit questions are in progress." : "Complete your pre-visit questions before your appointment."}</div>
-                {nextCheckIn && <Link className="ph-next-button" href={nextCheckIn}>{preVisitSubmitted ? "Review check-in" : preVisitStarted ? "Continue check-in" : "Start check-in"} <ArrowRight size={16} aria-hidden="true" /></Link>}
+                {nextCheckIn && <Link className="ph-next-button" href={nextCheckIn}>{preVisitSubmitted ? "Review pre-visit questions" : preVisitStarted ? "Continue pre-visit questions" : "Start pre-visit questions"} <ArrowRight size={16} aria-hidden="true" /></Link>}
               </div>
+              <ArrivalActions appointment={next} checkin={relatedCheckIn} working={working} checkIn={checkIn} />
             </> : <>
               <h2 id="ph-next-title">No upcoming appointment on your calendar</h2>
               <p className="ph-no-visit">Only upcoming appointments that are open for check-in appear here. If you expected a visit, contact your practice to confirm its status.</p>
@@ -156,7 +186,7 @@ export function PatientPortalPage() {
             </>}
             {data.upcomingAppointments.length > 1 && <div className="ph-more-visits">
               <strong>Later appointments</strong>
-              {data.upcomingAppointments.slice(1, 3).map((appointment) => <div key={appointment.id}><span>{dateTime(String(appointment.starts_at))}</span><Link href={portalCheckInPath(appointment.id)}>View check-in <ChevronRight size={13} /></Link></div>)}
+              {data.upcomingAppointments.slice(1).map((appointment) => <article key={appointment.id} className="ph-later-visit"><div><span>{dateTime(String(appointment.starts_at))}</span><span className="ph-status">{appointmentStatus(appointment.appointment_status)}</span></div><Link href={portalCheckInPath(appointment.id)}>Pre-visit questions <ChevronRight size={13} /></Link><ArrivalActions appointment={appointment} checkin={data.checkins.find((row) => String(row.appointment_id ?? "") === appointment.id)} working={working} checkIn={checkIn} /></article>)}
             </div>}
           </section>
 
@@ -179,9 +209,9 @@ export function PatientPortalPage() {
 
             <section className="ph-panel" id="documents" aria-labelledby="ph-documents-title">
               <div className="ph-panel-heading"><h2 id="ph-documents-title"><FileText size={18} /> Forms & documents</h2><span>{data.documents.length} on file</span></div>
-              {data.documents.length ? <div className="ph-document-list">{data.documents.slice(0, 4).map((doc) => <div key={doc.id}><span className="ph-doc-icon"><FileText size={16} /></span><div><strong>{text(doc.file_name, "Patient document")}</strong><small>{text(doc.document_type, "Document").replaceAll("_", " ")} · {dateTime(String(doc.created_at ?? ""))}</small></div></div>)}</div>
+              {data.documents.length ? <div className="ph-document-list">{data.documents.map((doc) => <div key={doc.id}><span className="ph-doc-icon"><FileText size={16} /></span><div><strong>{text(doc.file_name, "Patient document")}</strong><small>{text(doc.document_type, "Document").replaceAll("_", " ")} · {dateTime(String(doc.created_at ?? ""))}</small></div></div>)}</div>
                 : <div className="ph-empty"><p>No patient-facing documents are on file yet.</p></div>}
-              <p className="ph-caption">This section shows document details. Downloads appear only when an actual patient-accessible file is available.</p>
+              <p className="ph-caption">This section shows document details. Contact your practice for a copy of a document.</p>
             </section>
           </div>
 
@@ -199,7 +229,7 @@ export function PatientPortalPage() {
         <aside className="pj-rightbar ph-rightbar" aria-label="Care and account summary">
           <section className="pj-side-card ph-side">
             <h2><Heart size={17} /> Your care team</h2>
-            <div className="pj-provider"><span className="pj-provider-avatar" aria-hidden="true"><Heart size={20} /></span><div><strong>{providerName(data.provider)}</strong><small>Here to support your care</small></div></div>
+            <div className="pj-provider"><span className="pj-provider-avatar" aria-hidden="true"><Heart size={20} /></span><div><strong>{providerName(data.provider)}</strong><small>{data.providerUnavailable ? "Care team details are temporarily unavailable" : "Here to support your care"}</small></div></div>
           </section>
           <section className="pj-side-card ph-side">
             <h2><ShieldCheck size={17} /> Insurance on file</h2>
@@ -216,4 +246,28 @@ export function PatientPortalPage() {
       </div>
     </div>
   );
+}
+
+
+function appointmentStatus(value: unknown) {
+  const status = String(value ?? "");
+  const labels: Record<string, string> = { scheduled: "Scheduled", confirmed: "Confirmed", client_on_my_way: "On my way", client_arrived: "Arrived", checked_in: "Checked in" };
+  return labels[status] ?? (status ? status.replaceAll("_", " ") : "Status unavailable");
+}
+
+function ArrivalActions({ appointment, checkin, working, checkIn }: {
+  appointment: PortalData["upcomingAppointments"][number];
+  checkin: PortalData["checkins"][number] | null | undefined;
+  working: string | null;
+  checkIn: (id: string, step: "on_my_way" | "arrived" | "checked_in") => Promise<void>;
+}) {
+  const checkedIn = Boolean(checkin?.checked_in_at) || appointment.appointment_status === "checked_in";
+  const arrived = checkedIn || Boolean(checkin?.arrived_at) || appointment.appointment_status === "client_arrived";
+  const onMyWay = arrived || Boolean(checkin?.on_my_way_at) || appointment.appointment_status === "client_on_my_way";
+  return <div className="ph-arrival" role="group" aria-label={`Arrival for ${dateTime(String(appointment.starts_at))}`}>
+    <span>Arrival at the practice</span>
+    <div>{([
+      ["on_my_way", "On my way", onMyWay], ["arrived", "I arrived", arrived], ["checked_in", "Check in", checkedIn],
+    ] as const).map(([step, label, complete]) => <button key={step} type="button" disabled={complete || working !== null} onClick={() => void checkIn(appointment.id, step)}>{label}{complete ? " ✓" : working === `${appointment.id}-${step}` ? " — Saving…" : ""}</button>)}</div>
+  </div>;
 }

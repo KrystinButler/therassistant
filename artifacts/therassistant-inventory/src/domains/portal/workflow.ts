@@ -134,3 +134,9 @@ export function buildJournalEntryValues(input: JournalEntryInput, now = new Date
     submitted_at: entryStatus === "submitted" ? now.toISOString() : null,
   };
 }
+
+
+// Progress describes persisted answers, not merely populated form controls.
+export function isResponseSaved(saved: Record<string, unknown> | null, current: Record<string, unknown>) {
+  return saved !== null && Object.entries(current).every(([key, value]) => saved[key] === value);
+}

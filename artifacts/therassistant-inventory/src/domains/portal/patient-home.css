@@ -81,3 +81,12 @@
 @media(max-width:1170px){.ph-layout { grid-template-columns:170px minmax(0,1fr); }.ph-rightbar { grid-column:2;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));border-left:0;border-top:1px solid #e0e8db; }.ph-help { grid-column:1/-1; }}
 @media(max-width:780px){.ph-layout { display:block; }.ph-layout>.pj-sidebar { display:none; }.ph-main { padding:18px 14px 30px; }.ph-rightbar { display:grid;grid-template-columns:repeat(2,minmax(0,1fr));padding:14px; }.ph-action-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }.ph-action-grid>.ph-action-card:last-child { grid-column:1/-1; }.ph-mobile-nav { display:flex;gap:6px;overflow-x:auto;margin:0 0 20px;padding:0 0 5px; }.ph-mobile-nav a { display:flex;align-items:center;gap:6px;white-space:nowrap;padding:9px 12px;background:#ecf2e9;color:#2e5b3e;text-decoration:none;border-radius:8px;font-size:11px;font-weight:700; }}
 @media(max-width:540px){.ph-heading { align-items:flex-start; }.ph-refresh { font-size:0;padding:9px; }.ph-refresh svg { width:18px;height:18px; }.ph-next { padding:22px 18px; }.ph-next-bottom { align-items:stretch; }.ph-next-button { width:100%;box-sizing:border-box; }.ph-action-grid,.ph-content-grid,.ph-rightbar,.ph-profile-fields { grid-template-columns:minmax(0,1fr); }.ph-action-grid>.ph-action-card:last-child { grid-column:auto; }.ph-action-card { min-height:124px; }.ph-rightbar .ph-help { grid-column:1; }.ph-panel-heading { align-items:flex-start; }.ph-panel-heading>span { text-align:right; } }
+
+
+.ph-arrival { position:relative; margin-top:14px; font-size:12px; }
+.ph-arrival>span { display:block; margin-bottom:8px; }
+.ph-arrival>div { display:flex; flex-wrap:wrap; gap:8px; }
+.ph-arrival button { padding:10px 14px; min-height:44px; border:1px solid #c7ddce; border-radius:8px; background:#f1f6ee; color:#203848; cursor:pointer; }
+.ph-arrival button:disabled { opacity:.7; cursor:default; }
+.ph-later-visit { padding:12px 0; border-bottom:1px solid #ffffff32; }
+.ph-later-visit>div:first-child { display:flex; flex-wrap:wrap; align-items:center; gap:10px; margin-bottom:8px; }
