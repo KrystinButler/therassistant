@@ -10,7 +10,9 @@
     "typecheck": "pnpm run typecheck:libs && pnpm -r --filter \"./artifacts/**\" --filter \"./scripts\" --if-present run typecheck",
     "test:e2e": "playwright test",
     "test:e2e:headed": "playwright test --headed",
-    "verify:release-acceptance": "node scripts/verify-release-acceptance.mjs"
+    "verify:release-acceptance": "node scripts/verify-release-acceptance.mjs",
+    "test:fhir": "node --test tests/fhir/practitioner-role.test.ts",
+    "test:fhir:browser": "playwright test --config tests/fhir/playwright.config.ts"
   },
   "private": true,
   "dependencies": {
