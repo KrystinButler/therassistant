@@ -68,7 +68,7 @@ function tokenEndpointAudience(): string {
 function isForbiddenIp(address: string): boolean {
   if (net.isIPv4(address)) {
     const parts = address.split(".").map(Number);
-    const [a, b] = parts;
+    const [a, b, c] = parts;
 
     return (
       a === 0 ||
@@ -78,16 +78,21 @@ function isForbiddenIp(address: string): boolean {
       (a === 169 && b === 254) ||
       (a === 172 && b >= 16 && b <= 31) ||
       (a === 192 && b === 168) ||
-      (a === 192 && b === 0) ||
+      (a === 192 && b === 0 && c === 0) ||
+      (a === 192 && b === 0 && c === 2) ||
       (a === 198 && (b === 18 || b === 19)) ||
-      (a === 198 && b === 51) ||
-      (a === 203 && b === 0) ||
+      (a === 198 && b === 51 && c === 100) ||
+      (a === 203 && b === 0 && c === 113) ||
       a >= 224
     );
   }
 
   if (net.isIPv6(address)) {
     const normalized = address.toLowerCase();
+    if (normalized.startsWith("::ffff:")) {
+      return isForbiddenIp(normalized.slice("::ffff:".length));
+    }
+
     return (
       normalized === "::" ||
       normalized === "::1" ||
@@ -96,10 +101,7 @@ function isForbiddenIp(address: string): boolean {
       normalized.startsWith("fe8") ||
       normalized.startsWith("fe9") ||
       normalized.startsWith("fea") ||
-      normalized.startsWith("feb") ||
-      normalized.startsWith("::ffff:127.") ||
-      normalized.startsWith("::ffff:10.") ||
-      normalized.startsWith("::ffff:192.168.")
+      normalized.startsWith("feb")
     );
   }
 
