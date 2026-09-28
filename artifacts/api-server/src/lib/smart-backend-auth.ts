@@ -87,7 +87,7 @@ export function validateClientAssertionClaims(
     throw new Error("Client assertion has expired.");
   }
 
-  if (exp > now + maxLifetime + skew) {
+  if (exp > now + maxLifetime) {
     throw new Error("Client assertion expiration exceeds five minutes.");
   }
 
