@@ -69,6 +69,13 @@ for (const [label, inviteType] of [
     await page.route(`${supabaseUrl}/rest/v1/rpc/get_my_portal_provider_summary`, async (route) => {
       await route.fulfill({ status: 200, contentType: "application/json", body: "null" });
     });
+    await page.route(`${supabaseUrl}/rest/v1/rpc/get_my_portal_billing_summary`, async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ open_balance_cents: 0, payments: [] }),
+      });
+    });
 
     // Supabase may redirect a verified email invitation to its Site URL (/)
     // instead of the requested /patient-portal/activate path.
@@ -117,6 +124,13 @@ test("activated patient returning to Site URL opens portal, not staff setup", as
   });
   await page.route(`${supabaseUrl}/rest/v1/rpc/get_my_portal_provider_summary`, async (route) => {
     await route.fulfill({ status: 200, contentType: "application/json", body: "null" });
+  });
+  await page.route(`${supabaseUrl}/rest/v1/rpc/get_my_portal_billing_summary`, async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ open_balance_cents: 0, payments: [] }),
+    });
   });
   await page.goto("/#access_token=active-patient-token&refresh_token=active-patient-refresh&expires_in=3600");
   await expect.poll(() => new URL(page.url()).pathname).toBe("/patient-portal");
