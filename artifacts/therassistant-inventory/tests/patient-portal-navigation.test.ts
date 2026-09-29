@@ -34,9 +34,9 @@ test("Site URL fallback chooses patient routes only for matching nonstaff identi
 test("patient navigation uses real destinations and hides unfinished messaging",()=>{
   const nav=readFileSync(new URL("../src/domains/portal/PatientPortalNavigation.tsx",import.meta.url),"utf8");
   const home=readFileSync(new URL("../src/domains/portal/PatientPortalPage.tsx",import.meta.url),"utf8");
-  assert.match(nav,/patient-portal.*#appointments/);
-  assert.match(nav,/patient-portal.*#billing/);
-  assert.match(nav,/patient-portal.*#profile/);
+  assert.match(nav,/\$\{PORTAL_HOME\}#appointments/);
+  assert.match(nav,/\$\{PORTAL_HOME\}#billing/);
+  assert.match(nav,/\$\{PORTAL_HOME\}#profile/);
   assert.doesNotMatch(nav,/Messages/);
   assert.match(nav,/ppn-mobile/);
   assert.match(home,/id="appointments"/);
