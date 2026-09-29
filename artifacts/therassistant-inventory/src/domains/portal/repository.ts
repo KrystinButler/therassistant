@@ -21,7 +21,20 @@ type PortalDocumentAccess = DataRow & {
   file_size_bytes?: number | null;
 };
 
+type PortalContext = {
+  tenant_id?: string | null;
+  client_id?: string | null;
+  status?: string | null;
+};
+
+type PortalBillingSummary = {
+  open_balance_cents?: number | null;
+  payments?: DataRow[] | null;
+};
+
 const PORTAL_DOCUMENT_BUCKET = "therassistant-documents";
+const MAX_PORTAL_INSURANCE_BYTES = 50 * 1024 * 1024;
+const PORTAL_INSURANCE_MIME_TYPES = new Set(["application/pdf", "image/jpeg", "image/png", "image/webp"]);
 const encodeStoragePath = (value: string) => value.split("/").map(encodeURIComponent).join("/");
 
 type PatientPortalAggregate = {
@@ -113,6 +126,55 @@ export async function downloadPortalDocument(documentId: string) {
   URL.revokeObjectURL(url);
 }
 
+
+export async function uploadPortalInsuranceCard(file: File) {
+  if (!file || !file.name.trim() || file.size <= 0) throw new Error("Choose a non-empty insurance card file.");
+  if (file.size > MAX_PORTAL_INSURANCE_BYTES) throw new Error("The insurance card file exceeds the 50 MB limit.");
+  const mimeType = file.type || "application/octet-stream";
+  if (!PORTAL_INSURANCE_MIME_TYPES.has(mimeType)) {
+    throw new Error("Insurance cards must be PDF, JPG, PNG, or WebP files.");
+  }
+
+  const context = await portalRpc<PortalContext | null>("get_my_client_portal_context");
+  const tenantId = String(context?.tenant_id ?? "").trim();
+  const clientId = String(context?.client_id ?? "").trim();
+  if (context?.status !== "active" || !tenantId || !clientId) {
+    throw new Error("Active patient portal access is required.");
+  }
+
+  const fileName = file.name.trim().replace(/[\\/]/g, "_");
+  const storagePath = `${tenantId}/${clientId}/portal-insurance/${crypto.randomUUID()}/${fileName}`;
+  const upload = await authenticatedFetch(
+    `${SUPABASE_URL}/storage/v1/object/${PORTAL_DOCUMENT_BUCKET}/${encodeStoragePath(storagePath)}`,
+    {
+      method: "POST",
+      headers: { "Content-Type": mimeType, "x-upsert": "false" },
+      body: file,
+    },
+  );
+  if (!upload.ok) {
+    throw new Error(`Insurance card upload failed (${upload.status}): ${await upload.text()}`);
+  }
+
+  try {
+    return await portalRpc<DataRow>("portal_register_insurance_card", {
+      p_storage_path: storagePath,
+      p_file_name: fileName,
+      p_mime_type: mimeType,
+      p_file_size_bytes: file.size,
+    });
+  } catch (error) {
+    try {
+      await authenticatedFetch(`${SUPABASE_URL}/storage/v1/object/${PORTAL_DOCUMENT_BUCKET}`, {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ prefixes: [storagePath] }),
+      });
+    } catch { /* Cleanup is best effort; the object remains unreadable without a linked document row. */ }
+    throw error;
+  }
+}
+
 export function submitPortalChangeRequest(
   requestType: "demographics" | "insurance",
   details: string,
@@ -143,9 +205,10 @@ export function submitPortalScheduleChange(
 }
 
 export async function getPatientPortalData() {
-  const [payload, provider] = await Promise.all([
+  const [payload, provider, billing] = await Promise.all([
     portalRpc<PatientPortalAggregate>("get_my_patient_portal_data"),
     portalRpc<DataRow | null>("get_my_portal_provider_summary"),
+    portalRpc<PortalBillingSummary>("get_my_portal_billing_summary"),
   ]);
 
   if (!payload.patient) {
@@ -164,6 +227,8 @@ export async function getPatientPortalData() {
 
   return {
     ...portalData,
+    openBalanceCents: Number(billing.open_balance_cents ?? portalData.openBalanceCents),
+    patientPayments: billing.payments ?? [],
     treatmentGoals: payload.treatmentGoals,
     provider,
   };
