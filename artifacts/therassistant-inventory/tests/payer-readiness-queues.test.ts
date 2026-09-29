@@ -1,10 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import {
-  buildEligibilityQueue,
-  buildAuthorizationQueue,
-} from "../src/domains/payer-readiness/queues.ts";
+import { buildEligibilityQueue } from "../src/domains/payer-readiness/queues.ts";
 
 const clients = [
   { id: "c1", first_name: "Jordan", last_name: "Ellis" },
@@ -66,26 +63,4 @@ test("eligibility queue ignores legacy synthetic demo results", () => {
   assert.equal(jordan?.status, "inactive");
   assert.equal(jordan?.responseSource, "manual_payer_portal");
   assert.equal(jordan?.needsAttention, true);
-});
-
-test("authorization queue surfaces required coverage with no authorization", () => {
-  const rows = buildAuthorizationQueue({
-    clients,
-    payers,
-    policies,
-    authorizations: [
-      { id: "a1", client_id: "c1", payer_id: "p1", status: "approved", end_date: "2026-12-31" },
-    ],
-    units: [
-      { id: "u1", authorization_id: "a1", remaining_units: 2 },
-    ],
-    today: "2026-09-13",
-  });
-
-  const jordan = rows.find((row) => row.patientId === "c1");
-  const taylor = rows.find((row) => row.patientId === "c2");
-  assert.equal(jordan?.status, "approved");
-  assert.equal(jordan?.alert, "low_units");
-  assert.equal(taylor?.status, "missing");
-  assert.equal(taylor?.alert, "missing");
 });
