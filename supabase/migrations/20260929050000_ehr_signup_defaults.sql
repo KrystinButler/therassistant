@@ -25,7 +25,7 @@ create or replace function public.sync_client_sex()
 returns trigger
 language plpgsql
 set search_path = public, pg_temp
-as $
+as $$
 declare
   v_metadata_sex text := upper(coalesce(new.metadata->>'sex',''));
 begin
@@ -56,7 +56,7 @@ begin
 
   return new;
 end;
-$;
+$$;
 
 drop trigger if exists trg_sync_client_sex on public.clients;
 create trigger trg_sync_client_sex
