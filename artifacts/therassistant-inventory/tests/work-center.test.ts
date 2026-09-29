@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import {
   resolveMailroomWorkContext,
   sourceRouteForWorkItem,
+  workRouteForWorkItem,
 } from "../src/domains/work-center/repository.ts";
 import {
   changePriority,
@@ -119,4 +120,81 @@ test("Mailroom work context resolves human-readable patient, provider, payer, an
   assert.equal(context.payerName, "Aetna");
   assert.equal(context.relatedName, "Medical records request · Jordan Ellis · DEMO-001");
   assert.doesNotMatch(context.relatedName, /client-1|provider-1|payer-1|claim-1/);
+});
+
+test("RCM work items open their owning queues and exact correction records", () => {
+  assert.equal(
+    workRouteForWorkItem("encounter", "enc-1", "billing_readiness_blocked"),
+    "/billing/charges?tab=blocked&focus=enc-1",
+  );
+  assert.equal(
+    workRouteForWorkItem("charge", "charge-1", "billing_readiness_blocked", { encounterId: "enc-2" }),
+    "/billing/charges?tab=blocked&focus=enc-2",
+  );
+  assert.equal(
+    workRouteForWorkItem("claim", "claim-1", "claim_validation"),
+    "/rejections?claim=claim-1",
+  );
+  assert.equal(
+    workRouteForWorkItem("claim", "claim-2", "claim_rejection"),
+    "/rejections?claim=claim-2",
+  );
+  assert.equal(
+    workRouteForWorkItem("claim", "claim-3", "claim_follow_up"),
+    "/claims?claim=claim-3",
+  );
+  assert.equal(
+    workRouteForWorkItem("denial", "denial-1", "denial_followup"),
+    "/denials?denial=denial-1",
+  );
+  assert.equal(
+    workRouteForWorkItem("appeal", "appeal-1", "appeal_deadline"),
+    "/denials?tab=appeals&appeal=appeal-1",
+  );
+  assert.equal(
+    workRouteForWorkItem("payment", "payment-1", "payment_exception"),
+    "/payments?payment=payment-1",
+  );
+  assert.equal(
+    workRouteForWorkItem("adjustment", "adjustment-1", "recoupment"),
+    "/payments?tab=recovery",
+  );
+  assert.equal(
+    workRouteForWorkItem("encounter", "enc-3", "documentation"),
+    "/encounters/enc-3#encounter-progress-note-editor",
+  );
+});
+
+test("actual billing and ERA queue types open the field needing attention", () => {
+  assert.equal(
+    workRouteForWorkItem("encounter", "enc-1", "missing_documentation"),
+    "/encounters/enc-1#encounter-progress-note-editor",
+  );
+  assert.equal(
+    workRouteForWorkItem("encounter", "enc-1", "eligibility_issue", { clientId: "client-1" }),
+    "/clients/client-1?tab=coverage",
+  );
+  assert.equal(
+    workRouteForWorkItem("encounter", "enc-1", "credentialing_issue"),
+    "/payers-contracts",
+  );
+  assert.equal(
+    workRouteForWorkItem("era", "era-1", "unmatched_era"),
+    "/payments?tab=era",
+  );
+  assert.equal(
+    workRouteForWorkItem("claim", "claim-1", "payment_posting_issue"),
+    "/payments?tab=unapplied",
+  );
+});
+
+test("source records remain reachable separately from exception destinations", () => {
+  assert.equal(sourceRouteForWorkItem("encounter", "enc-1"), "/encounters/enc-1");
+  assert.equal(sourceRouteForWorkItem("claim_batch", "batch-1"), "/billing/charges?tab=batches");
+  assert.equal(sourceRouteForWorkItem("denial", "denial-1"), "/denials?denial=denial-1");
+  assert.equal(sourceRouteForWorkItem("era", "era-1"), "/payments?tab=era");
+  assert.equal(
+    workRouteForWorkItem("mailroom_item", "mail-1", "correspondence_followup"),
+    "/mailroom/mail-1",
+  );
 });

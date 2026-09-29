@@ -88,7 +88,7 @@ test("adjustment work items resolve to recovery context and route", () => {
 
   assert.equal(typeof sourceRouteForWorkItem, "function");
   if (sourceRouteForWorkItem) {
-    assert.equal(sourceRouteForWorkItem("adjustment", "adj-1"), "/ar-denials?tab=recovery");
+    assert.equal(sourceRouteForWorkItem("adjustment", "adj-1"), "/payments?tab=recovery");
   }
   assert.match(workCenterRepositorySource, /tenantSelect<DataRow>\("adjustments"/);
   assert.match(workCenterRepositorySource, /adjustmentsById/);

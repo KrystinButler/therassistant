@@ -14,5 +14,5 @@ test("claim and billing queues deep-link to the requested case and tab",()=>{
   assert.match(claims,/new URLSearchParams\(window\.location\.search\)\.get\("claim"\)/);
   assert.match(claims,/setActiveClaimId\(found\.id\)/);
   assert.match(charges,/new URLSearchParams\(window\.location\.search\)\.get\("tab"\)/);
-  assert.match(charges,/requested === "blocked" \|\| requested === "unbatched"/);
+  assert.match(charges,/\["ready", "blocked", "program", "private-pay", "unbatched", "batches", "submitted"\]\.includes\(requested \?\? ""\)/);
 });
