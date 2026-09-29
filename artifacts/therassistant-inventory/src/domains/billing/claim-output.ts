@@ -221,6 +221,7 @@ export function validate837PExport(input: BatchOutputData) {
   for (const item of input.claims) {
     const control = clean(item.claim.patient_control_number ?? item.claim.id) || "Claim";
     const clientMeta = metadata(item.client);
+    const clientSex = clean(item.client?.sex ?? clientMeta.sex).toUpperCase();
     const pos = clean(item.lines[0]?.place_of_service);
 
     requireValue(errors, item.claim.patient_control_number, `${control}: patient control number is missing.`);
@@ -231,7 +232,7 @@ export function validate837PExport(input: BatchOutputData) {
     requireValue(errors, item.client?.city, `${control}: patient city is missing.`);
     requireValue(errors, item.client?.state, `${control}: patient state is missing.`);
     requireValue(errors, item.client?.postal_code, `${control}: patient ZIP code is missing.`);
-    if (!["M", "F"].includes(String(clientMeta.sex ?? ""))) {
+    if (!["M", "F"].includes(clientSex)) {
       errors.push(`${control}: patient sex must be M or F for 837P export.`);
     }
 
@@ -335,6 +336,7 @@ export function build837PText(input: BatchOutputData, now = new Date()) {
   for (const item of input.claims) {
     hl += 1;
     const clientMeta = metadata(item.client);
+    const clientSex = clean(item.client?.sex ?? clientMeta.sex).toUpperCase();
     const payerId = payerEdiId(input, item);
     const filingIndicator = claimFilingIndicator(input, item);
     const pos = clean(item.lines[0]?.place_of_service);
@@ -348,7 +350,7 @@ export function build837PText(input: BatchOutputData, now = new Date()) {
     const subscriberFirstName = dependent ? subscriberMeta.first_name : item.client?.first_name;
     const subscriberLastName = dependent ? subscriberMeta.last_name : item.client?.last_name;
     const subscriberDob = dependent ? (subscriberMeta.dob ?? item.policy?.subscriber_dob) : item.client?.date_of_birth;
-    const subscriberSex = dependent ? subscriberMeta.sex : clientMeta.sex;
+    const subscriberSex = dependent ? subscriberMeta.sex : clientSex;
     const subscriberAddress1 = dependent ? subscriberMeta.address_line1 : item.client?.address_line1;
     const subscriberAddress2 = dependent ? subscriberMeta.address_line2 : item.client?.address_line2;
     const subscriberCity = dependent ? subscriberMeta.city : item.client?.city;
@@ -375,7 +377,7 @@ export function build837PText(input: BatchOutputData, now = new Date()) {
       tx.push(`NM1*QC*1*${compact(item.client?.last_name)}*${compact(item.client?.first_name)}~`);
       tx.push(`N3*${compact(item.client?.address_line1)}${item.client?.address_line2 ? `*${compact(item.client.address_line2)}` : ""}~`);
       tx.push(`N4*${compact(item.client?.city)}*${clean(item.client?.state).toUpperCase()}*${digits(item.client?.postal_code)}~`);
-      tx.push(`DMG*D8*${date8(item.client?.date_of_birth)}*${clean(clientMeta.sex)}~`);
+      tx.push(`DMG*D8*${date8(item.client?.date_of_birth)}*${clientSex}~`);
     }
 
     tx.push(`CLM*${controlNumber}*${total}***${pos}:B:1*Y*A*Y*Y~`);
