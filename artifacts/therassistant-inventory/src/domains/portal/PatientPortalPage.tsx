@@ -4,7 +4,7 @@ import { Link } from "wouter";
 import { StatusBadge } from "../../components/status-badge";
 import { dateTime, money } from "../../lib/format";
 import { PatientPortalMobileNavigation } from "./PatientPortalNavigation";
-import { getPatientPortalData, recordCheckIn } from "./repository";
+import { downloadPortalDocument, getPatientPortalData, openPortalDocument, recordCheckIn } from "./repository";
 import { PORTAL_JOURNAL, portalCheckInPath } from "./routes";
 
 type PortalData = Awaited<ReturnType<typeof getPatientPortalData>>;
@@ -24,6 +24,7 @@ export function PatientPortalPage() {
   const [data, setData] = useState<PortalData | null>(null);
   const [loading, setLoading] = useState(true);
   const [working, setWorking] = useState<string | null>(null);
+  const [documentWorking, setDocumentWorking] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   async function load() {
@@ -40,6 +41,19 @@ export function PatientPortalPage() {
     try { await recordCheckIn(appointmentId, step); await load(); }
     catch (err) { setError(err instanceof Error ? err.message : "Unable to update check-in."); }
     finally { setWorking(null); }
+  }
+
+  async function documentAction(documentId: string, action: "open" | "download") {
+    setDocumentWorking(`${documentId}-${action}`);
+    setError(null);
+    try {
+      if (action === "open") await openPortalDocument(documentId);
+      else await downloadPortalDocument(documentId);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to access this document.");
+    } finally {
+      setDocumentWorking(null);
+    }
   }
 
   if (loading) return <div className="thera-state">Loading patient portal...</div>;
@@ -78,7 +92,11 @@ export function PatientPortalPage() {
 
       <section id="coverage" className="thera-card"><h2>Insurance</h2>{data.insurancePolicies.length ? <div className="thera-stack">{data.insurancePolicies.map((policy) => <div key={policy.id} className="thera-report-list-row"><div><strong>{String(policy.insurance_order ?? "coverage").replaceAll("_", " ")}</strong><div className="thera-table-subtext">Member {String(policy.member_id ?? "—")} · Group {String(policy.group_number ?? "—")}</div></div><StatusBadge value={String(policy.status ?? "unknown")} /></div>)}</div> : <div className="thera-empty">No coverage on file.</div>}</section>
 
-      <section id="documents" className="thera-card thera-span-2"><div className="thera-card-header"><div><h2>Forms & Documents</h2><p>Only patient-facing document categories are shown here.</p></div></div>{data.documents.length ? <div className="thera-table-wrap"><table className="thera-table"><thead><tr><th>Date</th><th>Type</th><th>Name</th><th>Status</th></tr></thead><tbody>{data.documents.map((row) => <tr key={row.id}><td>{dateTime(String(row.created_at ?? ""))}</td><td>{String(row.document_type ?? "other").replaceAll("_", " ")}</td><td>{String(row.file_name ?? "—")}</td><td><StatusBadge value={String(row.document_status ?? "uploaded")} /></td></tr>)}</tbody></table></div> : <div className="thera-empty">No patient-facing documents.</div>}</section>
+      <section id="documents" className="thera-card thera-span-2"><div className="thera-card-header"><div><h2>Forms & Documents</h2><p>Open or download the forms, correspondence, insurance cards, and statements shared with you.</p></div></div>{data.documents.length ? <div className="thera-table-wrap"><table className="thera-table"><thead><tr><th>Date</th><th>Type</th><th>Name</th><th>Status</th><th>File</th></tr></thead><tbody>{data.documents.map((row) => {
+        const id = String(row.id ?? "");
+        const busy = documentWorking?.startsWith(`${id}-`) ?? false;
+        return <tr key={row.id}><td>{dateTime(String(row.created_at ?? ""))}</td><td>{String(row.document_type ?? "other").replaceAll("_", " ")}</td><td>{String(row.file_name ?? "—")}</td><td><StatusBadge value={String(row.document_status ?? "uploaded")} /></td><td><div className="thera-filter-row"><button type="button" className="thera-action secondary" disabled={busy} onClick={() => void documentAction(id, "open")}>{documentWorking === `${id}-open` ? "Opening..." : "Open"}</button><button type="button" className="thera-action secondary" disabled={busy} onClick={() => void documentAction(id, "download")}>{documentWorking === `${id}-download` ? "Downloading..." : "Download"}</button></div></td></tr>;
+      })}</tbody></table></div> : <div className="thera-empty">No patient-facing documents.</div>}</section>
 
       <section className="thera-card thera-span-2">
         <div className="thera-card-header"><div><h2>In-Between Session Journal</h2><p>Capture thoughts, symptoms, progress, and questions between visits. Entries stay patient-authored until a clinician deliberately incorporates relevant information into the clinical record.</p></div><Link href={PORTAL_JOURNAL} className="thera-action">Open Journal</Link></div>
