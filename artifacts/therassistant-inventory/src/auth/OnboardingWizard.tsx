@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ChangeEvent, type ReactNode } from "react";
 
 import { useTenant } from "./tenant-context";
 import {
@@ -183,7 +183,7 @@ function ProviderCard({
 }) {
   const input = (key: keyof ProviderOnboardingDraft) => ({
     value: String(provider[key] ?? ""),
-    onChange: (event: React.ChangeEvent<HTMLInputElement>) => onChange({ ...provider, [key]: event.target.value }),
+    onChange: (event: ChangeEvent<HTMLInputElement>) => onChange({ ...provider, [key]: event.target.value }),
   });
   return (
     <section className="thera-card" style={{ padding: 18 }}>
