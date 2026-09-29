@@ -3,8 +3,7 @@ import { Route, Switch, useLocation, useRoute } from "wouter";
 
 import { AuthProvider, useAuth } from "./auth/auth-context";
 import { LoginPage } from "./auth/LoginPage";
-import { OrganizationSetup } from "./auth/OrganizationSetup";
-import { AccountAccessChoice } from "./auth/AccountAccessChoice";
+import { OnboardingWizard } from "./auth/OnboardingWizard";
 import { PasswordRecoveryPage } from "./auth/PasswordRecoveryPage";
 import { TenantProvider, hasActiveStaffMembership, useTenant } from "./auth/tenant-context";
 import { AppShell } from "./components/app-shell";
@@ -116,13 +115,10 @@ function StaffRoutes() {
 }
 
 function TenantGate() {
-  const [location] = useLocation();
-  const { loading, error, tenantId, needsOrganizationSetup } = useTenant();
+  const { loading, error, tenantId, needsOrganizationSetup, onboardingRequired } = useTenant();
   if (loading) return <div className="thera-state">Loading organization...</div>;
   if (error) return <div className="thera-state error">{error}</div>;
-  if (needsOrganizationSetup) {
-    return location === "/organization-setup" ? <OrganizationSetup /> : <AccountAccessChoice />;
-  }
+  if (needsOrganizationSetup || onboardingRequired) return <OnboardingWizard />;
   if (!tenantId) return <div className="thera-state error">No active organization is available.</div>;
   return <StaffRoutes />;
 }
