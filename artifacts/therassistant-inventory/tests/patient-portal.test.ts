@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { buildPatientPortalData, buildJournalEntryValues, isPortalAppointmentAvailable, planCheckInUpdate } from "../src/domains/portal/workflow.ts";
+import { buildPatientPortalData, buildJournalEntryValues, getPortalArrivalAvailability, isPortalAppointmentAvailable, planCheckInUpdate } from "../src/domains/portal/workflow.ts";
 
 test("portal returns only patient-facing data", () => {
   const result = buildPatientPortalData({
@@ -66,6 +66,39 @@ test("portal exposes all eligible future appointments without a three-visit cap"
     now: new Date("2026-09-29T12:00:00Z"),
   });
   assert.equal(result.upcomingAppointments.length, 5);
+});
+
+
+test("patient arrival actions are time-gated before the appointment", () => {
+  const appointment = {
+    id: "appt-future",
+    starts_at: "2026-10-01T16:00:00Z",
+    ends_at: "2026-10-01T17:00:00Z",
+    appointment_status: "scheduled",
+  };
+
+  assert.deepEqual(
+    getPortalArrivalAvailability(appointment, new Date("2026-09-29T18:00:00Z")),
+    { onMyWay: false, arrival: false },
+  );
+  assert.deepEqual(
+    getPortalArrivalAvailability(appointment, new Date("2026-10-01T13:00:00Z")),
+    { onMyWay: true, arrival: false },
+  );
+  assert.deepEqual(
+    getPortalArrivalAvailability(appointment, new Date("2026-10-01T15:15:00Z")),
+    { onMyWay: true, arrival: true },
+  );
+});
+
+test("late-cancelled appointments are not patient check-in eligible", () => {
+  const appointment = {
+    id: "appt-late-cancel",
+    starts_at: "2026-10-01T16:00:00Z",
+    ends_at: "2026-10-01T17:00:00Z",
+    appointment_status: "late_cancel",
+  };
+  assert.equal(isPortalAppointmentAvailable(appointment, new Date("2026-09-29T18:00:00Z")), false);
 });
 
 test("check-in step updates one timestamp", () => {
