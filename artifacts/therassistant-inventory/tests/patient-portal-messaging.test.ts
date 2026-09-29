@@ -23,12 +23,18 @@ test("portal messages are stored behind RLS with no direct authenticated table a
 
 test("patient message RPCs derive the patient from active portal identity", () => {
   const sql = migration("secure_patient_portal_messaging");
+  const marker = "create or replace function private.portal_send_message_impl(";
+  const start = sql.toLowerCase().indexOf(marker.toLowerCase());
+  assert.notEqual(start, -1, "missing patient send-message implementation");
+  const end = sql.indexOf("$;", start);
+  assert.notEqual(end, -1, "unterminated patient send-message implementation");
+  const sendImpl = sql.slice(start, end + 3);
+
   assert.match(sql, /private\.get_my_portal_messages_impl/i);
-  assert.match(sql, /private\.portal_send_message_impl/i);
-  assert.match(sql, /client_portal_access/i);
-  assert.match(sql, /cpa\.user_id\s*=\s*\(select auth\.uid\(\)\)/i);
-  assert.match(sql, /cpa\.status\s*=\s*'active'/i);
-  assert.doesNotMatch(sql, /p_client_id\s+uuid[\s\S]*portal_send_message_impl/i);
+  assert.match(sendImpl, /client_portal_access/i);
+  assert.match(sendImpl, /cpa\.user_id\s*=\s*\(select auth\.uid\(\)\)/i);
+  assert.match(sendImpl, /cpa\.status\s*=\s*'active'/i);
+  assert.doesNotMatch(sendImpl, /p_client_id\s+uuid/i);
 });
 
 test("patient messages create client work and cannot write staff messages", () => {
