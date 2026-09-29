@@ -20,6 +20,7 @@ type FormState = {
   time: string;
   durationMinutes: number;
   locationType: "in_person" | "telehealth" | "phone" | "community" | "home" | "school" | "other";
+  telehealthJoinUrl: string;
   serviceType: string;
   cptCode: string;
 };
@@ -39,7 +40,7 @@ const SERVICE_TYPES = [
 
 const initialForm: FormState = {
   clientId: "", providerId: "", date: "", time: "09:00", durationMinutes: 60,
-  locationType: "telehealth", serviceType: "Individual Therapy", cptCode: "90837",
+  locationType: "telehealth", telehealthJoinUrl: "", serviceType: "Individual Therapy", cptCode: "90837",
 };
 
 function personName(row: Record<string, unknown>) {
@@ -93,6 +94,7 @@ function formFrom(appointment: ScheduleAppointment): FormState {
     time: `${pad(start.getHours())}:${pad(start.getMinutes())}`,
     durationMinutes: Math.max(15, Math.round((end.getTime() - start.getTime()) / 60000)),
     locationType: appointment.locationType as FormState["locationType"],
+    telehealthJoinUrl: appointment.telehealthJoinUrl,
     serviceType: appointment.serviceType,
     cptCode: appointment.cptCode,
   };
@@ -370,11 +372,18 @@ export function SchedulePage() {
               <small>Starting note template: <strong>{form.serviceType ? noteTemplateLabelForService(form.serviceType) : "Choose a service"}</strong></small>
             </label>
             <label>Visit location
-              <select className="thera-input" value={form.locationType} onChange={(e) => setForm({ ...form, locationType: e.target.value as FormState["locationType"] })}>
+              <select className="thera-input" value={form.locationType} onChange={(e) => {
+                const locationType = e.target.value as FormState["locationType"];
+                setForm({ ...form, locationType, telehealthJoinUrl: locationType === "telehealth" ? form.telehealthJoinUrl : "" });
+              }}>
                 <option value="telehealth">Telehealth</option><option value="in_person">Office / in person</option><option value="phone">Phone</option>
                 <option value="community">Community</option><option value="home">Home</option><option value="school">School</option><option value="other">Other</option>
               </select>
             </label>
+            {form.locationType === "telehealth" && <label className="schedule-telehealth-link">Telehealth video link
+              <input className="thera-input" type="url" inputMode="url" placeholder="https://..." value={form.telehealthJoinUrl} onChange={(e) => setForm({ ...form, telehealthJoinUrl: e.target.value })} />
+              <small>Use the secure HTTPS room link from your telehealth platform. Patients will see a Join Telehealth Visit button for this appointment.</small>
+            </label>}
           </div>
         </section>
         <div className="schedule-appointment-note"><strong>Clinical documentation stays independent.</strong><span>Scheduling creates the appointment only. Notes, charges and payer rules remain separate.</span></div>
