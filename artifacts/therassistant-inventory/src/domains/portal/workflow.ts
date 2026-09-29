@@ -37,6 +37,10 @@ export function buildPatientPortalData(input: PortalDataInput) {
     .filter((row) => isPortalAppointmentAvailable(row, now))
     .sort((a, b) => String(a.starts_at ?? "").localeCompare(String(b.starts_at ?? "")));
 
+  const appointmentHistory = input.appointments
+    .filter((row) => !isPortalAppointmentAvailable(row, now))
+    .sort((a, b) => String(b.starts_at ?? "").localeCompare(String(a.starts_at ?? "")));
+
   const visibleDocuments = input.documents.filter((row) =>
     ["insurance_card", "intake_form", "consent_form", "client_correspondence", "statement"].includes(String(row.document_type ?? "")) &&
     !["rejected", "voided"].includes(String(row.document_status ?? "")),
@@ -45,6 +49,7 @@ export function buildPatientPortalData(input: PortalDataInput) {
   return {
     patient: input.patient,
     upcomingAppointments,
+    appointmentHistory,
     insurancePolicies: input.policies.filter((row) => row.status !== "terminated"),
     documents: visibleDocuments,
     checkins: input.checkins,
