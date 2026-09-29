@@ -141,5 +141,6 @@ test("unmapped email-link account is given patient instructions, not organizatio
   await expect(page.getByRole("heading", { name: "Set up your organization" })).toHaveCount(0);
   await expect(page.getByRole("link", { name: "Patient portal sign in" })).toHaveAttribute("href", "/patient-portal/login");
   await page.getByRole("link", { name: "I'm setting up a practice or billing company" }).click();
-  await expect(page.getByRole("heading", { name: "Set up your organization" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Provider Information" })).toBeVisible();
+  await expect(page.getByText("Practice Setup · Step 1 of 14")).toBeVisible();
 });
