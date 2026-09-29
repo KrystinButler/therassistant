@@ -1,3 +1,4 @@
+import { authenticatedFetch, SUPABASE_URL } from "../../lib/supabase-client";
 import {
   portalRpc,
   type PortalRow as DataValue,
@@ -12,6 +13,16 @@ import {
 } from "./workflow";
 
 type DataRow = DataValue & { id: string };
+
+type PortalDocumentAccess = DataRow & {
+  storage_path: string;
+  file_name?: string | null;
+  mime_type?: string | null;
+  file_size_bytes?: number | null;
+};
+
+const PORTAL_DOCUMENT_BUCKET = "therassistant-documents";
+const encodeStoragePath = (value: string) => value.split("/").map(encodeURIComponent).join("/");
 
 type PatientPortalAggregate = {
   patient: PortalRow | null;
@@ -55,6 +66,51 @@ export function addPortalJournalEntry(input: JournalEntryInput) {
     p_related_treatment_goal_id: values.related_treatment_goal_id,
     p_entry_status: values.entry_status,
   });
+}
+
+async function loadPortalDocument(documentId: string) {
+  const access = await portalRpc<PortalDocumentAccess | null>("get_my_portal_document", {
+    p_document_id: documentId,
+  });
+  if (!access) throw new Error("This document is unavailable in your portal.");
+
+  const storagePath = String(access.storage_path ?? "").trim();
+  if (!storagePath || storagePath.startsWith("synthetic-demo/metadata-only/")) {
+    throw new Error("This document record does not have an uploaded file.");
+  }
+
+  const response = await authenticatedFetch(
+    `${SUPABASE_URL}/storage/v1/object/authenticated/${PORTAL_DOCUMENT_BUCKET}/${encodeStoragePath(storagePath)}`,
+  );
+  if (!response.ok) {
+    throw new Error(`Unable to open this portal document (${response.status}).`);
+  }
+  return { access, blob: await response.blob() };
+}
+
+export async function openPortalDocument(documentId: string) {
+  const { blob } = await loadPortalDocument(documentId);
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.target = "_blank";
+  anchor.rel = "noopener noreferrer";
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  globalThis.setTimeout(() => URL.revokeObjectURL(url), 60_000);
+}
+
+export async function downloadPortalDocument(documentId: string) {
+  const { access, blob } = await loadPortalDocument(documentId);
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = String(access.file_name ?? "portal-document");
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  URL.revokeObjectURL(url);
 }
 
 export async function getPatientPortalData() {
