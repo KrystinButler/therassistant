@@ -35,6 +35,7 @@ export type ScheduleAppointment = {
   endsAt: string;
   appointmentStatus: string;
   locationType: string;
+  telehealthJoinUrl: string;
   serviceType: string;
   cptCode: string;
   registrationStatus: string;
@@ -293,6 +294,7 @@ export async function getScheduleData(): Promise<ScheduleData> {
       endsAt: String(appointment.ends_at ?? ""),
       appointmentStatus: String(appointment.appointment_status ?? "scheduled"),
       locationType: String(appointment.location_type ?? ""),
+      telehealthJoinUrl: String(appointment.telehealth_join_url ?? ""),
       serviceType: String(appointment.service_type ?? ""),
       cptCode: String(appointment.cpt_code ?? ""),
       registrationStatus: String(
