@@ -1,6 +1,22 @@
 .ppn-mobile { display: none; }
 
+.ppn-home-layout {
+  grid-template-columns: 184px minmax(0, 1fr);
+}
+
+.ppn-home-main {
+  min-width: 0;
+}
+
+.ppn-home-main .thera-detail-grid,
+.ppn-home-main .thera-metric-grid {
+  width: 100%;
+}
+
 @media (max-width: 760px) {
+  .ppn-home-layout { display: block; }
+  .ppn-home-layout > .pj-sidebar { display: none; }
+
   .pj-app, .ppn-home-page { padding-bottom: calc(70px + env(safe-area-inset-bottom)); }
 
   .ppn-mobile {
