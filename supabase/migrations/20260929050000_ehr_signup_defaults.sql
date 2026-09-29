@@ -132,18 +132,18 @@ grant select, insert, update on public.tenant_onboarding to authenticated;
 drop policy if exists "tenant onboarding select" on public.tenant_onboarding;
 create policy "tenant onboarding select"
 on public.tenant_onboarding for select to authenticated
-using (public.is_tenant_member(tenant_id));
+using (private.has_tenant_read_access(tenant_id));
 
 drop policy if exists "tenant onboarding insert" on public.tenant_onboarding;
 create policy "tenant onboarding insert"
 on public.tenant_onboarding for insert to authenticated
-with check (public.is_tenant_member(tenant_id));
+with check (private.has_tenant_write_access(tenant_id));
 
 drop policy if exists "tenant onboarding update" on public.tenant_onboarding;
 create policy "tenant onboarding update"
 on public.tenant_onboarding for update to authenticated
-using (public.is_tenant_member(tenant_id))
-with check (public.is_tenant_member(tenant_id));
+using (private.has_tenant_write_access(tenant_id))
+with check (private.has_tenant_write_access(tenant_id));
 
 create index if not exists idx_tenant_onboarding_status
 on public.tenant_onboarding (tenant_id, status);
