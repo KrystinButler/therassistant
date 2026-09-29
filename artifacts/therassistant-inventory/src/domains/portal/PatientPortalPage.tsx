@@ -161,7 +161,7 @@ export function PatientPortalPage() {
       <main className="pj-main ppn-home-main">
         <div className="pj-breadcrumb"><span>Patient Portal</span><span>›</span><strong>Home</strong></div>
         <div className="pj-title-row">
-          <div><h1>{patientDisplayName}</h1><p>Welcome back. Appointments, check-in, coverage, secure messages, documents, journal, and billing.</p></div>
+          <div><div className="thera-eyebrow">PATIENT PORTAL</div><h1>{patientDisplayName}</h1><p>Welcome back. Appointments, check-in, coverage, secure messages, documents, journal, and billing.</p></div>
           <StatusBadge value={String(data.patient.registration_status ?? "not_started")} />
         </div>
         {error && <div className="pj-message error" style={{ marginBottom: 16 }}>{error}</div>}
