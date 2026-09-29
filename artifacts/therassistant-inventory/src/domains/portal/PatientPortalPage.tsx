@@ -4,16 +4,21 @@ import { Link } from "wouter";
 import { StatusBadge } from "../../components/status-badge";
 import { dateTime, money } from "../../lib/format";
 import { PatientMessagesPanel } from "./PatientMessagesPanel";
-import { PatientPortalMobileNavigation } from "./PatientPortalNavigation";
+import { PatientPortalMobileNavigation, PatientPortalNavigation } from "./PatientPortalNavigation";
 import { downloadPortalDocument, getPatientPortalData, openPortalDocument, recordCheckIn, submitPortalChangeRequest, submitPortalScheduleChange, uploadPortalInsuranceCard } from "./repository";
 import { PORTAL_JOURNAL, portalCheckInPath } from "./routes";
 import { getPortalArrivalAvailability } from "./workflow";
+import "./patient-journal.css";
 
 type PortalData = Awaited<ReturnType<typeof getPatientPortalData>>;
 
 function patientName(row: Record<string, unknown>) {
   const preferred = String(row.preferred_name ?? "").trim();
   return [preferred || row.first_name, row.last_name].filter(Boolean).join(" ") || "Patient";
+}
+
+function firstName(row: Record<string, unknown>) {
+  return String(row.preferred_name ?? row.first_name ?? "Patient");
 }
 
 function recordOf(value: unknown): Record<string, unknown> {
@@ -129,12 +134,40 @@ export function PatientPortalPage() {
   const statementDocuments = data.documents.filter((row) => String(row.document_type ?? "") === "statement");
   const generalDocuments = data.documents.filter((row) => String(row.document_type ?? "") !== "statement");
 
-  return <div className="ppn-home-page">
-    <div className="thera-page-header split"><div><div className="thera-eyebrow">PATIENT PORTAL</div><h1>{patientName(data.patient)}</h1><p>Appointments, check-in, coverage confirmation, selected documents, journal, and balance summary.</p></div><div><StatusBadge value={String(data.patient.registration_status ?? "not_started")} /></div></div>
-    {error && <div className="thera-state error" style={{ marginBottom: 16 }}>{error}</div>}
-    {notice && <div className="thera-alert" style={{ marginBottom: 16 }}>{notice}</div>}
+  const patientDisplayName = patientName(data.patient);
 
-    <div className="thera-metric-grid" style={{ marginBottom: 18 }}>
+  return <div className="pj-app ppn-home-page">
+    <header className="pj-topbar">
+      <Link href="/patient-portal" className="pj-brand" aria-label="Therassistant patient portal home">
+        <span className="pj-logo-mark" aria-hidden="true"><span>▲</span><span>▲</span><span>▲</span></span>
+        <span><strong>THERASSISTANT EHR</strong><small>BEHAVIORAL HEALTH. A BRIGHTER TOMORROW.</small></span>
+      </Link>
+      <div className="pj-topbar-right">
+        <span className="pj-care-message">Care today. A healthier tomorrow.</span>
+        <span className="pj-avatar">{firstName(data.patient).slice(0, 1).toUpperCase()}</span>
+        <span className="pj-user"><strong>{patientDisplayName}</strong><small>Patient Portal</small></span>
+      </div>
+    </header>
+
+    <div className="pj-layout ppn-home-layout">
+      <aside className="pj-sidebar">
+        <div className="pj-welcome"><small>Welcome back,</small><strong>{firstName(data.patient)}</strong></div>
+        <div className="pj-mountains" aria-hidden="true">⌁⌁⌁</div>
+        <p className="pj-progress-copy">Your care, visits,<br />and information in one place.</p>
+        <PatientPortalNavigation active="home" />
+        <div className="pj-sidebar-quote"><div className="pj-tree-line">▲ ▲ ▲</div><em>Same people.<br />A Healthier You.</em></div>
+      </aside>
+
+      <main className="pj-main ppn-home-main">
+        <div className="pj-breadcrumb"><span>Patient Portal</span><span>›</span><strong>Home</strong></div>
+        <div className="pj-title-row">
+          <div><h1>Welcome, {firstName(data.patient)}</h1><p>Appointments, check-in, coverage, secure messages, documents, journal, and billing.</p></div>
+          <StatusBadge value={String(data.patient.registration_status ?? "not_started")} />
+        </div>
+        {error && <div className="pj-message error" style={{ marginBottom: 16 }}>{error}</div>}
+        {notice && <div className="pj-message success" style={{ marginBottom: 16 }}>{notice}</div>}
+
+    <div className="thera-metric-grid four" style={{ marginBottom: 18 }}>
       <Metric label="Upcoming Appointments" value={data.upcomingAppointments.length} />
       <Metric label="Active Coverage" value={data.insurancePolicies.filter((row) => row.status === "active").length} />
       <Metric label="Portal Documents" value={data.documents.length} />
@@ -201,6 +234,8 @@ export function PatientPortalPage() {
         <div className="thera-card-header"><div><h2>In-Between Session Journal</h2><p>Capture thoughts, symptoms, progress, and questions between visits. Entries stay patient-authored until a clinician deliberately incorporates relevant information into the clinical record.</p></div><Link href={PORTAL_JOURNAL} className="thera-action">Open Journal</Link></div>
         {recentJournalEntries.length ? <div className="thera-stack">{recentJournalEntries.map((entry) => <article key={entry.id} className="thera-work-card"><div className="thera-work-card-top"><strong>{String(entry.mood ?? "Reflection").replaceAll("_", " ")}</strong><span className="thera-muted">{dateTime(String(entry.created_at ?? ""))}</span></div><p>{String(entry.entry_text ?? "")}</p></article>)}</div> : <div className="thera-empty">No journal entries yet. Open the journal to write your first reflection.</div>}
       </section>
+    </div>
+      </main>
     </div>
     <PatientPortalMobileNavigation active="home" />
   </div>;
