@@ -46,8 +46,8 @@ test("patient document actions resolve access through the portal RPC before priv
 
 test("patient portal renders explicit Open and Download document actions", () => {
   const source = readFileSync(new URL("../src/domains/portal/PatientPortalPage.tsx", import.meta.url), "utf8");
-  assert.match(source, />Open<\/button>/);
-  assert.match(source, />Download<\/button>/);
+  assert.match(source, /"Opening\.\.\." : "Open"/);
+  assert.match(source, /"Downloading\.\.\." : "Download"/);
   assert.match(source, /documentAction\(id, "open"\)/);
   assert.match(source, /documentAction\(id, "download"\)/);
 });
