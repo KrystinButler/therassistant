@@ -49,3 +49,14 @@ test("portal home presents one progressive arrival action per appointment",()=>{
   assert.match(home,/const arrivalStep = checkedIn \? null : arrived \? "checked_in" : onMyWay \? "arrived" : "on_my_way"/);
   assert.match(home,/const arrivalLabel = checkedIn \? "Checked In ✓" : arrived \? "Check In" : onMyWay \? "I Arrived" : "On My Way"/);
 });
+
+
+test("portal appointments expose staff-routed reschedule and cancellation requests",()=>{
+  const home=readFileSync(new URL("../src/domains/portal/PatientPortalPage.tsx",import.meta.url),"utf8");
+  const repository=readFileSync(new URL("../src/domains/portal/repository.ts",import.meta.url),"utf8");
+  assert.match(home,/Request Reschedule/);
+  assert.match(home,/Request Cancellation/);
+  assert.match(home,/appointment does not change until the practice confirms/i);
+  assert.match(repository,/portal_submit_schedule_change/);
+  assert.doesNotMatch(repository,/update.*appointments/i);
+});
