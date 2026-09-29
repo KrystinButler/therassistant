@@ -126,6 +126,22 @@ export function submitPortalChangeRequest(
   });
 }
 
+export function submitPortalScheduleChange(
+  appointmentId: string,
+  requestType: "cancel" | "reschedule",
+  details: string,
+) {
+  const clean = details.trim();
+  if (!appointmentId) throw new Error("Appointment is required.");
+  if (!clean) throw new Error("Add a note for the practice about this schedule change.");
+  if (clean.length > 2000) throw new Error("Schedule change details must be 2,000 characters or fewer.");
+  return portalRpc<DataValue>("portal_submit_schedule_change", {
+    p_appointment_id: appointmentId,
+    p_request_type: requestType,
+    p_details: clean,
+  });
+}
+
 export async function getPatientPortalData() {
   const [payload, provider] = await Promise.all([
     portalRpc<PatientPortalAggregate>("get_my_patient_portal_data"),
