@@ -95,8 +95,7 @@ as $$
   ) t;
 $$;
 
-revoke all on function private.portal_message_threads_json(uuid, uuid) from public, anon;
-grant execute on function private.portal_message_threads_json(uuid, uuid) to authenticated;
+revoke all on function private.portal_message_threads_json(uuid, uuid) from public, anon, authenticated;
 
 create or replace function private.get_my_portal_messages_impl()
 returns jsonb
