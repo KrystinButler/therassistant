@@ -16,6 +16,7 @@ import {
   Save,
   Tag,
   Target,
+  UserRound,
 } from "lucide-react";
 import { Link } from "wouter";
 
