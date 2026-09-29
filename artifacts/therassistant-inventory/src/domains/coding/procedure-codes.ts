@@ -1,4 +1,5 @@
 import { authenticatedFetch, SUPABASE_URL } from "../../lib/supabase-client";
+import { tenantSelect, type Row } from "../../lib/tenant-data-client";
 
 export type ProcedureCodeSearchResult = {
   code: string;
@@ -86,4 +87,70 @@ export async function searchProcedureCodes(
       descriptionSource: String(row.description_source ?? "").trim(),
     }))
     .filter((row) => Boolean(row.code));
+}
+
+
+type FeeRow = Row & { id: string };
+
+function scheduleApplies(row: Row, serviceDate: string) {
+  const effective = String(row.effective_date ?? "");
+  const termination = String(row.termination_date ?? "");
+  return (!effective || effective <= serviceDate) && (!termination || termination >= serviceDate);
+}
+
+export async function resolveProcedureCharge(
+  code: string,
+  payerId?: string,
+  serviceDate = new Date().toISOString().slice(0, 10),
+) {
+  const normalized = code.trim().toUpperCase();
+  if (!normalized) return null;
+
+  const lines = await tenantSelect<FeeRow>("fee_schedule_lines", {
+    cpt_code: `eq.${normalized}`,
+    order: "updated_at.desc",
+  });
+  if (!lines.length) return null;
+
+  const scheduleIds = [...new Set(lines.map((line) => String(line.fee_schedule_id ?? "")).filter(Boolean))];
+  if (!scheduleIds.length) return null;
+  const schedules = (await tenantSelect<FeeRow>("fee_schedules", {
+    id: `in.(${scheduleIds.join(",")})`,
+    status: "eq.active",
+    order: "effective_date.desc.nullslast,updated_at.desc",
+  })).filter((schedule) => scheduleApplies(schedule, serviceDate));
+  if (!schedules.length) return null;
+
+  if (payerId) {
+    const contracts = await tenantSelect<FeeRow>("payer_contracts", {
+      payer_id: `eq.${payerId}`,
+      status: "eq.active",
+      order: "effective_date.desc.nullslast,updated_at.desc",
+    });
+    const contractIds = new Set(
+      contracts.filter((contract) => scheduleApplies(contract, serviceDate)).map((contract) => String(contract.id)),
+    );
+    for (const schedule of schedules) {
+      if (!contractIds.has(String(schedule.payer_contract_id ?? ""))) continue;
+      const line = lines.find((candidate) =>
+        String(candidate.fee_schedule_id) === String(schedule.id)
+        && !String(candidate.modifier ?? "").trim(),
+      ) ?? lines.find((candidate) => String(candidate.fee_schedule_id) === String(schedule.id));
+      if (line && Number(line.rate_cents) > 0) {
+        return { amountCents: Number(line.rate_cents), source: String(schedule.name ?? "Payer fee schedule") };
+      }
+    }
+  }
+
+  for (const schedule of schedules) {
+    if (schedule.payer_contract_id) continue;
+    const line = lines.find((candidate) =>
+      String(candidate.fee_schedule_id) === String(schedule.id)
+      && !String(candidate.modifier ?? "").trim(),
+    ) ?? lines.find((candidate) => String(candidate.fee_schedule_id) === String(schedule.id));
+    if (line && Number(line.rate_cents) > 0) {
+      return { amountCents: Number(line.rate_cents), source: String(schedule.name ?? "Standard charges") };
+    }
+  }
+  return null;
 }
