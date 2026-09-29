@@ -7,7 +7,6 @@ import {
   ChevronRight,
   Clock3,
   Eye,
-  Heart,
   HeartPulse,
   Info,
   LockKeyhole,
