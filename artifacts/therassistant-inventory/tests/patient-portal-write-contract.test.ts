@@ -110,3 +110,20 @@ test("previsit hardening merges against the current conflicting row", () => {
   assert.match(impl, /jsonb_build_object\('pre_visit'/i);
   assert.doesNotMatch(impl, /responses\s*=\s*excluded\.responses/i);
 });
+
+
+test("patient schedule change requests derive identity and never mutate appointments directly", () => {
+  const sql = migration("patient_portal_schedule_change");
+  const wrapper = functionStatement(sql, "public.portal_submit_schedule_change");
+  const impl = functionStatement(sql, "private.portal_submit_schedule_change_impl");
+
+  assert.match(wrapper, /security invoker/i);
+  assert.match(impl, /security definer/i);
+  assert.match(impl, /client_portal_access/i);
+  assert.match(impl, /user_id\s*=\s*\(select auth\.uid\(\)\)/i);
+  assert.match(impl, /a\.tenant_id\s*=\s*v_access\.tenant_id/i);
+  assert.match(impl, /a\.client_id\s*=\s*v_access\.client_id/i);
+  assert.match(impl, /insert into public\.mailroom_items/i);
+  assert.match(impl, /insert into public\.workqueue_items/i);
+  assert.doesNotMatch(impl, /update\s+public\.appointments/i);
+});

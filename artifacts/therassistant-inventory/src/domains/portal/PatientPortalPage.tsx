@@ -4,7 +4,7 @@ import { Link } from "wouter";
 import { StatusBadge } from "../../components/status-badge";
 import { dateTime, money } from "../../lib/format";
 import { PatientPortalMobileNavigation } from "./PatientPortalNavigation";
-import { downloadPortalDocument, getPatientPortalData, openPortalDocument, recordCheckIn, submitPortalChangeRequest } from "./repository";
+import { downloadPortalDocument, getPatientPortalData, openPortalDocument, recordCheckIn, submitPortalChangeRequest, submitPortalScheduleChange } from "./repository";
 import { PORTAL_JOURNAL, portalCheckInPath } from "./routes";
 
 type PortalData = Awaited<ReturnType<typeof getPatientPortalData>>;
@@ -28,6 +28,9 @@ export function PatientPortalPage() {
   const [changeRequestType, setChangeRequestType] = useState<"demographics" | "insurance" | null>(null);
   const [changeDetails, setChangeDetails] = useState("");
   const [changeWorking, setChangeWorking] = useState(false);
+  const [scheduleRequest, setScheduleRequest] = useState<{ appointmentId: string; type: "cancel" | "reschedule" } | null>(null);
+  const [scheduleDetails, setScheduleDetails] = useState("");
+  const [scheduleWorking, setScheduleWorking] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -79,6 +82,25 @@ export function PatientPortalPage() {
     }
   }
 
+  async function submitScheduleRequest() {
+    if (!scheduleRequest) return;
+    setScheduleWorking(true);
+    setError(null);
+    setNotice(null);
+    try {
+      await submitPortalScheduleChange(scheduleRequest.appointmentId, scheduleRequest.type, scheduleDetails);
+      setNotice(scheduleRequest.type === "cancel"
+        ? "Your cancellation request was sent to the practice. Your appointment remains scheduled until staff confirms the change."
+        : "Your reschedule request was sent to the practice. Your appointment remains scheduled until staff confirms a new time.");
+      setScheduleRequest(null);
+      setScheduleDetails("");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to submit your schedule change request.");
+    } finally {
+      setScheduleWorking(false);
+    }
+  }
+
   if (loading) return <div className="thera-state">Loading patient portal...</div>;
   if (error && !data) return <div className="thera-state error">{error}</div>;
   if (!data) return <div className="thera-state error">Patient portal is unavailable.</div>;
@@ -109,7 +131,8 @@ export function PatientPortalPage() {
         const onMyWay = Boolean(checkin?.on_my_way_at);
         const arrivalStep = checkedIn ? null : arrived ? "checked_in" : onMyWay ? "arrived" : "on_my_way";
         const arrivalLabel = checkedIn ? "Checked In ✓" : arrived ? "Check In" : onMyWay ? "I Arrived" : "On My Way";
-        return <article className="thera-work-card" key={appointment.id}><div className="thera-work-card-top"><div><strong>{dateTime(String(appointment.starts_at ?? ""))}</strong><div className="thera-table-subtext">{String(appointment.service_type ?? "Appointment")} · {String(appointment.location_type ?? "").replaceAll("_", " ")}</div></div><StatusBadge value={String(appointment.appointment_status ?? "scheduled")} /></div><div className="thera-filter-row"><Link href={portalCheckInPath(appointment.id)} className="thera-action">{preVisitSubmitted ? "Review Pre-Visit Check-In" : preVisitStarted ? "Continue Pre-Visit Check-In" : "Start Pre-Visit Check-In"}</Link><button type="button" className={checkedIn ? "thera-action secondary" : "thera-action"} disabled={checkedIn || working !== null || arrivalStep === null} onClick={() => arrivalStep && void checkIn(appointment.id, arrivalStep)}>{working?.startsWith(`${appointment.id}-`) ? "Updating..." : arrivalLabel}</button></div></article>;
+        const canRequestScheduleChange = ["scheduled", "confirmed"].includes(String(appointment.appointment_status ?? "scheduled").toLowerCase()) && new Date(String(appointment.starts_at ?? "")).getTime() > Date.now();
+        return <article className="thera-work-card" key={appointment.id}><div className="thera-work-card-top"><div><strong>{dateTime(String(appointment.starts_at ?? ""))}</strong><div className="thera-table-subtext">{String(appointment.service_type ?? "Appointment")} · {String(appointment.location_type ?? "").replaceAll("_", " ")}</div></div><StatusBadge value={String(appointment.appointment_status ?? "scheduled")} /></div><div className="thera-filter-row"><Link href={portalCheckInPath(appointment.id)} className="thera-action">{preVisitSubmitted ? "Review Pre-Visit Check-In" : preVisitStarted ? "Continue Pre-Visit Check-In" : "Start Pre-Visit Check-In"}</Link><button type="button" className={checkedIn ? "thera-action secondary" : "thera-action"} disabled={checkedIn || working !== null || arrivalStep === null} onClick={() => arrivalStep && void checkIn(appointment.id, arrivalStep)}>{working?.startsWith(`${appointment.id}-`) ? "Updating..." : arrivalLabel}</button>{canRequestScheduleChange && <><button type="button" className="thera-action secondary" onClick={() => { setScheduleRequest({ appointmentId: appointment.id, type: "reschedule" }); setScheduleDetails(""); setNotice(null); }}>Request Reschedule</button><button type="button" className="thera-action secondary" onClick={() => { setScheduleRequest({ appointmentId: appointment.id, type: "cancel" }); setScheduleDetails(""); setNotice(null); }}>Request Cancellation</button></>}</div>{scheduleRequest?.appointmentId === appointment.id && <ScheduleRequestForm type={scheduleRequest.type} details={scheduleDetails} working={scheduleWorking} onDetails={setScheduleDetails} onSubmit={() => void submitScheduleRequest()} onCancel={() => { setScheduleRequest(null); setScheduleDetails(""); }} />}</article>;
       })}</div> : <div className="thera-empty">No upcoming appointments.</div>}</section>
 
       <section id="profile" className="thera-card"><div className="thera-card-header split"><div><h2>Demographics</h2><p>Review the information the practice has on file.</p></div><button type="button" className="thera-action secondary" onClick={() => { setChangeRequestType("demographics"); setChangeDetails(""); setNotice(null); }}>Report a Change</button></div><div className="thera-definition-grid"><Field label="Name" value={patientName(data.patient)} /><Field label="DOB" value={String(data.patient.date_of_birth ?? "—")} /><Field label="Phone" value={String(data.patient.phone ?? "—")} /><Field label="Email" value={String(data.patient.email ?? "—")} /><Field label="Address" value={[data.patient.address_line1, data.patient.city, data.patient.state, data.patient.postal_code].filter(Boolean).join(", ") || "—"} /></div>{changeRequestType === "demographics" && <ChangeRequestForm type="demographics" details={changeDetails} working={changeWorking} onDetails={setChangeDetails} onSubmit={() => void submitChangeRequest()} onCancel={() => { setChangeRequestType(null); setChangeDetails(""); }} />}</section>
@@ -148,5 +171,24 @@ function ChangeRequestForm({ type, details, working, onDetails, onSubmit, onCanc
   return <div className="thera-form-grid" style={{ marginTop: 14 }}>
     <label className="thera-field thera-span-2"><span className="thera-field-label">{label}</span><textarea className="thera-input" rows={4} maxLength={2000} value={details} onChange={(event) => onDetails(event.target.value)} placeholder={type === "demographics" ? "Example: My phone number and address changed..." : "Example: I have a new insurance plan effective October 1..."} /></label>
     <div className="thera-filter-row"><button type="button" className="thera-action" disabled={working || !details.trim()} onClick={onSubmit}>{working ? "Sending..." : "Send Update Request"}</button><button type="button" className="thera-action secondary" disabled={working} onClick={onCancel}>Cancel</button></div>
+  </div>;
+}
+
+
+function ScheduleRequestForm({ type, details, working, onDetails, onSubmit, onCancel }: {
+  type: "cancel" | "reschedule";
+  details: string;
+  working: boolean;
+  onDetails: (value: string) => void;
+  onSubmit: () => void;
+  onCancel: () => void;
+}) {
+  const label = type === "cancel"
+    ? "Tell the practice why you need to cancel. Staff must confirm the cancellation."
+    : "Tell the practice what days or times work better. Staff will contact you to confirm a new appointment.";
+  return <div className="thera-form-grid" style={{ marginTop: 14 }}>
+    <label className="thera-field thera-span-2"><span className="thera-field-label">{label}</span><textarea className="thera-input" rows={3} maxLength={2000} value={details} onChange={(event) => onDetails(event.target.value)} placeholder={type === "cancel" ? "Example: I am unable to attend this appointment..." : "Example: I am available Tuesday or Thursday afternoon..."} /></label>
+    <div className="thera-filter-row"><button type="button" className="thera-action" disabled={working || !details.trim()} onClick={onSubmit}>{working ? "Sending..." : type === "cancel" ? "Send Cancellation Request" : "Send Reschedule Request"}</button><button type="button" className="thera-action secondary" disabled={working} onClick={onCancel}>Keep Appointment</button></div>
+    <p className="thera-muted" style={{ margin: 0 }}>Your appointment does not change until the practice confirms your request.</p>
   </div>;
 }
