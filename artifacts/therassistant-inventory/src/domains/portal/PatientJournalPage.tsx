@@ -6,26 +6,23 @@ import {
   CheckCircle2,
   ChevronRight,
   Clock3,
-  CreditCard,
   Eye,
   Heart,
   HeartPulse,
-  Home,
   Info,
   LockKeyhole,
   MapPin,
-  MessageSquare,
   PencilLine,
   Phone,
   Save,
   Tag,
   Target,
-  UserRound,
 } from "lucide-react";
 import { Link } from "wouter";
 
+import { PatientPortalMobileNavigation, PatientPortalNavigation } from "./PatientPortalNavigation";
 import { addPortalJournalEntry, getPatientPortalData } from "./repository";
-import { PORTAL_HOME, PORTAL_JOURNAL } from "./routes";
+import { PORTAL_HOME } from "./routes";
 import "./patient-journal.css";
 
 type PortalData = Awaited<ReturnType<typeof getPatientPortalData>>;
@@ -179,15 +176,7 @@ export function PatientJournalPage() {
           <div className="pj-welcome"><small>Welcome back,</small><strong>{firstName(data.patient)}</strong></div>
           <div className="pj-mountains" aria-hidden="true">⌁⌁⌁</div>
           <p className="pj-progress-copy">Progress happens<br />between sessions, too.</p>
-          <nav className="pj-nav" aria-label="Patient portal navigation">
-            <Link href={PORTAL_HOME}><Home size={17} /> Home</Link>
-            <Link href={PORTAL_HOME}><CalendarDays size={17} /> Appointments</Link>
-            <Link href={PORTAL_JOURNAL} className="active"><BookOpenText size={17} /> Journal</Link>
-            <Link href={PORTAL_HOME}><Heart size={17} /> Check-In</Link>
-            <Link href={PORTAL_HOME}><CreditCard size={17} /> Billing</Link>
-            <Link href={PORTAL_HOME}><MessageSquare size={17} /> Messages</Link>
-            <Link href={PORTAL_HOME}><UserRound size={17} /> Profile</Link>
-          </nav>
+          <PatientPortalNavigation active="journal" />
           <div className="pj-sidebar-quote"><div className="pj-tree-line">▲ ▲ ▲</div><em>Same people.<br />A Healthier You.</em></div>
         </aside>
 
@@ -291,7 +280,7 @@ export function PatientJournalPage() {
             {appointment ? <>
               <div className="pj-side-detail"><CalendarDays size={15} /><div><strong>{formatDate(appointment.starts_at, { weekday: "short", month: "short", day: "numeric" })}</strong><small>{formatTime(appointment.starts_at)}</small></div></div>
               <div className="pj-side-detail"><MapPin size={15} /><div><strong>{String(appointment.service_type ?? "Appointment")}</strong><small>{String(appointment.location_type ?? "Office").replaceAll("_", " ")}</small></div></div>
-              <Link href={PORTAL_HOME} className="pj-outline-button">View Appointment <ChevronRight size={14} /></Link>
+              <Link href={`${PORTAL_HOME}#appointments`} className="pj-outline-button">View Appointment <ChevronRight size={14} /></Link>
             </> : <p className="pj-muted">No upcoming appointment is scheduled.</p>}
           </section>
 
@@ -299,7 +288,7 @@ export function PatientJournalPage() {
             <h2><UserRound size={17} /> Your Provider</h2>
             <div className="pj-provider"><div className="pj-provider-avatar">{String(provider?.first_name ?? "C").slice(0, 1)}{String(provider?.last_name ?? "T").slice(0, 1)}</div><div><strong>{providerName(provider)}</strong><small>{provider ? "Your behavioral health provider" : "Your care team"}</small></div></div>
             <p className="pj-provider-bio">Your provider can review entries you choose to share and use them to support your next session.</p>
-            <Link href={PORTAL_HOME} className="pj-outline-button">View Full Profile <ChevronRight size={14} /></Link>
+            <Link href={`${PORTAL_HOME}#profile`} className="pj-outline-button">View Profile <ChevronRight size={14} /></Link>
           </section>
 
           <section className="pj-side-card pj-prompts">
@@ -314,6 +303,7 @@ export function PatientJournalPage() {
           </section>
         </aside>
       </div>
+      <PatientPortalMobileNavigation active="journal" />
     </div>
   );
 }
