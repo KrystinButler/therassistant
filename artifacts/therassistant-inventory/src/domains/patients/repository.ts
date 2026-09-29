@@ -8,7 +8,7 @@ export async function getPatientChart(patientId: string): Promise<PatientChart> 
   if (!patientId) throw new Error("Patient ID is required.");
 
   const [
-    patients, contacts, policies, eligibility, authorizations, authorizationUnits,
+    patients, contacts, policies, eligibility,
     appointments, encounters, treatmentPlans, treatmentGoals, notes, diagnoses,
     charges, claims, payments, denials, appeals, documents, checkins, journalEntries,
     workItems, providers, payers, plans, balances,
@@ -17,8 +17,6 @@ export async function getPatientChart(patientId: string): Promise<PatientChart> 
     tenantSelect<DataRow>("client_contacts", { client_id: `eq.${patientId}`, order: "created_at.asc" }),
     tenantSelect<DataRow>("client_insurance_policies", { client_id: `eq.${patientId}`, order: "created_at.asc" }),
     tenantSelect<DataRow>("eligibility_checks", { client_id: `eq.${patientId}`, order: "service_date.desc,created_at.desc" }),
-    tenantSelect<DataRow>("authorizations", { client_id: `eq.${patientId}`, order: "end_date.desc.nullslast,created_at.desc" }),
-    tenantSelect<DataRow>("authorization_units", { order: "created_at.asc" }),
     tenantSelect<DataRow>("appointments", { client_id: `eq.${patientId}`, order: "starts_at.desc" }),
     tenantSelect<DataRow>("encounters", { client_id: `eq.${patientId}`, order: "started_at.desc" }),
     tenantSelect<DataRow>("treatment_plans", { client_id: `eq.${patientId}`, order: "effective_date.desc.nullslast,created_at.desc" }),
@@ -40,7 +38,6 @@ export async function getPatientChart(patientId: string): Promise<PatientChart> 
     tenantSelect<DataRow>("client_balance_summaries", { client_id: `eq.${patientId}`, limit: "1" }),
   ]);
 
-  const relevantAuthorizationIds = new Set(authorizations.map((row) => row.id));
   const relevantPlanIds = new Set(treatmentPlans.map((row) => row.id));
   const claimIds = new Set(claims.map((row) => row.id));
   const denialIds = new Set(denials.map((row) => row.id));
@@ -54,8 +51,6 @@ export async function getPatientChart(patientId: string): Promise<PatientChart> 
     contacts: contacts as ChartRow[],
     policies: policies as ChartRow[],
     eligibility: eligibility as ChartRow[],
-    authorizations: authorizations as ChartRow[],
-    authorizationUnits: authorizationUnits.filter((row) => relevantAuthorizationIds.has(String(row.authorization_id ?? ""))) as ChartRow[],
     appointments: appointments as ChartRow[],
     encounters: encounters as ChartRow[],
     treatmentPlans: treatmentPlans as ChartRow[],
