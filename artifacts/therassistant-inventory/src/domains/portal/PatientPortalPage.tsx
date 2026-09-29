@@ -4,7 +4,7 @@ import { Link } from "wouter";
 import { StatusBadge } from "../../components/status-badge";
 import { dateTime, money } from "../../lib/format";
 import { PatientPortalMobileNavigation } from "./PatientPortalNavigation";
-import { downloadPortalDocument, getPatientPortalData, openPortalDocument, recordCheckIn } from "./repository";
+import { downloadPortalDocument, getPatientPortalData, openPortalDocument, recordCheckIn, submitPortalChangeRequest } from "./repository";
 import { PORTAL_JOURNAL, portalCheckInPath } from "./routes";
 
 type PortalData = Awaited<ReturnType<typeof getPatientPortalData>>;
@@ -25,6 +25,10 @@ export function PatientPortalPage() {
   const [loading, setLoading] = useState(true);
   const [working, setWorking] = useState<string | null>(null);
   const [documentWorking, setDocumentWorking] = useState<string | null>(null);
+  const [changeRequestType, setChangeRequestType] = useState<"demographics" | "insurance" | null>(null);
+  const [changeDetails, setChangeDetails] = useState("");
+  const [changeWorking, setChangeWorking] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   async function load() {
@@ -56,6 +60,25 @@ export function PatientPortalPage() {
     }
   }
 
+  async function submitChangeRequest() {
+    if (!changeRequestType) return;
+    setChangeWorking(true);
+    setError(null);
+    setNotice(null);
+    try {
+      await submitPortalChangeRequest(changeRequestType, changeDetails);
+      setNotice(changeRequestType === "demographics"
+        ? "Your demographic update request was sent to the practice work queue."
+        : "Your insurance update request was sent to the practice work queue.");
+      setChangeRequestType(null);
+      setChangeDetails("");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to submit your change request.");
+    } finally {
+      setChangeWorking(false);
+    }
+  }
+
   if (loading) return <div className="thera-state">Loading patient portal...</div>;
   if (error && !data) return <div className="thera-state error">{error}</div>;
   if (!data) return <div className="thera-state error">Patient portal is unavailable.</div>;
@@ -66,6 +89,7 @@ export function PatientPortalPage() {
   return <div className="ppn-home-page">
     <div className="thera-page-header split"><div><div className="thera-eyebrow">PATIENT PORTAL</div><h1>{patientName(data.patient)}</h1><p>Appointments, check-in, coverage confirmation, selected documents, journal, and balance summary.</p></div><div><StatusBadge value={String(data.patient.registration_status ?? "not_started")} /></div></div>
     {error && <div className="thera-state error" style={{ marginBottom: 16 }}>{error}</div>}
+    {notice && <div className="thera-alert" style={{ marginBottom: 16 }}>{notice}</div>}
 
     <div className="thera-metric-grid" style={{ marginBottom: 18 }}>
       <Metric label="Upcoming Appointments" value={data.upcomingAppointments.length} />
@@ -88,9 +112,9 @@ export function PatientPortalPage() {
         return <article className="thera-work-card" key={appointment.id}><div className="thera-work-card-top"><div><strong>{dateTime(String(appointment.starts_at ?? ""))}</strong><div className="thera-table-subtext">{String(appointment.service_type ?? "Appointment")} · {String(appointment.location_type ?? "").replaceAll("_", " ")}</div></div><StatusBadge value={String(appointment.appointment_status ?? "scheduled")} /></div><div className="thera-filter-row"><Link href={portalCheckInPath(appointment.id)} className="thera-action">{preVisitSubmitted ? "Review Pre-Visit Check-In" : preVisitStarted ? "Continue Pre-Visit Check-In" : "Start Pre-Visit Check-In"}</Link><button type="button" className={checkedIn ? "thera-action secondary" : "thera-action"} disabled={checkedIn || working !== null || arrivalStep === null} onClick={() => arrivalStep && void checkIn(appointment.id, arrivalStep)}>{working?.startsWith(`${appointment.id}-`) ? "Updating..." : arrivalLabel}</button></div></article>;
       })}</div> : <div className="thera-empty">No upcoming appointments.</div>}</section>
 
-      <section id="profile" className="thera-card"><h2>Demographics</h2><div className="thera-definition-grid"><Field label="Name" value={patientName(data.patient)} /><Field label="DOB" value={String(data.patient.date_of_birth ?? "—")} /><Field label="Phone" value={String(data.patient.phone ?? "—")} /><Field label="Email" value={String(data.patient.email ?? "—")} /><Field label="Address" value={[data.patient.address_line1, data.patient.city, data.patient.state, data.patient.postal_code].filter(Boolean).join(", ") || "—"} /></div><p className="thera-muted" style={{ marginTop: 12 }}>Demographic changes are handled through the practice workflow; the portal does not expose administrative fields.</p></section>
+      <section id="profile" className="thera-card"><div className="thera-card-header split"><div><h2>Demographics</h2><p>Review the information the practice has on file.</p></div><button type="button" className="thera-action secondary" onClick={() => { setChangeRequestType("demographics"); setChangeDetails(""); setNotice(null); }}>Report a Change</button></div><div className="thera-definition-grid"><Field label="Name" value={patientName(data.patient)} /><Field label="DOB" value={String(data.patient.date_of_birth ?? "—")} /><Field label="Phone" value={String(data.patient.phone ?? "—")} /><Field label="Email" value={String(data.patient.email ?? "—")} /><Field label="Address" value={[data.patient.address_line1, data.patient.city, data.patient.state, data.patient.postal_code].filter(Boolean).join(", ") || "—"} /></div>{changeRequestType === "demographics" && <ChangeRequestForm type="demographics" details={changeDetails} working={changeWorking} onDetails={setChangeDetails} onSubmit={() => void submitChangeRequest()} onCancel={() => { setChangeRequestType(null); setChangeDetails(""); }} />}</section>
 
-      <section id="coverage" className="thera-card"><h2>Insurance</h2>{data.insurancePolicies.length ? <div className="thera-stack">{data.insurancePolicies.map((policy) => <div key={policy.id} className="thera-report-list-row"><div><strong>{String(policy.insurance_order ?? "coverage").replaceAll("_", " ")}</strong><div className="thera-table-subtext">Member {String(policy.member_id ?? "—")} · Group {String(policy.group_number ?? "—")}</div></div><StatusBadge value={String(policy.status ?? "unknown")} /></div>)}</div> : <div className="thera-empty">No coverage on file.</div>}</section>
+      <section id="coverage" className="thera-card"><div className="thera-card-header split"><div><h2>Insurance</h2><p>Review your coverage information.</p></div><button type="button" className="thera-action secondary" onClick={() => { setChangeRequestType("insurance"); setChangeDetails(""); setNotice(null); }}>Report Insurance Change</button></div>{data.insurancePolicies.length ? <div className="thera-stack">{data.insurancePolicies.map((policy) => <div key={policy.id} className="thera-report-list-row"><div><strong>{String(policy.insurance_order ?? "coverage").replaceAll("_", " ")}</strong><div className="thera-table-subtext">Member {String(policy.member_id ?? "—")} · Group {String(policy.group_number ?? "—")}</div></div><StatusBadge value={String(policy.status ?? "unknown")} /></div>)}</div> : <div className="thera-empty">No coverage on file.</div>}{changeRequestType === "insurance" && <ChangeRequestForm type="insurance" details={changeDetails} working={changeWorking} onDetails={setChangeDetails} onSubmit={() => void submitChangeRequest()} onCancel={() => { setChangeRequestType(null); setChangeDetails(""); }} />}</section>
 
       <section id="documents" className="thera-card thera-span-2"><div className="thera-card-header"><div><h2>Forms & Documents</h2><p>Open or download the forms, correspondence, insurance cards, and statements shared with you.</p></div></div>{data.documents.length ? <div className="thera-table-wrap"><table className="thera-table"><thead><tr><th>Date</th><th>Type</th><th>Name</th><th>Status</th><th>File</th></tr></thead><tbody>{data.documents.map((row) => {
         const id = String(row.id ?? "");
@@ -109,3 +133,20 @@ export function PatientPortalPage() {
 
 function Metric({ id, label, value }: { id?: string; label: string; value: string | number }) { return <div id={id} className="thera-metric-card"><div className="thera-metric-label">{label}</div><div className="thera-metric-value">{value}</div></div>; }
 function Field({ label, value }: { label: string; value: string }) { return <div><div className="thera-field-label">{label}</div><div>{value}</div></div>; }
+
+function ChangeRequestForm({ type, details, working, onDetails, onSubmit, onCancel }: {
+  type: "demographics" | "insurance";
+  details: string;
+  working: boolean;
+  onDetails: (value: string) => void;
+  onSubmit: () => void;
+  onCancel: () => void;
+}) {
+  const label = type === "demographics"
+    ? "Tell the practice what demographic information needs to be updated."
+    : "Tell the practice what changed with your insurance. Staff will follow up if they need a new card.";
+  return <div className="thera-form-grid" style={{ marginTop: 14 }}>
+    <label className="thera-field thera-span-2"><span className="thera-field-label">{label}</span><textarea className="thera-input" rows={4} maxLength={2000} value={details} onChange={(event) => onDetails(event.target.value)} placeholder={type === "demographics" ? "Example: My phone number and address changed..." : "Example: I have a new insurance plan effective October 1..."} /></label>
+    <div className="thera-filter-row"><button type="button" className="thera-action" disabled={working || !details.trim()} onClick={onSubmit}>{working ? "Sending..." : "Send Update Request"}</button><button type="button" className="thera-action secondary" disabled={working} onClick={onCancel}>Cancel</button></div>
+  </div>;
+}
