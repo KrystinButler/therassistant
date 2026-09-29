@@ -3,6 +3,7 @@ import { Link } from "wouter";
 
 import { StatusBadge } from "../../components/status-badge";
 import { dateTime, money } from "../../lib/format";
+import { PatientMessagesPanel } from "./PatientMessagesPanel";
 import { PatientPortalMobileNavigation } from "./PatientPortalNavigation";
 import { downloadPortalDocument, getPatientPortalData, openPortalDocument, recordCheckIn, submitPortalChangeRequest, submitPortalScheduleChange, uploadPortalInsuranceCard } from "./repository";
 import { PORTAL_JOURNAL, portalCheckInPath } from "./routes";
@@ -170,6 +171,8 @@ export function PatientPortalPage() {
         </div>
         {changeRequestType === "insurance" && <ChangeRequestForm type="insurance" details={changeDetails} working={changeWorking} onDetails={setChangeDetails} onSubmit={() => void submitChangeRequest()} onCancel={() => { setChangeRequestType(null); setChangeDetails(""); }} />}
       </section>
+
+      <PatientMessagesPanel />
 
       <section id="billing" className="thera-card thera-span-2">
         <div className="thera-card-header"><div><h2>Billing & Statements</h2><p>Review your current balance, patient payments, and statements shared by the practice.</p></div></div>
