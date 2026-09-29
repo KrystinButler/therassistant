@@ -113,6 +113,19 @@ export async function downloadPortalDocument(documentId: string) {
   URL.revokeObjectURL(url);
 }
 
+export function submitPortalChangeRequest(
+  requestType: "demographics" | "insurance",
+  details: string,
+) {
+  const clean = details.trim();
+  if (!clean) throw new Error("Describe what needs to be updated.");
+  if (clean.length > 2000) throw new Error("Change request details must be 2,000 characters or fewer.");
+  return portalRpc<DataValue>("portal_submit_change_request", {
+    p_request_type: requestType,
+    p_details: clean,
+  });
+}
+
 export async function getPatientPortalData() {
   const [payload, provider] = await Promise.all([
     portalRpc<PatientPortalAggregate>("get_my_patient_portal_data"),
