@@ -21,6 +21,48 @@ set sex = upper(metadata->>'sex')
 where sex is null
   and upper(coalesce(metadata->>'sex','')) in ('M','F','U');
 
+create or replace function public.sync_client_sex()
+returns trigger
+language plpgsql
+set search_path = public, pg_temp
+as $
+declare
+  v_metadata_sex text := upper(coalesce(new.metadata->>'sex',''));
+begin
+  new.metadata := coalesce(new.metadata, '{}'::jsonb);
+
+  if tg_op = 'INSERT' then
+    if new.sex is null and v_metadata_sex in ('M','F','U') then
+      new.sex := v_metadata_sex;
+    elsif new.sex in ('M','F','U') then
+      new.metadata := jsonb_set(new.metadata, '{sex}', to_jsonb(new.sex), true);
+    end if;
+    return new;
+  end if;
+
+  if new.sex is distinct from old.sex then
+    if new.sex in ('M','F','U') then
+      new.metadata := jsonb_set(new.metadata, '{sex}', to_jsonb(new.sex), true);
+    else
+      new.metadata := new.metadata - 'sex';
+    end if;
+  elsif coalesce(new.metadata->>'sex','') is distinct from coalesce(old.metadata->>'sex','') then
+    if v_metadata_sex in ('M','F','U') then
+      new.sex := v_metadata_sex;
+    else
+      new.sex := null;
+    end if;
+  end if;
+
+  return new;
+end;
+$;
+
+drop trigger if exists trg_sync_client_sex on public.clients;
+create trigger trg_sync_client_sex
+before insert or update on public.clients
+for each row execute function public.sync_client_sex();
+
 create or replace function public.default_professional_claim_metadata()
 returns trigger
 language plpgsql
