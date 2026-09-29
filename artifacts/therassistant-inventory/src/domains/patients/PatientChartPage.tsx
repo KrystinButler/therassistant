@@ -9,6 +9,7 @@ import { DocumentsPanel } from "../documents/DocumentsPanel";
 import { InsurancePanel } from "../insurance/InsurancePanel";
 import { JournalPanel } from "../journal/JournalPanel";
 import { PortalAccessPanel } from "../portal/PortalAccessPanel";
+import { StaffPortalMessagesPanel } from "../portal/StaffPortalMessagesPanel";
 import { TreatmentPlanPanel } from "../treatment-plans/TreatmentPlanPanel";
 import { DemographicsPanel } from "./DemographicsPanel";
 import { getPatientChart } from "./repository";
@@ -96,6 +97,7 @@ export function PatientChartPage() {
     {tab === "documents" && <DocumentsPanel chart={chart} onChanged={load} />}
     {tab === "engagement" && <>
       <JournalPanel chart={chart} onChanged={load} />
+      <StaffPortalMessagesPanel clientId={chart.patient.id} />
       <PortalCheckIn chart={chart} onEditDemographics={() => setTab("demographics")} />
     </>}
     {tab === "demographics" && <DemographicsPanel chart={chart} onChanged={load} />}
