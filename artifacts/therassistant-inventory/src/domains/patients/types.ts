@@ -7,7 +7,6 @@ export type PatientChart = {
   contacts: PatientChartRow[];
   insurancePolicies: PatientChartRow[];
   eligibilityHistory: PatientChartRow[];
-  authorizations: PatientChartRow[];
   appointments: PatientChartRow[];
   encounters: PatientChartRow[];
   treatmentPlans: Array<PatientChartRow & { goals: PatientChartRow[] }>;
