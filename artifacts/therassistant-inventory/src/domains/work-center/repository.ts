@@ -65,40 +65,6 @@ function personName(row?: Row) {
   return [row.first_name, row.last_name].filter(Boolean).join(" ") || "—";
 }
 
-export function resolveMailroomWorkContext(input: {
-  mailroomItem: Row & { id: string };
-  linkedClaim?: Row & { id: string };
-  client?: Row & { id: string };
-  provider?: Row & { id: string };
-  payer?: Row & { id: string };
-}) {
-  const { mailroomItem, linkedClaim, client, provider, payer } = input;
-  const clientId = String(mailroomItem.client_id ?? linkedClaim?.client_id ?? "");
-  const providerId = String(mailroomItem.provider_id ?? "");
-  const payerId = String(mailroomItem.payer_id ?? linkedClaim?.payer_id ?? "");
-  const patientName = clientId ? personName(client) : "—";
-  const providerName = providerId ? personName(provider) : "—";
-  const payerName = payerId ? String(payer?.name ?? "—") : "—";
-  const claimNumber = String(
-    linkedClaim?.patient_control_number ?? linkedClaim?.payer_claim_number ?? "",
-  );
-  const relatedName = [
-    String(mailroomItem.subject || "Correspondence"),
-    patientName !== "—" ? patientName : "",
-    claimNumber,
-  ].filter(Boolean).join(" · ");
-
-  return {
-    clientId,
-    providerId,
-    payerId,
-    patientName,
-    providerName,
-    payerName,
-    relatedName,
-  };
-}
-
 export function sourceRouteForWorkItem(type: string, id: string) {
   switch (type) {
     case "client": return `/clients/${id}`;
@@ -106,7 +72,6 @@ export function sourceRouteForWorkItem(type: string, id: string) {
     case "encounter": return `/encounters/${id}`;
     case "appointment": return `/schedule/${id}`;
     case "provider": return `/providers/${id}`;
-    case "authorization": return "/authorizations";
     case "eligibility": return "/eligibility";
     case "charge": return "/billing/charges";
     case "payment": return "/payments";
@@ -116,7 +81,6 @@ export function sourceRouteForWorkItem(type: string, id: string) {
     case "era": return "/payments";
     case "claim_batch": return "/claims/submission";
     case "payer_contract": return "/payers-contracts";
-    case "mailroom_item": return `/mailroom/${id}`;
     case "credentialing_application":
     case "provider_credential":
     case "network_participation":
@@ -144,7 +108,6 @@ export async function getWorkCenterData() {
     encounters,
     appointments,
     charges,
-    authorizations,
     eligibility,
     payments,
     denials,
@@ -152,7 +115,6 @@ export async function getWorkCenterData() {
     batches,
     eraFiles,
     payerContracts,
-    mailroomItems,
   ] = await Promise.all([
     tenantSelect<DataRow>("workqueue_items", { order: "created_at.desc" }),
     tenantSelect<DataRow>("workqueue_history", { order: "created_at.desc" }),
@@ -163,7 +125,6 @@ export async function getWorkCenterData() {
     tenantSelect<DataRow>("encounters"),
     tenantSelect<DataRow>("appointments"),
     tenantSelect<DataRow>("charge_capture_items"),
-    tenantSelect<DataRow>("authorizations"),
     tenantSelect<DataRow>("eligibility_checks"),
     tenantSelect<DataRow>("payments"),
     tenantSelect<DataRow>("denials"),
@@ -171,7 +132,6 @@ export async function getWorkCenterData() {
     tenantSelect<DataRow>("claim_batches"),
     tenantSelect<DataRow>("era_files"),
     tenantSelect<DataRow>("payer_contracts"),
-    tenantSelect<DataRow>("mailroom_items"),
   ]);
 
   const clientsById = new Map(clients.map((row) => [row.id, row]));
@@ -181,7 +141,6 @@ export async function getWorkCenterData() {
   const encountersById = new Map(encounters.map((row) => [row.id, row]));
   const appointmentsById = new Map(appointments.map((row) => [row.id, row]));
   const chargesById = new Map(charges.map((row) => [row.id, row]));
-  const authById = new Map(authorizations.map((row) => [row.id, row]));
   const eligibilityById = new Map(eligibility.map((row) => [row.id, row]));
   const paymentsById = new Map(payments.map((row) => [row.id, row]));
   const denialsById = new Map(denials.map((row) => [row.id, row]));
@@ -189,7 +148,6 @@ export async function getWorkCenterData() {
   const batchesById = new Map(batches.map((row) => [row.id, row]));
   const eraById = new Map(eraFiles.map((row) => [row.id, row]));
   const contractsById = new Map(payerContracts.map((row) => [row.id, row]));
-  const mailroomById = new Map(mailroomItems.map((row) => [row.id, row]));
 
   const historyByItem = new Map<string, DataRow[]>();
   for (const row of history) {
@@ -231,11 +189,6 @@ export async function getWorkCenterData() {
       providerId = String(row?.provider_id ?? "");
       payerId = String(row?.payer_id ?? "");
       relatedName = `${String(row?.cpt_code || "Charge")} · ${personName(clientsById.get(clientId))}`;
-    } else if (type === "authorization") {
-      const row = authById.get(id);
-      clientId = String(row?.client_id ?? "");
-      payerId = String(row?.payer_id ?? "");
-      relatedName = `Authorization · ${personName(clientsById.get(clientId))}`;
     } else if (type === "eligibility") {
       const row = eligibilityById.get(id);
       clientId = String(row?.client_id ?? "");
@@ -272,19 +225,9 @@ export async function getWorkCenterData() {
       const row = contractsById.get(id);
       payerId = String(row?.payer_id ?? "");
       relatedName = `Payer Contract · ${String(payersById.get(payerId)?.name || "Payer")}`;
-    } else if (type === "mailroom_item") {
-      const row = mailroomById.get(id);
-      const claim = claimsById.get(String(row?.claim_id ?? ""));
-      const resolvedClientId = String(row?.client_id ?? claim?.client_id ?? "");
-      const resolvedProviderId = String(row?.provider_id ?? "");
-      const resolvedPayerId = String(row?.payer_id ?? claim?.payer_id ?? "");
-      return resolveMailroomWorkContext({
-        mailroomItem: row ?? { id, subject: "Correspondence" },
-        linkedClaim: claim,
-        client: clientsById.get(resolvedClientId),
-        provider: providersById.get(resolvedProviderId),
-        payer: payersById.get(resolvedPayerId),
-      });
+    } else if (type === "legacy_correspondence") {
+      relatedName = "Legacy correspondence task";
+
     }
 
     return {
