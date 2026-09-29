@@ -36,7 +36,7 @@
 .pci-appointment-block > svg { color: #245478; flex: 0 0 auto; }
 .pci-appointment-block > div { display: grid; gap: 3px; }
 .pci-appointment-block strong { color: #173c5d; font-size: 11px; }
-.pci-appointment-block span { color: #6a808c; font-size: 9px; text-transform: capitalize; }
+.pci-appointment-block span { color: #6a808c; font-size: 12px; text-transform: capitalize; }
 
 .pci-progress {
   position: relative;
@@ -79,7 +79,7 @@
   color: #1d4267;
   display: grid;
   place-items: center;
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 800;
 }
 
@@ -99,7 +99,7 @@
 
 .pci-progress button small {
   color: inherit;
-  font-size: 8px;
+  font-size: 11px;
   font-weight: 600;
 }
 
@@ -132,14 +132,14 @@
 }
 
 .pci-section.open .pci-section-header { background: #edf4fb; }
-.pci-section-header strong { font-size: 10px; }
+.pci-section-header strong { font-size: 12px; }
 .pci-section-header > svg { color: #31567a; }
-.pci-section-state { color: #6c828e; font-size: 8px; font-weight: 600; }
+.pci-section-state { color: #6c828e; font-size: 11px; font-weight: 600; }
 
 .pci-status-dot {
   width: 24px;
   height: 24px;
-  font-size: 9px;
+  font-size: 12px;
   border-width: 1.5px;
 }
 
@@ -164,9 +164,9 @@
 }
 
 .pci-summary.wide { grid-column: 1 / -1; }
-.pci-summary small { color: #758994; font-size: 8px; }
-.pci-summary strong { color: #29495e; font-size: 10px; font-weight: 600; }
-.pci-empty { color: #70858f; font-size: 10px; padding: 8px 1px; }
+.pci-summary small { color: #758994; font-size: 11px; }
+.pci-summary strong { color: #29495e; font-size: 12px; font-weight: 600; }
+.pci-empty { color: #70858f; font-size: 12px; padding: 8px 1px; }
 
 .pci-actions {
   display: flex;
@@ -192,7 +192,7 @@
   align-items: center;
   gap: 9px;
   color: #254d70;
-  font-size: 9px;
+  font-size: 12px;
   font-weight: 700;
   line-height: 1.35;
 }
@@ -208,7 +208,7 @@
   color: #4f6878;
   padding: 7px 8px;
   font: inherit;
-  font-size: 9px;
+  font-size: 12px;
   line-height: 1.35;
   outline: none;
 }
@@ -227,7 +227,7 @@
   border-radius: 6px;
   background: #f9fbfb;
   color: #4e6875;
-  font-size: 9px;
+  font-size: 12px;
   line-height: 1.45;
 }
 
@@ -244,8 +244,8 @@
 }
 
 .pci-review-banner > div { display: grid; gap: 3px; }
-.pci-review-banner strong { font-size: 10px; }
-.pci-review-banner span { color: #657d89; font-size: 8px; }
+.pci-review-banner strong { font-size: 12px; }
+.pci-review-banner span { color: #657d89; font-size: 11px; }
 
 .pci-review-list { display: grid; gap: 6px; margin-top: 11px; }
 .pci-review-item {
@@ -258,8 +258,8 @@
 }
 .pci-review-item > span.complete { color: #3f7b6d; }
 .pci-review-empty { display: block; width: 12px; height: 12px; border: 1px solid #a9bac1; border-radius: 50%; }
-.pci-review-item strong { color: #345467; font-size: 9px; }
-.pci-review-item small { color: #798b94; font-size: 8px; }
+.pci-review-item strong { color: #345467; font-size: 12px; }
+.pci-review-item small { color: #798b94; font-size: 11px; }
 
 @media (max-width: 900px) {
   .pci-layout { grid-template-columns: 160px minmax(0, 1fr); }
@@ -274,7 +274,7 @@
   .pci-layout .pj-sidebar { display: none; }
   .pci-main { padding: 16px 12px 26px; }
   .pci-progress { margin-left: 0; margin-right: 0; }
-  .pci-progress button small { font-size: 7px; }
+  .pci-progress button small { font-size: 12px; }
   .pci-summary-grid { grid-template-columns: 1fr; }
   .pci-summary.wide { grid-column: auto; }
   .pci-section-header { grid-template-columns: 28px minmax(0, 1fr) auto; }
