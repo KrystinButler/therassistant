@@ -1,10 +1,10 @@
-import { BookOpenText, CalendarDays, CreditCard, Heart, Home, UserRound } from "lucide-react";
+import { BookOpenText, CalendarDays, CreditCard, Heart, Home, MessageSquare, UserRound } from "lucide-react";
 import { Link } from "wouter";
 
 import { PORTAL_HOME, PORTAL_JOURNAL } from "./routes";
 import "./patient-portal-nav.css";
 
-export type PatientPortalNavKey = "home" | "appointments" | "journal" | "checkin" | "billing" | "profile";
+export type PatientPortalNavKey = "home" | "appointments" | "journal" | "checkin" | "messages" | "billing" | "profile";
 
 type Props = {
   active?: PatientPortalNavKey;
@@ -13,6 +13,7 @@ type Props = {
 
 const homeAnchors = {
   appointments: `${PORTAL_HOME}#appointments`,
+  messages: `${PORTAL_HOME}#messages`,
   billing: `${PORTAL_HOME}#billing`,
   profile: `${PORTAL_HOME}#profile`,
 };
@@ -23,6 +24,7 @@ export function PatientPortalNavigation({ active, checkInHref }: Props) {
     { key: "appointments" as const, href: homeAnchors.appointments, label: "Appointments", icon: CalendarDays },
     { key: "journal" as const, href: PORTAL_JOURNAL, label: "Journal", icon: BookOpenText },
     { key: "checkin" as const, href: checkInHref ?? homeAnchors.appointments, label: "Check-In", icon: Heart },
+    { key: "messages" as const, href: homeAnchors.messages, label: "Messages", icon: MessageSquare },
     { key: "billing" as const, href: homeAnchors.billing, label: "Billing", icon: CreditCard },
     { key: "profile" as const, href: homeAnchors.profile, label: "Profile", icon: UserRound },
   ];
@@ -42,6 +44,7 @@ export function PatientPortalMobileNavigation({ active }: Pick<Props, "active">)
     { key: "home" as const, href: PORTAL_HOME, label: "Home", icon: Home },
     { key: "appointments" as const, href: homeAnchors.appointments, label: "Visits", icon: CalendarDays },
     { key: "journal" as const, href: PORTAL_JOURNAL, label: "Journal", icon: BookOpenText },
+    { key: "messages" as const, href: homeAnchors.messages, label: "Messages", icon: MessageSquare },
     { key: "billing" as const, href: homeAnchors.billing, label: "Billing", icon: CreditCard },
     { key: "profile" as const, href: homeAnchors.profile, label: "Profile", icon: UserRound },
   ];
