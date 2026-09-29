@@ -46,6 +46,15 @@ test("patient navigation uses real destinations including secure messaging",()=>
   assert.match(home,/id="profile"/);
 });
 
+
+test("portal home uses the same branded shell as journal and check-in", () => {
+  const home=readFileSync(new URL("../src/domains/portal/PatientPortalPage.tsx",import.meta.url),"utf8");
+  assert.match(home,/className="pj-app ppn-home-page"/);
+  assert.match(home,/className="pj-topbar"/);
+  assert.match(home,/PatientPortalNavigation active="home"/);
+  assert.match(home,/className="pj-layout ppn-home-layout"/);
+});
+
 test("portal home presents one progressive arrival action per appointment",()=>{
   const home=readFileSync(new URL("../src/domains/portal/PatientPortalPage.tsx",import.meta.url),"utf8");
   assert.match(home,/const arrivalStep = checkedIn \? null : arrived \? "checked_in" : onMyWay \? "arrived" : "on_my_way"/);
