@@ -72,3 +72,14 @@ test("patient and staff surfaces use the same secure conversation thread", () =>
   assert.match(repository, /reply_client_portal_message/);
   assert.match(chart, /StaffPortalMessagesPanel/);
 });
+
+
+test("patient message composer uses full-width portal-specific layout", () => {
+  const patient = readFileSync(new URL("../src/domains/portal/PatientMessagesPanel.tsx", import.meta.url), "utf8");
+  const css = readFileSync(new URL("../src/domains/portal/patient-messages.css", import.meta.url), "utf8");
+  assert.match(patient, /ppm-compose/);
+  assert.match(patient, /ppm-textarea/);
+  assert.match(patient, /ppm-reply-textarea/);
+  assert.match(css, /\.ppm-input[\s\S]*width:\s*100%/);
+  assert.match(css, /\.ppm-textarea[\s\S]*min-height:\s*118px/);
+});
