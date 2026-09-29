@@ -36,8 +36,12 @@ test("staff password recovery can request a reset and set a new password", () =>
   assert.match(appSource, /PasswordRecoveryPage/);
 });
 
-test("login exposes password recovery but no public signup surface", () => {
+test("staff login exposes password recovery and explicit EHR account signup", () => {
   assert.match(loginSource, /Forgot password\?/);
-  assert.doesNotMatch(loginSource, /sign up|create account|register/i);
-  assert.doesNotMatch(authClientSource, /\/auth\/v1\/signup/);
+  assert.match(loginSource, /THERASSISTANT EHR Sign Up/);
+  assert.match(loginSource, /Create account/);
+  assert.match(authClientSource, /\/auth\/v1\/signup/);
+  assert.match(authContextSource, /signUp/);
+  assert.match(appSource, /isPatientPortalPath/);
+  assert.match(appSource, /patientRoute \? <PatientPortalRoutes \/> : <StaffGate \/>/);
 });
