@@ -122,6 +122,7 @@ export function buildPreVisitResponses(
   };
 
   if (update.visit_questions) {
+    nextPreVisit.visit_questions_saved_at = timestamp;
     nextPreVisit.visit_questions = {
       ...recordOf(previousPreVisit.visit_questions),
       ...update.visit_questions,
@@ -129,6 +130,7 @@ export function buildPreVisitResponses(
   }
 
   if (update.consents) {
+    nextPreVisit.consents_saved_at = timestamp;
     nextPreVisit.consents = {
       ...recordOf(previousPreVisit.consents),
       ...update.consents,
