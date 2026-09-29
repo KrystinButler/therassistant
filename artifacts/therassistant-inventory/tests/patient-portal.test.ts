@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { buildPatientPortalData, buildJournalEntryValues, getPortalArrivalAvailability, isPortalAppointmentAvailable, planCheckInUpdate } from "../src/domains/portal/workflow.ts";
+import { buildPatientPortalData, buildJournalEntryValues, getPortalArrivalAvailability, getPortalTelehealthJoinUrl, isPortalAppointmentAvailable, planCheckInUpdate } from "../src/domains/portal/workflow.ts";
 
 test("portal returns only patient-facing data", () => {
   const result = buildPatientPortalData({
@@ -150,4 +150,32 @@ test("portal separates appointment history from currently available appointments
 
   assert.deepEqual(result.upcomingAppointments.map((row) => row.id), ["future"]);
   assert.deepEqual(result.appointmentHistory.map((row) => row.id), ["future-cancelled", "past-completed"]);
+});
+
+
+test("telehealth join links are appointment-scoped and HTTPS-only", () => {
+  assert.equal(
+    getPortalTelehealthJoinUrl({
+      id: "telehealth-appt",
+      location_type: "telehealth",
+      telehealth_join_url: "https://video.example.test/room/abc",
+    }),
+    "https://video.example.test/room/abc",
+  );
+  assert.equal(
+    getPortalTelehealthJoinUrl({
+      id: "office-appt",
+      location_type: "in_person",
+      telehealth_join_url: "https://video.example.test/room/abc",
+    }),
+    null,
+  );
+  assert.equal(
+    getPortalTelehealthJoinUrl({
+      id: "unsafe-appt",
+      location_type: "telehealth",
+      telehealth_join_url: "http://video.example.test/room/abc",
+    }),
+    null,
+  );
 });
