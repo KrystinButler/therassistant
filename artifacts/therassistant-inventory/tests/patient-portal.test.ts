@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { buildPatientPortalData, planCheckInUpdate, buildJournalEntryValues } from "../src/domains/portal/workflow.ts";
+import { buildPatientPortalData, buildJournalEntryValues, isPortalAppointmentAvailable, planCheckInUpdate } from "../src/domains/portal/workflow.ts";
 
 test("portal returns only patient-facing data", () => {
   const result = buildPatientPortalData({
@@ -22,6 +22,50 @@ test("portal returns only patient-facing data", () => {
   assert.equal("workItems" in result, false);
   assert.equal("credentialing" in result, false);
   assert.equal("claims" in result, false);
+});
+
+
+
+test("same-day appointment remains available after its start time", () => {
+  const appointment = {
+    id: "appt-current",
+    starts_at: "2026-09-29T18:00:00Z",
+    ends_at: "2026-09-29T19:00:00Z",
+    appointment_status: "scheduled",
+  };
+  assert.equal(isPortalAppointmentAvailable(appointment, new Date("2026-09-29T18:15:00Z")), true);
+  assert.equal(isPortalAppointmentAvailable(appointment, new Date("2026-09-29T23:01:00Z")), false);
+});
+
+test("completed and cancelled appointments are not patient check-in eligible", () => {
+  const base = {
+    id: "appt-current",
+    starts_at: "2026-09-29T18:00:00Z",
+    ends_at: "2026-09-29T19:00:00Z",
+  };
+  const now = new Date("2026-09-29T18:15:00Z");
+  assert.equal(isPortalAppointmentAvailable({ ...base, appointment_status: "completed" }, now), false);
+  assert.equal(isPortalAppointmentAvailable({ ...base, appointment_status: "cancelled" }, now), false);
+  assert.equal(isPortalAppointmentAvailable({ ...base, appointment_status: "no_show" }, now), false);
+});
+
+test("portal exposes all eligible future appointments without a three-visit cap", () => {
+  const appointments = Array.from({ length: 5 }, (_, index) => ({
+    id: `appt-${index + 1}`,
+    starts_at: `2026-10-0${index + 1}T18:00:00Z`,
+    ends_at: `2026-10-0${index + 1}T19:00:00Z`,
+    appointment_status: "scheduled",
+  }));
+  const result = buildPatientPortalData({
+    patient: { id: "patient-1" },
+    appointments,
+    policies: [],
+    documents: [],
+    checkins: [],
+    journalEntries: [],
+    now: new Date("2026-09-29T12:00:00Z"),
+  });
+  assert.equal(result.upcomingAppointments.length, 5);
 });
 
 test("check-in step updates one timestamp", () => {
