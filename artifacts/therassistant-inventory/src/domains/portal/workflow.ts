@@ -14,10 +14,12 @@ export type PortalDataInput = {
 };
 
 const PORTAL_APPOINTMENT_GRACE_MS = 4 * 60 * 60 * 1000;
+export const PORTAL_ON_MY_WAY_WINDOW_MS = 4 * 60 * 60 * 1000;
+export const PORTAL_ARRIVAL_WINDOW_MS = 60 * 60 * 1000;
 
 export function isPortalAppointmentAvailable(row: PortalRow, now = new Date()) {
   const status = String(row.appointment_status ?? "scheduled").toLowerCase();
-  if (["cancelled", "no_show", "completed", "rescheduled"].includes(status)) return false;
+  if (["cancelled", "no_show", "late_cancel", "completed", "rescheduled"].includes(status)) return false;
 
   const startsAt = new Date(String(row.starts_at ?? ""));
   if (!Number.isFinite(startsAt.getTime())) return false;
@@ -29,6 +31,30 @@ export function isPortalAppointmentAvailable(row: PortalRow, now = new Date()) {
     : new Date(startsAt.getTime() + 90 * 60 * 1000);
 
   return now.getTime() <= effectiveEnd.getTime() + PORTAL_APPOINTMENT_GRACE_MS;
+}
+
+export function getPortalArrivalAvailability(row: PortalRow, now = new Date()) {
+  const status = String(row.appointment_status ?? "scheduled").toLowerCase();
+  if (["cancelled", "no_show", "late_cancel", "completed", "rescheduled", "in_session"].includes(status)) {
+    return { onMyWay: false, arrival: false };
+  }
+
+  const startsAt = new Date(String(row.starts_at ?? ""));
+  if (!Number.isFinite(startsAt.getTime())) return { onMyWay: false, arrival: false };
+
+  const endsAt = new Date(String(row.ends_at ?? ""));
+  const effectiveEnd = Number.isFinite(endsAt.getTime()) && endsAt >= startsAt
+    ? endsAt
+    : new Date(startsAt.getTime() + 90 * 60 * 1000);
+  if (now.getTime() > effectiveEnd.getTime() + PORTAL_APPOINTMENT_GRACE_MS) {
+    return { onMyWay: false, arrival: false };
+  }
+
+  const untilStart = startsAt.getTime() - now.getTime();
+  return {
+    onMyWay: untilStart <= PORTAL_ON_MY_WAY_WINDOW_MS,
+    arrival: untilStart <= PORTAL_ARRIVAL_WINDOW_MS,
+  };
 }
 
 export function buildPatientPortalData(input: PortalDataInput) {
