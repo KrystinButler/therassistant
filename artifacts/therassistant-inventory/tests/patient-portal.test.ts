@@ -98,3 +98,23 @@ test("default other documents are not patient-facing without explicit classifica
 
   assert.deepEqual(result.documents.map((row) => row.id), ["doc-consent"]);
 });
+
+
+test("portal separates appointment history from currently available appointments", () => {
+  const result = buildPatientPortalData({
+    patient: { id: "patient-1" },
+    appointments: [
+      { id: "future", starts_at: "2026-10-03T18:00:00Z", ends_at: "2026-10-03T19:00:00Z", appointment_status: "scheduled" },
+      { id: "past-completed", starts_at: "2026-09-20T18:00:00Z", ends_at: "2026-09-20T19:00:00Z", appointment_status: "completed" },
+      { id: "future-cancelled", starts_at: "2026-10-02T18:00:00Z", ends_at: "2026-10-02T19:00:00Z", appointment_status: "cancelled" },
+    ],
+    policies: [],
+    documents: [],
+    checkins: [],
+    journalEntries: [],
+    now: new Date("2026-09-29T18:00:00Z"),
+  });
+
+  assert.deepEqual(result.upcomingAppointments.map((row) => row.id), ["future"]);
+  assert.deepEqual(result.appointmentHistory.map((row) => row.id), ["future-cancelled", "past-completed"]);
+});
