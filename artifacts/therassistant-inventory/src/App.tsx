@@ -4,6 +4,7 @@ import { Route, Switch, useLocation, useRoute } from "wouter";
 import { AuthProvider, useAuth } from "./auth/auth-context";
 import { LoginPage } from "./auth/LoginPage";
 import { OnboardingWizard } from "./auth/OnboardingWizard";
+import { AccountAccessChoice } from "./auth/AccountAccessChoice";
 import { PasswordRecoveryPage } from "./auth/PasswordRecoveryPage";
 import { TenantProvider, hasActiveStaffMembership, useTenant } from "./auth/tenant-context";
 import { AppShell } from "./components/app-shell";
@@ -115,10 +116,17 @@ function StaffRoutes() {
 }
 
 function TenantGate() {
+  const [location] = useLocation();
+  const { user } = useAuth();
   const { loading, error, tenantId, needsOrganizationSetup, onboardingRequired } = useTenant();
   if (loading) return <div className="thera-state">Loading organization...</div>;
   if (error) return <div className="thera-state error">{error}</div>;
-  if (needsOrganizationSetup || onboardingRequired) return <OnboardingWizard />;
+  if (onboardingRequired) return <OnboardingWizard />;
+  if (needsOrganizationSetup) {
+    const accountType = String(user?.user_metadata?.therassistant_account_type ?? "");
+    const explicitPracticeSetup = location === "/organization-setup" || accountType === "ehr_practice";
+    return explicitPracticeSetup ? <OnboardingWizard /> : <AccountAccessChoice />;
+  }
   if (!tenantId) return <div className="thera-state error">No active organization is available.</div>;
   return <StaffRoutes />;
 }
