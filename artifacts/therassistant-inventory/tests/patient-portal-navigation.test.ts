@@ -29,3 +29,23 @@ test("Site URL fallback chooses patient routes only for matching nonstaff identi
   assert.equal(rootPatientPortalDestination({ ...email, authenticatedEmail: "other@example.invalid", status: "invited", hasActiveStaffMembership: false }), null);
   assert.equal(rootPatientPortalDestination({ ...email, status: "revoked", hasActiveStaffMembership: false }), null);
 });
+
+
+test("patient navigation uses real destinations and hides unfinished messaging",()=>{
+  const nav=readFileSync(new URL("../src/domains/portal/PatientPortalNavigation.tsx",import.meta.url),"utf8");
+  const home=readFileSync(new URL("../src/domains/portal/PatientPortalPage.tsx",import.meta.url),"utf8");
+  assert.match(nav,/\$\{PORTAL_HOME\}#appointments/);
+  assert.match(nav,/\$\{PORTAL_HOME\}#billing/);
+  assert.match(nav,/\$\{PORTAL_HOME\}#profile/);
+  assert.doesNotMatch(nav,/Messages/);
+  assert.match(nav,/ppn-mobile/);
+  assert.match(home,/id="appointments"/);
+  assert.match(home,/id="billing"/);
+  assert.match(home,/id="profile"/);
+});
+
+test("portal home presents one progressive arrival action per appointment",()=>{
+  const home=readFileSync(new URL("../src/domains/portal/PatientPortalPage.tsx",import.meta.url),"utf8");
+  assert.match(home,/const arrivalStep = checkedIn \? null : arrived \? "checked_in" : onMyWay \? "arrived" : "on_my_way"/);
+  assert.match(home,/const arrivalLabel = checkedIn \? "Checked In ✓" : arrived \? "Check In" : onMyWay \? "I Arrived" : "On My Way"/);
+});

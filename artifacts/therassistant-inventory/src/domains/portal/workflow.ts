@@ -13,13 +13,28 @@ export type PortalDataInput = {
   now?: Date;
 };
 
+const PORTAL_APPOINTMENT_GRACE_MS = 4 * 60 * 60 * 1000;
+
+export function isPortalAppointmentAvailable(row: PortalRow, now = new Date()) {
+  const status = String(row.appointment_status ?? "scheduled").toLowerCase();
+  if (["cancelled", "no_show", "completed", "rescheduled"].includes(status)) return false;
+
+  const startsAt = new Date(String(row.starts_at ?? ""));
+  if (!Number.isFinite(startsAt.getTime())) return false;
+  if (startsAt >= now) return true;
+
+  const endsAt = new Date(String(row.ends_at ?? ""));
+  const effectiveEnd = Number.isFinite(endsAt.getTime()) && endsAt >= startsAt
+    ? endsAt
+    : new Date(startsAt.getTime() + 90 * 60 * 1000);
+
+  return now.getTime() <= effectiveEnd.getTime() + PORTAL_APPOINTMENT_GRACE_MS;
+}
+
 export function buildPatientPortalData(input: PortalDataInput) {
   const now = input.now ?? new Date();
   const upcomingAppointments = input.appointments
-    .filter((row) => {
-      const startsAt = new Date(String(row.starts_at ?? ""));
-      return Number.isFinite(startsAt.getTime()) && startsAt >= now && !["cancelled", "no_show"].includes(String(row.appointment_status ?? ""));
-    })
+    .filter((row) => isPortalAppointmentAvailable(row, now))
     .sort((a, b) => String(a.starts_at ?? "").localeCompare(String(b.starts_at ?? "")));
 
   const visibleDocuments = input.documents.filter((row) =>

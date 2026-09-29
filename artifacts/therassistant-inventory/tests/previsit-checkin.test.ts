@@ -123,3 +123,17 @@ test("provider patient review maps submitted safety responses", async () => {
   assert.equal(noConcern.safetyConcern, false);
 });
 
+
+
+test("pre-visit insurance confirmation distinguishes self-pay from missing coverage", () => {
+  const source = readFileSync(checkInPageUrl, "utf8");
+  assert.match(source, /Confirm No Insurance on File/);
+  assert.match(source, /If you are self-pay/);
+  assert.match(source, /contact the practice before submitting check-in/);
+});
+
+test("pre-visit safety question includes emergency-channel guidance", () => {
+  const source = readFileSync(checkInPageUrl, "utf8");
+  assert.match(source, /Portal responses are not monitored as an emergency service/);
+  assert.match(source, /call 911 or go to the nearest emergency department/);
+});
