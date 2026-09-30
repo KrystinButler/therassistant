@@ -24,6 +24,7 @@ export function DemographicsPanel({ chart, onChanged }: { chart: PatientChart; o
     lastName: value(patient, "last_name"),
     preferredName: value(patient, "preferred_name"),
     dateOfBirth: value(patient, "date_of_birth"),
+    sex: value(patient, "sex"),
     email: value(patient, "email"),
     phone: value(patient, "phone"),
     addressLine1: value(patient, "address_line1"),
@@ -64,6 +65,7 @@ export function DemographicsPanel({ chart, onChanged }: { chart: PatientChart; o
             <Text label="Last Name" value={form.lastName} onChange={(lastName) => setForm({ ...form, lastName })} />
             <Text label="Preferred Name" value={form.preferredName ?? ""} onChange={(preferredName) => setForm({ ...form, preferredName })} />
             <Text label="Date of Birth" type="date" value={form.dateOfBirth ?? ""} onChange={(dateOfBirth) => setForm({ ...form, dateOfBirth })} />
+            <Select label="Sex" value={form.sex ?? ""} options={["","M","F","U"]} labels={{ "": "Select sex", M: "Male", F: "Female", U: "Unknown / not recorded" }} onChange={(sex) => setForm({ ...form, sex })} />
             <Text label="Email" type="email" value={form.email ?? ""} onChange={(email) => setForm({ ...form, email })} />
             <Text label="Phone" value={form.phone ?? ""} onChange={(phone) => setForm({ ...form, phone })} />
             <Text label="Address" value={form.addressLine1 ?? ""} onChange={(addressLine1) => setForm({ ...form, addressLine1 })} />
@@ -80,6 +82,7 @@ export function DemographicsPanel({ chart, onChanged }: { chart: PatientChart; o
             <Field label="Legal Name" value={[patient.first_name, patient.middle_name, patient.last_name].filter(Boolean).join(" ") || "—"} />
             <Field label="Preferred Name" value={value(patient, "preferred_name") || "—"} />
             <Field label="Date of Birth" value={value(patient, "date_of_birth") || "—"} />
+            <Field label="Sex" value={({ M: "Male", F: "Female", U: "Unknown / not recorded" } as Record<string,string>)[value(patient, "sex")] || "—"} />
             <Field label="Phone" value={value(patient, "phone") || "—"} />
             <Field label="Email" value={value(patient, "email") || "—"} />
             <Field label="Address" value={[patient.address_line1, patient.address_line2, patient.city, patient.state, patient.postal_code].filter(Boolean).join(", ") || "—"} />
@@ -138,7 +141,7 @@ function ContactsSection({ chart, onChanged }: { chart: PatientChart; onChanged:
 function Text({ label, value, onChange, type = "text" }: { label: string; value: string; onChange: (value: string) => void; type?: string }) {
   return <label className="thera-field"><span className="thera-field-label">{label}</span><input className="thera-input" type={type} value={value} onChange={(event) => onChange(event.target.value)} /></label>;
 }
-function Select({ label, value, options, onChange }: { label: string; value: string; options: string[]; onChange: (value: string) => void }) {
-  return <label className="thera-field"><span className="thera-field-label">{label}</span><select className="thera-input" value={value} onChange={(event) => onChange(event.target.value)}>{options.map((option) => <option key={option} value={option}>{option.replaceAll("_", " ")}</option>)}</select></label>;
+function Select({ label, value, options, labels, onChange }: { label: string; value: string; options: string[]; labels?: Record<string,string>; onChange: (value: string) => void }) {
+  return <label className="thera-field"><span className="thera-field-label">{label}</span><select className="thera-input" value={value} onChange={(event) => onChange(event.target.value)}>{options.map((option) => <option key={option || "blank"} value={option}>{labels?.[option] ?? option.replaceAll("_", " ")}</option>)}</select></label>;
 }
 function Field({ label, value }: { label: string; value: unknown }) { return <div><div className="thera-field-label">{label}</div><div>{String(value)}</div></div>; }

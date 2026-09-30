@@ -13,6 +13,7 @@ import {
   onAuthStateChange,
   requestPasswordRecovery,
   signInWithPassword,
+  signUpWithPassword,
   signOutSession,
   updatePassword,
   type AuthSession,
@@ -27,6 +28,7 @@ type AuthContextValue = {
   error: string | null;
   passwordRecovery: boolean;
   signIn(email: string, password: string): Promise<void>;
+  signUp(email: string, password: string): Promise<{ requiresEmailConfirmation: boolean }>;
   signOut(): Promise<void>;
   requestPasswordReset(email: string, redirectTo?: string): Promise<void>;
   completePasswordRecovery(password: string): Promise<void>;
@@ -80,6 +82,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
+  const signUp = useCallback(async (email: string, password: string) => {
+    setError(null);
+    try {
+      const result = await signUpWithPassword(email, password);
+      if (result.session) setSession(result.session);
+      return { requiresEmailConfirmation: result.requiresEmailConfirmation };
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Unable to create account.";
+      setError(message);
+      throw new Error(message);
+    }
+  }, []);
+
   const signOut = useCallback(async () => {
     setError(null);
     setActiveTenantId(null);
@@ -125,11 +140,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       error,
       passwordRecovery: session?.flowType === "recovery",
       signIn,
+      signUp,
       signOut,
       requestPasswordReset,
       completePasswordRecovery,
     }),
-    [session, loading, error, signIn, signOut, requestPasswordReset, completePasswordRecovery],
+    [session, loading, error, signIn, signUp, signOut, requestPasswordReset, completePasswordRecovery],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

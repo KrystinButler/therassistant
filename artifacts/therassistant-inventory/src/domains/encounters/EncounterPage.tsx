@@ -25,6 +25,7 @@ import { psychedelicContextForCarryForward } from "../clinical/psychedelic-conte
 import { Icd10SearchInput } from "../coding/Icd10SearchInput";
 import { normalizedServiceLine, matchingServiceLineExists } from "./service-line-validation";
 import { ProcedureCodeSearchInput } from "../coding/ProcedureCodeSearchInput";
+import { resolveProcedureCharge, type ProcedureCodeSearchResult } from "../coding/procedure-codes";
 import { PlaceOfServiceSearchInput } from "../coding/PlaceOfServiceSearchInput";
 import {
   FUNDING_SOURCE_OPTIONS,
@@ -119,6 +120,7 @@ export function EncounterPage() {
   const [modifier1, setModifier1] = useState("");
   const [units, setUnits] = useState(1);
   const [chargeDollars, setChargeDollars] = useState("");
+  const [chargeSource, setChargeSource] = useState("");
   const [placeOfService, setPlaceOfService] = useState("11");
   const [signatureText, setSignatureText] = useState("");
   const [fundingSourceType, setFundingSourceType] = useState<FundingSourceType>("insurance");
@@ -166,7 +168,19 @@ export function EncounterPage() {
       setFundingResponsibleEntity(String(funding.context.responsible_entity ?? ""));
       setFundingReference(String(funding.context.reference ?? ""));
       setFundingNotes(String(funding.context.notes ?? ""));
-      setServiceCode((current) => current || String(result.appointment?.cpt_code ?? "90837"));
+      const defaultServiceCode = String(result.appointment?.cpt_code ?? "90837");
+      setServiceCode((current) => current || defaultServiceCode);
+      if (!result.serviceLines.length) {
+        const defaultCharge = await resolveProcedureCharge(
+          defaultServiceCode,
+          String(result.encounter.payer_id ?? ""),
+          String(result.encounter.started_at ?? "").slice(0, 10),
+        );
+        if (defaultCharge) {
+          setChargeDollars((defaultCharge.amountCents / 100).toFixed(2));
+          setChargeSource(defaultCharge.source);
+        }
+      }
       setPlaceOfService(defaultPos(String(result.encounter.location_type ?? "")));
       setSignatureText((current) => {
         if (current || !result.provider) return current;
@@ -299,6 +313,7 @@ export function EncounterPage() {
     setModifier1(String(line.modifier1 ?? ""));
     setUnits(Number(line.units ?? 1));
     setChargeDollars((Number(line.charge_amount_cents ?? 0) / 100).toFixed(2));
+    setChargeSource("Existing service line");
     setPlaceOfService(String(line.place_of_service_code ?? "11"));
     document.getElementById("encounter-service-editor")?.scrollIntoView({ behavior: "smooth", block: "center" });
   }
@@ -308,7 +323,28 @@ export function EncounterPage() {
     setModifier1("");
     setUnits(1);
     setChargeDollars("");
+    setChargeSource("");
   }
+
+  async function selectProcedureCode(result: ProcedureCodeSearchResult) {
+    setServiceCode(result.code);
+    try {
+      const charge = await resolveProcedureCharge(
+        result.code,
+        String(data?.encounter.payer_id ?? ""),
+        String(data?.encounter.started_at ?? "").slice(0, 10),
+      );
+      if (charge) {
+        setChargeDollars((charge.amountCents / 100).toFixed(2));
+        setChargeSource(charge.source);
+      } else {
+        setChargeSource("No configured fee-schedule rate; enter the charge manually.");
+      }
+    } catch {
+      setChargeSource("Fee schedule could not be resolved; enter the charge manually.");
+    }
+  }
+
   async function addServiceLine() {
     setServiceError(null);
     let values;
@@ -868,11 +904,11 @@ export function EncounterPage() {
               {editingServiceLineId && <button className="thera-action secondary" type="button" disabled={saving} onClick={resetServiceEditor}>Cancel edit</button>}
             </div>
             <div className="encounter-service-form">
-              <label>Procedure code <ProcedureCodeSearchInput code={serviceCode} serviceDate={serviceDate} onSelect={(result) => setServiceCode(result.code)} /></label>
+              <label>Procedure code <ProcedureCodeSearchInput code={serviceCode} serviceDate={serviceDate} onSelect={(result) => void selectProcedureCode(result)} /></label>
               <label>Modifier (optional) <input className="thera-input" maxLength={2} placeholder="e.g., 95" value={modifier1} onChange={(event) => setModifier1(event.target.value.toUpperCase())} /></label>
               <label>Units <input aria-label="Service units" className="thera-input" type="number" min={1} step={1} value={units} onChange={(event) => setUnits(Number(event.target.value))} /></label>
               <label>Place of service <PlaceOfServiceSearchInput code={placeOfService} onSelect={(result) => setPlaceOfService(result.code)} /></label>
-              <label>Charge ($) <input id="encounter-charge-amount" aria-label="Service charge" className="thera-input" type="number" step="0.01" min="0.01" placeholder="0.00" value={chargeDollars} onChange={(event) => setChargeDollars(event.target.value)} /></label>
+              <label>Charge ($) <input id="encounter-charge-amount" aria-label="Service charge" className="thera-input" type="number" step="0.01" min="0.01" placeholder="0.00" value={chargeDollars} onChange={(event) => { setChargeDollars(event.target.value); setChargeSource("Manual charge"); }} />{chargeSource ? <small className="thera-table-subtext">{chargeSource}</small> : null}</label>
               <div className="encounter-service-submit"><button type="button" className="thera-action" disabled={saving} onClick={() => void addServiceLine()}>
                 {saving ? "Saving…" : editingServiceLineId ? "Save Service Line" : "+ Add Service Line"}
               </button></div>

@@ -16,9 +16,9 @@ export type PayerEdiReference = {
 export function defaultClaimFilingIndicator(payer: PayerEdiReference): string {
   const name = String(payer.normalized_name || payer.name || "").trim().toLowerCase();
   const type = String(payer.payer_type || "").trim().toLowerCase();
-  if (type === "medicaid_rae" || ["health first colorado", "medicaid"].includes(name)) return "MC";
-  if (name === "medicare") return "MB";
-  if (name === "tricare") return "CH";
+  if (type === "medicaid_rae" || name.includes("medicaid") || name === "health first colorado") return "MC";
+  if (name.includes("medicare")) return "MB";
+  if (name.includes("tricare")) return "CH";
   if (name.includes("blue cross blue shield") || name.includes("bluecross blueshield")) return "BL";
   if (type === "commercial") return "CI";
   return "";
