@@ -149,3 +149,23 @@ test("previsit writes persist explicit saved-state markers", () => {
   assert.match(sql, /update public\.client_checkins/i);
   assert.match(sql, /visit_questions_saved_at/i);
 });
+
+
+test("database enforces one patient check-in row per appointment", () => {
+  const sql = migration("initial_therassistant_ehr_foundation");
+  assert.match(
+    sql,
+    /create table client_checkins[\s\S]*?unique\s*\(appointment_id\)/i,
+  );
+});
+
+test("portal read contract returns pre-visit saved markers and appointment telehealth link", () => {
+  const sql = migration("patient_portal_appointment_telehealth");
+  const impl = functionStatement(sql, "private.get_my_patient_portal_data_impl");
+
+  assert.match(sql, /add column if not exists telehealth_join_url text/i);
+  assert.match(sql, /appointments_telehealth_join_url_check/i);
+  assert.match(impl, /'telehealth_join_url'/i);
+  assert.match(impl, /'visit_questions_saved_at'/i);
+  assert.match(impl, /'consents_saved_at'/i);
+});

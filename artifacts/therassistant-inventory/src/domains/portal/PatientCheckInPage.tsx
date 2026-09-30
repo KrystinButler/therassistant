@@ -9,13 +9,14 @@ import {
   MapPin,
   MessageSquare,
   ShieldCheck,
+  Video,
 } from "lucide-react";
 import { Link, useRoute } from "wouter";
 
 import { PatientPortalMobileNavigation, PatientPortalNavigation } from "./PatientPortalNavigation";
 import { getPatientPortalData, savePreVisitCheckIn } from "./repository";
 import { PORTAL_HOME, portalCheckInPath } from "./routes";
-import type { PreVisitCheckInUpdate } from "./workflow";
+import { getPortalTelehealthJoinUrl, type PreVisitCheckInUpdate } from "./workflow";
 import "./patient-journal.css";
 import "./patient-checkin.css";
 
@@ -242,6 +243,7 @@ export function PatientCheckInPage() {
   if (!data || !appointment) return <div className="pj-loading pj-error">{error ?? "Pre-visit check-in is unavailable."}</div>;
 
   const patientDisplayName = patientName(data.patient);
+  const telehealthJoinUrl = getPortalTelehealthJoinUrl(appointment);
   const visitQuestionsComplete = Boolean(submittedAt || questionsSavedAt);
   const consentsComplete = allConsentsAccepted && Boolean(submittedAt || consentsSavedAt);
   const stepStatuses = [
@@ -289,6 +291,7 @@ export function PatientCheckInPage() {
             <div className="pci-appointment-block"><CalendarDays size={22} /><div><strong>{formatDate(appointment.starts_at)}</strong><span>{formatTime(appointment.starts_at)} – {formatTime(appointment.ends_at)}</span></div></div>
             <div className="pci-appointment-block"><Heart size={20} /><div><strong>{String(appointment.service_type ?? "Individual Therapy")}</strong><span>{String(appointment.location_type ?? "Office").replaceAll("_", " ")}</span></div></div>
             <div className="pci-appointment-block"><MapPin size={20} /><div><strong>Appointment location</strong><span>{String(appointment.location_type ?? "Office").replaceAll("_", " ")}</span></div></div>
+            {telehealthJoinUrl && <div className="pci-appointment-block"><Video size={20} /><div><strong>Telehealth video</strong><a href={telehealthJoinUrl} target="_blank" rel="noopener noreferrer" className="thera-action">Join Telehealth Visit</a></div></div>}
           </section>
 
           <div className="pci-progress" aria-label="Check-in progress">
