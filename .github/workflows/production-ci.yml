@@ -174,8 +174,7 @@ jobs:
       - name: Verify clinical API authorization
         shell: bash
         run: |
-          pnpm --filter @workspace/api-server run build
-          PORT=3001 NODE_ENV=production pnpm --filter @workspace/api-server run start > /tmp/therassistant-api.log 2>&1 &
+          PORT=3001 NODE_ENV=test pnpm --filter ./scripts exec tsx start-api-e2e.mts > /tmp/therassistant-api.log 2>&1 &
           API_PID=$!
           trap 'kill "$API_PID" 2>/dev/null || true' EXIT
 
