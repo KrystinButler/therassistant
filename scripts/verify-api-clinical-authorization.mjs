@@ -7,6 +7,13 @@ if (!SUPABASE_URL || !PUBLISHABLE_KEY || !SECRET_KEY) {
   throw new Error("Local Supabase E2E connection values are required.");
 }
 
+for (const url of [SUPABASE_URL, API_BASE_URL]) {
+  const host = new URL(url).hostname;
+  if (host !== "127.0.0.1" && host !== "localhost") {
+    throw new Error("Clinical API authorization verification is restricted to the isolated local Supabase and API stack.");
+  }
+}
+
 const identities = {
   staff: { email: process.env.E2E_STAFF_EMAIL, password: process.env.E2E_STAFF_PASSWORD },
   provider: { email: process.env.E2E_PROVIDER_EMAIL, password: process.env.E2E_PROVIDER_PASSWORD },
@@ -164,6 +171,11 @@ await serviceUpsert("clinical_notes", [
 
 const noToken = await apiRequest("/api/clinical", { tenantId: IDS.tenant });
 assert(noToken.response.status === 401, `Clinical API without a token must return 401, received ${noToken.response.status}.`);
+
+for (const tenantId of [undefined, "invalid-tenant", IDS.tenant]) {
+  const invalidToken = await apiRequest("/api/clinical", { token: "invalid-token", tenantId });
+  assert(invalidToken.response.status === 401, `Invalid bearer token must return 401 before tenant validation, received ${invalidToken.response.status}.`);
+}
 
 const noTenant = await apiRequest("/api/clinical", { token: provider.token });
 assert(noTenant.response.status === 400, `Clinical API without X-Tenant-Id must return 400, received ${noTenant.response.status}.`);

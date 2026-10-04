@@ -39,6 +39,9 @@ jobs:
       - name: Tests
         run: pnpm --filter ./scripts exec tsx --test ../artifacts/therassistant-inventory/tests/**/*.test.ts
 
+      - name: Clinical API verifier safety
+        run: node --test scripts/test-api-clinical-verifier-safety.mjs
+
       - name: Release acceptance evidence integrity
         run: pnpm verify:release-acceptance
 

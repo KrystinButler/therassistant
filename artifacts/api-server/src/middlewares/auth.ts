@@ -92,6 +92,13 @@ export const requireAuthenticatedTenant: RequestHandler = async (
       return;
     }
 
+    const userId = await verifySupabaseUser(accessToken);
+
+    if (!userId) {
+      res.status(401).json({ error: "Invalid or expired session" });
+      return;
+    }
+
     const requestedTenantId = req.get("X-Tenant-Id")?.trim();
 
     if (
@@ -99,13 +106,6 @@ export const requireAuthenticatedTenant: RequestHandler = async (
       !UUID_PATTERN.test(requestedTenantId)
     ) {
       res.status(400).json({ error: "Valid tenant context required" });
-      return;
-    }
-
-    const userId = await verifySupabaseUser(accessToken);
-
-    if (!userId) {
-      res.status(401).json({ error: "Invalid or expired session" });
       return;
     }
 
