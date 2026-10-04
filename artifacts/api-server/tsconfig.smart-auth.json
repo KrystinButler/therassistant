@@ -5,6 +5,8 @@
   },
   "include": [
     "src/lib/smart-backend-auth.ts",
+    "src/middlewares/auth.ts",
+    "src/routes/clinical.ts",
     "src/routes/smart-oauth.ts"
   ],
   "references": [
