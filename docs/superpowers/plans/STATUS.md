@@ -1,0 +1,1 @@
+Hybrid API authorization implementation is in progress on branch `security/hybrid-api-authorization`.
