@@ -6,13 +6,57 @@ import {
 import { db } from "@workspace/db";
 import { sql } from "drizzle-orm";
 
+import {
+  getTenantAuthContext,
+  requireAuthenticatedTenant,
+} from "../middlewares/auth";
+
 const router: IRouter = Router();
+
+const UUID_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+function hasAnyRole(
+  roles: string[],
+  allowedRoles: string[],
+) {
+  return allowedRoles.some((role) => roles.includes(role));
+}
 
 
 router.get(
   "/clinical",
-  async (_req, res, next) => {
+  requireAuthenticatedTenant,
+  async (req, res, next) => {
     try {
+      const { userId, tenantId, roles } =
+        getTenantAuthContext(req);
+
+      const isClinicalAdmin = hasAnyRole(roles, [
+        "platform_admin",
+        "practice_admin",
+      ]);
+      const isClinician = roles.includes("clinician");
+
+      if (!isClinicalAdmin && !isClinician) {
+        return res.status(403).json({
+          error: "Clinical note access denied",
+        });
+      }
+
+      const providerScope = isClinicalAdmin
+        ? sql``
+        : sql`
+            AND EXISTS (
+              SELECT 1
+              FROM provider_user_links pul
+              WHERE pul.tenant_id = cn.tenant_id
+                AND pul.user_id = ${userId}::uuid
+                AND pul.provider_id = cn.provider_id
+                AND pul.status = 'active'
+            )
+          `;
+
       const result = await db.execute(sql`
         SELECT
           cn.id,
@@ -99,12 +143,19 @@ router.get(
 
         JOIN clients c
           ON c.id = cn.client_id
+         AND c.tenant_id = cn.tenant_id
 
         LEFT JOIN providers pr
           ON pr.id = cn.provider_id
+         AND pr.tenant_id = cn.tenant_id
 
         LEFT JOIN charge_capture_items cci
           ON cci.clinical_note_id = cn.id
+         AND cci.tenant_id = cn.tenant_id
+
+        WHERE cn.tenant_id = ${tenantId}::uuid
+          AND cn.note_type <> 'psychotherapy'
+          ${providerScope}
 
         ORDER BY
           cn.service_date DESC NULLS LAST,
@@ -121,9 +172,25 @@ router.get(
 
 router.post(
   "/clinical-notes/:id/sign",
+  requireAuthenticatedTenant,
   async (req, res, next) => {
     try {
+      const { userId, tenantId, roles } =
+        getTenantAuthContext(req);
+
+      if (!roles.includes("clinician")) {
+        return res.status(403).json({
+          error: "Clinical note signing denied",
+        });
+      }
+
       const id = req.params.id;
+
+      if (!UUID_PATTERN.test(id)) {
+        return res.status(404).json({
+          error: "Clinical note not found",
+        });
+      }
 
       const noteResult = await db.execute(sql`
         SELECT
@@ -142,8 +209,19 @@ router.post(
 
         LEFT JOIN providers pr
           ON pr.id = cn.provider_id
+         AND pr.tenant_id = cn.tenant_id
 
         WHERE cn.id = ${id}::uuid
+          AND cn.tenant_id = ${tenantId}::uuid
+          AND cn.note_type <> 'psychotherapy'
+          AND EXISTS (
+            SELECT 1
+            FROM provider_user_links pul
+            WHERE pul.tenant_id = cn.tenant_id
+              AND pul.user_id = ${userId}::uuid
+              AND pul.provider_id = cn.provider_id
+              AND pul.status = 'active'
+          )
         LIMIT 1
       `);
 
@@ -195,18 +273,33 @@ router.post(
                 : ""
             }`;
 
-      await db.transaction(
+      const signed = await db.transaction(
         async (tx) => {
-          await tx.execute(sql`
-            UPDATE clinical_notes
+          const updateResult = await tx.execute(sql`
+            UPDATE clinical_notes cn
 
             SET
               note_status = 'signed',
               locked_at = now(),
               updated_at = now()
 
-            WHERE id = ${id}::uuid
+            WHERE cn.id = ${id}::uuid
+              AND cn.tenant_id = ${tenantId}::uuid
+              AND cn.note_type <> 'psychotherapy'
+              AND EXISTS (
+                SELECT 1
+                FROM provider_user_links pul
+                WHERE pul.tenant_id = cn.tenant_id
+                  AND pul.user_id = ${userId}::uuid
+                  AND pul.provider_id = cn.provider_id
+                  AND pul.status = 'active'
+              )
+            RETURNING cn.id
           `);
+
+          if (!updateResult.rows.length) {
+            return false;
+          }
 
           await tx.execute(sql`
             INSERT INTO clinical_note_signatures
@@ -215,30 +308,41 @@ router.post(
               clinical_note_id,
               signer_id,
               signed_at,
-              signature_text
+              signature_text,
+              provider_id
             )
 
             SELECT
               cn.tenant_id,
               cn.id,
-              NULL,
+              ${userId}::uuid,
               now(),
-              ${signatureText}
+              ${signatureText},
+              cn.provider_id
 
             FROM clinical_notes cn
 
             WHERE cn.id = ${id}::uuid
-
+              AND cn.tenant_id = ${tenantId}::uuid
+              AND cn.note_type <> 'psychotherapy'
+              AND EXISTS (
+                SELECT 1
+                FROM provider_user_links pul
+                WHERE pul.tenant_id = cn.tenant_id
+                  AND pul.user_id = ${userId}::uuid
+                  AND pul.provider_id = cn.provider_id
+                  AND pul.status = 'active'
+              )
               AND NOT EXISTS (
                 SELECT 1
                 FROM clinical_note_signatures cns
-                WHERE cns.clinical_note_id =
-                  cn.id
+                WHERE cns.clinical_note_id = cn.id
+                  AND cns.tenant_id = cn.tenant_id
               )
           `);
 
           await tx.execute(sql`
-            UPDATE charge_capture_items
+            UPDATE charge_capture_items cci
 
             SET
               updated_at = now(),
@@ -251,21 +355,45 @@ router.post(
                   ELSE block_reason
                 END
 
-            WHERE clinical_note_id =
-              ${id}::uuid
+            WHERE cci.tenant_id = ${tenantId}::uuid
+              AND cci.clinical_note_id = ${id}::uuid
           `);
+
+          return true;
         },
       );
 
+      if (!signed) {
+        return res.status(404).json({
+          error: "Clinical note not found",
+        });
+      }
+
       const updated =
         await db.execute(sql`
-          SELECT *
-          FROM clinical_notes
-          WHERE id = ${id}::uuid
+          SELECT cn.*
+          FROM clinical_notes cn
+          WHERE cn.id = ${id}::uuid
+            AND cn.tenant_id = ${tenantId}::uuid
+            AND cn.note_type <> 'psychotherapy'
+            AND EXISTS (
+              SELECT 1
+              FROM provider_user_links pul
+              WHERE pul.tenant_id = cn.tenant_id
+                AND pul.user_id = ${userId}::uuid
+                AND pul.provider_id = cn.provider_id
+                AND pul.status = 'active'
+            )
           LIMIT 1
         `);
 
-      res.json({
+      if (!updated.rows.length) {
+        return res.status(404).json({
+          error: "Clinical note not found",
+        });
+      }
+
+      return res.json({
         message:
           "Clinical note signed and locked.",
         note: updated.rows[0],
