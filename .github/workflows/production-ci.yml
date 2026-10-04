@@ -176,7 +176,7 @@ jobs:
         run: |
           # Fixtures run only inside the isolated CI database and roll back.
           for fixture in scripts/sql-tests/claim-handoff-*.sql; do
-            pnpm dlx supabase@2.117.0 db query --local --file "$fixture"
+            docker exec -i supabase_db_therassistant-e2e psql -U postgres -d postgres -v ON_ERROR_STOP=1 < "$fixture"
           done
 
       - name: Verify isolated staff, provider, and patient boundaries
