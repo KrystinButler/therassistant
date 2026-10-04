@@ -67,7 +67,15 @@ function choosePrimaryPolicy(
   policies: DataRow[],
   clientId: string,
   payerId: string,
+  policyId = "",
 ) {
+  if (policyId) {
+    const exact = policies.find((row) => row.id === policyId &&
+      String(row.client_id ?? "") === clientId &&
+      String(row.payer_id ?? "") === payerId);
+    if (!exact) throw new Error("The claim's selected insurance policy is unavailable or does not match the patient and payer. Review the claim before export.");
+    return exact;
+  }
   return (
     policies.find(
       (row) =>
@@ -107,7 +115,8 @@ export async function getClaimPreviewData(claimId: string): Promise<{
   const payerId = String(claim.payer_id ?? "");
   const providerId = String(claim.rendering_provider_id ?? "");
 
-  const [tenantRows, lines, diagnoses, clients, providers, payers, policies] = await Promise.all([
+  const capturedPolicyId = String(record(claim.metadata).insurance_policy_id ?? "");
+  const [tenantRows, lines, diagnoses, clients, providers, payers, policies, encounters] = await Promise.all([
     referenceSelect<DataRow>("tenants", { id: `eq.${tenantId}`, limit: "1" }),
     tenantSelect<DataRow>("professional_claim_lines", {
       claim_id: `eq.${claimId}`,
@@ -132,12 +141,18 @@ export async function getClaimPreviewData(claimId: string): Promise<{
           order: "created_at.desc",
         })
       : Promise.resolve([]),
+    claim.source_encounter_id && !capturedPolicyId
+      ? tenantSelect<DataRow>("encounters", {
+          id: `eq.${String(claim.source_encounter_id)}`, limit: "1",
+        })
+      : Promise.resolve([]),
   ]);
 
   const client = clients[0] ?? null;
   const provider = providers[0] ?? null;
   const payer = payers[0] ?? null;
-  const policy = choosePrimaryPolicy(policies, clientId, payerId);
+  const policy = choosePrimaryPolicy(policies, clientId, payerId,
+    capturedPolicyId || String(encounters[0]?.insurance_policy_id ?? ""));
   const edi = resolvePayerEdiConfig(read837PConfig(tenantRows[0]?.settings), payers);
 
   return {
@@ -183,8 +198,11 @@ export async function getBatchExportData(batchId: string): Promise<BatchOutputDa
   const clientIds = [...new Set(claimRows.map((row) => String(row.client_id ?? "")).filter(Boolean))];
   const providerIds = [...new Set(claimRows.map((row) => String(row.rendering_provider_id ?? "")).filter(Boolean))];
   const payerIds = [...new Set(claimRows.map((row) => String(row.payer_id ?? "")).filter(Boolean))];
+  const encounterIds = [...new Set(claimRows.filter((row) =>
+    !record(row.metadata).insurance_policy_id).map((row) =>
+    String(row.source_encounter_id ?? "")).filter(Boolean))];
 
-  const [lines, diagnoses, clients, providers, payers, policies] = await Promise.all([
+  const [lines, diagnoses, clients, providers, payers, policies, encounters] = await Promise.all([
     tenantSelect<DataRow>("professional_claim_lines", {
       claim_id: inFilter(claimIds),
       order: "service_date.asc,created_at.asc",
@@ -208,35 +226,22 @@ export async function getBatchExportData(batchId: string): Promise<BatchOutputDa
           order: "created_at.desc",
         })
       : Promise.resolve([]),
+    encounterIds.length
+      ? tenantSelect<DataRow>("encounters", { id: inFilter(encounterIds) })
+      : Promise.resolve([]),
   ]);
 
   const clientsById = new Map(clients.map((row) => [row.id, row]));
   const providersById = new Map(providers.map((row) => [row.id, row]));
   const payersById = new Map(payers.map((row) => [row.id, row]));
+  const encountersById = new Map(encounters.map((row) => [row.id, row]));
 
   const claims: ClaimOutputItem[] = claimRows.map((claim) => {
     const clientId = String(claim.client_id ?? "");
     const payerId = String(claim.payer_id ?? "");
-    const policy =
-      policies.find(
-        (row) =>
-          String(row.client_id ?? "") === clientId &&
-          String(row.payer_id ?? "") === payerId &&
-          String(row.status ?? "") === "active" &&
-          String(row.insurance_order ?? "") === "primary",
-      ) ??
-      policies.find(
-        (row) =>
-          String(row.client_id ?? "") === clientId &&
-          String(row.payer_id ?? "") === payerId &&
-          String(row.insurance_order ?? "") === "primary",
-      ) ??
-      policies.find(
-        (row) =>
-          String(row.client_id ?? "") === clientId &&
-          String(row.payer_id ?? "") === payerId,
-      ) ??
-      null;
+    const policyId = String(record(claim.metadata).insurance_policy_id ??
+      encountersById.get(String(claim.source_encounter_id ?? ""))?.insurance_policy_id ?? "");
+    const policy = choosePrimaryPolicy(policies, clientId, payerId, policyId);
 
     return {
       claim,

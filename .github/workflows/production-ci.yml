@@ -171,6 +171,14 @@ jobs:
       - name: Seed isolated synthetic E2E data
         run: node scripts/provision-synthetic-e2e-identities.mjs
 
+      - name: Verify claim diagnosis, policy, and revalidation handoffs
+        shell: bash
+        run: |
+          # Fixtures run only inside the isolated CI database and roll back.
+          for fixture in scripts/sql-tests/claim-handoff-*.sql; do
+            pnpm dlx supabase@2.117.0 db query --local --file "$fixture"
+          done
+
       - name: Verify isolated staff, provider, and patient boundaries
         run: node scripts/verify-synthetic-isolation.mjs
 
