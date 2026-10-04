@@ -184,9 +184,10 @@ router.post(
         });
       }
 
-      const id = req.params.id;
+      const rawId = req.params.id;
+      const id = Array.isArray(rawId) ? rawId[0] : rawId;
 
-      if (!UUID_PATTERN.test(id)) {
+      if (!id || !UUID_PATTERN.test(id)) {
         return res.status(404).json({
           error: "Clinical note not found",
         });
