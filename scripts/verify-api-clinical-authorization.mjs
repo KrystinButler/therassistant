@@ -156,6 +156,8 @@ await serviceUpsert("clinical_notes", [
     note_type: "psychotherapy",
     note_status: "ready_for_signature",
     service_date: serviceDate,
+    cpt_code: null,
+    diagnosis_code: null,
     note_text: "Synthetic psychotherapy note excluded from the ordinary API path.",
   },
 ]);
