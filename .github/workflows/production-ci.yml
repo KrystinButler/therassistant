@@ -165,6 +165,29 @@ jobs:
       - name: Verify isolated staff, provider, and patient boundaries
         run: node scripts/verify-synthetic-isolation.mjs
 
+      - name: Verify clinical API authorization
+        shell: bash
+        run: |
+          pnpm --filter @workspace/api-server run build
+          PORT=3001 NODE_ENV=production pnpm --filter @workspace/api-server run start > /tmp/therassistant-api.log 2>&1 &
+          API_PID=$!
+          trap 'kill "$API_PID" 2>/dev/null || true' EXIT
+
+          ready=0
+          for i in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:3001/api/healthz >/dev/null; then
+              ready=1
+              break
+            fi
+            sleep 1
+          done
+          if [ "$ready" -ne 1 ]; then
+            cat /tmp/therassistant-api.log
+            exit 1
+          fi
+
+          API_BASE_URL=http://127.0.0.1:3001 node scripts/verify-api-clinical-authorization.mjs
+
       - name: Verify full system role matrix
         run: node scripts/verify-system-role-matrix.mjs
 
