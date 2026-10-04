@@ -323,3 +323,40 @@ test("a claimed charge is preserved on repeated charge generation", async () => 
   assert.equal(repo.charges[0].charge_status, "claim_created");
   assert.equal(repo.charges[0].charge_amount_cents, 17500);
 });
+
+test("re-auditing a claimed encounter preserves its claim handoff", async () => {
+  const repo = fakeRepo({
+    ...cleanContext,
+    encounter: { ...cleanContext.encounter, billing_status: "claimed" },
+  });
+  const result = await routeEncounterToBillingWorkflow(repo, "enc-1");
+  assert.equal(result.ok, true);
+  assert.equal(repo.encounterUpdate.billing_status, undefined);
+  assert.equal(repo.readinessChecks.length, 0);
+});
+
+test("charge capture after claim creation preserves encounter and charge state", async () => {
+  const repo = fakeRepo({
+    ...cleanContext,
+    encounter: { ...cleanContext.encounter, billing_status: "claimed" },
+  }, [{ id: "charge-claimed", service_line_id: "line-1", charge_status: "claim_created", charge_amount_cents: 17500 }]);
+  const result = await createChargeFromEncounterWorkflow(repo, "enc-1");
+  assert.equal(result.ok, true);
+  assert.equal(repo.encounterUpdate.billing_status, undefined);
+  assert.equal(repo.charges.length, 1);
+  assert.equal(repo.charges[0].charge_status, "claim_created");
+  assert.equal(repo.serviceLineUpdates.length, 0);
+});
+
+test("changed readiness cannot move an already claimed encounter into billing holds", async () => {
+  const repo = fakeRepo({
+    ...cleanContext,
+    encounter: { ...cleanContext.encounter, billing_status: "claimed" },
+    eligibilityStatus: "inactive",
+  }, [{ id: "charge-claimed", service_line_id: "line-1", charge_status: "claim_created" }]);
+  const result = await createChargeFromEncounterWorkflow(repo, "enc-1");
+  assert.equal(result.ok, true);
+  assert.equal(repo.encounterUpdate.billing_status, undefined);
+  assert.equal(repo.work.length, 0);
+  assert.equal(repo.charges[0].charge_status, "claim_created");
+});
