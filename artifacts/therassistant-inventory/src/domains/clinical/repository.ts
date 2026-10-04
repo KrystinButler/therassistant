@@ -143,7 +143,7 @@ export async function addEncounterDiagnosis(
     order: "sequence_number.asc",
   });
 
-  return tenantInsert<DataRow>("encounter_diagnoses", {
+  const diagnosis = await tenantInsert<DataRow>("encounter_diagnoses", {
     encounter_id: encounterId,
     diagnosis_code: values.diagnosisCode.trim().toUpperCase(),
     diagnosis_description: values.diagnosisDescription?.trim() || null,
@@ -151,6 +151,19 @@ export async function addEncounterDiagnosis(
     sequence_number: existing.length + 1,
     present_on_claim: true,
   });
+
+  const note = first(await tenantSelect<DataRow>("clinical_notes", {
+    encounter_id: `eq.${encounterId}`,
+    order: "created_at.desc",
+    limit: "1",
+  }));
+  if (note && ["signed", "locked"].includes(String(note.note_status))) {
+    const result = await createChargeFromEncounter(encounterId);
+    if (!result.ok && !result.blocked) {
+      throw new Error("Diagnosis saved, but charge reconciliation failed: " + result.message);
+    }
+  }
+  return diagnosis;
 }
 
 async function assertUnbilledLine(encounterId: string, lineId: string, allowBlockedCorrection = false): Promise<DataRow> {
