@@ -119,6 +119,12 @@ jobs:
           # seed the isolated E2E dataset explicitly after schema migrations.
           mv supabase/migrations/20260915040049_phase5_mailroom_demo_seed.sql /tmp/phase5_mailroom_demo_seed.sql
 
+          # The coding guidance staging table was also created historically outside
+          # the reproducible chain. Make its later cleanup idempotent in isolated CI
+          # so replay can reach the authorization acceptance tests.
+          sed -i 's/drop table public\.coding_guidance_sheet_rows;/drop table if exists public.coding_guidance_sheet_rows;/' \
+            supabase/migrations/20260929235306_remove_obsolete_ehr_authorization_mailroom_staging.sql
+
           pnpm dlx supabase@2.117.0 start
           pnpm dlx supabase@2.117.0 status -o env > /tmp/supabase.env
           set -a
