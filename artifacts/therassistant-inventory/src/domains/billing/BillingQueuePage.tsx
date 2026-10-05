@@ -84,7 +84,7 @@ export function BillingQueuePage() {
         !data.billing.chargesByEncounter.get(row.id)?.length,
     );
     const blocked = data.billing.encounters.filter(
-      (row) => row.billing_status === "held" || row.blockingChecks.length > 0,
+      (row) => row.billingHandoffPending || row.billing_status === "held" || row.blockingChecks.length > 0,
     );
 
     return {

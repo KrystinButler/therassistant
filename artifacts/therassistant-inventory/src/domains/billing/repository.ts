@@ -2,6 +2,7 @@ import {
   tenantInsert,
   tenantSelect,
   tenantUpdate,
+  tenantRpc,
   referenceSelect,
   type Row,
 } from "../../lib/tenant-data-client";
@@ -32,6 +33,7 @@ type BillingQueueEncounter = DataRow & {
   payerName: string;
   blockingChecks: DataRow[];
   advisoryChecks: DataRow[];
+  billingHandoffPending: boolean;
 };
 
 function first<T>(rows: T[]) {
@@ -250,18 +252,34 @@ export function routeEncounterToBilling(encounterId: string) {
   return routeEncounterToBillingWorkflow(repository, encounterId);
 }
 
-export function createChargeFromEncounter(encounterId: string) {
-  return createChargeFromEncounterWorkflow(repository, encounterId);
+export async function createChargeFromEncounter(encounterId: string) {
+  const result = await createChargeFromEncounterWorkflow(repository, encounterId);
+  if (result.ok) {
+    try {
+      const complete = await tenantRpc<boolean>("complete_clinical_billing_handoff", { p_encounter_id: encounterId });
+      if (!complete) return { ok: false as const, blocked: false, code: "billing_handoff_pending",
+        message: "Charge reconciliation is incomplete. The billing handoff remains open in Work Center; retry charge capture." };
+    } catch {
+      return { ok: false as const, blocked: false, code: "billing_handoff_pending",
+        message: "Charges were saved, but billing handoff confirmation failed. Retry charge capture; the signed note is preserved." };
+    }
+  }
+  return result;
 }
 
 export async function getBillingQueueData() {
-  const [encounters, clients, providers, charges, payers, readinessChecks] = await Promise.all([
+  const [encounters, clients, providers, charges, payers, readinessChecks, handoffs] = await Promise.all([
     tenantSelect<DataRow>("encounters", { order: "updated_at.desc" }),
     tenantSelect<DataRow>("clients"),
     tenantSelect<DataRow>("providers"),
     tenantSelect<DataRow>("charge_capture_items", { order: "created_at.desc" }),
     referenceSelect<DataRow>("payers", { order: "name.asc" }),
     tenantSelect<DataRow>("encounter_readiness_checks"),
+    tenantSelect<DataRow>("workqueue_items", {
+      source_object_type: "eq.encounter", workqueue_type: "eq.general_task",
+      title: "eq.Clinical billing handoff",
+      workqueue_status: "in.(open,in_progress,pending,snoozed,reopened)",
+    }),
   ]);
 
   const clientsById = new Map(clients.map((row) => [row.id, row]));
@@ -290,6 +308,7 @@ export async function getBillingQueueData() {
       fundingSourceSubtype: funding.sourceSubtype,
       billingPath: funding.billingPath,
       fundingSourceLabel: fundingSourceLabel(funding.sourceType),
+      billingHandoffPending: handoffs.some((item) => item.source_object_id === encounter.id),
       clientName: displayName(client),
       providerName: displayName(providersById.get(String(encounter.provider_id))),
       payerName,

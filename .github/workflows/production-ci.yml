@@ -175,7 +175,7 @@ jobs:
         shell: bash
         run: |
           # Fixtures run only inside the isolated CI database and roll back.
-          for fixture in scripts/sql-tests/claim-handoff-*.sql; do
+          for fixture in scripts/sql-tests/claim-handoff-*.sql scripts/sql-tests/clinical-handoff-*.sql; do
             docker exec -i supabase_db_therassistant-e2e psql -U postgres -d postgres -v ON_ERROR_STOP=1 < "$fixture"
           done
 

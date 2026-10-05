@@ -411,7 +411,7 @@ export function EncounterPage() {
         ? `${noteText.trim()}\n\n${timeStatement}`
         : noteText;
       const saved = await saveClinicalNote(encounterId, { noteType, noteText: signedNoteText, goalAddressed, structuredSelections, generatedNarrative, carryForwardContext });
-      const result = await signEncounterNote(encounterId, providerId, signatureText);
+      const result = await signEncounterNote(encounterId, providerId, signatureText, saved.id);
       if (!result.ok) {
         setError(result.details?.length ? `${result.message} ${result.details.join(" ")}` : result.message);
         return;
@@ -419,7 +419,9 @@ export function EncounterPage() {
       setData((current) => current ? { ...current,
         notes: [{ ...saved, note_status: "signed", locked_at: result.value.signedAt }, ...current.notes.filter((row) => row.id !== saved.id)],
       } : current);
-      setMessage("Clinical note signed and locked. Billing exceptions remain outside the clinical workflow.");
+      setMessage(result.value.billingPending
+        ? "Clinical note signed and locked. Billing follow-up is pending in Work Center; you do not need to sign again."
+        : "Clinical note signed and locked. Billing exceptions remain outside the clinical workflow.");
       await load();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unable to sign note.");
