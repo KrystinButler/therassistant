@@ -283,10 +283,12 @@ export function EncounterPage() {
           diagnosisCode, diagnosisDescription,
           isPrimary: (data?.diagnoses.length ?? 0) === 0,
         });
-        const result = await routeEncounterToBilling(encounterId);
-        if (!result.ok && !result.blocked) throw new Error(result.message);
+        if (!signed) {
+          const result = await routeEncounterToBilling(encounterId);
+          if (!result.ok && !result.blocked) throw new Error(result.message);
+        }
       },
-      signed ? "Billing diagnosis added and billing readiness refreshed. The signed clinical note was not changed." : "Diagnosis added and billing readiness refreshed.",
+      signed ? "Billing diagnosis added and unclaimed charges reconciled." : "Diagnosis added and billing readiness refreshed.",
       true,
     );
     if (success) { setDiagnosisCode(""); setDiagnosisDescription(""); }

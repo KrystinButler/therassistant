@@ -44,6 +44,11 @@ export async function routeEncounterToBillingWorkflow(
 ): Promise<WorkflowResult<{ encounterId: string }>> {
   try {
     const context = await repo.getBillingContext(encounterId);
+    // Once a claim exists, corrections belong to the claim workflow. An
+    // earlier billing audit must not reset that handoff or reopen its holds.
+    if (context.encounter.billing_status === "claimed") {
+      return success({ encounterId });
+    }
     const readiness = evaluateBillingReadiness(context);
 
     await repo.replaceReadinessChecks(
@@ -109,6 +114,9 @@ export async function createChargeFromEncounterWorkflow(
 
   try {
     const context = await repo.getBillingContext(encounterId);
+    if (context.encounter.billing_status === "claimed") {
+      return success(await repo.getExistingCharges(encounterId));
+    }
     const noteSigned = Boolean(
       context.note && ["signed", "locked"].includes(String(context.note.note_status)),
     );

@@ -171,6 +171,14 @@ jobs:
       - name: Seed isolated synthetic E2E data
         run: node scripts/provision-synthetic-e2e-identities.mjs
 
+      - name: Verify claim diagnosis, policy, and revalidation handoffs
+        shell: bash
+        run: |
+          # Fixtures run only inside the isolated CI database and roll back.
+          for fixture in scripts/sql-tests/claim-handoff-*.sql; do
+            docker exec -i supabase_db_therassistant-e2e psql -U postgres -d postgres -v ON_ERROR_STOP=1 < "$fixture"
+          done
+
       - name: Verify isolated staff, provider, and patient boundaries
         run: node scripts/verify-synthetic-isolation.mjs
 
