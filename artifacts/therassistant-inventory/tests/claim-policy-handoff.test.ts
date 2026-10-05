@@ -21,7 +21,7 @@ hook.deregister();
 function fixture() {
   const claim = { id: "claim-1", client_id: "client-1", payer_id: "payer-1", rendering_provider_id: "provider-1",
     source_encounter_id: "enc-1", metadata: { insurance_policy_id: "policy-original" } as Record<string, unknown> };
-  const encounter = { id: "enc-1", insurance_policy_id: "policy-original" };
+  const encounter = { id: "enc-1", client_id: "client-1", payer_id: "payer-1", insurance_policy_id: "policy-original" };
   const policies = [
     { id: "policy-new", client_id: "client-1", payer_id: "payer-1", status: "active", insurance_order: "primary", member_id: "NEW-MEMBER" },
     { id: "policy-original", client_id: "client-1", payer_id: "payer-1", status: "inactive", insurance_order: "primary", member_id: "ORIGINAL-MEMBER" },
@@ -77,4 +77,32 @@ test("legacy claims without a source encounter or snapshot retain the existing p
   state.claim.source_encounter_id = "";
   const result = await getClaimPreviewData("claim-1");
   assert.equal(result.item.policy?.member_id, "NEW-MEMBER");
+});
+
+for (const field of ["client_id", "payer_id"] as const) {
+  test(`legacy corrected ${field} uses matching coverage instead of the original encounter policy`, async () => {
+    const state = fixture();
+    state.claim.metadata = {};
+    state.claim[field] = "corrected-identity";
+    state.policies[0][field] = "corrected-identity";
+    assert.equal((await getClaimPreviewData("claim-1")).item.policy?.member_id, "NEW-MEMBER");
+    assert.equal((await getBatchExportData("batch-1")).claims[0].policy?.member_id, "NEW-MEMBER");
+  });
+}
+
+test("corrected claims use the replacement captured policy in preview and batch export", async () => {
+  const state = fixture();
+  state.claim.client_id = "corrected-client";
+  state.policies[0].client_id = "corrected-client";
+  state.claim.metadata.insurance_policy_id = "policy-new";
+  assert.equal((await getClaimPreviewData("claim-1")).item.policy?.member_id, "NEW-MEMBER");
+  assert.equal((await getBatchExportData("batch-1")).claims[0].policy?.member_id, "NEW-MEMBER");
+});
+
+test("removing the payer does not reuse the original encounter coverage", async () => {
+  const state = fixture();
+  state.claim.payer_id = "";
+  state.claim.metadata = {};
+  assert.equal((await getClaimPreviewData("claim-1")).item.policy, null);
+  assert.equal((await getBatchExportData("batch-1")).claims[0].policy, null);
 });

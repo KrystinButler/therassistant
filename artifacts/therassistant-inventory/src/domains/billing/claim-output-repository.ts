@@ -63,6 +63,13 @@ function rowName(row: DataRow | null | undefined) {
   return [row.first_name, row.last_name].filter(Boolean).join(" ") || "—";
 }
 
+function sourcePolicyId(encounter: DataRow | undefined, clientId: string, payerId: string) {
+  // Identity corrections can deliberately differ from the source encounter.
+  return encounter && String(encounter.client_id ?? "") === clientId &&
+    String(encounter.payer_id ?? "") === payerId
+    ? String(encounter.insurance_policy_id ?? "") : "";
+}
+
 function choosePrimaryPolicy(
   policies: DataRow[],
   clientId: string,
@@ -152,7 +159,7 @@ export async function getClaimPreviewData(claimId: string): Promise<{
   const provider = providers[0] ?? null;
   const payer = payers[0] ?? null;
   const policy = choosePrimaryPolicy(policies, clientId, payerId,
-    capturedPolicyId || String(encounters[0]?.insurance_policy_id ?? ""));
+    capturedPolicyId || sourcePolicyId(encounters[0], clientId, payerId));
   const edi = resolvePayerEdiConfig(read837PConfig(tenantRows[0]?.settings), payers);
 
   return {
@@ -239,8 +246,8 @@ export async function getBatchExportData(batchId: string): Promise<BatchOutputDa
   const claims: ClaimOutputItem[] = claimRows.map((claim) => {
     const clientId = String(claim.client_id ?? "");
     const payerId = String(claim.payer_id ?? "");
-    const policyId = String(record(claim.metadata).insurance_policy_id ??
-      encountersById.get(String(claim.source_encounter_id ?? ""))?.insurance_policy_id ?? "");
+    const policyId = String(record(claim.metadata).insurance_policy_id ?? "") ||
+      sourcePolicyId(encountersById.get(String(claim.source_encounter_id ?? "")), clientId, payerId);
     const policy = choosePrimaryPolicy(policies, clientId, payerId, policyId);
 
     return {
