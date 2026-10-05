@@ -112,6 +112,13 @@ function clinicalRepo(overrides: Record<string, unknown> = {}) {
       noteStatus = String(values.note_status ?? noteStatus);
       return { id: "note-1", ...values };
     },
+    async signNoteAtomically(_encounterId: string, noteId: string, providerId: string, signatureText: string) {
+      if (!signatures.length) {
+        signatures.push({ clinical_note_id: noteId, provider_id: providerId, signature_text: signatureText });
+        noteStatus = "signed";
+      }
+      return { note_id: noteId, signed_at: "2026-10-05T14:00:00Z" };
+    },
     async runBillingReadiness() {
       readinessRuns += 1;
       return { ready: true, checks: [] };
@@ -162,4 +169,36 @@ test("billing-readiness failure does not undo a clinical signature", async () =>
   assert.equal(result.ok, true);
   assert.equal(repo.signatures.length, 1);
   assert.equal(repo.noteStatus, "signed");
+  if (result.ok) assert.equal(result.value.billingPending, true);
+});
+
+test("signing returns the durable server timestamp and reuses the signature on retry", async () => {
+  const repo = clinicalRepo();
+  const first = await signNoteWorkflow(repo, "encounter-1", "provider-1", "Jamie Parker, LCSW");
+  const second = await signNoteWorkflow(repo, "encounter-1", "provider-1", "Jamie Parker, LCSW");
+  assert.equal(first.ok, true);
+  assert.equal(second.ok, true);
+  assert.equal(repo.signatures.length, 1);
+  if (first.ok && second.ok) {
+    assert.equal(first.value.signedAt, "2026-10-05T14:00:00Z");
+    assert.equal(second.value.signedAt, first.value.signedAt);
+  }
+});
+
+test("failed atomic signing does not run downstream billing", async () => {
+  const repo = clinicalRepo();
+  repo.signNoteAtomically = async () => { throw new Error("Signing transaction rolled back"); };
+  const result = await signNoteWorkflow(repo, "encounter-1", "provider-1", "Jamie Parker, LCSW");
+  assert.equal(result.ok, false);
+  assert.equal(repo.signatures.length, 0);
+  assert.equal(repo.noteStatus, "ready_for_signature");
+  assert.equal(repo.readinessRuns, 0);
+});
+
+test("a newer encounter note cannot replace the note the clinician just saved", async () => {
+  const repo = clinicalRepo();
+  const result = await signNoteWorkflow(repo, "encounter-1", "provider-1", "Jamie Parker, LCSW", "saved-note-2");
+  assert.equal(result.ok, false);
+  if (!result.ok) assert.equal(result.code, "note_changed");
+  assert.equal(repo.signatures.length, 0);
 });
