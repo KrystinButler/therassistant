@@ -51,6 +51,11 @@ type NppesResponse = {
   results?: NppesResult[];
 };
 
+type CmsEnrollmentRow = Record<string, string | number | boolean | null | undefined>;
+
+const CMS_PECOS_MAIN_DATASET_ID =
+  "2457ea29-fc82-48b0-86ec-3b0755de7515";
+
 function formatAddress(address?: NppesAddress) {
   if (!address) return null;
   return [
@@ -75,6 +80,44 @@ function formatProviderName(result: NppesResult) {
     .trim();
 
   return name || null;
+}
+
+function value(row: CmsEnrollmentRow, ...keys: string[]) {
+  for (const key of keys) {
+    const candidate = row[key];
+    if (candidate !== null && candidate !== undefined && String(candidate).trim()) {
+      return String(candidate).trim();
+    }
+  }
+  return null;
+}
+
+function formatCmsEnrollmentName(row: CmsEnrollmentRow) {
+  const organization = value(row, "ORG_NAME", "ORGANIZATION_NAME");
+  if (organization) return organization;
+
+  const name = [
+    value(row, "FIRST_NAME", "PROVIDER_FIRST_NAME"),
+    value(row, "MDL_NAME", "MIDDLE_NAME", "PROVIDER_MIDDLE_NAME"),
+    value(row, "LAST_NAME", "PROVIDER_LAST_NAME"),
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .trim();
+
+  return name || null;
+}
+
+function formatCmsEnrollmentLocation(row: CmsEnrollmentRow) {
+  const parts = [
+    value(row, "LINE_1_ST_ADR", "ADDRESS_LINE_1", "ADDRESS_1"),
+    value(row, "LINE_2_ST_ADR", "ADDRESS_LINE_2", "ADDRESS_2"),
+    value(row, "CITY_NAME", "CITY"),
+    value(row, "STATE_CD", "STATE"),
+    value(row, "ZIP_CD", "ZIP", "POSTAL_CODE"),
+  ].filter(Boolean);
+
+  return parts.length ? parts.join(", ") : null;
 }
 
 export async function lookupNppesProvider(
@@ -181,6 +224,120 @@ export async function lookupNppesProvider(
       checkedAt,
       rawResult: {
         error: error instanceof Error ? error.message : "NPPES lookup failed",
+      },
+    };
+  }
+}
+
+export async function lookupCmsMedicareEnrollment(
+  npi: string,
+  fetchImpl: typeof fetch = fetch,
+): Promise<DirectoryObservation> {
+  const checkedAt = new Date().toISOString();
+  const normalizedNpi = npi.trim();
+
+  if (!/^\d{10}$/.test(normalizedNpi)) {
+    return {
+      sourceKey: "cms_pecos_ffs",
+      sourceRecordId: null,
+      directoryStatus: "unable_to_verify",
+      providerNpi: normalizedNpi,
+      providerName: null,
+      specialtyText: null,
+      locationText: null,
+      networkText: null,
+      sourceUpdatedAt: null,
+      checkedAt,
+      rawResult: { error: "NPI must contain exactly 10 digits." },
+    };
+  }
+
+  const url = new URL(
+    `https://data.cms.gov/data-api/v1/dataset/${CMS_PECOS_MAIN_DATASET_ID}/data`,
+  );
+  url.searchParams.set("filter[NPI]", normalizedNpi);
+  url.searchParams.set("size", "50");
+
+  try {
+    const response = await fetchImpl(url, {
+      headers: { accept: "application/json" },
+      signal: AbortSignal.timeout(15_000),
+    });
+
+    if (!response.ok) {
+      return {
+        sourceKey: "cms_pecos_ffs",
+        sourceRecordId: null,
+        directoryStatus: "source_unavailable",
+        providerNpi: normalizedNpi,
+        providerName: null,
+        specialtyText: null,
+        locationText: null,
+        networkText: null,
+        sourceUpdatedAt: null,
+        checkedAt,
+        rawResult: { httpStatus: response.status, datasetId: CMS_PECOS_MAIN_DATASET_ID },
+      };
+    }
+
+    const body = (await response.json()) as CmsEnrollmentRow[];
+    const exactMatches = Array.isArray(body)
+      ? body.filter((row) => value(row, "NPI") === normalizedNpi)
+      : [];
+
+    if (exactMatches.length === 0) {
+      return {
+        sourceKey: "cms_pecos_ffs",
+        sourceRecordId: normalizedNpi,
+        directoryStatus: "not_found",
+        providerNpi: normalizedNpi,
+        providerName: null,
+        specialtyText: null,
+        locationText: null,
+        networkText: "No active Medicare FFS enrollment row found",
+        sourceUpdatedAt: null,
+        checkedAt,
+        rawResult: body,
+      };
+    }
+
+    const first = exactMatches[0];
+    const enrollmentIds = exactMatches
+      .map((row) => value(row, "ENRLMT_ID", "ENROLLMENT_ID"))
+      .filter((id): id is string => Boolean(id));
+
+    return {
+      sourceKey: "cms_pecos_ffs",
+      sourceRecordId: enrollmentIds[0] ?? normalizedNpi,
+      directoryStatus: exactMatches.length > 1 ? "multiple_matches" : "found",
+      providerNpi: normalizedNpi,
+      providerName: formatCmsEnrollmentName(first),
+      specialtyText: value(first, "PROVIDER_TYPE_DESC", "SPECIALTY_DESC"),
+      locationText: formatCmsEnrollmentLocation(first),
+      networkText: "Active Medicare FFS enrollment evidence found",
+      sourceUpdatedAt: null,
+      checkedAt,
+      rawResult: {
+        datasetId: CMS_PECOS_MAIN_DATASET_ID,
+        enrollmentIds,
+        rows: body,
+      },
+    };
+  } catch (error) {
+    return {
+      sourceKey: "cms_pecos_ffs",
+      sourceRecordId: null,
+      directoryStatus: "source_unavailable",
+      providerNpi: normalizedNpi,
+      providerName: null,
+      specialtyText: null,
+      locationText: null,
+      networkText: null,
+      sourceUpdatedAt: null,
+      checkedAt,
+      rawResult: {
+        datasetId: CMS_PECOS_MAIN_DATASET_ID,
+        error: error instanceof Error ? error.message : "CMS PECOS lookup failed",
       },
     };
   }
