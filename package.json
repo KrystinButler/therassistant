@@ -13,7 +13,7 @@
     "verify:release-acceptance": "node scripts/verify-release-acceptance.mjs",
     "test:fhir": "node --test tests/fhir/*.test.ts",
     "test:fhir:browser": "playwright test --config tests/fhir/playwright.config.ts",
-    "test:credentialing": "node --test tests/credentialing/*.test.ts"
+    "test:credentialing": "node --experimental-strip-types --test tests/credentialing/*.test.ts"
   },
   "private": true,
   "dependencies": {
