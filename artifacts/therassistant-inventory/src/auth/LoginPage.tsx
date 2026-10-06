@@ -3,8 +3,8 @@ import { useState, type FormEvent } from "react";
 import { useAuth } from "./auth-context";
 
 export function LoginPage() {
-  const { signIn, requestPasswordReset, error: authError } = useAuth();
-  const [mode, setMode] = useState<"signin" | "reset">("signin");
+  const { signIn, signUp, requestPasswordReset, error: authError } = useAuth();
+  const [mode, setMode] = useState<"signin" | "signup" | "reset">("signin");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [working, setWorking] = useState(false);
@@ -22,9 +22,16 @@ export function LoginPage() {
         setNotice("If an authorized account exists for that email, a password reset link has been sent.");
         return;
       }
+      if (mode === "signup") {
+        const result = await signUp(email.trim(), password);
+        if (result.requiresEmailConfirmation) {
+          setNotice("Account created. Check your email to confirm the address, then return here to continue EHR setup.");
+        }
+        return;
+      }
       await signIn(email.trim(), password);
     } catch (err) {
-      setError(err instanceof Error ? err.message : mode === "reset" ? "Unable to request a password reset." : "Unable to sign in.");
+      setError(err instanceof Error ? err.message : mode === "reset" ? "Unable to request a password reset." : mode === "signup" ? "Unable to create account." : "Unable to sign in.");
     } finally {
       setWorking(false);
     }
@@ -42,8 +49,8 @@ export function LoginPage() {
         </div>
         <div className="thera-card-header">
           <div>
-            <h1>{mode === "reset" ? "Reset password" : "Sign in"}</h1>
-            <p>{mode === "reset" ? "Enter the email for your authorized Therassistant account." : "Use your authorized Therassistant account."}</p>
+            <h1>{mode === "reset" ? "Reset password" : mode === "signup" ? "THERASSISTANT EHR Sign Up" : "Sign in"}</h1>
+            <p>{mode === "reset" ? "Enter the email for your authorized Therassistant account." : mode === "signup" ? "Create your EHR administrator account with an email and password." : "Use your authorized Therassistant account."}</p>
           </div>
         </div>
         <label style={{ display: "grid", gap: 6, marginBottom: 16 }}>
@@ -58,13 +65,13 @@ export function LoginPage() {
             style={{ padding: "10px 12px", borderRadius: 8, border: "1px solid var(--thera-border, #d7d7d2)" }}
           />
         </label>
-        {mode === "signin" ? (
+        {mode !== "reset" ? (
           <label style={{ display: "grid", gap: 6, marginBottom: 16 }}>
             <span className="thera-field-label">Password</span>
             <input
               type="password"
               name="password"
-              autoComplete="current-password"
+              autoComplete={mode === "signup" ? "new-password" : "current-password"}
               required
               value={password}
               onChange={(event) => setPassword(event.target.value)}
@@ -75,19 +82,25 @@ export function LoginPage() {
         {(error ?? authError) ? <div className="thera-state error" style={{ marginBottom: 16 }}>{error ?? authError}</div> : null}
         {notice ? <div className="thera-state" style={{ marginBottom: 16 }}>{notice}</div> : null}
         <button type="submit" className="thera-action" disabled={working} style={{ width: "100%" }}>
-          {working ? (mode === "reset" ? "Sending..." : "Signing in...") : (mode === "reset" ? "Send reset link" : "Sign in")}
+          {working ? (mode === "reset" ? "Sending..." : mode === "signup" ? "Creating account..." : "Signing in...") : (mode === "reset" ? "Send reset link" : mode === "signup" ? "Create account" : "Sign in")}
         </button>
-        <button
-          type="button"
-          onClick={() => {
-            setMode(mode === "signin" ? "reset" : "signin");
-            setError(null);
-            setNotice(null);
-          }}
-          style={{ width: "100%", marginTop: 12, border: 0, background: "transparent", textDecoration: "underline", cursor: "pointer" }}
-        >
-          {mode === "signin" ? "Forgot password?" : "Back to sign in"}
-        </button>
+        {mode === "signin" ? (
+          <>
+            <button type="button" onClick={() => { setMode("signup"); setError(null); setNotice(null); }}
+              style={{ width: "100%", marginTop: 12, border: 0, background: "transparent", textDecoration: "underline", cursor: "pointer" }}>
+              New practice? Create an EHR account
+            </button>
+            <button type="button" onClick={() => { setMode("reset"); setError(null); setNotice(null); }}
+              style={{ width: "100%", marginTop: 8, border: 0, background: "transparent", textDecoration: "underline", cursor: "pointer" }}>
+              Forgot password?
+            </button>
+          </>
+        ) : (
+          <button type="button" onClick={() => { setMode("signin"); setError(null); setNotice(null); }}
+            style={{ width: "100%", marginTop: 12, border: 0, background: "transparent", textDecoration: "underline", cursor: "pointer" }}>
+            Back to sign in
+          </button>
+        )}
       </form>
     </main>
   );

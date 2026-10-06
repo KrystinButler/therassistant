@@ -201,6 +201,23 @@ export async function signInWithPassword(email: string, password: string) {
   return session;
 }
 
+export async function signUpWithPassword(email: string, password: string) {
+  const payload = await authRequest("/auth/v1/signup", {
+    email,
+    password,
+    data: { therassistant_account_type: "ehr_practice" },
+  });
+  const accessToken = String(payload.access_token ?? "");
+  const refreshToken = String(payload.refresh_token ?? "");
+  if (!accessToken || !refreshToken) {
+    return { session: null, requiresEmailConfirmation: true };
+  }
+  const session = normalizeSession(payload);
+  validatedAccessToken = session.access_token;
+  persistSession(session);
+  return { session, requiresEmailConfirmation: false };
+}
+
 export async function requestPasswordRecovery(
   email: string,
   redirectTo?: string,

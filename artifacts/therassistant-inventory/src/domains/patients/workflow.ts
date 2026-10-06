@@ -6,6 +6,7 @@ export type DemographicsDraft = {
   lastName: string;
   preferredName?: string;
   dateOfBirth?: string;
+  sex?: string;
   email?: string;
   phone?: string;
   addressLine1?: string;
@@ -51,6 +52,8 @@ export function validateDemographics(input: DemographicsDraft): Row {
 
   const clientStatus = input.clientStatus || "active";
   const registrationStatus = input.registrationStatus || "in_progress";
+  const sex = input.sex?.trim().toUpperCase() || null;
+  if (sex && !["M", "F", "U"].includes(sex)) throw new Error("Invalid patient sex.");
   if (!CLIENT_STATUSES.has(clientStatus)) throw new Error("Invalid client status.");
   if (!REGISTRATION_STATUSES.has(registrationStatus)) throw new Error("Invalid registration status.");
 
@@ -60,6 +63,7 @@ export function validateDemographics(input: DemographicsDraft): Row {
     last_name: lastName,
     preferred_name: input.preferredName?.trim() || null,
     date_of_birth: input.dateOfBirth || null,
+    sex,
     email: input.email?.trim() || null,
     phone: normalizePhone(input.phone) || null,
     address_line1: input.addressLine1?.trim() || null,

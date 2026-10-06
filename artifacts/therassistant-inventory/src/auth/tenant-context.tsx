@@ -29,7 +29,10 @@ type TenantContextValue = {
   loading: boolean;
   error: string | null;
   needsOrganizationSetup: boolean;
-  bootstrapOrganization(name: string, type: OrganizationType): Promise<void>;
+  onboardingRequired: boolean;
+  onboardingStep: number | null;
+  bootstrapOrganization(name: string, type: OrganizationType): Promise<string>;
+  refreshTenant(): void;
 };
 
 const TenantContext = createContext<TenantContextValue | null>(null);
@@ -64,6 +67,8 @@ export function TenantProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [needsOrganizationSetup, setNeedsOrganizationSetup] = useState(false);
+  const [onboardingRequired, setOnboardingRequired] = useState(false);
+  const [onboardingStep, setOnboardingStep] = useState<number | null>(null);
   const [reloadVersion, setReloadVersion] = useState(0);
 
   useEffect(() => {
@@ -72,6 +77,8 @@ export function TenantProvider({ children }: { children: ReactNode }) {
     setTenant(null);
     setRoles([]);
     setNeedsOrganizationSetup(false);
+    setOnboardingRequired(false);
+    setOnboardingStep(null);
 
     if (!user) {
       setLoading(false);
@@ -99,13 +106,17 @@ export function TenantProvider({ children }: { children: ReactNode }) {
           return;
         }
 
-        const [tenantRows, roleRows] = await Promise.all([
+        const [tenantRows, roleRows, onboardingRows] = await Promise.all([
           selectRows<TenantRow>("tenants", { id: `eq.${tenantId}`, limit: "1" }),
           selectRows<{ role: string }>("tenant_user_roles", {
             user_id: `eq.${user.id}`,
             tenant_id: `eq.${tenantId}`,
             order: "created_at.asc",
           }),
+          selectRows<{ status: string; current_step: number }>("tenant_onboarding", {
+            tenant_id: `eq.${tenantId}`,
+            limit: "1",
+          }).catch(() => []),
         ]);
 
         const nextTenant = tenantRows[0];
@@ -113,6 +124,9 @@ export function TenantProvider({ children }: { children: ReactNode }) {
         if (!active) return;
         setTenant(nextTenant);
         setRoles(roleRows.map((row) => row.role));
+        const onboarding = onboardingRows[0];
+        setOnboardingRequired(Boolean(onboarding && onboarding.status !== "completed"));
+        setOnboardingStep(onboarding ? Number(onboarding.current_step || 1) : null);
         setActiveTenantId(nextTenant.id);
       } catch (err) {
         if (!active) return;
@@ -160,11 +174,20 @@ export function TenantProvider({ children }: { children: ReactNode }) {
         );
       }
 
+      const tenantId = String(await response.json());
+      if (!tenantId) throw new Error("Organization setup did not return an organization ID.");
+      setActiveTenantId(tenantId);
+      setTenant({ id: tenantId, name: organizationName, timezone: "America/Denver", status: "active" });
+      setRoles([type === "billing_company" ? "billing_company_admin" : "practice_admin"]);
       setNeedsOrganizationSetup(false);
-      setReloadVersion((version) => version + 1);
+      setOnboardingRequired(true);
+      setOnboardingStep(1);
+      return tenantId;
     },
     [user],
   );
+
+  const refreshTenant = useCallback(() => setReloadVersion((version) => version + 1), []);
 
   const value = useMemo<TenantContextValue>(
     () => ({
@@ -175,9 +198,12 @@ export function TenantProvider({ children }: { children: ReactNode }) {
       loading,
       error,
       needsOrganizationSetup,
+      onboardingRequired,
+      onboardingStep,
       bootstrapOrganization,
+      refreshTenant,
     }),
-    [tenant, roles, loading, error, needsOrganizationSetup, bootstrapOrganization],
+    [tenant, roles, loading, error, needsOrganizationSetup, onboardingRequired, onboardingStep, bootstrapOrganization, refreshTenant],
   );
 
   return <TenantContext.Provider value={value}>{children}</TenantContext.Provider>;
