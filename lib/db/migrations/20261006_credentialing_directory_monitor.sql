@@ -72,6 +72,64 @@ CREATE INDEX IF NOT EXISTS credentialing_directory_discrepancies_queue_idx
   ON public.credentialing_directory_discrepancies
   (tenant_id, status, last_detected_at DESC);
 
+-- Public is an exposed Supabase schema. Credentialing monitoring records must
+-- follow the same tenant isolation model as the existing provider tables.
+ALTER TABLE public.credentialing_directory_expectations ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.credentialing_directory_snapshots ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.credentialing_directory_discrepancies ENABLE ROW LEVEL SECURITY;
+
+REVOKE ALL ON public.credentialing_directory_expectations FROM anon;
+REVOKE ALL ON public.credentialing_directory_snapshots FROM anon;
+REVOKE ALL ON public.credentialing_directory_discrepancies FROM anon;
+
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.credentialing_directory_expectations TO authenticated;
+GRANT SELECT ON public.credentialing_directory_snapshots TO authenticated;
+GRANT SELECT, UPDATE ON public.credentialing_directory_discrepancies TO authenticated;
+
+DROP POLICY IF EXISTS credentialing_directory_expectations_tenant_select ON public.credentialing_directory_expectations;
+CREATE POLICY credentialing_directory_expectations_tenant_select
+  ON public.credentialing_directory_expectations
+  FOR SELECT TO authenticated
+  USING (private.has_tenant_read_access(tenant_id));
+
+DROP POLICY IF EXISTS credentialing_directory_expectations_tenant_insert ON public.credentialing_directory_expectations;
+CREATE POLICY credentialing_directory_expectations_tenant_insert
+  ON public.credentialing_directory_expectations
+  FOR INSERT TO authenticated
+  WITH CHECK (private.has_tenant_write_access(tenant_id));
+
+DROP POLICY IF EXISTS credentialing_directory_expectations_tenant_update ON public.credentialing_directory_expectations;
+CREATE POLICY credentialing_directory_expectations_tenant_update
+  ON public.credentialing_directory_expectations
+  FOR UPDATE TO authenticated
+  USING (private.has_tenant_write_access(tenant_id))
+  WITH CHECK (private.has_tenant_write_access(tenant_id));
+
+DROP POLICY IF EXISTS credentialing_directory_expectations_tenant_delete ON public.credentialing_directory_expectations;
+CREATE POLICY credentialing_directory_expectations_tenant_delete
+  ON public.credentialing_directory_expectations
+  FOR DELETE TO authenticated
+  USING (private.has_tenant_write_access(tenant_id));
+
+DROP POLICY IF EXISTS credentialing_directory_snapshots_tenant_select ON public.credentialing_directory_snapshots;
+CREATE POLICY credentialing_directory_snapshots_tenant_select
+  ON public.credentialing_directory_snapshots
+  FOR SELECT TO authenticated
+  USING (private.has_tenant_read_access(tenant_id));
+
+DROP POLICY IF EXISTS credentialing_directory_discrepancies_tenant_select ON public.credentialing_directory_discrepancies;
+CREATE POLICY credentialing_directory_discrepancies_tenant_select
+  ON public.credentialing_directory_discrepancies
+  FOR SELECT TO authenticated
+  USING (private.has_tenant_read_access(tenant_id));
+
+DROP POLICY IF EXISTS credentialing_directory_discrepancies_tenant_update ON public.credentialing_directory_discrepancies;
+CREATE POLICY credentialing_directory_discrepancies_tenant_update
+  ON public.credentialing_directory_discrepancies
+  FOR UPDATE TO authenticated
+  USING (private.has_tenant_write_access(tenant_id))
+  WITH CHECK (private.has_tenant_write_access(tenant_id));
+
 COMMENT ON TABLE public.credentialing_directory_expectations IS
   'Credentialing-only expected directory/network participation. Has no claim workflow authority.';
 COMMENT ON TABLE public.credentialing_directory_snapshots IS
