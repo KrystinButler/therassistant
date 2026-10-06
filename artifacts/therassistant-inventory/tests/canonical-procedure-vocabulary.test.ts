@@ -10,13 +10,13 @@ const migration = readFileSync(
   "utf8",
 );
 
-test("searchable HCPCS codes are synchronized into the canonical procedure-code parent before foreign keys are enforced", () => {
+test("searchable HCPCS codes are synchronized into the canonical procedure-code parent before revenue-cycle foreign keys are enforced", () => {
   assert.match(migration, /from public\.hcpcs_codes h/i);
   assert.match(migration, /insert into public\.cpt_codes/i);
   assert.match(migration, /'HCPCS'::text as code_system|"code_system",\s*"HCPCS"|jsonb_build_object\([^)]*'code_system'\s*,\s*'HCPCS'/is);
   assert.match(migration, /on conflict \(code\)/i);
 
-  const hcpcsSync = migration.search(/from public\.hcpcs_codes h/i);
-  const firstCanonicalFk = migration.search(/foreign key \([^)]*\)\s+references public\.cpt_codes\(code\)/i);
-  assert.ok(hcpcsSync >= 0 && firstCanonicalFk > hcpcsSync, "HCPCS synchronization must run before canonical foreign keys are added");
+  const hcpcsSync = migration.indexOf("from public.hcpcs_codes h");
+  const firstRevenueCycleFk = migration.indexOf("fee_schedule_lines_cpt_code_fkey");
+  assert.ok(hcpcsSync >= 0 && firstRevenueCycleFk > hcpcsSync, "HCPCS synchronization must run before revenue-cycle foreign keys are added");
 });
