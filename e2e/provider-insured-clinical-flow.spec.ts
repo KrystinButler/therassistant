@@ -42,6 +42,12 @@ test("provider completes the synthetic insured visit for billing", async ({ page
   const signButton = page.getByRole("button", { name: "Sign & Lock Note" });
   await expect(signButton).toBeEnabled({ timeout: 15_000 });
   await signButton.click();
+  // Report the application failure instead of hiding it behind a handoff timeout.
+  const signingError = page.locator(".thera-state.error").first();
+  await expect(signedHandoff.or(signingError)).toBeVisible({ timeout: 15_000 });
+  if (await signingError.isVisible()) {
+    throw new Error(`Clinical signing failed: ${await signingError.innerText()}`);
+  }
 
   // Assert the durable locked-note handoff rather than the removed toast text.
   await expect(signedHandoff).toBeVisible({ timeout: 15_000 });

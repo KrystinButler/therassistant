@@ -227,3 +227,14 @@ jobs:
 
       - name: Verify isolated database restore rehearsal
         run: bash scripts/verify-local-restore-drill.sh
+
+      - name: Preserve browser failure evidence
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: browser-failure-evidence
+          path: |
+            test-results/
+            playwright-report/
+          retention-days: 7
+          if-no-files-found: ignore
