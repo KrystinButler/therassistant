@@ -148,24 +148,29 @@ router.post("/payers/:payerId/fee-schedules/:scheduleId/lines", async (req, res,
       return res.status(400).json({ error: "Invalid payer or fee schedule id" });
     }
     if (!cptCode || !Number.isFinite(rate) || rate < 0) {
-      return res.status(400).json({ error: "CPT code and non-negative rate are required" });
+      return res.status(400).json({ error: "CPT/HCPCS code and non-negative rate are required" });
     }
+    const canonicalCode = cptCode.toUpperCase();
 
     const result = await db.execute(sql`
       INSERT INTO fee_schedule_lines (
         tenant_id, fee_schedule_id, cpt_code, modifier, rate_cents, unit_type
       )
       SELECT
-        fs.tenant_id, fs.id, ${cptCode}, ${modifier}, ${Math.round(rate)}, ${unitType}
+        fs.tenant_id, fs.id, ${canonicalCode}, ${modifier}, ${Math.round(rate)}, ${unitType}
       FROM fee_schedules fs
       JOIN payer_contracts pc ON pc.id = fs.payer_contract_id
       JOIN tenants t ON t.id = fs.tenant_id
+      JOIN cpt_codes cc ON cc.code = ${canonicalCode}
       WHERE fs.id = ${scheduleId}::uuid
         AND pc.payer_id = ${payerId}::uuid
+        AND cc.is_active = true
         AND COALESCE((t.settings ->> 'demo')::boolean, false) = true
       RETURNING *
     `);
-    if (!result.rows.length) return res.status(404).json({ error: "Demo fee schedule not found" });
+    if (!result.rows.length) {
+      return res.status(404).json({ error: "Demo fee schedule or active CPT/HCPCS code not found" });
+    }
     return res.status(201).json(result.rows[0]);
   } catch (error) {
     return next(error);
