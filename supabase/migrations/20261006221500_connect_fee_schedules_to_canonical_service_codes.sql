@@ -2,36 +2,53 @@
 -- This migration is intentionally additive/non-destructive: existing text code columns remain
 -- the API-compatible keys while foreign keys prevent future drift.
 
--- Backfill any CPT/HCPCS codes already represented in the reference fee-rate library.
-insert into public.cpt_codes (
-  code,
-  display_name,
-  is_active,
-  label_source,
-  metadata
-)
-select distinct
-  upper(trim(r.code)) as code,
-  upper(trim(r.code)) as display_name,
-  true as is_active,
-  'reference_fee_rate_backfill' as label_source,
-  jsonb_build_object(
-    'code_system', 'CPT_HCPCS',
-    'backfilled_from', 'reference_fee_rates'
-  ) as metadata
-from public.reference_fee_rates r
-where nullif(trim(r.code), '') is not null
-  and not exists (
-    select 1
-    from public.cpt_codes c
-    where c.code = upper(trim(r.code))
-  );
+-- reference_fee_rates exists in production but is optional in clean/replayed environments.
+-- Guard all work against that table so the migration can be applied from a fresh database.
+do $$
+begin
+  if to_regclass('public.reference_fee_rates') is not null then
+    insert into public.cpt_codes (
+      code,
+      display_name,
+      is_active,
+      label_source,
+      metadata
+    )
+    select distinct
+      upper(trim(r.code)) as code,
+      upper(trim(r.code)) as display_name,
+      true as is_active,
+      'reference_fee_rate_backfill' as label_source,
+      jsonb_build_object(
+        'code_system', 'CPT_HCPCS',
+        'backfilled_from', 'reference_fee_rates'
+      ) as metadata
+    from public.reference_fee_rates r
+    where nullif(trim(r.code), '') is not null
+      and not exists (
+        select 1
+        from public.cpt_codes c
+        where c.code = upper(trim(r.code))
+      );
+
+    update public.reference_fee_rates
+    set code = upper(trim(code))
+    where code is distinct from upper(trim(code));
+
+    if not exists (select 1 from pg_constraint where conname = 'reference_fee_rates_code_fkey') then
+      alter table public.reference_fee_rates
+        add constraint reference_fee_rates_code_fkey
+        foreign key (code) references public.cpt_codes(code)
+        on update cascade on delete restrict;
+    end if;
+
+    create index if not exists idx_reference_fee_rates_code
+      on public.reference_fee_rates(code);
+  end if;
+end
+$$;
 
 -- Normalize existing fee schedule code keys before enforcing relationships.
-update public.reference_fee_rates
-set code = upper(trim(code))
-where code is distinct from upper(trim(code));
-
 update public.fee_schedule_lines
 set cpt_code = upper(trim(cpt_code))
 where cpt_code is distinct from upper(trim(cpt_code));
@@ -75,13 +92,6 @@ where cpt_code is not null
 -- Enforce one canonical CPT/HCPCS vocabulary across fee schedules and the revenue cycle.
 do $$
 begin
-  if not exists (select 1 from pg_constraint where conname = 'reference_fee_rates_code_fkey') then
-    alter table public.reference_fee_rates
-      add constraint reference_fee_rates_code_fkey
-      foreign key (code) references public.cpt_codes(code)
-      on update cascade on delete restrict;
-  end if;
-
   if not exists (select 1 from pg_constraint where conname = 'fee_schedule_lines_cpt_code_fkey') then
     alter table public.fee_schedule_lines
       add constraint fee_schedule_lines_cpt_code_fkey
@@ -140,9 +150,6 @@ begin
 end
 $$;
 
--- Index the fee-rate lookup keys used by pricing and reimbursement comparison paths.
-create index if not exists idx_reference_fee_rates_code
-  on public.reference_fee_rates(code);
-
+-- Index the fee-rate lookup key used by pricing and reimbursement comparison paths.
 create index if not exists idx_fee_schedule_lines_cpt_code
   on public.fee_schedule_lines(cpt_code);
