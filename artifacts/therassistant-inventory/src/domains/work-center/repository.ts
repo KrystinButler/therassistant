@@ -107,7 +107,7 @@ export function workRouteForWorkItem(
   type: string,
   id: string,
   workqueueType: string,
-  related: { encounterId?: string; claimId?: string; clientId?: string } = {},
+  related: { encounterId?: string; claimId?: string; clientId?: string; workItemId?: string } = {},
 ) {
   const queue = workqueueType.trim().toLowerCase();
   const encounterId = type === "encounter" ? id : related.encounterId;
@@ -155,13 +155,13 @@ export function workRouteForWorkItem(
     return "/payments?tab=recovery";
   }
   if (["payment_exception", "unapplied_payment", "payment_posting_issue"].includes(queue)) {
-    if (type === "era" || (queue === "payment_posting_issue" && type !== "payment")) return "/payments?tab=era";
+    if (type === "era" || (queue === "payment_posting_issue" && type !== "payment")) return `/payments?tab=era${related.workItemId ? `&work=${queryId(related.workItemId)}` : ""}`;
     return type === "payment"
       ? `/payments?payment=${queryId(id)}`
       : "/payments?tab=unapplied";
   }
   if (["era_match_exception", "era_import", "unmatched_era"].includes(queue)) {
-    return "/payments?tab=era";
+    return `/payments?tab=era${related.workItemId ? `&work=${queryId(related.workItemId)}` : ""}`;
   }
   if (["documentation", "clinical_documentation", "unsigned_note"].includes(queue) && encounterId) {
     return `/encounters/${queryId(encounterId)}#encounter-progress-note-editor`;
@@ -326,6 +326,7 @@ export async function getWorkCenterData() {
       sourceRoute: sourceRouteForWorkItem(sourceType, sourceId),
       workRoute: workRouteForWorkItem(sourceType, sourceId, String(item.workqueue_type ?? ""), {
         clientId: context.clientId,
+        workItemId: item.id,
         encounterId: sourceType === "charge"
           ? String(chargesById.get(sourceId)?.encounter_id ?? "")
           : undefined,
