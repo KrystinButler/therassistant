@@ -25,7 +25,10 @@ async function postingFixtures(page: Page) {
   const taskLookups: string[] = [];
   const writes: string[] = [];
   page.on("request", (request) => {
-    if (new URL(request.url()).pathname.startsWith("/rest/v1/") && request.method() !== "GET") {
+    const pathname = new URL(request.url()).pathname;
+    // This stable authentication RPC is a read even though PostgREST uses POST.
+    const portalContextRead = request.method() === "POST" && pathname === "/rest/v1/rpc/get_my_client_portal_context";
+    if (pathname.startsWith("/rest/v1/") && request.method() !== "GET" && !portalContextRead) {
       writes.push(request.method() + " " + new URL(request.url()).pathname);
     }
   });
