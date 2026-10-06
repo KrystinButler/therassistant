@@ -6,7 +6,7 @@ import { createChargeFromEncounterWorkflow } from "../src/domains/billing/workfl
 // Substitute persistence and unrelated repository imports, while running the
 // actual diagnosis writer and billing readiness/capture workflows.
 const sources: Record<string, string> = {
-  "../../lib/tenant-data-client": "export const tenantSelect = (...args) => globalThis.diagnosisHandoff.select(...args); export const tenantInsert = (...args) => globalThis.diagnosisHandoff.insert(...args); export const tenantUpdate = () => {}; export const tenantDelete = () => {}; export const tenantRpc = () => {};",
+  "../../lib/tenant-data-client": "export const getCurrentTenantId = () => { throw new Error('Unexpected timezone lookup in diagnosis-only test'); }; export const referenceSelect = () => { throw new Error('Unexpected reference lookup in diagnosis-only test'); }; export const tenantSelect = (...args) => globalThis.diagnosisHandoff.select(...args); export const tenantInsert = (...args) => globalThis.diagnosisHandoff.insert(...args); export const tenantUpdate = () => {}; export const tenantDelete = () => {}; export const tenantRpc = () => {};",
   "../billing/repository": "export const createChargeFromEncounter = (...args) => globalThis.diagnosisHandoff.capture(...args);",
   "../encounters/service-line-validation": "export const matchingServiceLineExists = () => false; export const validateServiceLineValues = () => {};",
   "./fast-charting-repository": "export const saveStructuredClinicalData = () => {};",
