@@ -17,6 +17,6 @@ test("searchable HCPCS codes are synchronized into the canonical procedure-code 
   assert.match(migration, /on conflict \(code\)/i);
 
   const hcpcsSync = migration.search(/from public\.hcpcs_codes h/i);
-  const firstCanonicalFk = migration.search(/foreign key \([^)]*\) references public\.cpt_codes\(code\)/i);
+  const firstCanonicalFk = migration.search(/foreign key \([^)]*\)\s+references public\.cpt_codes\(code\)/i);
   assert.ok(hcpcsSync >= 0 && firstCanonicalFk > hcpcsSync, "HCPCS synchronization must run before canonical foreign keys are added");
 });
