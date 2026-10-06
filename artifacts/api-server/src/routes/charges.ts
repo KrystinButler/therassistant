@@ -237,21 +237,6 @@ router.post(
         );
       }
 
-      /*
-       * Preserve existing enrollment or authorization
-       * blocks until those workflows resolve them.
-       */
-      if (
-        charge.block_reason &&
-        /enrollment|credential|authorization/i.test(
-          charge.block_reason,
-        )
-      ) {
-        issues.push(
-          charge.block_reason,
-        );
-      }
-
       const uniqueIssues = [
         ...new Set(issues),
       ];
