@@ -106,7 +106,7 @@ export function evaluateBillingReadiness(input: BillingReadinessInput): BillingR
     } else {
       checks.push(result("eligibility_active", "Eligibility", "pass", false, "Coverage is active for the service date."));
     }
-  
+
     if (input.providerEnrollmentStatus === "needs_revalidation") {
       checks.push(result(
         "provider_revalidation_due",
@@ -117,7 +117,14 @@ export function evaluateBillingReadiness(input: BillingReadinessInput): BillingR
         "Complete payer revalidation before the due date.",
       ));
     } else if (input.providerEnrollmentStatus !== "approved") {
-      checks.push(result("provider_enrollment", "Provider Participation", "fail", true, `Provider enrollment is ${String(input.providerEnrollmentStatus ?? "not confirmed").replaceAll("_", " ")}.`, "Resolve provider-payer enrollment before claim creation."));
+      checks.push(result(
+        "provider_enrollment",
+        "Provider Participation",
+        "warn",
+        false,
+        `Provider enrollment is ${String(input.providerEnrollmentStatus ?? "not confirmed").replaceAll("_", " ")}. Billing may proceed; review payer participation and route any enrollment follow-up separately.`,
+        "Review provider-payer enrollment without holding claim creation.",
+      ));
     } else {
       checks.push(result("provider_enrollment_approved", "Provider Participation", "pass", false, "Provider enrollment is approved."));
     }
