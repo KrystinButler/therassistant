@@ -5,9 +5,13 @@ const fileOne = "20000000-0000-4000-8000-000000000001";
 const fileTwo = "20000000-0000-4000-8000-000000000002";
 const claimTaskId = "30000000-0000-4000-8000-000000000001";
 const fileTaskId = "30000000-0000-4000-8000-000000000002";
+const exactTaskId = "30000000-0000-4000-8000-000000000004";
+const exactEraClaimId = "40000000-0000-4000-8000-000000000002";
 const unrelatedTaskId = "30000000-0000-4000-8000-000000000003";
 
 const tasks = [
+  { id: exactTaskId, title: "Review exact remittance exception", description: "Review only this retained remittance.",
+    source_object_type: "era_claim", source_object_id: exactEraClaimId, workqueue_type: "payment_posting_issue" },
   { id: claimTaskId, title: "Review claim posting exception", description: "Review both remittances for the claim.",
     source_object_type: "claim", source_object_id: claimId, workqueue_type: "payment_posting_issue" },
   { id: fileTaskId, title: "Review specific ERA exception", description: "Review the second file only.",
@@ -54,6 +58,7 @@ async function postingFixtures(page: Page) {
 }
 
 for (const [id, title, files] of [
+  [exactTaskId, "Review exact remittance exception", ["second-remittance.835"]],
   [claimTaskId, "Review claim posting exception", ["first-remittance.835", "second-remittance.835"]],
   [fileTaskId, "Review specific ERA exception", ["second-remittance.835"]],
 ] as const) {

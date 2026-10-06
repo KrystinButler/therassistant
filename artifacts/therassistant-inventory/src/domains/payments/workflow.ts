@@ -276,7 +276,7 @@ export async function import835Workflow(
   async function routeEraIssue(
     title: string,
     description: string,
-    sourceObjectType: "era" | "claim",
+    sourceObjectType: "era" | "era_claim",
     sourceObjectId: string,
     workqueueType: "unmatched_era" | "payment_posting_issue" = "payment_posting_issue",
   ) {
@@ -292,15 +292,15 @@ export async function import835Workflow(
     });
   }
 
-  async function verifyEraPayerIdentity(claim: PaymentRow, controlNumber: string) {
+  async function verifyEraPayerIdentity(claim: PaymentRow, controlNumber: string, eraClaim: PaymentRow) {
     const payerId = String(claim.payer_id ?? "");
     if (!payerId) {
       payerIdentityBlocked = true;
       await routeEraIssue(
         "835 matched claim has no payer",
         `${controlNumber}: the matched internal claim has no payer, so the remittance source cannot be verified.`,
-        "claim",
-        claim.id,
+        "era_claim",
+        eraClaim.id,
       );
       return false;
     }
@@ -319,8 +319,8 @@ export async function import835Workflow(
       await routeEraIssue(
         "ERA payer identifier is not configured",
         `${controlNumber}: configure the inbound ERA payer ID for this payer before auto-posting remittances.`,
-        "claim",
-        claim.id,
+        "era_claim",
+        eraClaim.id,
       );
       return false;
     }
@@ -330,8 +330,8 @@ export async function import835Workflow(
       await routeEraIssue(
         "835 payer identifier is missing",
         `${controlNumber}: the 835 N1*PR segment does not contain N104, so THERASSISTANT cannot verify the remittance payer.`,
-        "claim",
-        claim.id,
+        "era_claim",
+        eraClaim.id,
       );
       return false;
     }
@@ -341,8 +341,8 @@ export async function import835Workflow(
       await routeEraIssue(
         "835 payer identifier does not match",
         `${controlNumber}: inbound ERA payer ID ${parsed.payerIdentifier} does not match the configured payer ID. Financial posting was blocked.`,
-        "claim",
-        claim.id,
+        "era_claim",
+        eraClaim.id,
       );
       return false;
     }
@@ -402,8 +402,8 @@ export async function import835Workflow(
         matches.length > 1
           ? `Multiple claims match patient control number ${parsedClaim.patientControlNumber}.`
           : `No internal claim matches patient control number ${parsedClaim.patientControlNumber}.`,
-        "era",
-        eraFile.id,
+        "era_claim",
+        eraClaim.id,
         "unmatched_era",
       );
       continue;
@@ -412,7 +412,7 @@ export async function import835Workflow(
     matchedCount += 1;
     if (claim.payer_id) matchedPayerIds.add(String(claim.payer_id));
 
-    if (!(await verifyEraPayerIdentity(claim, parsedClaim.patientControlNumber))) {
+    if (!(await verifyEraPayerIdentity(claim, parsedClaim.patientControlNumber, eraClaim))) {
       continue;
     }
 
@@ -441,8 +441,8 @@ export async function import835Workflow(
       await routeEraIssue(
         "835 claim charge does not match",
         `${parsedClaim.patientControlNumber}: ERA charge ${parsedClaim.totalChargeCents} cents does not match internal claim charge ${Number(claim.total_charge_cents ?? 0)} cents.`,
-        "claim",
-        claim.id,
+        "era_claim",
+        eraClaim.id,
       );
       continue;
     }
@@ -451,8 +451,8 @@ export async function import835Workflow(
       await routeEraIssue(
         "835 reversal/negative adjustment requires review",
         `${parsedClaim.patientControlNumber} contains a negative CAS adjustment. Do not auto-post until the reversal or recoupment is reviewed.`,
-        "claim",
-        claim.id,
+        "era_claim",
+        eraClaim.id,
       );
       continue;
     }
@@ -462,8 +462,8 @@ export async function import835Workflow(
       await routeEraIssue(
         "835 claim does not reconcile",
         `${parsedClaim.patientControlNumber}: paid plus CAS adjustments does not equal the ERA claim charge.`,
-        "claim",
-        claim.id,
+        "era_claim",
+        eraClaim.id,
       );
       continue;
     }
@@ -473,8 +473,8 @@ export async function import835Workflow(
       await routeEraIssue(
         "835 adjustment group requires review",
         `${parsedClaim.patientControlNumber} contains unsupported CAS group(s): ${unsupported.join(", ")}. THERASSISTANT will not auto-write off these adjustments.`,
-        "claim",
-        claim.id,
+        "era_claim",
+        eraClaim.id,
       );
       continue;
     }
@@ -484,8 +484,8 @@ export async function import835Workflow(
         await routeEraIssue(
           "Denied 835 claim includes payment",
           `${parsedClaim.patientControlNumber} has CLP status 4 but also includes a payment. Review before posting.`,
-          "claim",
-          claim.id,
+          "era_claim",
+          eraClaim.id,
         );
         continue;
       }
@@ -508,8 +508,8 @@ export async function import835Workflow(
       await routeEraIssue(
         "835 claim status requires review",
         `${parsedClaim.patientControlNumber} has CLP status ${parsedClaim.claimStatusCode}, which is not auto-posted.`,
-        "claim",
-        claim.id,
+        "era_claim",
+        eraClaim.id,
       );
       continue;
     }
@@ -677,8 +677,8 @@ export async function import835Workflow(
       await routeEraIssue(
         "Unable to post 835 denial",
         denial.message,
-        "claim",
-        item.claim.id,
+        "era_claim",
+        item.eraClaim.id,
       );
       continue;
     }

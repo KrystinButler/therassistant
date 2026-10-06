@@ -79,7 +79,8 @@ export function sourceRouteForWorkItem(type: string, id: string) {
     case "denial": return `/denials?denial=${safeId}`;
     case "appeal": return `/denials?tab=appeals&appeal=${safeId}`;
     case "adjustment": return "/payments?tab=recovery";
-    case "era": return "/payments?tab=era";
+    case "era":
+    case "era_claim": return "/payments?tab=era";
     case "claim_batch": return "/billing/charges?tab=batches";
     case "payer_contract": return "/payers-contracts";
     case "credentialing_application":
@@ -155,7 +156,7 @@ export function workRouteForWorkItem(
     return "/payments?tab=recovery";
   }
   if (["payment_exception", "unapplied_payment", "payment_posting_issue"].includes(queue)) {
-    if (type === "era" || (queue === "payment_posting_issue" && type !== "payment")) return `/payments?tab=era${related.workItemId ? `&work=${queryId(related.workItemId)}` : ""}`;
+    if (["era", "era_claim"].includes(type) || (queue === "payment_posting_issue" && type !== "payment")) return `/payments?tab=era${related.workItemId ? `&work=${queryId(related.workItemId)}` : ""}`;
     return type === "payment"
       ? `/payments?payment=${queryId(id)}`
       : "/payments?tab=unapplied";
@@ -189,6 +190,7 @@ export async function getWorkCenterData() {
     adjustments,
     batches,
     eraFiles,
+    eraClaims,
     payerContracts,
   ] = await Promise.all([
     tenantSelect<DataRow>("workqueue_items", { order: "created_at.desc" }),
@@ -206,6 +208,7 @@ export async function getWorkCenterData() {
     tenantSelect<DataRow>("adjustments"),
     tenantSelect<DataRow>("claim_batches"),
     tenantSelect<DataRow>("era_files"),
+    tenantSelect<DataRow>("era_claims"),
     tenantSelect<DataRow>("payer_contracts"),
   ]);
 
@@ -221,6 +224,7 @@ export async function getWorkCenterData() {
   const denialsById = new Map(denials.map((row) => [row.id, row]));
   const adjustmentsById = new Map(adjustments.map((row) => [row.id, row]));
   const batchesById = new Map(batches.map((row) => [row.id, row]));
+  const eraClaimsById = new Map(eraClaims.map((row) => [row.id, row]));
   const eraById = new Map(eraFiles.map((row) => [row.id, row]));
   const contractsById = new Map(payerContracts.map((row) => [row.id, row]));
 
@@ -292,6 +296,14 @@ export async function getWorkCenterData() {
       relatedName = personName(providersById.get(id));
     } else if (type === "claim_batch") {
       relatedName = String(batchesById.get(id)?.batch_name || "Claim Batch");
+    } else if (type === "era_claim") {
+      const row = eraClaimsById.get(id);
+      const claim = claimsById.get(String(row?.claim_id ?? ""));
+      const file = eraById.get(String(row?.era_file_id ?? ""));
+      clientId = String(row?.client_id ?? claim?.client_id ?? "");
+      providerId = String(claim?.rendering_provider_id ?? "");
+      payerId = String(file?.payer_id ?? claim?.payer_id ?? "");
+      relatedName = `${String(row?.patient_control_number || "ERA claim")} · ${String(file?.file_name || "ERA / 835")}`;
     } else if (type === "era") {
       const row = eraById.get(id);
       payerId = String(row?.payer_id ?? "");
