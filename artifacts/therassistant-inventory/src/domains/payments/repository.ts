@@ -255,8 +255,8 @@ function personName(row?: Row) {
   return [row.first_name, row.last_name].filter(Boolean).join(" ") || "—";
 }
 
-export async function getPaymentsWorkspaceData() {
-  const [claims, clients, payers, payments, allocations, reversals, adjustments, eraFiles, eraClaims, denials] = await Promise.all([
+export async function getPaymentsWorkspaceData(workItemId?: string | null) {
+  const [claims, clients, payers, payments, allocations, reversals, adjustments, eraFiles, eraClaims, denials, postingWorkItems] = await Promise.all([
     tenantSelect<DataRow>("professional_claims", { order: "created_at.desc" }),
     tenantSelect<DataRow>("clients"),
     referenceSelect<DataRow>("payers", { order: "name.asc" }),
@@ -267,6 +267,7 @@ export async function getPaymentsWorkspaceData() {
     tenantSelect<DataRow>("era_files", { order: "created_at.desc" }),
     tenantSelect<DataRow>("era_claims", { order: "created_at.desc" }),
     tenantSelect<DataRow>("denials", { order: "created_at.desc" }),
+    workItemId ? tenantSelect<DataRow>("workqueue_items", { id: `eq.${workItemId}`, limit: "1" }) : Promise.resolve([]),
   ]);
 
   const clientsById = new Map(clients.map((row) => [row.id, row]));
@@ -340,6 +341,7 @@ export async function getPaymentsWorkspaceData() {
     reversals: reversalRows,
     adjustments: adjustmentRows,
     eraFiles,
+    postingWorkItem: postingWorkItems[0] ?? null,
     eraClaims: eraClaimRows,
     denials: denialRows,
   };

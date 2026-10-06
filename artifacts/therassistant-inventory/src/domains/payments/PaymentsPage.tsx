@@ -13,6 +13,7 @@ import {
   type RecoveryWorkspaceRow,
   type VarianceWorkspaceRow,
 } from "../ar/repository";
+import { resolvePostingWorkContext } from "./posting-work-context";
 import { allocateExistingPayment } from "./payment-allocation";
 import {
   AllocatePaymentDrawer,
@@ -63,7 +64,7 @@ export function PaymentsPage() {
     setError(null);
     try {
       const [payments, exceptions] = await Promise.all([
-        getPaymentsWorkspaceData(),
+        getPaymentsWorkspaceData(new URLSearchParams(window.location.search).get("work")),
         getArWorkspaceData(),
       ]);
       setData(payments);
@@ -91,6 +92,13 @@ export function PaymentsPage() {
       : target.payment_source === "patient" ? "patient" : "insurance");
     setPaymentDetail(target);
   }, [data]);
+
+  useEffect(() => {
+    if (loading || tab !== "era" || !data?.postingWorkItem) return;
+    const row = document.getElementById(`posting-work-${data.postingWorkItem.id}`);
+    row?.scrollIntoView({ block: "center" });
+    row?.focus({ preventScroll: true });
+  }, [loading, tab, data]);
 
   const acceptedClaims = useMemo(
     () => (data?.claims ?? []).filter((claim) => claim.claim_status === "accepted"),
@@ -398,7 +406,18 @@ function EraTab({
   onFileChange: (file: File | null) => void;
   onImport: () => void;
 }) {
+  const context = resolvePostingWorkContext(data.postingWorkItem, data.eraClaims);
+  const requestedWork = new URLSearchParams(window.location.search).get("work");
   return <div className="thera-stack">
+    {requestedWork && !context && <div className="thera-state error">The requested posting task is unavailable in this organization or is not an ERA posting issue.</div>}
+    {context && <section className="thera-card" id={`posting-work-${context.workItem.id}`} tabIndex={-1} style={{ border: "2px solid var(--thera-sage-dark)" }}>
+      <div className="thera-card-header split"><h2>{String(context.workItem.title || "Payment posting issue")}</h2><StatusBadge value={String(context.workItem.workqueue_status || "open")} /></div>
+      <p>{String(context.workItem.description || "")}</p>
+      <Link className="thera-table-link" href="/work-center">Return to Work Center</Link>
+      <h3 style={{ marginTop: 12 }}>Associated ERA records</h3>
+      {context.eraClaims.length ? <div className="thera-table-wrap"><table className="thera-table"><thead><tr><th>Claim</th><th>ERA file</th><th>Charge</th><th>Paid</th><th>Status</th></tr></thead><tbody>{context.eraClaims.map((row) => <tr key={row.id}><td>{String(row.patient_control_number || row.payer_claim_number || "—")}</td><td>{String(data.eraFiles.find((file) => file.id === row.era_file_id)?.file_name || "—")}</td><td>{money(Number(row.charge_amount_cents ?? 0))}</td><td>{money(Number(row.paid_amount_cents ?? 0))}</td><td><StatusBadge value={String(row.status || "—")} /></td></tr>)}</tbody></table></div> : <p>No associated ERA claim records are available.</p>}
+      {context.eraClaims.length > 1 && <p>Multiple remittances are associated with this task. Review the issue details and trace before posting.</p>}
+    </section>}
     <section className="thera-card">
       <div className="thera-card-header split">
         <div>
