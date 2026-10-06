@@ -1,6 +1,10 @@
 import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
 import { sql } from "drizzle-orm";
+import {
+  discrepancyForExpectation,
+  lookupNppesProvider,
+} from "../lib/credentialing-directory.js";
 
 const router: IRouter = Router();
 const UUID_PATTERN =
@@ -21,6 +25,261 @@ const ENROLLMENT_STATUSES = new Set([
 function optionalText(value: unknown) {
   return typeof value === "string" && value.trim() ? value.trim() : null;
 }
+
+router.get("/credentialing/directory-monitor", async (_req, res, next) => {
+  try {
+    const result = await db.execute(sql`
+      SELECT
+        e.id AS "expectationId",
+        e.tenant_id AS "tenantId",
+        e.provider_id AS "providerId",
+        e.payer_id AS "payerId",
+        e.source_key AS "sourceKey",
+        e.expected_participation AS "expectedParticipation",
+        e.expected_location_text AS "expectedLocationText",
+        e.active,
+        CONCAT(pr.first_name, ' ', pr.last_name) AS "providerName",
+        pr.npi AS "providerNpi",
+        p.name AS "payerName",
+        s.id AS "latestSnapshotId",
+        s.directory_status AS "directoryStatus",
+        s.provider_name AS "directoryProviderName",
+        s.specialty_text AS "directorySpecialty",
+        s.location_text AS "directoryLocation",
+        s.network_text AS "directoryNetwork",
+        s.checked_at AS "lastCheckedAt",
+        d.id AS "openDiscrepancyId",
+        d.discrepancy_type AS "discrepancyType",
+        d.summary AS "discrepancySummary"
+      FROM credentialing_directory_expectations e
+      JOIN providers pr ON pr.id = e.provider_id
+      LEFT JOIN payers p ON p.id = e.payer_id
+      LEFT JOIN LATERAL (
+        SELECT s2.*
+        FROM credentialing_directory_snapshots s2
+        WHERE s2.tenant_id = e.tenant_id
+          AND s2.provider_id = e.provider_id
+          AND s2.source_key = e.source_key
+          AND s2.payer_id IS NOT DISTINCT FROM e.payer_id
+        ORDER BY s2.checked_at DESC
+        LIMIT 1
+      ) s ON true
+      LEFT JOIN LATERAL (
+        SELECT d2.*
+        FROM credentialing_directory_discrepancies d2
+        WHERE d2.tenant_id = e.tenant_id
+          AND d2.provider_id = e.provider_id
+          AND d2.expectation_id = e.id
+          AND d2.status = 'open'
+        ORDER BY d2.last_detected_at DESC
+        LIMIT 1
+      ) d ON true
+      WHERE e.active = true
+      ORDER BY pr.last_name, pr.first_name, p.name NULLS FIRST, e.source_key
+    `);
+
+    return res.json(result.rows);
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.post("/credentialing/directory-expectations", async (req, res, next) => {
+  try {
+    const providerId = optionalText(req.body?.provider_id);
+    const payerId = optionalText(req.body?.payer_id);
+    const sourceKey = optionalText(req.body?.source_key);
+    const expectedParticipation =
+      typeof req.body?.expected_participation === "boolean"
+        ? req.body.expected_participation
+        : null;
+    const expectedLocationText = optionalText(req.body?.expected_location_text);
+    const notes = optionalText(req.body?.notes);
+
+    if (!providerId || !UUID_PATTERN.test(providerId)) {
+      return res.status(400).json({ error: "Valid provider_id is required" });
+    }
+    if (payerId && !UUID_PATTERN.test(payerId)) {
+      return res.status(400).json({ error: "Invalid payer_id" });
+    }
+    if (!sourceKey) {
+      return res.status(400).json({ error: "source_key is required" });
+    }
+
+    const provider = await db.execute(sql`
+      SELECT id, tenant_id
+      FROM providers
+      WHERE id = ${providerId}::uuid
+      LIMIT 1
+    `);
+
+    if (!provider.rows.length) {
+      return res.status(404).json({ error: "Provider not found" });
+    }
+
+    const tenantId = String((provider.rows[0] as Record<string, unknown>).tenant_id);
+
+    const result = await db.execute(sql`
+      INSERT INTO credentialing_directory_expectations (
+        tenant_id,
+        provider_id,
+        payer_id,
+        source_key,
+        expected_participation,
+        expected_location_text,
+        notes,
+        active
+      )
+      VALUES (
+        ${tenantId}::uuid,
+        ${providerId}::uuid,
+        ${payerId}::uuid,
+        ${sourceKey},
+        ${expectedParticipation},
+        ${expectedLocationText},
+        ${notes},
+        true
+      )
+      ON CONFLICT (tenant_id, provider_id, payer_id, source_key)
+      DO UPDATE SET
+        expected_participation = EXCLUDED.expected_participation,
+        expected_location_text = EXCLUDED.expected_location_text,
+        notes = EXCLUDED.notes,
+        active = true,
+        updated_at = now()
+      RETURNING *
+    `);
+
+    return res.status(201).json(result.rows[0]);
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.post("/credentialing/providers/:id/nppes-check", async (req, res, next) => {
+  try {
+    const providerId = req.params.id;
+    if (!UUID_PATTERN.test(providerId)) {
+      return res.status(400).json({ error: "Invalid provider id" });
+    }
+
+    const providerResult = await db.execute(sql`
+      SELECT
+        id,
+        tenant_id,
+        npi,
+        first_name,
+        last_name
+      FROM providers
+      WHERE id = ${providerId}::uuid
+      LIMIT 1
+    `);
+
+    if (!providerResult.rows.length) {
+      return res.status(404).json({ error: "Provider not found" });
+    }
+
+    const provider = providerResult.rows[0] as Record<string, unknown>;
+    const npi = typeof provider.npi === "string" ? provider.npi : "";
+    const tenantId = String(provider.tenant_id);
+
+    const observation = await lookupNppesProvider(npi);
+
+    const snapshot = await db.execute(sql`
+      INSERT INTO credentialing_directory_snapshots (
+        tenant_id,
+        provider_id,
+        payer_id,
+        expectation_id,
+        source_key,
+        source_record_id,
+        directory_status,
+        provider_npi,
+        provider_name,
+        specialty_text,
+        location_text,
+        network_text,
+        source_updated_at,
+        checked_at,
+        raw_result
+      )
+      VALUES (
+        ${tenantId}::uuid,
+        ${providerId}::uuid,
+        NULL,
+        NULL,
+        ${observation.sourceKey},
+        ${observation.sourceRecordId},
+        ${observation.directoryStatus},
+        ${observation.providerNpi},
+        ${observation.providerName},
+        ${observation.specialtyText},
+        ${observation.locationText},
+        ${observation.networkText},
+        ${observation.sourceUpdatedAt}::timestamptz,
+        ${observation.checkedAt}::timestamptz,
+        ${JSON.stringify(observation.rawResult)}::jsonb
+      )
+      RETURNING id
+    `);
+
+    const snapshotId = String((snapshot.rows[0] as Record<string, unknown>).id);
+    const discrepancy = discrepancyForExpectation({
+      expectedParticipation: true,
+      observation,
+    });
+
+    let discrepancyId: string | null = null;
+
+    if (discrepancy) {
+      const discrepancyResult = await db.execute(sql`
+        INSERT INTO credentialing_directory_discrepancies (
+          tenant_id,
+          provider_id,
+          payer_id,
+          expectation_id,
+          snapshot_id,
+          source_key,
+          discrepancy_type,
+          status,
+          summary,
+          details,
+          first_detected_at,
+          last_detected_at
+        )
+        VALUES (
+          ${tenantId}::uuid,
+          ${providerId}::uuid,
+          NULL,
+          NULL,
+          ${snapshotId}::uuid,
+          'nppes',
+          ${discrepancy.type},
+          'open',
+          ${discrepancy.summary},
+          ${JSON.stringify({ npi, observation })}::jsonb,
+          now(),
+          now()
+        )
+        RETURNING id
+      `);
+
+      discrepancyId = String(
+        (discrepancyResult.rows[0] as Record<string, unknown>).id,
+      );
+    }
+
+    return res.json({
+      providerId,
+      snapshotId,
+      discrepancyId,
+      observation,
+      claimImpact: "none",
+    });
+  } catch (error) {
+    return next(error);
+  }
+});
 
 router.patch("/credentialing/enrollments/:id", async (req, res, next) => {
   try {
