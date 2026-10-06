@@ -157,8 +157,8 @@ function claimValidationIssues(
   claim: ClaimRow,
   lines: ClaimRow[],
   diagnoses: ClaimRow[],
-  enrollmentStatus: string | null,
-  encounterBillingStatus: string | null,
+  _enrollmentStatus: string | null,
+  _encounterBillingStatus: string | null,
 ) {
   const issues: string[] = [];
 
@@ -179,13 +179,8 @@ function claimValidationIssues(
     if (!/^\d{2}$/.test(String(line.place_of_service ?? ""))) issues.push("Claim line place of service must be a two-digit code.");
   }
 
-  if (enrollmentStatus !== "approved") {
-    issues.push("Rendering provider is not approved with the payer.");
-  }
-  if (encounterBillingStatus && !["charged", "claimed"].includes(encounterBillingStatus)) {
-    issues.push("Source encounter has not completed billing readiness and charge creation.");
-  }
-
+  // Provider-payer participation and source encounter readiness are operational
+  // context only. They remain available to callers but never fail Claim Scrub.
   return [...new Set(issues)];
 }
 
