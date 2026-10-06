@@ -4,7 +4,7 @@ import { sql } from "drizzle-orm";
 import {
   discrepancyForExpectation,
   lookupNppesProvider,
-} from "../lib/credentialing-directory.js";
+} from "../lib/credentialing-directory";
 
 const router: IRouter = Router();
 const UUID_PATTERN =
