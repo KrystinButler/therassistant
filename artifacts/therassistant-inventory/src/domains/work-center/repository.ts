@@ -184,14 +184,14 @@ export function workRouteForWorkItem(
       ? `/denials?tab=appeals&appeal=${queryId(id)}`
       : "/denials?tab=appeals";
   }
-  if (["underpayment", "payment_variance"].includes(queue)) {
+  if (["underpayment", "payment_variance", "contract_variance"].includes(queue)) {
     return "/payments?tab=underpayments";
   }
   if (["recoupment", "refund", "recovery"].includes(queue)) {
     return "/payments?tab=recovery";
   }
   if (["payment_exception", "unapplied_payment", "payment_posting_issue"].includes(queue)) {
-    if (type === "era") return "/payments?tab=era";
+    if (type === "era" || (queue === "payment_posting_issue" && type !== "payment")) return "/payments?tab=era";
     return type === "payment"
       ? `/payments?payment=${queryId(id)}`
       : "/payments?tab=unapplied";

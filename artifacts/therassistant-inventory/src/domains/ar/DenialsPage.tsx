@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { resolveAppealDeepLink } from "./appeal-deep-link";
 import { StatusBadge } from "../../components/status-badge";
 import { money, shortDate } from "../../lib/format";
 import { getDenialTab } from "../rcm/queue-routing";
@@ -59,6 +60,7 @@ export function DenialsPage() {
   const [message, setMessage] = useState<string | null>(null);
   const [denialWork, setDenialWork] = useState<DenialQueueRow | null>(null);
   const [appealDenial, setAppealDenial] = useState<DenialQueueRow | null>(null);
+  const [selectedAppealId, setSelectedAppealId] = useState<string | null>(null);
   const [appealOutcome, setAppealOutcome] = useState<DenialAppealRow | null>(null);
 
   async function load() {
@@ -87,7 +89,9 @@ export function DenialsPage() {
     const denialId = params.get("denial");
     const claimId = params.get("claim");
     const appealId = params.get("appeal");
-    const appeal = appealId ? data.appeals.find((row) => row.id === appealId) : undefined;
+    const selected = resolveAppealDeepLink(appealId, data.appeals, data.denials);
+    const appeal = selected?.appeal;
+    setSelectedAppealId(appeal?.id ?? null);
     const target = data.denials.find((row) =>
       isActive(row) && (denialId
         ? row.id === denialId
@@ -139,6 +143,13 @@ export function DenialsPage() {
     }),
     [data, payerRows],
   );
+  useEffect(() => {
+    if (loading || tab !== "appeals" || !selectedAppealId) return;
+    const row = document.getElementById(`appeal-${selectedAppealId}`);
+    row?.scrollIntoView({ block: "center" });
+    row?.focus({ preventScroll: true });
+  }, [loading, tab, selectedAppealId, appealRows]);
+
   const denialWorkIndex = denialWork ? tabRows.findIndex((row) => row.id === denialWork.id) : -1;
 
   useEffect(() => {
@@ -207,7 +218,7 @@ export function DenialsPage() {
           </div>
 
           {tab === "appeals"
-            ? <AppealsTable rows={appealRows} saving={saving} onSubmit={(row) => void act("Appeal submitted.", () => submitAppeal(row.id))} onOutcome={setAppealOutcome} />
+            ? <AppealsTable selectedAppealId={selectedAppealId} rows={appealRows} saving={saving} onSubmit={(row) => void act("Appeal submitted.", () => submitAppeal(row.id))} onOutcome={setAppealOutcome} />
             : <DenialsTable rows={tabRows} saving={saving} onOpen={setDenialWork} onDefer={(row) => void act("Denial deferred.", () => deferDenial(row.id))} onResume={(row) => void act("Denial returned to active follow-up.", () => resumeDenial(row.id))} />}
         </div>
       )}
@@ -266,7 +277,7 @@ function DenialsTable({
   })}</tbody></table></div></section>;
 }
 
-function AppealsTable({ rows, saving, onSubmit, onOutcome }: { rows: DenialAppealRow[]; saving: boolean; onSubmit: (row: DenialAppealRow) => void; onOutcome: (row: DenialAppealRow) => void }) {
+function AppealsTable({ rows, saving, onSubmit, onOutcome, selectedAppealId }: { selectedAppealId: string | null; rows: DenialAppealRow[]; saving: boolean; onSubmit: (row: DenialAppealRow) => void; onOutcome: (row: DenialAppealRow) => void }) {
   if (!rows.length) return <section className="thera-card"><div className="thera-empty">No active appeals for this payer.</div></section>;
-  return <section className="thera-card"><div className="thera-table-wrap"><table className="thera-table"><thead><tr><th>Claim / Patient</th><th>Denial</th><th>Level</th><th>Status</th><th>Due</th><th>Submitted</th><th>Action</th></tr></thead><tbody>{rows.map((row) => <tr key={row.id}><td>{row.claimNumber}<div className="thera-table-subtext">{row.clientName}</div></td><td>{row.denialCategory.replaceAll("_", " ")}</td><td>{String(row.appeal_level ?? "—")}</td><td><StatusBadge value={String(row.appeal_status ?? "not_started")} /></td><td>{row.deadline_date ? shortDate(String(row.deadline_date)) : "—"}</td><td>{row.submitted_at ? shortDate(String(row.submitted_at)) : "—"}</td><td>{["not_started", "drafting"].includes(String(row.appeal_status)) ? <button type="button" className="thera-action" disabled={saving} onClick={() => onSubmit(row)}>Submit</button> : <button type="button" className="thera-action secondary" disabled={saving} onClick={() => onOutcome(row)}>Record Outcome</button>}</td></tr>)}</tbody></table></div></section>;
+  return <section className="thera-card"><div className="thera-table-wrap"><table className="thera-table"><thead><tr><th>Claim / Patient</th><th>Denial</th><th>Level</th><th>Status</th><th>Due</th><th>Submitted</th><th>Action</th></tr></thead><tbody>{rows.map((row) => <tr key={row.id} id={`appeal-${row.id}`} tabIndex={row.id === selectedAppealId ? -1 : undefined} aria-selected={row.id === selectedAppealId} style={{ backgroundColor: row.id === selectedAppealId ? "rgba(79, 126, 93, 0.12)" : undefined }}><td>{row.claimNumber}<div className="thera-table-subtext">{row.clientName}</div></td><td>{row.denialCategory.replaceAll("_", " ")}</td><td>{String(row.appeal_level ?? "—")}</td><td><StatusBadge value={String(row.appeal_status ?? "not_started")} /></td><td>{row.deadline_date ? shortDate(String(row.deadline_date)) : "—"}</td><td>{row.submitted_at ? shortDate(String(row.submitted_at)) : "—"}</td><td>{["not_started", "drafting"].includes(String(row.appeal_status)) ? <button type="button" className="thera-action" disabled={saving} onClick={() => onSubmit(row)}>Submit</button> : <button type="button" className="thera-action secondary" disabled={saving} onClick={() => onOutcome(row)}>Record Outcome</button>}</td></tr>)}</tbody></table></div></section>;
 }

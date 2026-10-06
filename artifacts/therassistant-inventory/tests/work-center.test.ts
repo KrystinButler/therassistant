@@ -184,7 +184,7 @@ test("actual billing and ERA queue types open the field needing attention", () =
   );
   assert.equal(
     workRouteForWorkItem("claim", "claim-1", "payment_posting_issue"),
-    "/payments?tab=unapplied",
+    "/payments?tab=era",
   );
 });
 
@@ -197,4 +197,13 @@ test("source records remain reachable separately from exception destinations", (
     workRouteForWorkItem("mailroom_item", "mail-1", "correspondence_followup"),
     "/mailroom/mail-1",
   );
+});
+
+test("canonical contract variance and posting issues preserve operational ownership", () => {
+  assert.equal(workRouteForWorkItem("claim", "claim-1", "contract_variance"), "/payments?tab=underpayments");
+  assert.equal(workRouteForWorkItem("claim", "claim-1", " PAYMENT_POSTING_ISSUE "), "/payments?tab=era");
+  assert.equal(workRouteForWorkItem("era", "era-1", "payment_posting_issue"), "/payments?tab=era");
+  assert.equal(workRouteForWorkItem("payment", "pay &1", "payment_posting_issue"), "/payments?payment=pay%20%261");
+  assert.equal(workRouteForWorkItem("claim", "claim-1", "unapplied_payment"), "/payments?tab=unapplied");
+  assert.equal(sourceRouteForWorkItem("claim", "claim-1"), "/claims/claim-1");
 });
