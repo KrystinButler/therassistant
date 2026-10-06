@@ -37,10 +37,12 @@ test("unsigned note blocks billing readiness", () => {
   assert.ok(result.checks.some((check) => check.code === "note_unsigned" && check.blocking));
 });
 
-test("credentialing failure blocks billing readiness", () => {
+test("credentialing status is advisory and does not block billing readiness", () => {
   const result = evaluateBillingReadiness({ ...cleanContext, providerEnrollmentStatus: "submitted" });
-  assert.equal(result.ready, false);
-  assert.ok(result.checks.some((check) => check.code === "provider_enrollment" && check.blocking));
+  assert.equal(result.ready, true);
+  assert.ok(result.checks.some(
+    (check) => check.code === "provider_enrollment" && check.status === "warn" && !check.blocking,
+  ));
 });
 
 test("needs revalidation remains billing ready but surfaces a participation warning", () => {
@@ -117,7 +119,7 @@ function fakeRepo(context: any = cleanContext, initialCharges: Array<Record<stri
   };
 }
 
-test("blocked encounter keeps clinical status separate and creates work for every billing queue", async () => {
+test("blocked encounter keeps clinical status separate and creates work only for blocking billing queues", async () => {
   const repo = fakeRepo({
     ...cleanContext,
     eligibilityStatus: "inactive",
@@ -130,12 +132,15 @@ test("blocked encounter keeps clinical status separate and creates work for ever
   assert.equal(repo.encounterUpdate.encounter_status, undefined);
   assert.deepEqual(
     repo.work.map((item) => item.workqueue_type).sort(),
-    ["charge_validation", "credentialing_issue", "eligibility_issue"],
+    ["charge_validation", "eligibility_issue"],
   );
   assert.deepEqual(
     [...repo.resolvedWorkTypes[0]].sort(),
-    ["charge_validation", "credentialing_issue", "eligibility_issue"],
+    ["charge_validation", "eligibility_issue"],
   );
+  assert.ok(repo.readinessChecks.some(
+    (check) => check.check_code === "provider_enrollment" && check.check_status === "warn" && check.blocking === false,
+  ));
 });
 
 test("ready encounter routes to billing and resolves stale billing work", async () => {

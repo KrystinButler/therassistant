@@ -28,7 +28,7 @@ async function answerDialogs(
   }
 }
 
-test("staff creates, archives, records and accepts the synthetic insured claim", async ({ page }) => {
+test("staff creates, scrubs, archives, records and accepts the synthetic insured claim", async ({ page }) => {
   const validationResponses: string[] = [];
   const archiveResponses: string[] = [];
   page.on("response", async (response) => {
@@ -51,21 +51,25 @@ test("staff creates, archives, records and accepts the synthetic insured claim",
 
   await page.getByRole("button", { name: /^Insurance Claims \(/ }).click();
   const chargeCard = page.locator("section.thera-card").filter({ hasText: "Taylor Morgan" }).first();
-  const createButton = chargeCard.getByRole("button", { name: "Create & Scrub Claim" });
+  const createButton = chargeCard.getByRole("button", { name: "Create Claim" });
   if (await createButton.isVisible().catch(() => false)) {
     await expect(chargeCard).toContainText("Synthetic Commercial Payer");
     await createButton.click();
+    await expect(page.getByText(/created and is ready for Claim Scrub/)).toBeVisible({ timeout: 15_000 });
+  }
 
-    const successMessage = page.getByText(/passed scrub and is ready to batch/);
-    const rejectionMessage = page.getByText(/created and moved to Rejections for correction/);
+  const payerCard = page.locator("section.thera-card").filter({ hasText: "Synthetic Commercial Payer" }).last();
+  const scrubButton = payerCard.getByRole("button", { name: "Claim Scrub" });
+  if (await scrubButton.isVisible().catch(() => false)) {
+    await expect(scrubButton).toBeEnabled({ timeout: 15_000 });
+    await scrubButton.click();
+
+    const successMessage = page.getByText(/Claim scrub passed and the claim is ready to batch/);
+    const rejectionMessage = page.getByText(/Claim scrub failed and the claim moved to Rejections for correction/);
     await expect.poll(async () => {
       if (await successMessage.isVisible().catch(() => false)) return "ready";
       if (await rejectionMessage.isVisible().catch(() => false)) {
         return `rejected: ${await rejectionMessage.innerText()} | validate=${validationResponses.join(" || ")}`;
-      }
-      const scrubFailure = page.getByText(/claim scrub could not complete/);
-      if (await scrubFailure.isVisible().catch(() => false)) {
-        return `scrub-error: ${await scrubFailure.innerText()} | validate=${validationResponses.join(" || ")}`;
       }
       const error = page.locator(".thera-state.error").first();
       if (await error.isVisible().catch(() => false)) return `error: ${await error.innerText()}`;
@@ -73,7 +77,6 @@ test("staff creates, archives, records and accepts the synthetic insured claim",
     }, { timeout: 15_000 }).toBe("ready");
   }
 
-  const payerCard = page.locator("section.thera-card").filter({ hasText: "Synthetic Commercial Payer" }).last();
   const batchButton = payerCard.getByRole("button", { name: /Batch by Payer \(1\)/ });
   await expect(batchButton).toBeEnabled({ timeout: 15_000 });
   await batchButton.click();

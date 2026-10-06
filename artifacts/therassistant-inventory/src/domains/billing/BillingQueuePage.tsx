@@ -200,24 +200,9 @@ export function BillingQueuePage() {
         return;
       }
 
-      const claimId = String(created.value.claim.id);
-      const validation = await validateClaim(claimId);
-      if (!validation.ok) {
-        const validationDetails = validation.details?.length
-          ? validation.details.join(" ")
-          : validation.message;
-        const disposition = validation.blocked
-          ? "was created and moved to Rejections for correction"
-          : "was created, but the claim scrub could not complete";
-        setMessage(
-          `Claim ${String(created.value.claim.patient_control_number || "created")} ${disposition}. ${validationDetails}`,
-        );
-      } else {
-        setMessage(`Claim ${String(created.value.claim.patient_control_number || "created")} passed scrub and is ready to batch.`);
-      }
+      setMessage(`Claim ${String(created.value.claim.patient_control_number || "created")} created and is ready for Claim Scrub.`);
       setTab("unbatched");
       await load();
-      if (!validation.ok) setCorrectionLinks([{ href: "/rejections?claim=" + encodeURIComponent(claimId), label: "Correct this claim in Rejections" }]);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unable to create claim.");
     } finally {
@@ -239,7 +224,7 @@ export function BillingQueuePage() {
       await load();
       if (!result.ok) setCorrectionLinks([{ href: "/rejections?claim=" + encodeURIComponent(claimId), label: "Open this claim’s editable fields" }]);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Unable to validate claim.");
+      setError(err instanceof Error ? err.message : "Unable to scrub claim.");
     } finally {
       setSavingId(null);
     }
@@ -249,7 +234,7 @@ export function BillingQueuePage() {
     if (!data) return;
     const claims = groups.readyForBatch.filter((claim) => String(claim.payer_id ?? "") === payerId);
     if (!claims.length) {
-      setError("No validated claims are ready for this payer.");
+      setError("No claims that passed Claim Scrub are ready for this payer.");
       return;
     }
 
@@ -459,7 +444,7 @@ export function BillingQueuePage() {
         <Tab active={tab === "blocked"} onClick={() => setTab("blocked")} label={`Validation Hold (${groups.blocked.length})`} />
         <Tab active={tab === "program"} onClick={() => setTab("program")} label={`Program Billing (${groups.programCharges.length})`} />
         <Tab active={tab === "private-pay"} onClick={() => setTab("private-pay")} label={`Private Pay (${groups.privatePayCharges.length})`} />
-        <Tab active={tab === "unbatched"} onClick={() => setTab("unbatched")} label={`Insurance Claims (${groups.readyCharges.length + groups.preBatchClaims.length})`} title="Create insurance claims, check them for errors and prepare payer batches—nothing is transmitted here." />
+        <Tab active={tab === "unbatched"} onClick={() => setTab("unbatched")} label={`Insurance Claims (${groups.readyCharges.length + groups.preBatchClaims.length})`} title="Create insurance claims, run Claim Scrub, and prepare payer batches—nothing is transmitted here." />
         <Tab active={tab === "batches"} onClick={() => setTab("batches")} label={`837P Batches (${groups.openBatches.length})`} />
         <Tab active={tab === "submitted"} onClick={() => setTab("submitted")} label={`Submitted / Responses (${groups.submittedBatches.length})`} />
       </div>
@@ -735,12 +720,12 @@ function UnbatchedCharges({
     <section className="thera-card" style={{ borderLeft: "4px solid var(--thera-sage)" }}>
       <div className="thera-eyebrow">INSURANCE ONLY · BEFORE SUBMISSION</div>
       <h2 style={{ margin: "4px 0 6px" }}>Prepare Insurance Claims</h2>
-      <p style={{ maxWidth: 780 }}>This is where ready insurance charges become claims. Each claim is checked for missing or invalid details before it can be grouped into a payer-specific 837P file. Nothing is sent to an insurer from this section.</p>
+      <p style={{ maxWidth: 780 }}>This is where ready insurance charges become claims. Each claim is checked for missing or invalid details during Claim Scrub before it can be grouped into a payer-specific 837P file. Nothing is sent to an insurer from this section.</p>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 10, marginTop: 13 }}>
         {[
-          ["01", "Create claim", "Convert captured charges into an insurance claim."],
-          ["02", "Check for errors", "Review required fields and route failed checks to Rejections."],
-          ["03", "Group by payer", "Create an 837P batch from claims that passed validation."],
+          ["01", "Create Claim", "Convert captured charges into an insurance claim."],
+          ["02", "Claim Scrub", "Review required claim fields and route true claim-content failures to Rejections."],
+          ["03", "Group by payer", "Create an 837P batch from claims that passed Claim Scrub."],
         ].map(([number, label, detail]) => <div key={number} style={{ padding: 11, border: "1px solid var(--thera-border)", borderRadius: 8, background: "var(--thera-cream)" }}>
           <span className="thera-eyebrow">{number}</span>
           <strong style={{ display: "block", color: "var(--thera-navy)", fontSize: ".82rem", marginTop: 3 }}>{label}</strong>
@@ -755,7 +740,7 @@ function UnbatchedCharges({
       return <section className="thera-card" key={`charges-${encounterId || charges[0].id}`}>
         <div className="thera-card-header split">
           <div><h2>{encounter?.clientName ?? "Patient"} · {encounter?.payerName ?? "Payer"}</h2><p>{charges.length} charge line(s) · {money(total)}</p></div>
-          {encounterId && <button type="button" className="thera-action" disabled={savingId === encounterId} onClick={() => onCreateClaim(encounterId)}>Create & Scrub Claim</button>}
+          {encounterId && <button type="button" className="thera-action" disabled={savingId === encounterId} onClick={() => onCreateClaim(encounterId)}>Create Claim</button>}
         </div>
       </section>;
     })}
@@ -764,10 +749,10 @@ function UnbatchedCharges({
       const ready = claims.filter((claim) => claim.claim_status === "ready_for_batch");
       return <section className="thera-card" key={`payer-${payerId || claims[0].payerName}`}>
         <div className="thera-card-header split">
-          <div><h2>{claims[0].payerName}</h2><p>{ready.length} validated claim(s) ready for this payer batch.</p></div>
+          <div><h2>{claims[0].payerName}</h2><p>{ready.length} Claim Scrub-passed claim(s) ready for this payer batch.</p></div>
           <button type="button" className="thera-action" disabled={!payerId || ready.length === 0 || savingId === `batch-${payerId}`} onClick={() => onCreatePayerBatch(payerId)}>Batch by Payer ({ready.length})</button>
         </div>
-        <div className="thera-table-wrap"><table className="thera-table"><thead><tr><th>Claim</th><th>DOS</th><th>Patient</th><th>Charge</th><th>Status</th><th>Action</th></tr></thead><tbody>{claims.map((claim) => <tr key={claim.id}><td><Link className="thera-table-link" href={`/claims/${claim.id}`}>{String(claim.patient_control_number || "Open")}</Link></td><td>{shortDate(String(claim.service_date_from ?? ""))}</td><td>{claim.clientName}</td><td>{money(Number(claim.total_charge_cents ?? 0))}</td><td><StatusBadge value={String(claim.claim_status)} /></td><td><div className="thera-filter-row"><button type="button" className="thera-action secondary" disabled={savingId === `preview-${claim.id}`} onClick={() => onPreview(claim.id)}>Preview CMS-1500</button>{claim.claim_status === "ready_for_validation" ? <button type="button" className="thera-action" disabled={savingId === claim.id} onClick={() => onValidate(claim.id)}>Scrub Claim</button> : <span className="thera-muted">Ready</span>}</div></td></tr>)}</tbody></table></div>
+        <div className="thera-table-wrap"><table className="thera-table"><thead><tr><th>Claim</th><th>DOS</th><th>Patient</th><th>Charge</th><th>Status</th><th>Action</th></tr></thead><tbody>{claims.map((claim) => <tr key={claim.id}><td><Link className="thera-table-link" href={`/claims/${claim.id}`}>{String(claim.patient_control_number || "Open")}</Link></td><td>{shortDate(String(claim.service_date_from ?? ""))}</td><td>{claim.clientName}</td><td>{money(Number(claim.total_charge_cents ?? 0))}</td><td><StatusBadge value={String(claim.claim_status)} /></td><td><div className="thera-filter-row"><button type="button" className="thera-action secondary" disabled={savingId === `preview-${claim.id}`} onClick={() => onPreview(claim.id)}>Preview CMS-1500</button>{claim.claim_status === "ready_for_validation" ? <button type="button" className="thera-action" disabled={savingId === claim.id} onClick={() => onValidate(claim.id)}>Claim Scrub</button> : <span className="thera-muted">Ready</span>}</div></td></tr>)}</tbody></table></div>
       </section>;
     })}
   </div>;
