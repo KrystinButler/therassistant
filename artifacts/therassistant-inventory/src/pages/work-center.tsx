@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 
 import { StatusBadge } from "../components/status-badge";
 import { dateTime, shortDate } from "../lib/format";
@@ -25,6 +25,7 @@ type WorkItem = WorkItemBase & {
 type DueFilter = "all" | "overdue" | "next7" | "none";
 
 export function WorkCenterPage() {
+  const [, navigate] = useLocation();
   const [items, setItems] = useState<WorkItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -108,6 +109,29 @@ export function WorkCenterPage() {
     }
   }
 
+  async function startAndOpen(item: WorkItem) {
+    const destination = String(item.workRoute || item.sourceRoute);
+    if (item.workqueue_status === "in_progress") {
+      navigate(destination);
+      return;
+    }
+    setSavingId(item.id);
+    setError(null);
+    setMessage(null);
+    try {
+      const result = await startWorkItem(item.id);
+      if (!result.ok) {
+        setError(result.details?.length ? `${result.message} ${result.details.join(" ")}` : result.message);
+        return;
+      }
+      navigate(destination);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to start work.");
+    } finally {
+      setSavingId(null);
+    }
+  }
+
   function promptNote(label: string) {
     const note = window.prompt(label);
     return note?.trim() || null;
@@ -152,14 +176,14 @@ export function WorkCenterPage() {
                   return <tr key={item.id}>
                     <td><select className="thera-select" value={String(item.priority)} disabled={savingId === item.id} onChange={(event) => void execute(item.id, () => changeWorkPriority(item.id, event.target.value as "low" | "normal" | "high" | "urgent"), "Priority updated.")}><option value="low">Low</option><option value="normal">Normal</option><option value="high">High</option><option value="urgent">Urgent</option></select></td>
                     <td><div>{String(item.workqueue_type).replaceAll("_", " ")}</div><strong>{String(item.title)}</strong><div className="thera-table-subtext">{String(item.description || "")}</div></td>
-                    <td><Link className="thera-table-link" href={String(item.sourceRoute)}>{String(item.relatedName || "Open source")}</Link><div className="thera-table-subtext">{String(item.source_object_type || "").replaceAll("_", " ")}</div></td>
+                    <td><Link className="thera-table-link" href={String(item.workRoute || item.sourceRoute)}>{String(item.relatedName || "Open issue")}</Link><div className="thera-table-subtext">{String(item.source_object_type || "").replaceAll("_", " ")}</div></td>
                     <td>{item.patientName !== "—" ? item.patientName : item.providerName}</td>
                     <td>{item.payerName}</td>
                     <td><StatusBadge value={itemStatus} /></td>
                     <td>{item.due_date ? shortDate(String(item.due_date)) : "—"}</td>
                     <td>
                       <div className="thera-filter-row">
-                        {["open", "reopened", "pending", "snoozed"].includes(itemStatus) && <button type="button" className="thera-action secondary" disabled={savingId === item.id} onClick={() => void execute(item.id, () => startWorkItem(item.id), "Work started.")}>Start</button>}
+                        {["open", "reopened", "pending", "snoozed", "in_progress"].includes(itemStatus) && <button type="button" className="thera-action secondary" disabled={savingId === item.id} onClick={() => void startAndOpen(item)}>{itemStatus === "in_progress" ? "Continue" : "Start"}</button>}
                         {active && <button type="button" className="thera-action secondary" disabled={savingId === item.id} onClick={() => { const note = promptNote("Why is this work pending?"); if (note) void execute(item.id, () => pendWorkItem(item.id, note), "Work pended."); }}>Pend</button>}
                         {active && <button type="button" className="thera-action secondary" disabled={savingId === item.id} onClick={() => { const note = promptNote("Why is this work being snoozed?"); if (note) void execute(item.id, () => pendWorkItem(item.id, note, true), "Work snoozed."); }}>Snooze</button>}
                         {active && <button type="button" className="thera-action" disabled={savingId === item.id} onClick={() => { const note = promptNote("Completion note"); if (note) void execute(item.id, () => completeWorkItem(item.id, note), "Work completed."); }}>Complete</button>}

@@ -1,4 +1,6 @@
 import {
+  getCurrentTenantId,
+  referenceSelect,
   tenantInsert,
   tenantSelect,
   tenantUpdate,
@@ -10,6 +12,7 @@ import { createChargeFromEncounter } from "../billing/repository";
 import { matchingServiceLineExists, validateServiceLineValues, type ServiceLineValues } from "../encounters/service-line-validation";
 import { saveStructuredClinicalData } from "./fast-charting-repository";
 import type { StructuredSelections } from "./fast-charting";
+import { clinicalServiceDate } from "./service-date";
 import { signNoteWorkflow, type ClinicalSigningRepository } from "./workflow";
 
 type DataRow = Row & { id: string };
@@ -88,7 +91,14 @@ export async function saveClinicalNote(
       goal_addressed: values.goalAddressed || null,
     });
   } else {
-    const serviceDate = String(state.encounter.started_at ?? new Date().toISOString()).slice(0, 10);
+    const tenantId = await getCurrentTenantId();
+    const [tenant] = await referenceSelect<DataRow>("tenants", {
+      id: `eq.${tenantId}`, select: "id,timezone", limit: "1",
+    });
+    if (!tenant?.timezone) throw new Error("Organization timezone is required to date the clinical note.");
+    const serviceDate = clinicalServiceDate(
+      String(state.encounter.started_at ?? new Date().toISOString()), String(tenant.timezone),
+    );
     saved = await tenantInsert<DataRow>("clinical_notes", {
       encounter_id: encounterId,
       client_id: state.encounter.client_id,

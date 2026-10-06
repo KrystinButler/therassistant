@@ -21,5 +21,5 @@ test("final reversal privilege hardening runs after legacy Phase 3 grants", () =
 });
 
 test("charge work items open the moved charge queue", () => {
-  assert.equal(sourceRouteForWorkItem("charge", "charge-1"), "/billing/charges");
+  assert.equal(sourceRouteForWorkItem("charge", "charge-1"), "/billing/charges?tab=unbatched");
 });

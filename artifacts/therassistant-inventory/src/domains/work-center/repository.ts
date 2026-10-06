@@ -66,20 +66,21 @@ function personName(row?: Row) {
 }
 
 export function sourceRouteForWorkItem(type: string, id: string) {
+  const safeId = encodeURIComponent(id);
   switch (type) {
-    case "client": return `/clients/${id}`;
-    case "claim": return `/claims/${id}`;
-    case "encounter": return `/encounters/${id}`;
-    case "appointment": return `/schedule/${id}`;
-    case "provider": return `/providers/${id}`;
+    case "client": return `/clients/${safeId}`;
+    case "claim": return `/claims/${safeId}`;
+    case "encounter": return `/encounters/${safeId}`;
+    case "appointment": return `/schedule/${safeId}`;
+    case "provider": return `/providers/${safeId}`;
     case "eligibility": return "/eligibility";
-    case "charge": return "/billing/charges";
-    case "payment": return "/payments";
-    case "denial": return "/ar-denials?tab=denials";
-    case "appeal": return "/ar-denials";
-    case "adjustment": return "/ar-denials?tab=recovery";
-    case "era": return "/payments";
-    case "claim_batch": return "/claims/submission";
+    case "charge": return "/billing/charges?tab=unbatched";
+    case "payment": return `/payments?payment=${safeId}`;
+    case "denial": return `/denials?denial=${safeId}`;
+    case "appeal": return `/denials?tab=appeals&appeal=${safeId}`;
+    case "adjustment": return "/payments?tab=recovery";
+    case "era": return "/payments?tab=era";
+    case "claim_batch": return "/billing/charges?tab=batches";
     case "payer_contract": return "/payers-contracts";
     case "credentialing_application":
     case "provider_credential":
@@ -95,6 +96,80 @@ export function sourceRouteForWorkItem(type: string, id: string) {
       return "/payments";
     default: return "/work-center";
   }
+}
+
+/**
+ * Work Center starts work in the operational queue that owns the exception.
+ * The source-record link remains separate so staff can still inspect the
+ * encounter, claim, or patient without losing the exact correction context.
+ */
+export function workRouteForWorkItem(
+  type: string,
+  id: string,
+  workqueueType: string,
+  related: { encounterId?: string; claimId?: string; clientId?: string } = {},
+) {
+  const queue = workqueueType.trim().toLowerCase();
+  const encounterId = type === "encounter" ? id : related.encounterId;
+  const claimId = type === "claim" ? id : related.claimId;
+  const queryId = (value: string) => encodeURIComponent(value);
+
+  if (queue.startsWith("billing_readiness") || queue === "charge_validation") {
+    return `/billing/charges?tab=blocked${encounterId ? `&focus=${queryId(encounterId)}` : ""}`;
+  }
+  if (queue === "eligibility_issue") {
+    return related.clientId ? `/clients/${queryId(related.clientId)}?tab=coverage` : "/eligibility";
+  }
+  if (queue === "credentialing_issue" && type === "encounter") {
+    return "/payers-contracts";
+  }
+  if (queue === "missing_documentation" && encounterId) {
+    return `/encounters/${queryId(encounterId)}#encounter-progress-note-editor`;
+  }
+  if (queue === "charge_capture" || queue === "charges_ready") {
+    return `/billing/charges?tab=ready${encounterId ? `&focus=${queryId(encounterId)}` : ""}`;
+  }
+  if (["claim_validation", "claim_rejection", "claim_correction"].includes(queue)) {
+    return `/rejections${claimId ? `?claim=${queryId(claimId)}` : ""}`;
+  }
+  if (["claim_followup", "claim_follow_up", "insurance_ar", "payer_followup"].includes(queue)) {
+    return `/claims${claimId ? `?claim=${queryId(claimId)}` : ""}`;
+  }
+  if (queue === "claim_submission" || queue === "claim_batch") {
+    return "/billing/charges?tab=unbatched";
+  }
+  if (queue === "denial_followup" || queue === "denial_follow_up") {
+    return type === "denial"
+      ? `/denials?denial=${queryId(id)}`
+      : `/denials${claimId ? `?claim=${queryId(claimId)}` : ""}`;
+  }
+  if (queue === "appeal_deadline" || queue === "appeal_followup") {
+    return type === "appeal"
+      ? `/denials?tab=appeals&appeal=${queryId(id)}`
+      : "/denials?tab=appeals";
+  }
+  if (["underpayment", "payment_variance", "contract_variance"].includes(queue)) {
+    return "/payments?tab=underpayments";
+  }
+  if (["recoupment", "refund", "recovery"].includes(queue)) {
+    return "/payments?tab=recovery";
+  }
+  if (["payment_exception", "unapplied_payment", "payment_posting_issue"].includes(queue)) {
+    if (type === "era" || (queue === "payment_posting_issue" && type !== "payment")) return "/payments?tab=era";
+    return type === "payment"
+      ? `/payments?payment=${queryId(id)}`
+      : "/payments?tab=unapplied";
+  }
+  if (["era_match_exception", "era_import", "unmatched_era"].includes(queue)) {
+    return "/payments?tab=era";
+  }
+  if (["documentation", "clinical_documentation", "unsigned_note"].includes(queue) && encounterId) {
+    return `/encounters/${queryId(encounterId)}#encounter-progress-note-editor`;
+  }
+  if (queue === "signature" && encounterId) {
+    return `/encounters/${queryId(encounterId)}#encounter-signature`;
+  }
+  return sourceRouteForWorkItem(type, id);
 }
 
 export async function getWorkCenterData() {
@@ -249,6 +324,17 @@ export async function getWorkCenterData() {
       ...item,
       ...context,
       sourceRoute: sourceRouteForWorkItem(sourceType, sourceId),
+      workRoute: workRouteForWorkItem(sourceType, sourceId, String(item.workqueue_type ?? ""), {
+        clientId: context.clientId,
+        encounterId: sourceType === "charge"
+          ? String(chargesById.get(sourceId)?.encounter_id ?? "")
+          : undefined,
+        claimId: sourceType === "denial"
+          ? String(denialsById.get(sourceId)?.claim_id ?? "")
+          : sourceType === "adjustment"
+            ? String(adjustmentsById.get(sourceId)?.claim_id ?? "")
+            : undefined,
+      }),
       history: historyByItem.get(item.id) ?? [],
     };
   });

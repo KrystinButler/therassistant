@@ -78,5 +78,5 @@ test("reversed and voided payments have no available unapplied balance", () => {
 });
 
 test("denial work items open the actionable denial workspace", () => {
-  assert.equal(sourceRouteForWorkItem("denial", "denial-1"), "/ar-denials?tab=denials");
+  assert.equal(sourceRouteForWorkItem("denial", "denial-1"), "/denials?denial=denial-1");
 });

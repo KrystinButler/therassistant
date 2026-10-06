@@ -36,6 +36,12 @@ test("provider completes a synthetic visit from schedule through signed note and
   const signButton = page.getByRole("button", { name: "Sign & Lock Note" });
   await expect(signButton).toBeEnabled({ timeout: 15_000 });
   await signButton.click();
+  // Report the application failure instead of hiding it behind a handoff timeout.
+  const signingError = page.locator(".thera-state.error").first();
+  await expect(signedHandoff.or(signingError)).toBeVisible({ timeout: 15_000 });
+  if (await signingError.isVisible()) {
+    throw new Error(`Clinical signing failed: ${await signingError.innerText()}`);
+  }
 
   // Signing is accepted only when the persisted, locked clinical handoff is displayed.
   // The previous transient success message was retired in favor of nonblocking billing follow-up.
