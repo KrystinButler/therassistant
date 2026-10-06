@@ -94,3 +94,20 @@ for (const id of ["malformed", "30000000-0000-4000-8000-000000000099", unrelated
     expect(requests.writes).toEqual([]);
   });
 }
+
+
+test("Dashboard task link preserves exact remittance context and focus", async ({ page }) => {
+  const requests = await postingFixtures(page);
+  await page.goto("/");
+  const link = page.getByRole("link").filter({ has: page.getByText("Review exact remittance exception", { exact: true }) });
+  await expect(link).toHaveAttribute("href", "/payments?tab=era&work=" + exactTaskId);
+  await link.click();
+  const panel = page.locator("#posting-work-" + exactTaskId);
+  await expect(panel).toBeVisible();
+  await expect(panel).toBeFocused();
+  await expect(panel.getByRole("row")).toHaveCount(2);
+  await expect(panel.getByRole("cell", { name: "second-remittance.835", exact: true })).toBeVisible();
+  await expect(panel.getByRole("cell", { name: "first-remittance.835", exact: true })).toHaveCount(0);
+  expect(requests.taskLookups).toContain("eq." + exactTaskId);
+  expect(requests.writes).toEqual([]);
+});
