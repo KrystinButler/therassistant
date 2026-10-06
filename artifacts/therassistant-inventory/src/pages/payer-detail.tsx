@@ -4,6 +4,7 @@ import { StatusBadge } from "../components/status-badge";
 import { buildPayer360View } from "../domains/credentialing/payer-360";
 import { getColoradoReferenceResources } from "../domains/credentialing/colorado-payer-reference";
 import { parsePayerRuleConfig } from "../domains/billing/payer-billing-rules";
+import { ProcedureCodeSearchInput } from "../domains/coding/ProcedureCodeSearchInput";
 import { tenantInsert, tenantSelect, tenantUpdate, referenceSelect } from "../lib/tenant-data-client";
 import { money, shortDate } from "../lib/format";
 
@@ -20,6 +21,8 @@ export function PayerDetailPage() {
   const [error, setError] = useState<string | null>(null);
   const [view, setView] = useState<View | null>(null);
   const [resources, setResources] = useState<Row[]>([]);
+  const [referenceRates, setReferenceRates] = useState<Row[]>([]);
+  const [serviceCodes, setServiceCodes] = useState<Row[]>([]);
   const [modal, setModal] = useState<ModalKind>(null);
   const [form, setForm] = useState<Record<string, string>>({});
 
@@ -31,16 +34,20 @@ export function PayerDetailPage() {
     Promise.all([
       referenceSelect("payers"),
       referenceSelect("payer_plans"),
+      referenceSelect<Row>("cpt_codes", { is_active: "eq.true", order: "code.asc" }),
       tenantSelect("providers"),
       tenantSelect("provider_payer_enrollments"),
       tenantSelect("payer_contracts"),
       tenantSelect("fee_schedules"),
       tenantSelect("fee_schedule_lines"),
+      referenceSelect<Row>("reference_fee_rates", { payer_id: `eq.${payerId}`, order: "code.asc,provider_level.asc" }),
       tenantSelect("payer_resources", { payer_id: `eq.${payerId}`, order: "resource_type.asc,sort_order.asc,created_at.asc" }),
     ])
-      .then(([payers, plans, providers, enrollments, contracts, feeSchedules, feeScheduleLines, resourceRows]) => {
+      .then(([payers, plans, codeRows, providers, enrollments, contracts, feeSchedules, feeScheduleLines, referenceRateRows, resourceRows]) => {
         if (!active) return;
         setView(buildPayer360View({ payerId, payers, plans, providers, enrollments, contracts, feeSchedules, feeScheduleLines }));
+        setServiceCodes(codeRows);
+        setReferenceRates(referenceRateRows);
         setResources(resourceRows);
       })
       .catch((err: unknown) => active && setError(err instanceof Error ? err.message : "Unable to load payer"))
@@ -135,13 +142,22 @@ export function PayerDetailPage() {
         });
       } else if (modal === "rate") {
         if (!form.schedule_id || !form.cpt_code?.trim()) return;
+        const canonicalCode = form.cpt_code.trim().toUpperCase();
+        const canonicalMatches = await referenceSelect<Row>("cpt_codes", {
+          code: `eq.${canonicalCode}`,
+          is_active: "eq.true",
+          limit: "1",
+        });
+        if (!canonicalMatches.length) {
+          throw new Error("Select an active CPT/HCPCS code from the THERASSISTANT code library.");
+        }
         const rateCents = Math.round(Number(form.rate || 0) * 100);
         if (!Number.isFinite(rateCents) || rateCents < 0) {
           throw new Error("Enter a valid non-negative rate.");
         }
         await tenantInsert("fee_schedule_lines", {
           fee_schedule_id: form.schedule_id,
-          cpt_code: form.cpt_code.trim(),
+          cpt_code: form.cpt_code.trim().toUpperCase(),
           modifier: form.modifier || null,
           rate_cents: rateCents,
           unit_type: form.unit_type || "service",
@@ -302,6 +318,30 @@ export function PayerDetailPage() {
             </div>)}
           </div>
         </section>
+
+        <section className="thera-card thera-span-2">
+          <div className="thera-card-header">
+            <div>
+              <div className="thera-eyebrow">IMPORTED REIMBURSEMENT REFERENCE</div>
+              <h2>Reference Fee Rates</h2>
+              <p>Rates loaded into the shared reference library for comparison and fee-schedule analysis. These rates do not establish a practice-specific executed contract.</p>
+            </div>
+            <div className="thera-metric-value" style={{ fontSize: "1.35rem" }}>{referenceRates.length}</div>
+          </div>
+          {referenceRates.length === 0 ? <div className="thera-empty">No mapped reference rates are loaded for this payer.</div> : <div className="thera-table-wrap"><table className="thera-table">
+            <thead><tr><th>CPT / HCPCS</th><th>Provider Level</th><th>Modifier</th><th>Reference Rate</th><th>Effective</th></tr></thead>
+            <tbody>{referenceRates.map((rate) => {
+              const serviceCode = serviceCodes.find((code) => code.code === rate.code);
+              return <tr key={`${rate.source_version}:${rate.payer_label}:${rate.provider_level}:${rate.code}:${rate.modifier}`}>
+                <td><strong>{rate.code}</strong><div className="thera-table-subtext">{serviceCode?.display_name || "Canonical service code"}</div></td>
+                <td>{rate.provider_level || "—"}</td>
+                <td>{rate.modifier || "—"}</td>
+                <td>{money(rate.rate_cents)}</td>
+                <td>{rate.effective_from || rate.effective_to ? `${shortDate(rate.effective_from)} – ${shortDate(rate.effective_to)}` : "Source effective dates not recorded"}</td>
+              </tr>;
+            })}</tbody>
+          </table></div>}
+        </section>
       </div>
 
       {modal && <Modal title={modalTitle(modal)} onClose={() => setModal(null)}>
@@ -358,7 +398,13 @@ export function PayerDetailPage() {
         </Grid>}
         {modal === "contract" && <Grid><Input label="Contract Name" value={form.contract_name || ""} onChange={(value) => setForm({ ...form, contract_name: value })} /><Select label="Status" value={form.status || "draft"} options={["draft", "pending", "active"]} onChange={(value) => setForm({ ...form, status: value })} /><Input label="Effective Date" type="date" value={form.effective_date || ""} onChange={(value) => setForm({ ...form, effective_date: value })} /><Input label="Notes" value={form.notes || ""} onChange={(value) => setForm({ ...form, notes: value })} /></Grid>}
         {modal === "schedule" && <Grid><Select label="Contract" value={form.contract_id || ""} options={view.contracts.map((contract) => ({ value: contract.id, label: contract.contract_name }))} onChange={(value) => setForm({ ...form, contract_id: value })} /><Input label="Schedule Name" value={form.name || ""} onChange={(value) => setForm({ ...form, name: value })} /><Select label="Status" value={form.status || "draft"} options={["draft", "pending", "active"]} onChange={(value) => setForm({ ...form, status: value })} /><Input label="Effective Date" type="date" value={form.effective_date || ""} onChange={(value) => setForm({ ...form, effective_date: value })} /></Grid>}
-        {modal === "rate" && <Grid><Select label="Fee Schedule" value={form.schedule_id || ""} options={schedules.map((schedule) => ({ value: schedule.id, label: schedule.name }))} onChange={(value) => setForm({ ...form, schedule_id: value })} /><Input label="CPT Code" value={form.cpt_code || ""} onChange={(value) => setForm({ ...form, cpt_code: value })} /><Input label="Modifier" value={form.modifier || ""} onChange={(value) => setForm({ ...form, modifier: value })} /><Input label="Rate ($)" type="number" value={form.rate || ""} onChange={(value) => setForm({ ...form, rate: value })} /><Input label="Unit Type" value={form.unit_type || ""} onChange={(value) => setForm({ ...form, unit_type: value })} /></Grid>}
+        {modal === "rate" && <Grid>
+          <Select label="Fee Schedule" value={form.schedule_id || ""} options={schedules.map((schedule) => ({ value: schedule.id, label: schedule.name }))} onChange={(value) => setForm({ ...form, schedule_id: value })} />
+          <label><div className="thera-field-label">CPT / HCPCS Code</div><ProcedureCodeSearchInput code={form.cpt_code || ""} onSelect={(result) => setForm({ ...form, cpt_code: result.code })} /></label>
+          <Input label="Modifier" value={form.modifier || ""} onChange={(value) => setForm({ ...form, modifier: value })} />
+          <Input label="Rate ($)" type="number" value={form.rate || ""} onChange={(value) => setForm({ ...form, rate: value })} />
+          <Input label="Unit Type" value={form.unit_type || ""} onChange={(value) => setForm({ ...form, unit_type: value })} />
+        </Grid>}
         <div style={{ marginTop: 16 }}><button type="button" className="thera-action" onClick={() => void save()}>Save</button></div>
       </Modal>}
     </>
