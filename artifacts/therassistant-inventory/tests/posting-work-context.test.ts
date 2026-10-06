@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { resolvePostingWorkContext } from "../src/domains/payments/posting-work-context.ts";
+import { resolvePostingWorkContext, postingWorkItemId } from "../src/domains/payments/posting-work-context.ts";
 import { workRouteForWorkItem } from "../src/domains/work-center/repository.ts";
 
 const eras = [
@@ -27,4 +27,13 @@ test("missing, unrelated, and invalid sources cannot select another exception", 
   assert.equal(resolvePostingWorkContext({ id: "w1", workqueue_type: "contract_variance", source_object_type: "claim", source_object_id: "c1" }, eras), null);
   assert.equal(resolvePostingWorkContext({ id: "w1", workqueue_type: "payment_posting_issue", source_object_type: "claim", source_object_id: "" }, eras), null);
   assert.deepEqual(resolvePostingWorkContext({ id: "w1", workqueue_type: "payment_posting_issue", source_object_type: "claim", source_object_id: "missing" }, eras)?.eraClaims, []);
+});
+
+test("malformed posting task IDs cannot reach the UUID lookup", () => {
+  for (const id of [null, undefined, "", "truncated", "e2b6b5e2-dbc0-d885-c96c", "a".repeat(36), "e2b6b5e2-dbc0-d885-c96c-5c413cd5a73z"]) {
+    assert.equal(postingWorkItemId(id), null);
+  }
+  for (const id of ["e2b6b5e2-dbc0-d885-c96c-5c413cd5a737", "E2B6B5E2-DBC0-D885-C96C-5C413CD5A737"]) {
+    assert.equal(postingWorkItemId(id), id);
+  }
 });

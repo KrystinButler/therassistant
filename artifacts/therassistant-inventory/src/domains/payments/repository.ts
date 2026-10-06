@@ -7,6 +7,7 @@ import {
   referenceSelect,
   type Row,
 } from "../../lib/tenant-data-client";
+import { postingWorkItemId } from "./posting-work-context";
 import { isRecoveryAdjustment } from "../ar/variance";
 import {
   buildAllocationPlan,
@@ -256,6 +257,7 @@ function personName(row?: Row) {
 }
 
 export async function getPaymentsWorkspaceData(workItemId?: string | null) {
+  const validWorkItemId = postingWorkItemId(workItemId);
   const [claims, clients, payers, payments, allocations, reversals, adjustments, eraFiles, eraClaims, denials, postingWorkItems] = await Promise.all([
     tenantSelect<DataRow>("professional_claims", { order: "created_at.desc" }),
     tenantSelect<DataRow>("clients"),
@@ -267,7 +269,7 @@ export async function getPaymentsWorkspaceData(workItemId?: string | null) {
     tenantSelect<DataRow>("era_files", { order: "created_at.desc" }),
     tenantSelect<DataRow>("era_claims", { order: "created_at.desc" }),
     tenantSelect<DataRow>("denials", { order: "created_at.desc" }),
-    workItemId ? tenantSelect<DataRow>("workqueue_items", { id: `eq.${workItemId}`, limit: "1" }) : Promise.resolve([]),
+    validWorkItemId ? tenantSelect<DataRow>("workqueue_items", { id: `eq.${validWorkItemId}`, limit: "1" }) : Promise.resolve([]),
   ]);
 
   const clientsById = new Map(clients.map((row) => [row.id, row]));

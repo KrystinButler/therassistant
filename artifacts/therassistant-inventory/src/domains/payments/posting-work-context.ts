@@ -14,3 +14,8 @@ export function resolvePostingWorkContext<W extends WorkItem, E extends EraClaim
     eraClaims: eraClaims.filter((row) => String(sourceType === "claim" ? row.claim_id ?? "" : row.era_file_id ?? "") === sourceId),
   };
 }
+
+/** Reject malformed URL parameters before filtering a PostgreSQL UUID column. */
+export function postingWorkItemId(value?: string | null): string | null {
+  return value && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value) ? value : null;
+}
