@@ -23,3 +23,9 @@ test("appointment save errors remain visible inside the drawer and clinician sel
   assert.match(schedule,/disabled=\{clinicianView\}/);
   assert.match(schedule,/!dirty \|\| window.confirm/);
 });
+
+test("telehealth appointments capture a secure patient video link",()=>{
+  assert.match(schedule,/Telehealth video link/);
+  assert.match(schedule,/type="url"/);
+  assert.match(schedule,/telehealthJoinUrl/);
+});

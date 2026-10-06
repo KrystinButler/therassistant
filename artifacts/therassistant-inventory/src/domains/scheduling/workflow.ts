@@ -10,6 +10,7 @@ export type AppointmentDraft = {
   serviceType: string;
   cptCode?: string | null;
   notes?: string | null;
+  telehealthJoinUrl?: string | null;
 };
 
 export type ScheduleCheckInStatus =
@@ -88,6 +89,24 @@ export function buildSchedulePatientPresentation(
   return { checkInStatus, preVisitInsights, sessionFocus };
 }
 
+function normalizeTelehealthJoinUrl(value?: string | null) {
+  const clean = String(value ?? "").trim();
+  if (!clean) return null;
+
+  let url: URL;
+  try {
+    url = new URL(clean);
+  } catch {
+    throw new Error("Enter a valid telehealth video URL.");
+  }
+
+  if (url.protocol !== "https:" || url.username || url.password) {
+    throw new Error("Telehealth video links must use a secure HTTPS URL.");
+  }
+
+  return url.toString();
+}
+
 export function buildAppointmentInput(draft: AppointmentDraft) {
   const duration = draft.durationMinutes ?? 60;
   const startsAt = new Date(`${draft.date}T${draft.time}:00`);
@@ -101,6 +120,10 @@ export function buildAppointmentInput(draft: AppointmentDraft) {
   }
 
   const endsAt = new Date(startsAt.getTime() + duration * 60_000);
+  const telehealthJoinUrl =
+    draft.locationType === "telehealth"
+      ? normalizeTelehealthJoinUrl(draft.telehealthJoinUrl)
+      : null;
 
   return {
     client_id: draft.clientId,
@@ -109,6 +132,7 @@ export function buildAppointmentInput(draft: AppointmentDraft) {
     ends_at: endsAt.toISOString(),
     appointment_status: "scheduled",
     location_type: draft.locationType,
+    telehealth_join_url: telehealthJoinUrl,
     service_type: draft.serviceType,
     cpt_code: draft.cptCode || null,
     notes: draft.notes || null,

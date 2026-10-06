@@ -57,6 +57,20 @@ export function getPortalArrivalAvailability(row: PortalRow, now = new Date()) {
   };
 }
 
+export function getPortalTelehealthJoinUrl(row: PortalRow) {
+  if (String(row.location_type ?? "").toLowerCase() !== "telehealth") return null;
+  const raw = String(row.telehealth_join_url ?? "").trim();
+  if (!raw) return null;
+
+  try {
+    const url = new URL(raw);
+    if (url.protocol !== "https:" || url.username || url.password) return null;
+    return url.toString();
+  } catch {
+    return null;
+  }
+}
+
 export function buildPatientPortalData(input: PortalDataInput) {
   const now = input.now ?? new Date();
   const upcomingAppointments = input.appointments
