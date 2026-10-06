@@ -10,6 +10,7 @@ const page = readFileSync(join(here, "../src/pages/payer-detail.tsx"), "utf8");
 test("fee schedule rate entry uses the canonical CPT/HCPCS selector", () => {
   assert.match(page, /ProcedureCodeSearchInput/);
   assert.match(page, /CPT \/ HCPCS Code/);
+  assert.match(page, /referenceSelect<Row>\("cpt_codes"/);
   assert.match(page, /cpt_code:\s*form\.cpt_code\.trim\(\)\.toUpperCase\(\)/);
   assert.doesNotMatch(page, /<Input label="CPT Code"/);
 });
