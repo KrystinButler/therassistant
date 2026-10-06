@@ -21,6 +21,8 @@ export function PayerDetailPage() {
   const [error, setError] = useState<string | null>(null);
   const [view, setView] = useState<View | null>(null);
   const [resources, setResources] = useState<Row[]>([]);
+  const [referenceRates, setReferenceRates] = useState<Row[]>([]);
+  const [serviceCodes, setServiceCodes] = useState<Row[]>([]);
   const [modal, setModal] = useState<ModalKind>(null);
   const [form, setForm] = useState<Record<string, string>>({});
 
@@ -32,16 +34,20 @@ export function PayerDetailPage() {
     Promise.all([
       referenceSelect("payers"),
       referenceSelect("payer_plans"),
+      referenceSelect<Row>("cpt_codes", { is_active: "eq.true", order: "code.asc" }),
       tenantSelect("providers"),
       tenantSelect("provider_payer_enrollments"),
       tenantSelect("payer_contracts"),
       tenantSelect("fee_schedules"),
       tenantSelect("fee_schedule_lines"),
+      referenceSelect<Row>("reference_fee_rates", { payer_id: `eq.${payerId}`, order: "code.asc,provider_level.asc" }),
       tenantSelect("payer_resources", { payer_id: `eq.${payerId}`, order: "resource_type.asc,sort_order.asc,created_at.asc" }),
     ])
-      .then(([payers, plans, providers, enrollments, contracts, feeSchedules, feeScheduleLines, resourceRows]) => {
+      .then(([payers, plans, codeRows, providers, enrollments, contracts, feeSchedules, feeScheduleLines, referenceRateRows, resourceRows]) => {
         if (!active) return;
         setView(buildPayer360View({ payerId, payers, plans, providers, enrollments, contracts, feeSchedules, feeScheduleLines }));
+        setServiceCodes(codeRows);
+        setReferenceRates(referenceRateRows);
         setResources(resourceRows);
       })
       .catch((err: unknown) => active && setError(err instanceof Error ? err.message : "Unable to load payer"))
@@ -311,6 +317,30 @@ export function PayerDetailPage() {
               </div>)}
             </div>)}
           </div>
+        </section>
+
+        <section className="thera-card thera-span-2">
+          <div className="thera-card-header">
+            <div>
+              <div className="thera-eyebrow">IMPORTED REIMBURSEMENT REFERENCE</div>
+              <h2>Reference Fee Rates</h2>
+              <p>Rates loaded into the shared reference library for comparison and fee-schedule analysis. These rates do not establish a practice-specific executed contract.</p>
+            </div>
+            <div className="thera-metric-value" style={{ fontSize: "1.35rem" }}>{referenceRates.length}</div>
+          </div>
+          {referenceRates.length === 0 ? <div className="thera-empty">No mapped reference rates are loaded for this payer.</div> : <div className="thera-table-wrap"><table className="thera-table">
+            <thead><tr><th>CPT / HCPCS</th><th>Provider Level</th><th>Modifier</th><th>Reference Rate</th><th>Effective</th></tr></thead>
+            <tbody>{referenceRates.map((rate) => {
+              const serviceCode = serviceCodes.find((code) => code.code === rate.code);
+              return <tr key={`${rate.source_version}:${rate.payer_label}:${rate.provider_level}:${rate.code}:${rate.modifier}`}>
+                <td><strong>{rate.code}</strong><div className="thera-table-subtext">{serviceCode?.display_name || "Canonical service code"}</div></td>
+                <td>{rate.provider_level || "—"}</td>
+                <td>{rate.modifier || "—"}</td>
+                <td>{money(rate.rate_cents)}</td>
+                <td>{rate.effective_from || rate.effective_to ? `${shortDate(rate.effective_from)} – ${shortDate(rate.effective_to)}` : "Source effective dates not recorded"}</td>
+              </tr>;
+            })}</tbody>
+          </table></div>}
         </section>
       </div>
 
