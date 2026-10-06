@@ -110,3 +110,42 @@ test("previsit hardening merges against the current conflicting row", () => {
   assert.match(impl, /jsonb_build_object\('pre_visit'/i);
   assert.doesNotMatch(impl, /responses\s*=\s*excluded\.responses/i);
 });
+
+
+test("patient schedule change requests derive identity and never mutate appointments directly", () => {
+  const sql = migration("patient_portal_schedule_change");
+  const wrapper = functionStatement(sql, "public.portal_submit_schedule_change");
+  const impl = functionStatement(sql, "private.portal_submit_schedule_change_impl");
+
+  assert.match(wrapper, /security invoker/i);
+  assert.match(impl, /security definer/i);
+  assert.match(impl, /client_portal_access/i);
+  assert.match(impl, /user_id\s*=\s*\(select auth\.uid\(\)\)/i);
+  assert.match(impl, /a\.tenant_id\s*=\s*v_access\.tenant_id/i);
+  assert.match(impl, /a\.client_id\s*=\s*v_access\.client_id/i);
+  assert.match(impl, /insert into public\.mailroom_items/i);
+  assert.match(impl, /insert into public\.workqueue_items/i);
+  assert.doesNotMatch(impl, /update\s+public\.appointments/i);
+});
+
+
+test("patient arrival states are enforced by appointment time on the server", () => {
+  const sql = migration("patient_portal_testing_regression_fixes");
+  const impl = functionStatement(sql, "private.record_client_checkin_impl");
+
+  assert.match(impl, /starts_at\s*-\s*interval '4 hours'/i);
+  assert.match(impl, /starts_at\s*-\s*interval '1 hour'/i);
+  assert.match(impl, /lower\(p_status\)\s*=\s*'checked_in'/i);
+  assert.match(impl, /existing_checkin\.arrived_at\s+is\s+not\s+null/i);
+  assert.match(impl, /if v_patient_access and not v_staff_access/i);
+});
+
+test("previsit writes persist explicit saved-state markers", () => {
+  const sql = migration("patient_portal_testing_regression_fixes");
+  const impl = functionStatement(sql, "private.portal_save_previsit_checkin_impl");
+
+  assert.match(impl, /visit_questions_saved_at/i);
+  assert.match(impl, /consents_saved_at/i);
+  assert.match(sql, /update public\.client_checkins/i);
+  assert.match(sql, /visit_questions_saved_at/i);
+});

@@ -12,6 +12,10 @@
   "outputDirectory": "artifacts/therassistant-inventory/dist/public",
   "rewrites": [
     {
+      "source": "/api/oauth/token",
+      "destination": "https://lpjwfdvaxobewxcklenl.supabase.co/functions/v1/smart-oauth-token"
+    },
+    {
       "source": "/payment-desk",
       "destination": "/payment-desk.html"
     },

@@ -2,7 +2,6 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import {
-  resolveMailroomWorkContext,
   sourceRouteForWorkItem,
   workRouteForWorkItem,
 } from "../src/domains/work-center/repository.ts";
@@ -84,42 +83,11 @@ test("complete and reopen preserve auditable history", async () => {
   assert.equal(state.history.at(-1)?.new_status, "reopened");
 });
 
-test("Mailroom work routes to the exact Correspondence 360 record", () => {
+test("legacy correspondence stays in Work Center without a deleted source route", () => {
   assert.equal(
-    sourceRouteForWorkItem("mailroom_item", "mail-1"),
-    "/mailroom/mail-1",
+    sourceRouteForWorkItem("legacy_correspondence", "legacy-1"),
+    "/work-center",
   );
-});
-
-test("Mailroom work context resolves human-readable patient, provider, payer, and subject", () => {
-  const context = resolveMailroomWorkContext({
-    mailroomItem: {
-      id: "mail-1",
-      subject: "Medical records request",
-      client_id: "client-1",
-      provider_id: "provider-1",
-      payer_id: "payer-1",
-      claim_id: "claim-1",
-    },
-    linkedClaim: {
-      id: "claim-1",
-      patient_control_number: "DEMO-001",
-      client_id: "client-1",
-      payer_id: "payer-1",
-    },
-    client: { id: "client-1", first_name: "Jordan", last_name: "Ellis" },
-    provider: { id: "provider-1", first_name: "Samantha", last_name: "Thomas" },
-    payer: { id: "payer-1", name: "Aetna" },
-  });
-
-  assert.equal(context.clientId, "client-1");
-  assert.equal(context.providerId, "provider-1");
-  assert.equal(context.payerId, "payer-1");
-  assert.equal(context.patientName, "Jordan Ellis");
-  assert.equal(context.providerName, "Samantha Thomas");
-  assert.equal(context.payerName, "Aetna");
-  assert.equal(context.relatedName, "Medical records request · Jordan Ellis · DEMO-001");
-  assert.doesNotMatch(context.relatedName, /client-1|provider-1|payer-1|claim-1/);
 });
 
 test("RCM work items open their owning queues and exact correction records", () => {
@@ -195,7 +163,7 @@ test("source records remain reachable separately from exception destinations", (
   assert.equal(sourceRouteForWorkItem("era", "era-1"), "/payments?tab=era");
   assert.equal(
     workRouteForWorkItem("mailroom_item", "mail-1", "correspondence_followup"),
-    "/mailroom/mail-1",
+    "/work-center",
   );
 });
 

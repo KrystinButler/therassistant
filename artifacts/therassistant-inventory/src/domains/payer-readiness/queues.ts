@@ -18,35 +18,11 @@ export type EligibilityQueueRow = {
   rawResponse: unknown;
 };
 
-export type AuthorizationQueueRow = {
-  id: string;
-  patientId: string;
-  patientName: string;
-  payerId: string | null;
-  payerName: string;
-  authorizationId: string | null;
-  authorizationNumber: string | null;
-  status: string;
-  endDate: string | null;
-  remainingUnits: number | null;
-  alert: string;
-  needsAttention: boolean;
-};
-
 type EligibilityQueueInput = {
   clients: QueueRow[];
   payers: QueueRow[];
   policies: QueueRow[];
   eligibility: QueueRow[];
-};
-
-type AuthorizationQueueInput = {
-  clients: QueueRow[];
-  payers: QueueRow[];
-  policies: QueueRow[];
-  authorizations: QueueRow[];
-  units: QueueRow[];
-  today?: string;
 };
 
 function patientName(row?: QueueRow | null) {
@@ -117,98 +93,4 @@ export function buildEligibilityQueue(input: EligibilityQueueInput): Eligibility
       rawResponse: latest?.raw_response ?? null,
     };
   });
-}
-
-function currentAuthorization(
-  rows: QueueRow[],
-  patientId: string,
-  payerId: string | null,
-) {
-  const relevant = rows.filter(
-    (row) =>
-      row.client_id === patientId &&
-      (!payerId || !row.payer_id || String(row.payer_id) === payerId),
-  );
-  return [...relevant].sort((a, b) => {
-    const aApproved = a.status === "approved";
-    const bApproved = b.status === "approved";
-    if (aApproved && !bApproved) return -1;
-    if (bApproved && !aApproved) return 1;
-    return String(b.end_date ?? b.created_at ?? "").localeCompare(
-      String(a.end_date ?? a.created_at ?? ""),
-    );
-  })[0] ?? null;
-}
-
-export function buildAuthorizationQueue(input: AuthorizationQueueInput): AuthorizationQueueRow[] {
-  const payerMap = new Map(input.payers.map((row) => [row.id, row]));
-  const today = input.today ?? new Date().toISOString().slice(0, 10);
-  const result: AuthorizationQueueRow[] = [];
-
-  for (const client of input.clients) {
-    if (String(metadata(client).billing_type ?? "insurance") === "self_pay") continue;
-
-    const policy = primaryPolicy(input.policies, client.id);
-    const payerId = policy?.payer_id ? String(policy.payer_id) : null;
-    const required = metadata(policy).authorization_required === true;
-    const authorization = currentAuthorization(
-      input.authorizations,
-      client.id,
-      payerId,
-    );
-
-    if (!required && !authorization) continue;
-
-    if (!authorization) {
-      result.push({
-        id: `authorization-missing-${client.id}`,
-        patientId: client.id,
-        patientName: patientName(client),
-        payerId,
-        payerName: payerId ? String(payerMap.get(payerId)?.name ?? "—") : "—",
-        authorizationId: null,
-        authorizationNumber: null,
-        status: "missing",
-        endDate: null,
-        remainingUnits: null,
-        alert: "missing",
-        needsAttention: true,
-      });
-      continue;
-    }
-
-    const authUnits = input.units.filter(
-      (row) => row.authorization_id === authorization.id,
-    );
-    const remainingUnits = authUnits.length
-      ? authUnits.reduce((sum, row) => sum + Number(row.remaining_units ?? 0), 0)
-      : null;
-    const status = String(authorization.status ?? "unknown");
-    const endDate = authorization.end_date ? String(authorization.end_date) : null;
-
-    let alert = "current";
-    if (status !== "approved") alert = status;
-    else if (endDate && endDate < today) alert = "expired";
-    else if (remainingUnits !== null && remainingUnits <= 0) alert = "exhausted";
-    else if (remainingUnits !== null && remainingUnits <= 2) alert = "low_units";
-
-    result.push({
-      id: authorization.id,
-      patientId: client.id,
-      patientName: patientName(client),
-      payerId,
-      payerName: payerId ? String(payerMap.get(payerId)?.name ?? "—") : "—",
-      authorizationId: authorization.id,
-      authorizationNumber: authorization.authorization_number
-        ? String(authorization.authorization_number)
-        : null,
-      status,
-      endDate,
-      remainingUnits,
-      alert,
-      needsAttention: alert !== "current",
-    });
-  }
-
-  return result;
 }

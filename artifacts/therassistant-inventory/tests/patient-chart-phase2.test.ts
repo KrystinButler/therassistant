@@ -6,7 +6,7 @@ import {
   summarizePatientReadiness,
 } from "../src/domains/patients/chart.ts";
 
-test("patient chart summary resolves payer, next appointment, authorization alert and open work", () => {
+test("patient chart summary resolves payer, next appointment and open work", () => {
   const summary = summarizePatientReadiness({
     patient: {
       id: "patient-1",
@@ -37,12 +37,6 @@ test("patient chart summary resolves payer, next appointment, authorization aler
       { id: "appt-2", client_id: "patient-1", starts_at: "2026-09-25T10:00:00Z", appointment_status: "scheduled" },
       { id: "appt-1", client_id: "patient-1", starts_at: "2026-09-20T10:00:00Z", appointment_status: "scheduled" },
     ],
-    authorizations: [
-      { id: "auth-1", client_id: "patient-1", payer_id: "payer-1", status: "approved", end_date: "2026-12-31" },
-    ],
-    authorizationUnits: [
-      { id: "units-1", authorization_id: "auth-1", authorized_units: 10, used_units: 8, remaining_units: 2 },
-    ],
     workItems: [
       { id: "work-1", source_object_type: "client", source_object_id: "patient-1", workqueue_status: "open" },
       { id: "work-2", source_object_type: "client", source_object_id: "patient-1", workqueue_status: "pending" },
@@ -53,7 +47,6 @@ test("patient chart summary resolves payer, next appointment, authorization aler
 
   assert.equal(summary.primaryPayerName, "Health First Colorado");
   assert.equal(summary.nextAppointmentId, "appt-1");
-  assert.equal(summary.authorizationAlert, "2 units remaining");
   assert.equal(summary.openWorkCount, 2);
   assert.equal(summary.registrationStatus, "complete");
 });
@@ -65,8 +58,6 @@ test("patient chart aggregate keeps only patient-owned records and enriches paye
     contacts: [{ id: "contact-1", client_id: "patient-1", contact_name: "Alex Ellis" }],
     policies: [{ id: "policy-1", client_id: "patient-1", payer_id: "payer-1", insurance_order: "primary", status: "active", member_id: "MEM1" }],
     eligibility: [{ id: "elig-1", client_id: "patient-1", payer_id: "payer-1", eligibility_status: "active", service_date: "2026-09-13" }],
-    authorizations: [{ id: "auth-1", client_id: "patient-1", payer_id: "payer-1", status: "approved" }],
-    authorizationUnits: [{ id: "unit-1", authorization_id: "auth-1", authorized_units: 12, used_units: 10, remaining_units: 2 }],
     appointments: [{ id: "appt-1", client_id: "patient-1", provider_id: "provider-1", starts_at: "2026-09-20T10:00:00Z", appointment_status: "scheduled" }],
     encounters: [{ id: "enc-1", client_id: "patient-1", provider_id: "provider-1", payer_id: "payer-1" }],
     treatmentPlans: [{ id: "plan-1", client_id: "patient-1", provider_id: "provider-1", status: "active" }],

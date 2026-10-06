@@ -34,6 +34,7 @@ test("pre-visit responses preserve unrelated check-in data and record submission
   assert.deepEqual(result.kiosk, { language: "en" });
   assert.deepEqual((result.pre_visit as Record<string, unknown>).visit_questions, { focus_today: "Manage anxiety" });
   assert.equal((result.pre_visit as Record<string, unknown>).demographics_confirmed, true);
+  assert.equal((result.pre_visit as Record<string, unknown>).visit_questions_saved_at, "2026-09-16T20:00:00.000Z");
   assert.equal((result.pre_visit as Record<string, unknown>).submitted_at, "2026-09-16T20:00:00.000Z");
 });
 
@@ -43,6 +44,15 @@ test("pre-visit page includes the five approved workflow sections", () => {
   for (const label of ["Demographics", "Insurance", "Visit Questions", "Consents & Acknowledgments", "Review & Submit"]) {
     assert.match(source, new RegExp(label.replace(/[&]/g, "\\&")));
   }
+});
+
+
+test("pre-visit page uses explicit saved markers for completion states", () => {
+  const source = readFileSync(checkInPageUrl, "utf8");
+  assert.match(source, /visitQuestionsComplete = Boolean\(submittedAt \|\| questionsSavedAt\)/);
+  assert.match(source, /consentsComplete = allConsentsAccepted && Boolean\(submittedAt \|\| consentsSavedAt\)/);
+  assert.match(source, /visitQuestionsComplete \? "Completed" : hasVisitAnswers \? "In progress" : "Not started"/);
+  assert.match(source, /consentsComplete \? "Completed" : hasConsentProgress \? "In progress" : "Not started"/);
 });
 
 test("provider patient review prioritizes submitted pre-visit visit questions", async () => {
@@ -123,3 +133,17 @@ test("provider patient review maps submitted safety responses", async () => {
   assert.equal(noConcern.safetyConcern, false);
 });
 
+
+
+test("pre-visit insurance confirmation distinguishes self-pay from missing coverage", () => {
+  const source = readFileSync(checkInPageUrl, "utf8");
+  assert.match(source, /Confirm No Insurance on File/);
+  assert.match(source, /If you are self-pay/);
+  assert.match(source, /contact the practice before submitting check-in/);
+});
+
+test("pre-visit safety question includes emergency-channel guidance", () => {
+  const source = readFileSync(checkInPageUrl, "utf8");
+  assert.match(source, /Portal responses are not monitored as an emergency service/);
+  assert.match(source, /call 911 or go to the nearest emergency department/);
+});

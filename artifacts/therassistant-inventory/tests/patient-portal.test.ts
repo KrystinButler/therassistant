@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { buildPatientPortalData, planCheckInUpdate, buildJournalEntryValues } from "../src/domains/portal/workflow.ts";
+import { buildPatientPortalData, buildJournalEntryValues, getPortalArrivalAvailability, isPortalAppointmentAvailable, planCheckInUpdate } from "../src/domains/portal/workflow.ts";
 
 test("portal returns only patient-facing data", () => {
   const result = buildPatientPortalData({
@@ -22,6 +22,83 @@ test("portal returns only patient-facing data", () => {
   assert.equal("workItems" in result, false);
   assert.equal("credentialing" in result, false);
   assert.equal("claims" in result, false);
+});
+
+
+
+test("same-day appointment remains available after its start time", () => {
+  const appointment = {
+    id: "appt-current",
+    starts_at: "2026-09-29T18:00:00Z",
+    ends_at: "2026-09-29T19:00:00Z",
+    appointment_status: "scheduled",
+  };
+  assert.equal(isPortalAppointmentAvailable(appointment, new Date("2026-09-29T18:15:00Z")), true);
+  assert.equal(isPortalAppointmentAvailable(appointment, new Date("2026-09-29T23:01:00Z")), false);
+});
+
+test("completed and cancelled appointments are not patient check-in eligible", () => {
+  const base = {
+    id: "appt-current",
+    starts_at: "2026-09-29T18:00:00Z",
+    ends_at: "2026-09-29T19:00:00Z",
+  };
+  const now = new Date("2026-09-29T18:15:00Z");
+  assert.equal(isPortalAppointmentAvailable({ ...base, appointment_status: "completed" }, now), false);
+  assert.equal(isPortalAppointmentAvailable({ ...base, appointment_status: "cancelled" }, now), false);
+  assert.equal(isPortalAppointmentAvailable({ ...base, appointment_status: "no_show" }, now), false);
+});
+
+test("portal exposes all eligible future appointments without a three-visit cap", () => {
+  const appointments = Array.from({ length: 5 }, (_, index) => ({
+    id: `appt-${index + 1}`,
+    starts_at: `2026-10-0${index + 1}T18:00:00Z`,
+    ends_at: `2026-10-0${index + 1}T19:00:00Z`,
+    appointment_status: "scheduled",
+  }));
+  const result = buildPatientPortalData({
+    patient: { id: "patient-1" },
+    appointments,
+    policies: [],
+    documents: [],
+    checkins: [],
+    journalEntries: [],
+    now: new Date("2026-09-29T12:00:00Z"),
+  });
+  assert.equal(result.upcomingAppointments.length, 5);
+});
+
+
+test("patient arrival actions are time-gated before the appointment", () => {
+  const appointment = {
+    id: "appt-future",
+    starts_at: "2026-10-01T16:00:00Z",
+    ends_at: "2026-10-01T17:00:00Z",
+    appointment_status: "scheduled",
+  };
+
+  assert.deepEqual(
+    getPortalArrivalAvailability(appointment, new Date("2026-09-29T18:00:00Z")),
+    { onMyWay: false, arrival: false },
+  );
+  assert.deepEqual(
+    getPortalArrivalAvailability(appointment, new Date("2026-10-01T13:00:00Z")),
+    { onMyWay: true, arrival: false },
+  );
+  assert.deepEqual(
+    getPortalArrivalAvailability(appointment, new Date("2026-10-01T15:15:00Z")),
+    { onMyWay: true, arrival: true },
+  );
+});
+
+test("late-cancelled appointments are not patient check-in eligible", () => {
+  const appointment = {
+    id: "appt-late-cancel",
+    starts_at: "2026-10-01T16:00:00Z",
+    ends_at: "2026-10-01T17:00:00Z",
+    appointment_status: "late_cancel",
+  };
+  assert.equal(isPortalAppointmentAvailable(appointment, new Date("2026-09-29T18:00:00Z")), false);
 });
 
 test("check-in step updates one timestamp", () => {
@@ -53,4 +130,24 @@ test("default other documents are not patient-facing without explicit classifica
   });
 
   assert.deepEqual(result.documents.map((row) => row.id), ["doc-consent"]);
+});
+
+
+test("portal separates appointment history from currently available appointments", () => {
+  const result = buildPatientPortalData({
+    patient: { id: "patient-1" },
+    appointments: [
+      { id: "future", starts_at: "2026-10-03T18:00:00Z", ends_at: "2026-10-03T19:00:00Z", appointment_status: "scheduled" },
+      { id: "past-completed", starts_at: "2026-09-20T18:00:00Z", ends_at: "2026-09-20T19:00:00Z", appointment_status: "completed" },
+      { id: "future-cancelled", starts_at: "2026-10-02T18:00:00Z", ends_at: "2026-10-02T19:00:00Z", appointment_status: "cancelled" },
+    ],
+    policies: [],
+    documents: [],
+    checkins: [],
+    journalEntries: [],
+    now: new Date("2026-09-29T18:00:00Z"),
+  });
+
+  assert.deepEqual(result.upcomingAppointments.map((row) => row.id), ["future"]);
+  assert.deepEqual(result.appointmentHistory.map((row) => row.id), ["future-cancelled", "past-completed"]);
 });

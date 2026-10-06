@@ -1,0 +1,56 @@
+.ppn-mobile { display: none; }
+
+.ppn-home-layout {
+  grid-template-columns: 184px minmax(0, 1fr);
+}
+
+.ppn-home-main {
+  min-width: 0;
+}
+
+.ppn-home-main .thera-detail-grid,
+.ppn-home-main .thera-metric-grid {
+  width: 100%;
+}
+
+@media (max-width: 760px) {
+  .ppn-home-layout { display: block; }
+  .ppn-home-layout > .pj-sidebar { display: none; }
+
+  .pj-app, .ppn-home-page { padding-bottom: calc(70px + env(safe-area-inset-bottom)); }
+
+  .ppn-mobile {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 50;
+    display: grid;
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+    gap: 2px;
+    padding: 7px 8px calc(7px + env(safe-area-inset-bottom));
+    border-top: 1px solid #dce6e8;
+    background: rgba(255, 255, 255, .98);
+    box-shadow: 0 -3px 14px rgba(36, 67, 82, .08);
+  }
+
+  .ppn-mobile a {
+    min-height: 46px;
+    display: grid;
+    place-items: center;
+    align-content: center;
+    gap: 3px;
+    border-radius: 7px;
+    color: #53697c;
+    font-size: 11px;
+    font-weight: 600;
+    text-decoration: none;
+  }
+
+  .ppn-mobile a.active {
+    background: #dfeae6;
+    color: #173f4c;
+  }
+
+  .ppn-mobile span { line-height: 1; }
+}

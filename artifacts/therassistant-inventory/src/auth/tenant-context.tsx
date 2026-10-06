@@ -46,6 +46,17 @@ async function selectRows<T>(table: string, filters: Record<string, string>) {
   return (await response.json()) as T[];
 }
 
+/** Authoritative staff membership check for routing, not a patient permission. */
+export async function hasActiveStaffMembership(userId: string) {
+  if (!userId) return false;
+  const rows = await selectRows<{ id: string }>("tenant_users", {
+    user_id: `eq.${userId}`,
+    status: "eq.active",
+    limit: "1",
+  });
+  return rows.length > 0;
+}
+
 export function TenantProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth();
   const [tenant, setTenant] = useState<TenantRow | null>(null);

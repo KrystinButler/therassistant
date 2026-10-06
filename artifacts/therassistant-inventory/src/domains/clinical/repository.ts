@@ -10,7 +10,6 @@ import { createChargeFromEncounter } from "../billing/repository";
 import { matchingServiceLineExists, validateServiceLineValues, type ServiceLineValues } from "../encounters/service-line-validation";
 import { saveStructuredClinicalData } from "./fast-charting-repository";
 import type { StructuredSelections } from "./fast-charting";
-import { updateEncounter } from "../encounters/repository";
 import { signNoteWorkflow, type ClinicalSigningRepository } from "./workflow";
 
 type DataRow = Row & { id: string };
@@ -47,29 +46,13 @@ async function clinicalState(encounterId: string) {
 
 const signingRepository: ClinicalSigningRepository = {
   getClinicalState: clinicalState,
-  createSignature(values) {
-    return tenantInsert<DataRow>("clinical_note_signatures", values);
-  },
-  updateNote(id, values) {
-    return tenantUpdate<DataRow>("clinical_notes", id, values);
+  signNoteAtomically(encounterId, noteId, providerId, signatureText) {
+    return tenantRpc<{ note_id: string; signed_at: string }>("sign_encounter_note", {
+      p_encounter_id: encounterId, p_note_id: noteId,
+      p_provider_id: providerId, p_signature_text: signatureText,
+    });
   },
   async runBillingReadiness(encounterId) {
-    const state = await clinicalState(encounterId);
-    if (!state.encounter) throw new Error("Encounter not found.");
-
-    const completedAt = new Date().toISOString();
-    await updateEncounter(encounterId, {
-      encounter_status: "completed",
-      ended_at: state.encounter.ended_at || completedAt,
-    });
-
-    if (state.encounter.appointment_id) {
-      await tenantUpdate<DataRow>("appointments", String(state.encounter.appointment_id), {
-        appointment_status: "completed",
-        completed_at: completedAt,
-      });
-    }
-
     const readiness = await createChargeFromEncounter(encounterId);
     if (!readiness.ok && !readiness.blocked) {
       throw new Error(readiness.message);
@@ -143,7 +126,7 @@ export async function addEncounterDiagnosis(
     order: "sequence_number.asc",
   });
 
-  return tenantInsert<DataRow>("encounter_diagnoses", {
+  const diagnosis = await tenantInsert<DataRow>("encounter_diagnoses", {
     encounter_id: encounterId,
     diagnosis_code: values.diagnosisCode.trim().toUpperCase(),
     diagnosis_description: values.diagnosisDescription?.trim() || null,
@@ -151,6 +134,19 @@ export async function addEncounterDiagnosis(
     sequence_number: existing.length + 1,
     present_on_claim: true,
   });
+
+  const note = first(await tenantSelect<DataRow>("clinical_notes", {
+    encounter_id: `eq.${encounterId}`,
+    order: "created_at.desc",
+    limit: "1",
+  }));
+  if (note && ["signed", "locked"].includes(String(note.note_status))) {
+    const result = await createChargeFromEncounter(encounterId);
+    if (!result.ok && !result.blocked) {
+      throw new Error("Diagnosis saved, but charge reconciliation failed: " + result.message);
+    }
+  }
+  return diagnosis;
 }
 
 async function assertUnbilledLine(encounterId: string, lineId: string, allowBlockedCorrection = false): Promise<DataRow> {
@@ -205,6 +201,7 @@ export async function signEncounterNote(
   encounterId: string,
   signerId: string,
   signatureText: string,
+  expectedNoteId?: string,
 ) {
-  return signNoteWorkflow(signingRepository, encounterId, signerId, signatureText);
+  return signNoteWorkflow(signingRepository, encounterId, signerId, signatureText, expectedNoteId);
 }

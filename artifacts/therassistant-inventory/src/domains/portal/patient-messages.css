@@ -1,0 +1,47 @@
+.ppm-compose {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.ppm-field {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+}
+
+.ppm-input {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+}
+
+.ppm-textarea {
+  min-height: 118px;
+  resize: vertical;
+  line-height: 1.45;
+}
+
+.ppm-reply {
+  display: grid;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.ppm-reply-textarea {
+  min-height: 82px;
+  resize: vertical;
+  line-height: 1.45;
+}
+
+.ppm-actions {
+  display: flex;
+  justify-content: flex-start;
+  gap: 8px;
+}
+
+@media (max-width: 760px) {
+  .ppm-textarea { min-height: 132px; }
+  .ppm-actions .thera-action { width: 100%; justify-content: center; }
+}

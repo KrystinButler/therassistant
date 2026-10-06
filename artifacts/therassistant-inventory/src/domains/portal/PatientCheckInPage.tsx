@@ -4,20 +4,17 @@ import {
   Check,
   CheckCircle2,
   ChevronDown,
-  ClipboardCheck,
-  CreditCard,
   FileCheck2,
   Heart,
-  Home,
   MapPin,
   MessageSquare,
   ShieldCheck,
-  UserRound,
 } from "lucide-react";
 import { Link, useRoute } from "wouter";
 
+import { PatientPortalMobileNavigation, PatientPortalNavigation } from "./PatientPortalNavigation";
 import { getPatientPortalData, savePreVisitCheckIn } from "./repository";
-import { PORTAL_HOME, PORTAL_JOURNAL, portalCheckInPath } from "./routes";
+import { PORTAL_HOME, portalCheckInPath } from "./routes";
 import type { PreVisitCheckInUpdate } from "./workflow";
 import "./patient-journal.css";
 import "./patient-checkin.css";
@@ -115,6 +112,8 @@ export function PatientCheckInPage() {
   const [insuranceConfirmed, setInsuranceConfirmed] = useState(false);
   const [visitQuestions, setVisitQuestions] = useState<VisitQuestions>(emptyQuestions);
   const [consents, setConsents] = useState<Consents>(emptyConsents);
+  const [questionsSavedAt, setQuestionsSavedAt] = useState("");
+  const [consentsSavedAt, setConsentsSavedAt] = useState("");
   const [submittedAt, setSubmittedAt] = useState("");
 
   useEffect(() => {
@@ -133,6 +132,8 @@ export function PatientCheckInPage() {
         const insuranceDone = preVisit.insurance_confirmed === true;
         const loadedQuestions = readQuestions(preVisit.visit_questions);
         const loadedConsents = readConsents(preVisit.consents);
+        const loadedQuestionsSavedAt = String(preVisit.visit_questions_saved_at ?? "");
+        const loadedConsentsSavedAt = String(preVisit.consents_saved_at ?? "");
         const submitted = String(preVisit.submitted_at ?? "");
 
         setData(result);
@@ -140,8 +141,17 @@ export function PatientCheckInPage() {
         setInsuranceConfirmed(insuranceDone);
         setVisitQuestions(loadedQuestions);
         setConsents(loadedConsents);
+        setQuestionsSavedAt(loadedQuestionsSavedAt);
+        setConsentsSavedAt(loadedConsentsSavedAt);
         setSubmittedAt(submitted);
-        setActiveStep(submitted ? 5 : !demographicsDone ? 1 : !insuranceDone ? 2 : 3);
+        setActiveStep(
+          submitted ? 5
+            : !demographicsDone ? 1
+              : !insuranceDone ? 2
+                : !loadedQuestionsSavedAt ? 3
+                  : !loadedConsentsSavedAt ? 4
+                    : 5,
+        );
         setError(null);
       } catch (err) {
         if (active) setError(err instanceof Error ? err.message : "Unable to load pre-visit check-in.");
@@ -156,6 +166,7 @@ export function PatientCheckInPage() {
   const appointment = data?.upcomingAppointments.find((row) => row.id === appointmentId) ?? null;
   const policy = data?.insurancePolicies.find((row) => String(row.status ?? "") === "active") ?? data?.insurancePolicies[0] ?? null;
   const allConsentsAccepted = Object.values(consents).every(Boolean);
+  const hasConsentProgress = Object.values(consents).some(Boolean);
   const hasVisitAnswers = useMemo(
     () => Object.values(visitQuestions).some((value) => value.trim().length > 0),
     [visitQuestions],
@@ -168,11 +179,13 @@ export function PatientCheckInPage() {
     try {
       const saved = await savePreVisitCheckIn(appointmentId, update);
       const preVisit = recordOf(recordOf(saved.responses).pre_visit);
+      if (preVisit.visit_questions_saved_at) setQuestionsSavedAt(String(preVisit.visit_questions_saved_at));
+      if (preVisit.consents_saved_at) setConsentsSavedAt(String(preVisit.consents_saved_at));
       if (preVisit.submitted_at) setSubmittedAt(String(preVisit.submitted_at));
-      return true;
+      return preVisit;
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unable to save pre-visit check-in.");
-      return false;
+      return null;
     } finally {
       setWorking(null);
     }
@@ -229,11 +242,13 @@ export function PatientCheckInPage() {
   if (!data || !appointment) return <div className="pj-loading pj-error">{error ?? "Pre-visit check-in is unavailable."}</div>;
 
   const patientDisplayName = patientName(data.patient);
+  const visitQuestionsComplete = Boolean(submittedAt || questionsSavedAt);
+  const consentsComplete = allConsentsAccepted && Boolean(submittedAt || consentsSavedAt);
   const stepStatuses = [
     demographicsConfirmed,
     insuranceConfirmed,
-    hasVisitAnswers,
-    allConsentsAccepted,
+    visitQuestionsComplete,
+    consentsComplete,
     Boolean(submittedAt),
   ];
 
@@ -256,15 +271,7 @@ export function PatientCheckInPage() {
           <div className="pj-welcome"><small>Welcome back,</small><strong>{firstName(data.patient)}</strong></div>
           <div className="pj-mountains" aria-hidden="true">⌁⌁⌁</div>
           <p className="pj-progress-copy">Progress happens<br />between sessions, too.</p>
-          <nav className="pj-nav" aria-label="Patient portal navigation">
-            <Link href={PORTAL_HOME}><Home size={17} /> Home</Link>
-            <Link href={PORTAL_HOME}><CalendarDays size={17} /> Appointments</Link>
-            <Link href={PORTAL_JOURNAL}><ClipboardCheck size={17} /> Journal</Link>
-            <Link href={portalCheckInPath(appointmentId)} className="active"><Heart size={17} /> Check-In</Link>
-            <Link href={PORTAL_HOME}><CreditCard size={17} /> Billing</Link>
-            <Link href={PORTAL_HOME}><MessageSquare size={17} /> Messages</Link>
-            <Link href={PORTAL_HOME}><UserRound size={17} /> Profile</Link>
-          </nav>
+          <PatientPortalNavigation active="checkin" checkInHref={portalCheckInPath(appointmentId)} />
           <div className="pj-sidebar-quote"><div className="pj-tree-line">▲ ▲ ▲</div><em>Same people.<br />A Healthier You.</em></div>
         </aside>
 
@@ -323,21 +330,22 @@ export function PatientCheckInPage() {
                 <Summary label="Member ID" value={String(policy.member_id ?? "—")} />
                 <Summary label="Group number" value={String(policy.group_number ?? "—")} />
                 <Summary label="Status" value={String(policy.status ?? "—")} />
-              </div> : <div className="pci-empty">No insurance policy is currently shown in the portal.</div>}
-              <div className="pci-actions"><button type="button" className="pj-primary-button" disabled={working !== null} onClick={() => void confirmInsurance()}>{working === "insurance" ? "Saving..." : insuranceConfirmed ? "Confirmed" : "Confirm Insurance"}</button></div>
+              </div> : <div className="pci-empty"><strong>No insurance is currently on file.</strong><br />If you are self-pay, confirm that below. If you expected insurance to appear, contact the practice before submitting check-in.</div>}
+              <div className="pci-actions"><button type="button" className="pj-primary-button" disabled={working !== null} onClick={() => void confirmInsurance()}>{working === "insurance" ? "Saving..." : insuranceConfirmed ? "Confirmed" : policy ? "Confirm Insurance" : "Confirm No Insurance on File"}</button></div>
             </div>}
           </section>
 
           <section className={`pci-section ${activeStep === 3 ? "open" : ""}`}>
             <button type="button" className="pci-section-header" onClick={() => setActiveStep(3)}>
-              <span className={`pci-status-dot ${hasVisitAnswers ? "complete" : "current"}`}>{hasVisitAnswers ? <Check size={14} /> : 3}</span>
-              <strong>Visit Questions</strong><span className="pci-section-state">{hasVisitAnswers ? "In progress" : "Not started"}</span><ChevronDown size={16} />
+              <span className={`pci-status-dot ${visitQuestionsComplete ? "complete" : hasVisitAnswers ? "current" : ""}`}>{visitQuestionsComplete ? <Check size={14} /> : 3}</span>
+              <strong>Visit Questions</strong><span className="pci-section-state">{visitQuestionsComplete ? "Completed" : hasVisitAnswers ? "In progress" : "Not started"}</span><ChevronDown size={16} />
             </button>
             {activeStep === 3 && <div className="pci-section-body pci-questions">
               <Question label="What would you like to focus on today?" value={visitQuestions.focus_today} onChange={(value) => setVisitQuestions((current) => ({ ...current, focus_today: value }))} />
               <Question label="How have you been feeling since your last visit?" value={visitQuestions.feeling_since_last_visit} onChange={(value) => setVisitQuestions((current) => ({ ...current, feeling_since_last_visit: value }))} />
               <Question label="Any important changes since your last appointment?" value={visitQuestions.important_changes} onChange={(value) => setVisitQuestions((current) => ({ ...current, important_changes: value }))} />
               <Question label="Are there any safety concerns you want your provider to know about today?" value={visitQuestions.safety_concerns} onChange={(value) => setVisitQuestions((current) => ({ ...current, safety_concerns: value }))} />
+              <div className="pj-message" role="note">Portal responses are not monitored as an emergency service. If you are in immediate danger or need emergency help, call 911 or go to the nearest emergency department.</div>
               <label className="pci-question"><span><ShieldCheck size={17} /> Which treatment goal feels most important right now?</span><select value={visitQuestions.treatment_goal} onChange={(event) => setVisitQuestions((current) => ({ ...current, treatment_goal: event.target.value }))}><option value="">Select a treatment goal</option>{data.treatmentGoals.map((goal) => <option key={goal.id} value={String(goal.goal_text ?? goal.id)}>{String(goal.goal_text ?? "Treatment goal")}</option>)}</select></label>
               <Question label="Anything else you want your provider to know before the session?" value={visitQuestions.anything_else} onChange={(value) => setVisitQuestions((current) => ({ ...current, anything_else: value }))} />
               <div className="pci-actions"><button type="button" className="pj-primary-button" disabled={working !== null} onClick={() => void saveVisitQuestions()}>{working === "questions" ? "Saving..." : "Save & Continue"}</button></div>
@@ -346,8 +354,8 @@ export function PatientCheckInPage() {
 
           <section className={`pci-section ${activeStep === 4 ? "open" : ""}`}>
             <button type="button" className="pci-section-header" onClick={() => setActiveStep(4)}>
-              <span className={`pci-status-dot ${allConsentsAccepted ? "complete" : ""}`}>{allConsentsAccepted ? <Check size={14} /> : 4}</span>
-              <strong>Consents & Acknowledgments</strong><span className="pci-section-state">{allConsentsAccepted ? "Completed" : "Not started"}</span><ChevronDown size={16} />
+              <span className={`pci-status-dot ${consentsComplete ? "complete" : hasConsentProgress ? "current" : ""}`}>{consentsComplete ? <Check size={14} /> : 4}</span>
+              <strong>Consents & Acknowledgments</strong><span className="pci-section-state">{consentsComplete ? "Completed" : hasConsentProgress ? "In progress" : "Not started"}</span><ChevronDown size={16} />
             </button>
             {activeStep === 4 && <div className="pci-section-body">
               <Consent checked={consents.information_accurate} onChange={(checked) => setConsents((current) => ({ ...current, information_accurate: checked }))}>I confirm that my demographic and insurance information shown above is accurate to the best of my knowledge.</Consent>
@@ -367,14 +375,15 @@ export function PatientCheckInPage() {
               <div className="pci-review-list">
                 <ReviewItem label="Demographics" complete={demographicsConfirmed} />
                 <ReviewItem label="Insurance" complete={insuranceConfirmed} />
-                <ReviewItem label="Visit Questions" complete={hasVisitAnswers} />
-                <ReviewItem label="Consents & Acknowledgments" complete={allConsentsAccepted} />
+                <ReviewItem label="Visit Questions" complete={visitQuestionsComplete} />
+                <ReviewItem label="Consents & Acknowledgments" complete={consentsComplete} />
               </div>
               <div className="pci-actions"><button type="button" className="pj-primary-button" disabled={working !== null || Boolean(submittedAt)} onClick={() => void submitCheckIn()}>{working === "submit" ? "Submitting..." : submittedAt ? "Submitted" : "Submit Pre-Visit Check-In"}</button></div>
             </div>}
           </section>
         </main>
       </div>
+      <PatientPortalMobileNavigation active="appointments" />
     </div>
   );
 }

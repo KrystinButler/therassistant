@@ -7,8 +7,9 @@ export type ClinicalSigningRepository = {
     diagnoses: Array<Record<string, any>>;
     serviceLines: Array<Record<string, any>>;
   }>;
-  createSignature(values: Record<string, unknown>): Promise<Record<string, unknown>>;
-  updateNote(id: string, values: Record<string, unknown>): Promise<Record<string, unknown>>;
+  signNoteAtomically(encounterId: string, noteId: string, providerId: string, signatureText: string): Promise<{
+    note_id: string; signed_at: string;
+  }>;
   runBillingReadiness(encounterId: string): Promise<unknown>;
 };
 
@@ -17,7 +18,8 @@ export async function signNoteWorkflow(
   encounterId: string,
   providerId: string,
   signatureText: string,
-): Promise<WorkflowResult<{ noteId: string; signedAt: string }>> {
+  expectedNoteId?: string,
+): Promise<WorkflowResult<{ noteId: string; signedAt: string; billingPending: boolean }>> {
   if (!providerId || !signatureText.trim()) {
     return blocked(
       "signature_required",
@@ -31,6 +33,9 @@ export async function signNoteWorkflow(
   }
   if (!state.note) {
     return blocked("note_missing", "Create a clinical note before signing.");
+  }
+  if (expectedNoteId && String(state.note.id) !== expectedNoteId) {
+    return failure("note_changed", "The encounter note changed before signing. Reload and review the current note.");
   }
 
   const encounterProviderId = String(state.encounter.provider_id ?? "");
@@ -49,20 +54,10 @@ export async function signNoteWorkflow(
   // belong to billing readiness. They must not block a provider
   // from completing and signing the clinical record.
 
-  const signedAt = new Date().toISOString();
+  let signed: { note_id: string; signed_at: string };
 
   try {
-    await repo.createSignature({
-      clinical_note_id: state.note.id,
-      provider_id: providerId,
-      signed_at: signedAt,
-      signature_text: signatureText.trim(),
-    });
-
-    await repo.updateNote(String(state.note.id), {
-      note_status: "signed",
-      locked_at: signedAt,
-    });
+    signed = await repo.signNoteAtomically(encounterId, String(state.note.id), providerId, signatureText.trim());
   } catch (error) {
     return failure(
       "note_sign_failed",
@@ -70,12 +65,15 @@ export async function signNoteWorkflow(
     );
   }
 
+  let billingPending = false;
   try {
-    await repo.runBillingReadiness(encounterId);
+    const readiness = await repo.runBillingReadiness(encounterId) as { ok?: boolean } | undefined;
+    billingPending = readiness?.ok === false;
   } catch {
-    // The clinical signature is authoritative once saved. A downstream
-    // billing-readiness failure must never make the clinical signature fail.
+    // The signature and recovery task already committed together. Do not ask
+    // the clinician to re-sign when billing is unavailable.
+    billingPending = true;
   }
 
-  return success({ noteId: String(state.note.id), signedAt });
+  return success({ noteId: signed.note_id, signedAt: signed.signed_at, billingPending });
 }

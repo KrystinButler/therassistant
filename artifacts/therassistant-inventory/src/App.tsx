@@ -4,8 +4,9 @@ import { Route, Switch, useLocation, useRoute } from "wouter";
 import { AuthProvider, useAuth } from "./auth/auth-context";
 import { LoginPage } from "./auth/LoginPage";
 import { OrganizationSetup } from "./auth/OrganizationSetup";
+import { AccountAccessChoice } from "./auth/AccountAccessChoice";
 import { PasswordRecoveryPage } from "./auth/PasswordRecoveryPage";
-import { TenantProvider, useTenant } from "./auth/tenant-context";
+import { TenantProvider, hasActiveStaffMembership, useTenant } from "./auth/tenant-context";
 import { AppShell } from "./components/app-shell";
 import { DenialsPage } from "./domains/ar/DenialsPage";
 import { BillingHubPage } from "./domains/billing/BillingHubPage";
@@ -38,6 +39,7 @@ import {
   PORTAL_JOURNAL,
   PORTAL_LOGIN,
   PORTAL_RECOVER,
+  rootPatientPortalDestination,
 } from "./domains/portal/routes";
 import { SchedulePage } from "./domains/scheduling/SchedulePage";
 import { SpecialtyProgramTemplatesPage } from "./domains/specialty-programs/SpecialtyProgramTemplatesPage";
@@ -114,10 +116,13 @@ function StaffRoutes() {
 }
 
 function TenantGate() {
+  const [location] = useLocation();
   const { loading, error, tenantId, needsOrganizationSetup } = useTenant();
   if (loading) return <div className="thera-state">Loading organization...</div>;
   if (error) return <div className="thera-state error">{error}</div>;
-  if (needsOrganizationSetup) return <OrganizationSetup />;
+  if (needsOrganizationSetup) {
+    return location === "/organization-setup" ? <OrganizationSetup /> : <AccountAccessChoice />;
+  }
   if (!tenantId) return <div className="thera-state error">No active organization is available.</div>;
   return <StaffRoutes />;
 }
@@ -161,33 +166,44 @@ function PatientPortalRoutes() {
 function ApplicationRoutes() {
   const [location] = useLocation();
   const { session, loading } = useAuth();
-  const [pendingInviteAtRoot, setPendingInviteAtRoot] = useState<boolean | null>(null);
+  const [rootPortalDestination, setRootPortalDestination] = useState<string | null>(null);
   const patientRoute = isPatientPortalPath(location);
 
-  // Supabase can return an accepted email invitation to its configured Site URL
-  // instead of redirectTo. Never send an invitation session into the staff gate.
+  // Verified invitations can fall back to Supabase's Site URL (/), sometimes
+  // without type=invite. Resolve server-side portal mapping and staff membership
+  // before choosing a patient or staff landing page.
   useEffect(() => {
     let active = true;
     if (loading || !session || patientRoute || !["/", "/login"].includes(location) || session.flowType) {
-      setPendingInviteAtRoot(false);
+      setRootPortalDestination("none");
       return () => { active = false; };
     }
-    setPendingInviteAtRoot(null);
-    void getMyPortalContext().then((context) => {
+    setRootPortalDestination(null);
+    void getMyPortalContext().then(async (context) => {
       if (!active) return;
-      const matchingEmail = Boolean(session.user?.email)
-        && String(context?.invited_email ?? "").trim().toLowerCase()
-          === String(session.user.email).trim().toLowerCase();
-      setPendingInviteAtRoot(context?.status === "invited" && matchingEmail);
-    }).catch(() => { if (active) setPendingInviteAtRoot(false); });
+      if (!["invited", "active"].includes(context?.status ?? "")) {
+        setRootPortalDestination("none");
+        return;
+      }
+      const hasStaff = await hasActiveStaffMembership(session.user?.id ?? "");
+      if (!active) return;
+      setRootPortalDestination(rootPatientPortalDestination({
+        status: context?.status,
+        invitedEmail: context?.invited_email,
+        authenticatedEmail: session.user?.email,
+        hasActiveStaffMembership: hasStaff,
+      }) ?? "none");
+    }).catch(() => { if (active) setRootPortalDestination("none"); });
     return () => { active = false; };
-  }, [loading, location, patientRoute, session?.access_token, session?.flowType, session?.user?.email]);
+  }, [loading, location, patientRoute, session?.access_token, session?.flowType, session?.user?.id, session?.user?.email]);
 
   if (!patientRoute && session?.flowType === "invite") return <Redirect to={PORTAL_ACTIVATE} />;
-  if (!patientRoute && pendingInviteAtRoot === true) return <Redirect to={PORTAL_ACTIVATE} />;
+  if (!patientRoute && rootPortalDestination && rootPortalDestination !== "none") {
+    return <Redirect to={rootPortalDestination} />;
+  }
   if (!patientRoute && !loading && session && !session.flowType
-      && ["/", "/login"].includes(location) && pendingInviteAtRoot === null) {
-    return <div className="thera-state">Checking patient invitation...</div>;
+      && ["/", "/login"].includes(location) && rootPortalDestination === null) {
+    return <div className="thera-state">Checking account access...</div>;
   }
   return patientRoute ? <PatientPortalRoutes /> : <StaffGate />;
 }

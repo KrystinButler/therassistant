@@ -28,6 +28,9 @@ for (const [label, inviteType] of [
       if (route.request().method() === "PUT") passwordUpdated = true;
       await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(authUser) });
     });
+    await page.route(`${supabaseUrl}/rest/v1/tenant_users**`, async (route) => {
+      await route.fulfill({ status: 200, contentType: "application/json", body: "[]" });
+    });
     await page.route(`${supabaseUrl}/rest/v1/rpc/get_my_client_portal_context`, async (route) => {
       await route.fulfill({
         status: 200,
@@ -66,6 +69,13 @@ for (const [label, inviteType] of [
     await page.route(`${supabaseUrl}/rest/v1/rpc/get_my_portal_provider_summary`, async (route) => {
       await route.fulfill({ status: 200, contentType: "application/json", body: "null" });
     });
+    await page.route(`${supabaseUrl}/rest/v1/rpc/get_my_portal_billing_summary`, async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ open_balance_cents: 0, payments: [] }),
+      });
+    });
 
     // Supabase may redirect a verified email invitation to its Site URL (/)
     // instead of the requested /patient-portal/activate path.
@@ -90,3 +100,60 @@ for (const [label, inviteType] of [
     expect(passwordUpdated).toBe(true);
   });
 }
+
+test("activated patient returning to Site URL opens portal, not staff setup", async ({ page }) => {
+  const user = { id: "00000000-0000-4000-8000-000000000092", email: "activated@example.invalid" };
+  await page.route(`${supabaseUrl}/auth/v1/user`, async (route) => {
+    await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(user) });
+  });
+  await page.route(`${supabaseUrl}/rest/v1/rpc/get_my_client_portal_context`, async (route) => {
+    await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({
+      tenant_id: "10000000-0000-4000-8000-000000000092",
+      client_id: "40000000-0000-4000-8000-000000000092",
+      status: "active", invited_email: user.email,
+    }) });
+  });
+  await page.route(`${supabaseUrl}/rest/v1/tenant_users**`, async (route) => {
+    await route.fulfill({ status: 200, contentType: "application/json", body: "[]" });
+  });
+  await page.route(`${supabaseUrl}/rest/v1/rpc/get_my_patient_portal_data`, async (route) => {
+    await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({
+      patient: { id: "40000000-0000-4000-8000-000000000092", first_name: "Alex", last_name: "Synthetic" },
+      appointments: [], insurancePolicies: [], documents: [], checkins: [], journalEntries: [], balance: null,
+    }) });
+  });
+  await page.route(`${supabaseUrl}/rest/v1/rpc/get_my_portal_provider_summary`, async (route) => {
+    await route.fulfill({ status: 200, contentType: "application/json", body: "null" });
+  });
+  await page.route(`${supabaseUrl}/rest/v1/rpc/get_my_portal_billing_summary`, async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ open_balance_cents: 0, payments: [] }),
+    });
+  });
+  await page.goto("/#access_token=active-patient-token&refresh_token=active-patient-refresh&expires_in=3600");
+  await expect.poll(() => new URL(page.url()).pathname).toBe("/patient-portal");
+  await expect(page.getByRole("heading", { name: "Alex Synthetic" })).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByRole("heading", { name: "Set up your organization" })).toHaveCount(0);
+});
+
+test("unmapped email-link account is given patient instructions, not organization setup", async ({ page }) => {
+  await page.route(`${supabaseUrl}/auth/v1/user`, async (route) => {
+    await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({
+      id: "00000000-0000-4000-8000-000000000093", email: "unmapped@example.invalid",
+    }) });
+  });
+  await page.route(`${supabaseUrl}/rest/v1/rpc/get_my_client_portal_context`, async (route) => {
+    await route.fulfill({ status: 200, contentType: "application/json", body: "null" });
+  });
+  await page.route(`${supabaseUrl}/rest/v1/tenant_users**`, async (route) => {
+    await route.fulfill({ status: 200, contentType: "application/json", body: "[]" });
+  });
+  await page.goto("/#access_token=unmapped-token&refresh_token=unmapped-refresh&expires_in=3600");
+  await expect(page.getByRole("heading", { name: "Account access not configured" })).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByRole("heading", { name: "Set up your organization" })).toHaveCount(0);
+  await expect(page.getByRole("link", { name: "Patient portal sign in" })).toHaveAttribute("href", "/patient-portal/login");
+  await page.getByRole("link", { name: "I'm setting up a practice or billing company" }).click();
+  await expect(page.getByRole("heading", { name: "Set up your organization" })).toBeVisible();
+});
