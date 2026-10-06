@@ -259,7 +259,7 @@ export function DashboardPage() {
             {view.priorityWork.length ? (
               <div className="cw-list">
                 {view.priorityWork.slice(0, 5).map((item) => (
-                  <Link className="cw-task-row" key={item.id} href={safeRoute(item.sourceRoute)}>
+                  <Link className="cw-task-row" key={item.id} href={safeRoute(item.workRoute || item.sourceRoute)}>
                     <span className="cw-task-indicator"><span className="cw-task-square" /></span>
                     <span className="cw-task-copy">
                       <strong>{String(item.title || "Work item")}</strong>

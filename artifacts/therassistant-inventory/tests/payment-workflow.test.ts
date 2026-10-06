@@ -458,3 +458,44 @@ test("denied adjudication helper creates denial and follow-up work without auto 
   assert.equal(state.claims.get("claim-1")?.claim_status, "denied");
   assert.equal(state.appeals.length, 0);
 });
+
+
+test("separate remittances for one claim retain separate exact exception tasks", async () => {
+  const state = makeRepo();
+  for (const trace of ["EXCEPTION-ONE", "EXCEPTION-TWO"]) {
+    const result = await import835Workflow(state.repo, {
+      rawText: era835({ trace, charge: "110.00" }), fileName: trace + ".835",
+    });
+    assert.equal(result.ok, true);
+  }
+  const tasks = state.workItems.filter((row) => row.title === "835 claim charge does not match");
+  assert.equal(tasks.length, 2);
+  assert.deepEqual(tasks.map((row) => row.source_object_type), ["era_claim", "era_claim"]);
+  assert.deepEqual(tasks.map((row) => row.source_object_id), state.eraClaims.map((row) => row.id));
+  assert.notEqual(tasks[0].source_object_id, tasks[1].source_object_id);
+});
+
+test("unmatched claims in one ERA do not overwrite each other's exception task", async () => {
+  const state = makeRepo();
+  const rawText = era835({ control: "UNKNOWN-ONE", trace: "TWO-UNMATCHED", paid: "0.00", patient: "0.00", cas: [] })
+    .replace("SE*12*0001", "CLP*UNKNOWN-TWO*1*100.00*0.00*0.00**PAYER-2~SE*13*0001");
+  const result = await import835Workflow(state.repo, { rawText, fileName: "two-unmatched.835" });
+  assert.equal(result.ok, true);
+  const tasks = state.workItems.filter((row) => row.workqueue_type === "unmatched_era");
+  assert.equal(tasks.length, 2);
+  assert.deepEqual(tasks.map((row) => row.source_object_type), ["era_claim", "era_claim"]);
+  assert.deepEqual(tasks.map((row) => row.source_object_id), state.eraClaims.map((row) => row.id));
+});
+
+test("payer identity holds reference the exact ERA claim while deposit holds remain file scoped", async () => {
+  const state = makeRepo();
+  await import835Workflow(state.repo, {
+    rawText: era835().replace("AETNA835", "WRONGPAYER"), fileName: "wrong-payer.835",
+  });
+  const claimIssue = state.workItems.find((row) => row.title === "835 payer identifier does not match");
+  assert.equal(claimIssue?.source_object_type, "era_claim");
+  assert.equal(claimIssue?.source_object_id, state.eraClaims[0].id);
+  const fileIssue = state.workItems.find((row) => row.title === "835 payer identity verification failed");
+  assert.equal(fileIssue?.source_object_type, "era");
+  assert.equal(fileIssue?.source_object_id, state.eraFiles[0].id);
+});

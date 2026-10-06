@@ -37,3 +37,11 @@ test("malformed posting task IDs cannot reach the UUID lookup", () => {
     assert.equal(postingWorkItemId(id), id);
   }
 });
+
+
+test("exact remittance source never expands to another remittance for the same claim", () => {
+  const task = { id: "w4", workqueue_type: "payment_posting_issue", source_object_type: "era_claim", source_object_id: "e2" };
+  assert.deepEqual(resolvePostingWorkContext(task, eras)?.eraClaims.map((row) => row.id), ["e2"]);
+  assert.deepEqual(resolvePostingWorkContext({ ...task, source_object_id: "deleted" }, eras)?.eraClaims, []);
+  assert.equal(workRouteForWorkItem("era_claim", "e2", "payment_posting_issue", { workItemId: "w4" }), "/payments?tab=era&work=w4");
+});

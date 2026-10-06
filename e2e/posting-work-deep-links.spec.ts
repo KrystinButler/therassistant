@@ -5,9 +5,13 @@ const fileOne = "20000000-0000-4000-8000-000000000001";
 const fileTwo = "20000000-0000-4000-8000-000000000002";
 const claimTaskId = "30000000-0000-4000-8000-000000000001";
 const fileTaskId = "30000000-0000-4000-8000-000000000002";
+const exactTaskId = "30000000-0000-4000-8000-000000000004";
+const exactEraClaimId = "40000000-0000-4000-8000-000000000002";
 const unrelatedTaskId = "30000000-0000-4000-8000-000000000003";
 
 const tasks = [
+  { id: exactTaskId, title: "Review exact remittance exception", description: "Review only this retained remittance.",
+    source_object_type: "era_claim", source_object_id: exactEraClaimId, workqueue_type: "payment_posting_issue" },
   { id: claimTaskId, title: "Review claim posting exception", description: "Review both remittances for the claim.",
     source_object_type: "claim", source_object_id: claimId, workqueue_type: "payment_posting_issue" },
   { id: fileTaskId, title: "Review specific ERA exception", description: "Review the second file only.",
@@ -21,7 +25,10 @@ async function postingFixtures(page: Page) {
   const taskLookups: string[] = [];
   const writes: string[] = [];
   page.on("request", (request) => {
-    if (new URL(request.url()).pathname.startsWith("/rest/v1/") && request.method() !== "GET") {
+    const pathname = new URL(request.url()).pathname;
+    // This stable authentication RPC is a read even though PostgREST uses POST.
+    const portalContextRead = request.method() === "POST" && pathname === "/rest/v1/rpc/get_my_client_portal_context";
+    if (pathname.startsWith("/rest/v1/") && request.method() !== "GET" && !portalContextRead) {
       writes.push(request.method() + " " + new URL(request.url()).pathname);
     }
   });
@@ -54,6 +61,7 @@ async function postingFixtures(page: Page) {
 }
 
 for (const [id, title, files] of [
+  [exactTaskId, "Review exact remittance exception", ["second-remittance.835"]],
   [claimTaskId, "Review claim posting exception", ["first-remittance.835", "second-remittance.835"]],
   [fileTaskId, "Review specific ERA exception", ["second-remittance.835"]],
 ] as const) {
@@ -89,3 +97,20 @@ for (const id of ["malformed", "30000000-0000-4000-8000-000000000099", unrelated
     expect(requests.writes).toEqual([]);
   });
 }
+
+
+test("Dashboard task link preserves exact remittance context and focus", async ({ page }) => {
+  const requests = await postingFixtures(page);
+  await page.goto("/");
+  const link = page.getByRole("link").filter({ has: page.getByText("Review exact remittance exception", { exact: true }) });
+  await expect(link).toHaveAttribute("href", "/payments?tab=era&work=" + exactTaskId);
+  await link.click();
+  const panel = page.locator("#posting-work-" + exactTaskId);
+  await expect(panel).toBeVisible();
+  await expect(panel).toBeFocused();
+  await expect(panel.getByRole("row")).toHaveCount(2);
+  await expect(panel.getByRole("cell", { name: "second-remittance.835", exact: true })).toBeVisible();
+  await expect(panel.getByRole("cell", { name: "first-remittance.835", exact: true })).toHaveCount(0);
+  expect(requests.taskLookups).toContain("eq." + exactTaskId);
+  expect(requests.writes).toEqual([]);
+});
