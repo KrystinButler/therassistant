@@ -6,6 +6,7 @@ const migrationPath = "supabase/migrations/20261007040000_credentialing_maintena
 const directoryMonitorPath = "supabase/functions/credentialing-directory-monitor/index.ts";
 const workerPath = "supabase/functions/credentialing-verification-worker/index.ts";
 const catalogPath = "supabase/functions/credentialing-catalog-sync/index.ts";
+const supabaseConfigPath = "supabase/config.toml";
 
 async function text(path: string) {
   return readFile(path, "utf8");
@@ -29,6 +30,21 @@ test("maintenance functions require a custom scheduler secret rather than a publ
     const source = await text(path);
     assert.match(source, /x-therassistant-scheduler-secret/i);
     assert.match(source, /credentialing_internal_secret_valid/);
+  }
+});
+
+test("maintenance Edge Functions disable gateway JWT verification because custom scheduler auth runs inside the function", async () => {
+  const config = await text(supabaseConfigPath);
+  for (const slug of [
+    "credentialing-verification-worker",
+    "credentialing-catalog-sync",
+    "credentialing-directory-monitor",
+  ]) {
+    const escaped = slug.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    assert.match(
+      config,
+      new RegExp(`\\[functions\\.${escaped}\\]\\s+verify_jwt\\s*=\\s*false`, "m"),
+    );
   }
 });
 
