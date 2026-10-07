@@ -40,6 +40,20 @@ function directCoverageState(area: CignaCoverageArea) {
   return display && /^[A-Z]{2}$/.test(display) ? display : null;
 }
 
+function normalizeKeyPart(value: string | null | undefined) {
+  return (value ?? "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "");
+}
+
+export function cignaCanonicalPlanKey(
+  name: string | null | undefined,
+  productCode: string | null | undefined,
+) {
+  return `${normalizeKeyPart(name)}|${normalizeKeyPart(productCode)}`;
+}
+
 export function isColoradoInsurancePlan(
   plan: CignaInsurancePlan,
   includedLocations: Map<string, CignaLocation>,
