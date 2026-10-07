@@ -213,11 +213,11 @@ export async function requestPasswordRecovery(
 
 export async function updatePasswordForCurrentSession(
   password: string,
-  allowedFlow: "invite" | "recovery",
+  allowedFlow: "invite" | "recovery" | "staff_invite",
 ) {
   const session = await getSession();
   if (!session?.access_token) {
-    throw new Error("Sign in with your patient invitation before creating a password.");
+    throw new Error("Open your invitation or recovery link before creating a password.");
   }
 
   if (allowedFlow === "invite") {
@@ -244,6 +244,12 @@ export async function updatePasswordForCurrentSession(
         === String(session.user.email).trim().toLowerCase();
     if (context?.status !== "invited" || !matchingEmail) {
       throw new Error("This account does not have a pending patient invitation.");
+    }
+  } else if (allowedFlow === "staff_invite") {
+    // This updates only the authenticated user's password. Organization access
+    // still requires the existing server-enforced membership and role checks.
+    if (session.flowType !== "invite") {
+      throw new Error("A valid invitation session is required.");
     }
   } else if (session.flowType !== allowedFlow) {
     throw new Error("A valid password recovery session is required.");
