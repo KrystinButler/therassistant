@@ -3,11 +3,13 @@ import { useLocation } from "wouter";
 import { useAuth } from "./auth-context";
 import { clearAuthFlowType, updatePasswordForCurrentSession } from "../lib/supabase-client";
 import { getMyPortalContext } from "../domains/portal/portal-client";
+import { PORTAL_ACTIVATE } from "../domains/portal/routes";
 import { PatientPortalActivatePage } from "../domains/portal/PatientPortalActivatePage";
 
 /** Auth invites are shared by staff and patients; only the server mapping identifies a patient. */
 export function InvitationGate() {
   const { session, signOut } = useAuth();
+  const [, navigate] = useLocation();
   const [kind, setKind] = useState<"checking" | "patient" | "staff">("checking");
   const [error, setError] = useState<string | null>(null);
   const [attempt, setAttempt] = useState(0);
@@ -16,12 +18,14 @@ export function InvitationGate() {
     setKind("checking");
     setError(null);
     void getMyPortalContext().then(context => {
-      if (active) setKind(context ? "patient" : "staff");
+      if (!active) return;
+      if (context) navigate(PORTAL_ACTIVATE, { replace: true });
+      setKind(context ? "patient" : "staff");
     }).catch(cause => {
       if (active) setError(cause instanceof Error ? cause.message : "Unable to verify invitation.");
     });
     return () => { active = false; };
-  }, [session?.user.id, attempt]);
+  }, [session?.user.id, attempt, navigate]);
   if (error) return <main className="thera-main"><section className="thera-card">
     <h1>Unable to verify invitation</h1><p role="alert">{error}</p>
     <button className="thera-action" onClick={() => setAttempt(value => value + 1)}>Try again</button>
