@@ -1,0 +1,46 @@
+import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
+import test from "node:test";
+
+const adapterPath = "supabase/functions/_shared/credentialing/cigna.ts";
+const catalogPath = "supabase/functions/credentialing-catalog-sync/index.ts";
+const workerPath = "supabase/functions/credentialing-verification-worker/index.ts";
+
+async function text(path: string) {
+  return readFile(path, "utf8");
+}
+
+test("Cigna verifier uses exact NPI plus PractitionerRole network relationship", async () => {
+  const adapter = await text(adapterPath);
+  assert.match(adapter, /Practitioner\?identifier=/);
+  assert.match(adapter, /PractitionerRole\?/);
+  assert.match(adapter, /network=/);
+  assert.match(adapter, /providerNetworkRelationshipConfirmed/);
+  assert.match(adapter, /http:\/\/hl7\.org\/fhir\/sid\/us-npi/);
+  assert.doesNotMatch(adapter, /providerNetworkRelationshipConfirmed:\s*true[\s\S]{0,100}Practitioner\?identifier/);
+});
+
+test("Cigna selected group and location evidence are checked when supplied", async () => {
+  const adapter = await text(adapterPath);
+  assert.match(adapter, /organizationNpi/);
+  assert.match(adapter, /Organization\?identifier=/);
+  assert.match(adapter, /postalCode/);
+  assert.match(adapter, /_include=PractitionerRole%3Alocation|_include.*PractitionerRole:location/);
+});
+
+test("Cigna catalog sync derives plans and networks from InsurancePlan references", async () => {
+  const catalog = await text(catalogPath);
+  assert.match(catalog, /InsurancePlan/);
+  assert.match(catalog, /external_plan_id/);
+  assert.match(catalog, /external_network_id/);
+  assert.match(catalog, /payer_catalog_syncs/);
+  assert.match(catalog, /adapter_key=eq\.cigna/);
+});
+
+test("verification worker dispatches Cigna through the Plan-Net adapter", async () => {
+  const worker = await text(workerPath);
+  assert.match(worker, /verifyCignaParticipation/);
+  assert.match(worker, /adapterKey === "cigna"/);
+  assert.match(worker, /PARTICIPATING/);
+  assert.match(worker, /NOT_FOUND/);
+});
