@@ -7,7 +7,8 @@ test("staff navigation exposes the actual patient portal in a separate tab",()=>
   const shell=readFileSync(new URL("../src/components/app-shell.tsx",import.meta.url),"utf8");
   assert.match(shell,/label: "Patient Portal", href: PORTAL_LOGIN/);
   assert.match(shell,/target="_blank" rel="noopener noreferrer"/);
-  assert.match(shell,/private browser session/);
+  assert.match(shell,/private window/i);
+  assert.match(shell,/invited patient identity/i);
   assert.equal(PORTAL_LOGIN,"/patient-portal/login");
   assert.equal(isPatientPortalPath(PORTAL_LOGIN),true);
 });
