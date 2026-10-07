@@ -15,17 +15,32 @@ function secretKey() {
 
 const serviceKey = secretKey();
 
+async function credentialing_internal_secret_valid(value: string | null) {
+  if (!value || !base || !serviceKey) return false;
+  const response = await fetch(`${base}/rest/v1/rpc/credentialing_internal_secret_valid`, {
+    method: "POST",
+    headers: {
+      apikey: serviceKey,
+      Authorization: `Bearer ${serviceKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ p_secret: value }),
+  });
+  return response.ok && (await response.json()) === true;
+}
+
 Deno.serve(async (req: Request) => {
-  const authorization = req.headers.get("authorization");
-  if (!authorization?.startsWith("Bearer ")) {
-    return new Response(JSON.stringify({ error: "Authorization required" }), {
-      status: 401,
-      headers: { "content-type": "application/json" },
-    });
-  }
   if (!base || !serviceKey) {
     return new Response(JSON.stringify({ error: "Worker configuration missing" }), {
       status: 500,
+      headers: { "content-type": "application/json" },
+    });
+  }
+
+  const schedulerSecret = req.headers.get("x-therassistant-scheduler-secret");
+  if (!(await credentialing_internal_secret_valid(schedulerSecret))) {
+    return new Response(JSON.stringify({ error: "Unauthorized maintenance request" }), {
+      status: 401,
       headers: { "content-type": "application/json" },
     });
   }
