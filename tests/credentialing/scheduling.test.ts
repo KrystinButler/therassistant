@@ -49,11 +49,11 @@ test("maintenance Edge Functions disable gateway JWT verification because custom
   }
 });
 
-test("restore rehearsal excludes only database-bound pg_cron extension metadata", async () => {
+test("restore rehearsal excludes pg_cron TOC rows even when pg_restore appends an owner", async () => {
   const script = await text(restoreDrillPath);
   assert.match(script, /pg_restore\s+.*--list/s);
-  assert.match(script, /EXTENSION - pg_cron/);
-  assert.match(script, /COMMENT - EXTENSION pg_cron/);
+  assert.match(script, /EXTENSION - pg_cron\\\(\[\[:space:\]\]\\\|\$\\\)/);
+  assert.match(script, /COMMENT - EXTENSION pg_cron\\\(\[\[:space:\]\]\\\|\$\\\)/);
   assert.match(script, /--use-list/);
   assert.doesNotMatch(script, /--exclude-table=.*credentialing|--exclude-schema=.*credentialing/i);
 });
