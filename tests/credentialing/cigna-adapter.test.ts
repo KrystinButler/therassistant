@@ -2,6 +2,11 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 
+import {
+  insurancePlanProduct,
+  isColoradoInsurancePlan,
+} from "../../supabase/functions/_shared/credentialing/cigna-catalog.ts";
+
 const adapterPath = "supabase/functions/_shared/credentialing/cigna.ts";
 const catalogPath = "supabase/functions/credentialing-catalog-sync/index.ts";
 const workerPath = "supabase/functions/credentialing-verification-worker/processor.ts";
@@ -28,6 +33,53 @@ test("Cigna selected group and location evidence are checked when supplied", asy
   assert.match(adapter, /_include=PractitionerRole%3Alocation|_include.*PractitionerRole:location/);
 });
 
+test("Cigna catalog recognizes Colorado when coverageArea uses direct display instead of a Location reference", () => {
+  const plan = {
+    resourceType: "InsurancePlan" as const,
+    id: "d16-example",
+    name: "Open Access Plus",
+    coverageArea: [{ display: "CO" }],
+    type: [
+      {
+        coding: [
+          {
+            code: "commppo",
+            display: "Commercial PPO",
+          },
+        ],
+      },
+    ],
+    network: [{ reference: "Organization/d16-network" }],
+  };
+
+  assert.equal(isColoradoInsurancePlan(plan, new Map()), true);
+  assert.deepEqual(insurancePlanProduct(plan), {
+    code: "commppo",
+    display: "Commercial PPO",
+  });
+});
+
+test("Cigna catalog still recognizes referenced Colorado coverage locations", () => {
+  const plan = {
+    resourceType: "InsurancePlan" as const,
+    id: "referenced-location-plan",
+    name: "Referenced Location Plan",
+    coverageArea: [{ reference: "Location/co-location" }],
+  };
+  const locations = new Map([
+    [
+      "co-location",
+      {
+        resourceType: "Location" as const,
+        id: "co-location",
+        address: { state: "CO" },
+      },
+    ],
+  ]);
+
+  assert.equal(isColoradoInsurancePlan(plan, locations), true);
+});
+
 test("Cigna catalog sync derives plans and networks from InsurancePlan references", async () => {
   const catalog = await text(catalogPath);
   assert.match(catalog, /InsurancePlan/);
@@ -35,6 +87,8 @@ test("Cigna catalog sync derives plans and networks from InsurancePlan reference
   assert.match(catalog, /external_network_id/);
   assert.match(catalog, /payer_catalog_syncs/);
   assert.match(catalog, /adapter_key=eq\.cigna/);
+  assert.match(catalog, /isColoradoInsurancePlan/);
+  assert.match(catalog, /insurancePlanProduct/);
 });
 
 test("verification worker dispatches Cigna through the Plan-Net adapter", async () => {
