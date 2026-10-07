@@ -11,6 +11,7 @@ import {
 
 const adapterPath = "supabase/functions/_shared/credentialing/cigna.ts";
 const catalogPath = "supabase/functions/credentialing-catalog-sync/index.ts";
+const catalogResumeMigrationPath = "supabase/migrations/20261007050000_credentialing_catalog_sync_resume.sql";
 const workerPath = "supabase/functions/credentialing-verification-worker/processor.ts";
 
 async function text(path: string) {
@@ -118,6 +119,22 @@ test("Cigna catalog uses a supported page size and rejects OperationOutcome bund
   assert.match(catalog, /OperationOutcome/);
   assert.match(catalog, /Cigna Provider Directory returned an OperationOutcome/);
   assert.doesNotMatch(catalog, /InsurancePlan\?_count=200/);
+});
+
+test("Cigna catalog sync is bounded, resumable, and does not restart a fresh completed catalog all day", async () => {
+  const [catalog, migration] = await Promise.all([
+    text(catalogPath),
+    text(catalogResumeMigrationPath),
+  ]);
+  assert.match(migration, /next_cursor_url/);
+  assert.match(migration, /pages_processed/);
+  assert.match(migration, /last_progress_at/);
+  assert.match(migration, /\*\/15 \* \* \* \*/);
+  assert.match(catalog, /MAX_PAGES_PER_INVOCATION\s*=\s*1/);
+  assert.match(catalog, /CATALOG_REFRESH_INTERVAL_MS/);
+  assert.match(catalog, /next_cursor_url/);
+  assert.match(catalog, /last_progress_at/);
+  assert.match(catalog, /status=eq\.in_progress/);
 });
 
 test("Cigna catalog sync resolves unique network names before persisting plan-network rows", async () => {
