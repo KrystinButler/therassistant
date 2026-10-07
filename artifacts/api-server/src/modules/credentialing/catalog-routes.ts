@@ -2,6 +2,8 @@ import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
 import { sql } from "drizzle-orm";
 
+import { requireAuthenticatedTenant } from "../../middlewares/auth";
+
 const router: IRouter = Router();
 const UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -10,7 +12,7 @@ function includeInactiveRecords(value: unknown) {
   return value === "true";
 }
 
-router.get("/api/v1/payers", async (req, res, next) => {
+router.get("/v1/payers", requireAuthenticatedTenant, async (req, res, next) => {
   try {
     const includeInactive = includeInactiveRecords(req.query.includeInactive);
     const result = await db.execute(sql`
@@ -43,7 +45,7 @@ router.get("/api/v1/payers", async (req, res, next) => {
   }
 });
 
-router.get("/api/v1/payers/:payerId/plans", async (req, res, next) => {
+router.get("/v1/payers/:payerId/plans", requireAuthenticatedTenant, async (req, res, next) => {
   try {
     const payerId = req.params.payerId;
     const includeInactive = includeInactiveRecords(req.query.includeInactive);
@@ -86,7 +88,7 @@ router.get("/api/v1/payers/:payerId/plans", async (req, res, next) => {
   }
 });
 
-router.get("/api/v1/plans/:planId/networks", async (req, res, next) => {
+router.get("/v1/plans/:planId/networks", requireAuthenticatedTenant, async (req, res, next) => {
   try {
     const planId = req.params.planId;
     const includeInactive = includeInactiveRecords(req.query.includeInactive);
