@@ -31,6 +31,13 @@ test("Site URL fallback chooses patient routes only for matching nonstaff identi
   assert.equal(rootPatientPortalDestination({ ...email, status: "revoked", hasActiveStaffMembership: false }), null);
 });
 
+test("generic Supabase invite callbacks are resolved by account identity before patient routing", () => {
+  const app = readFileSync(new URL("../src/App.tsx", import.meta.url), "utf8");
+  assert.doesNotMatch(app, /session\?\.flowType === "invite"\) return <Redirect to=\{PORTAL_ACTIVATE\}/);
+  assert.doesNotMatch(app, /\|\| session\.flowType\) \{/);
+  assert.match(app, /session\.flowType === "recovery"/);
+  assert.match(app, /rootPatientPortalDestination\(/);
+});
 
 test("patient navigation uses real destinations including secure messaging",()=>{
   const nav=readFileSync(new URL("../src/domains/portal/PatientPortalNavigation.tsx",import.meta.url),"utf8");
@@ -47,7 +54,6 @@ test("patient navigation uses real destinations including secure messaging",()=>
   assert.match(home,/id="profile"/);
 });
 
-
 test("portal home uses the same branded shell as journal and check-in", () => {
   const home=readFileSync(new URL("../src/domains/portal/PatientPortalPage.tsx",import.meta.url),"utf8");
   assert.match(home,/className="pj-app ppn-home-page"/);
@@ -61,7 +67,6 @@ test("portal home presents one progressive arrival action per appointment",()=>{
   assert.match(home,/const arrivalStep = checkedIn \? null : arrived \? "checked_in" : onMyWay \? "arrived" : "on_my_way"/);
   assert.match(home,/const arrivalLabel = checkedIn \? "Checked In ✓" : arrived \? "Check In" : onMyWay \? "I Arrived" : "On My Way"/);
 });
-
 
 test("portal appointments expose staff-routed reschedule and cancellation requests",()=>{
   const home=readFileSync(new URL("../src/domains/portal/PatientPortalPage.tsx",import.meta.url),"utf8");
