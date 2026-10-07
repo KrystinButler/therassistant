@@ -125,6 +125,25 @@ test("claim and charge API routes have no credentialing dependency", async () =>
   }
 });
 
+test("directory monitor schema is part of clean Supabase replay", async () => {
+  const migration = await readFile(
+    "supabase/migrations/20261007005000_credentialing_directory_monitor.sql",
+    "utf8",
+  );
+
+  for (const table of [
+    "credentialing_directory_expectations",
+    "credentialing_directory_snapshots",
+    "credentialing_directory_discrepancies",
+  ]) {
+    assert.match(migration, new RegExp(`CREATE TABLE IF NOT EXISTS public\\.${table}`));
+    assert.match(migration, new RegExp(`ALTER TABLE public\\.${table} ENABLE ROW LEVEL SECURITY`));
+  }
+  assert.match(migration, /private\.has_tenant_read_access/);
+  assert.match(migration, /private\.has_tenant_write_access/);
+  assert.doesNotMatch(migration, /professional_claims|provider_payer_enrollments/i);
+});
+
 test("claim validation migration removes provider enrollment lookup", async () => {
   const migration = await readFile(
     "lib/db/migrations/20261006_credentialing_directory_monitor.sql",
