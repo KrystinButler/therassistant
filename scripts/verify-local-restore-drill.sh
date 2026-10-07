@@ -40,11 +40,12 @@ docker exec "$DB_CONTAINER" pg_dump \
 
 # pg_cron is intentionally database-bound in Supabase. The production/local
 # scheduler remains in the configured postgres database, while this rehearsal
-# restores application schema/data into a disposable database. Exclude only the
-# pg_cron extension declaration/comment from the restore TOC; credentialing
-# tables, functions, evidence, and all other extensions remain in the drill.
+# restores application schema/data into a disposable database. pg_restore TOC
+# rows include an owner after the object name, so match whitespace or end-of-line
+# after pg_cron. Credentialing tables, functions, evidence, and all other
+# extensions remain in the drill.
 docker exec "$DB_CONTAINER" sh -c \
-  "pg_restore --list '$DUMP_PATH' | sed -e '/EXTENSION - pg_cron$/d' -e '/COMMENT - EXTENSION pg_cron$/d' > '$TOC_PATH'"
+  "pg_restore --list '$DUMP_PATH' | sed -e '/EXTENSION - pg_cron\([[:space:]]\|$\)/d' -e '/COMMENT - EXTENSION pg_cron\([[:space:]]\|$\)/d' > '$TOC_PATH'"
 
 RESTORE_ROLE="$(docker exec "$DB_CONTAINER" psql -U postgres -d postgres -Atqc "select rolname from pg_roles where rolsuper order by case when rolname='supabase_admin' then 0 else 1 end, rolname limit 1;")"
 if [ -z "$RESTORE_ROLE" ]; then
