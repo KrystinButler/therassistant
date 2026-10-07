@@ -183,16 +183,37 @@ jobs:
           done
 
       - name: Verify isolated staff, provider, and patient boundaries
-        run: node scripts/test-runtime-boundaries.mjs
+        run: node scripts/verify-synthetic-isolation.mjs
+
+      - name: Start isolated API E2E server
+        shell: bash
+        run: |
+          PORT=3001 pnpm --filter @workspace/scripts exec tsx start-api-e2e.mts > /tmp/therassistant-api-e2e.log 2>&1 &
+          API_PID=$!
+          echo "API_E2E_PID=$API_PID" >> "$GITHUB_ENV"
+
+          ready=0
+          for i in $(seq 1 30); do
+            code="$(curl -sS -o /dev/null -w '%{http_code}' http://127.0.0.1:3001/api/clinical || true)"
+            if [ "$code" = "401" ] || [ "$code" = "400" ] || [ "$code" = "403" ]; then
+              ready=1
+              break
+            fi
+            sleep 1
+          done
+          if [ "$ready" -ne 1 ]; then
+            cat /tmp/therassistant-api-e2e.log
+            exit 1
+          fi
 
       - name: Verify clinical API authorization
-        run: node scripts/test-api-clinical-authorization.mjs
+        run: node scripts/verify-api-clinical-authorization.mjs
 
       - name: Verify full system role matrix
-        run: node scripts/test-role-matrix-authorization.mjs
+        run: node scripts/verify-system-role-matrix.mjs
 
       - name: Verify isolated patient portal lifecycle
-        run: node scripts/test-patient-portal-lifecycle.mjs
+        run: node scripts/test-synthetic-patient-portal-lifecycle.mjs
 
       - name: Install Playwright Chromium
         run: pnpm exec playwright install chromium
@@ -204,13 +225,21 @@ jobs:
         run: pnpm run test:e2e
 
       - name: Complete and verify synthetic insured revenue cycle
-        run: node scripts/complete-synthetic-e2e-revenue-cycle.mjs
+        run: node scripts/complete-synthetic-insured-revenue-cycle.mjs
 
       - name: Verify synthetic clinical-to-charge handoff
-        run: node scripts/verify-clinical-handoff.mjs
+        run: node scripts/verify-synthetic-clinical-handoff.mjs
 
       - name: Verify isolated database restore rehearsal
-        run: node scripts/test-database-restore-rehearsal.mjs
+        run: bash scripts/verify-local-restore-drill.sh
+
+      - name: Stop isolated API E2E server
+        if: always()
+        shell: bash
+        run: |
+          if [ -n "${API_E2E_PID:-}" ]; then
+            kill "$API_E2E_PID" 2>/dev/null || true
+          fi
 
       - name: Preserve browser failure evidence
         if: failure()
