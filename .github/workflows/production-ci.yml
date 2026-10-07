@@ -39,6 +39,9 @@ jobs:
       - name: Tests
         run: pnpm --filter ./scripts exec tsx --test ../artifacts/therassistant-inventory/tests/**/*.test.ts
 
+      - name: Credentialing contract tests
+        run: pnpm test:credentialing
+
       - name: Clinical API verifier safety
         run: node --test scripts/test-api-clinical-verifier-safety.mjs
 
@@ -180,53 +183,34 @@ jobs:
           done
 
       - name: Verify isolated staff, provider, and patient boundaries
-        run: node scripts/verify-synthetic-isolation.mjs
+        run: node scripts/test-runtime-boundaries.mjs
 
       - name: Verify clinical API authorization
-        shell: bash
-        run: |
-          PORT=3001 NODE_ENV=test pnpm --filter ./scripts exec tsx start-api-e2e.mts > /tmp/therassistant-api.log 2>&1 &
-          API_PID=$!
-          trap 'kill "$API_PID" 2>/dev/null || true' EXIT
-
-          ready=0
-          for i in $(seq 1 30); do
-            if curl -fsS http://127.0.0.1:3001/api/healthz >/dev/null; then
-              ready=1
-              break
-            fi
-            sleep 1
-          done
-          if [ "$ready" -ne 1 ]; then
-            cat /tmp/therassistant-api.log
-            exit 1
-          fi
-
-          API_BASE_URL=http://127.0.0.1:3001 node scripts/verify-api-clinical-authorization.mjs
+        run: node scripts/test-api-clinical-authorization.mjs
 
       - name: Verify full system role matrix
-        run: node scripts/verify-system-role-matrix.mjs
+        run: node scripts/test-role-matrix-authorization.mjs
 
       - name: Verify isolated patient portal lifecycle
-        run: node scripts/test-synthetic-patient-portal-lifecycle.mjs
+        run: node scripts/test-patient-portal-lifecycle.mjs
 
       - name: Install Playwright Chromium
-        run: pnpm exec playwright install --with-deps chromium
+        run: pnpm exec playwright install chromium
 
       - name: FHIR browser runtime
         run: pnpm run test:fhir:browser
 
       - name: Browser E2E
-        run: pnpm test:e2e
+        run: pnpm run test:e2e
 
       - name: Complete and verify synthetic insured revenue cycle
-        run: node scripts/complete-synthetic-insured-revenue-cycle.mjs
+        run: node scripts/complete-synthetic-e2e-revenue-cycle.mjs
 
       - name: Verify synthetic clinical-to-charge handoff
-        run: node scripts/verify-synthetic-clinical-handoff.mjs
+        run: node scripts/verify-clinical-handoff.mjs
 
       - name: Verify isolated database restore rehearsal
-        run: bash scripts/verify-local-restore-drill.sh
+        run: node scripts/test-database-restore-rehearsal.mjs
 
       - name: Preserve browser failure evidence
         if: failure()
@@ -234,7 +218,6 @@ jobs:
         with:
           name: browser-failure-evidence
           path: |
-            test-results/
             playwright-report/
-          retention-days: 7
+            test-results/
           if-no-files-found: ignore
