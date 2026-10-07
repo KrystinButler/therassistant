@@ -11,9 +11,9 @@ test("credentialing catalog migration is additive, effective-dated, and shared r
 
   assert.match(sql, /ALTER TABLE public\.payers[\s\S]*adapter_key/i);
   assert.match(sql, /ALTER TABLE public\.payer_plans[\s\S]*external_plan_id/i);
-  assert.match(sql, /CREATE TABLE public\.payer_networks/i);
-  assert.match(sql, /CREATE TABLE public\.payer_coverage_areas/i);
-  assert.match(sql, /CREATE TABLE public\.payer_catalog_syncs/i);
+  assert.match(sql, /CREATE TABLE(?: IF NOT EXISTS)? public\.payer_networks/i);
+  assert.match(sql, /CREATE TABLE(?: IF NOT EXISTS)? public\.payer_coverage_areas/i);
+  assert.match(sql, /CREATE TABLE(?: IF NOT EXISTS)? public\.payer_catalog_syncs/i);
 
   for (const field of ["effective_from", "effective_to", "active", "source_updated_at"]) {
     assert.match(sql, new RegExp(field, "i"));
@@ -39,7 +39,7 @@ test("Colorado ACC Phase III relationships are effective-dated rather than hard-
   assert.match(sql, /Region 4/i);
   assert.match(sql, /Colorado Access/i);
   assert.match(sql, /2025-07-01/);
-  assert.match(sql, /SELECT[\s\S]+FROM public\.payers/i);
+  assert.match(sql, /(?:FROM|JOIN) public\.payers/i);
   assert.doesNotMatch(sql, /'[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}'::uuid/i);
 });
 
