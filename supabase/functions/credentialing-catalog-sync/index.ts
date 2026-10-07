@@ -66,6 +66,16 @@ async function rest(path: string, init: RequestInit = {}) {
   return text ? JSON.parse(text) : null;
 }
 
+async function credentialing_internal_secret_valid(value: string | null) {
+  if (!value || !base || !serviceKey) return false;
+  const response = await fetch(`${base}/rest/v1/rpc/credentialing_internal_secret_valid`, {
+    method: "POST",
+    headers: headers(),
+    body: JSON.stringify({ p_secret: value }),
+  });
+  return response.ok && (await response.json()) === true;
+}
+
 async function getOne(path: string): Promise<Row | null> {
   const rows = (await rest(`${path}&limit=1`)) as Row[];
   return rows?.[0] ?? null;
@@ -258,12 +268,15 @@ async function syncCigna() {
 }
 
 Deno.serve(async (req: Request) => {
-  if (!req.headers.get("authorization")?.startsWith("Bearer ")) {
-    return new Response(JSON.stringify({ error: "Authorization required" }), { status: 401, headers: { "content-type": "application/json" } });
-  }
   if (!base || !serviceKey) {
     return new Response(JSON.stringify({ error: "Catalog sync configuration missing" }), { status: 500, headers: { "content-type": "application/json" } });
   }
+
+  const schedulerSecret = req.headers.get("x-therassistant-scheduler-secret");
+  if (!(await credentialing_internal_secret_valid(schedulerSecret))) {
+    return new Response(JSON.stringify({ error: "Unauthorized maintenance request" }), { status: 401, headers: { "content-type": "application/json" } });
+  }
+
   try {
     const result = await syncCigna();
     return new Response(JSON.stringify(result), { headers: { "content-type": "application/json" } });
