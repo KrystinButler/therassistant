@@ -102,7 +102,7 @@ export function evaluateBillingReadiness(input: BillingReadinessInput): BillingR
     ));
   } else {
     if (!["active", "eligible"].includes(String(input.eligibilityStatus ?? ""))) {
-      checks.push(result("eligibility_not_active", "Eligibility", "fail", true, `Eligibility is ${String(input.eligibilityStatus ?? "not verified").replaceAll("_", " ")}.`, "Verify active coverage for the service date."));
+      checks.push(result("eligibility_not_active", "Eligibility", "warn", false, `Eligibility is ${String(input.eligibilityStatus ?? "not verified").replaceAll("_", " ")}. Billing may proceed; review coverage separately.`, "Verify coverage for the service date without holding billing."));
     } else {
       checks.push(result("eligibility_active", "Eligibility", "pass", false, "Coverage is active for the service date."));
     }
