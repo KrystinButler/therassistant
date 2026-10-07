@@ -62,23 +62,6 @@ function qualifies(request: VerificationRequest, evidence: NormalizedEvidence) {
   return evidence.providerNetworkRelationshipConfirmed;
 }
 
-function baseDecision(
-  status: VerificationDecision["status"],
-  evidence: NormalizedEvidence | undefined,
-  payerEvidence: PayerEvidence,
-): VerificationDecision {
-  return {
-    status,
-    confidence: status === "PARTICIPATING" ? "HIGH" : status === "NOT_FOUND" ? "MEDIUM" : "LOW",
-    sourceType: evidence?.sourceType ?? null,
-    sourceReference: evidence?.sourceReference ?? null,
-    sourceUpdatedAt: evidence?.sourceUpdatedAt ?? null,
-    failureCode: payerEvidence.failureCode ?? null,
-    failureDetail: payerEvidence.failureDetail ?? null,
-    matches: evidence ? factsForEvidence((null as unknown) as VerificationRequest, evidence) : [],
-  };
-}
-
 export function evaluateParticipation(
   request: VerificationRequest,
   payerEvidence: PayerEvidence,
