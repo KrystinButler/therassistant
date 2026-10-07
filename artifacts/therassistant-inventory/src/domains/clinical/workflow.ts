@@ -61,7 +61,9 @@ export async function signNoteWorkflow(
   } catch (error) {
     return failure(
       "note_sign_failed",
-      error instanceof Error ? error.message : "Unable to sign clinical note.",
+      error instanceof Error && error.message.includes("A linked clinician account is required")
+        ? "Signing requires the Clinician role and an active link to this encounter’s rendering provider. A practice-admin role alone cannot sign. Configure the clinician account and provider link, then retry; your note remains saved."
+        : error instanceof Error ? error.message : "Unable to sign clinical note.",
     );
   }
 

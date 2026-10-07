@@ -132,11 +132,11 @@ test("blocked encounter keeps clinical status separate and creates work only for
   assert.equal(repo.encounterUpdate.encounter_status, undefined);
   assert.deepEqual(
     repo.work.map((item) => item.workqueue_type).sort(),
-    ["charge_validation", "eligibility_issue"],
+    ["charge_validation"],
   );
   assert.deepEqual(
     [...repo.resolvedWorkTypes[0]].sort(),
-    ["charge_validation", "eligibility_issue"],
+    ["charge_validation"],
   );
   assert.ok(repo.readinessChecks.some(
     (check) => check.check_code === "provider_enrollment" && check.check_status === "warn" && check.blocking === false,
@@ -173,6 +173,7 @@ test("billing blockers hold the captured charge instead of blocking clinical com
     serviceLines: [{
       ...cleanContext.serviceLines[0],
       units: 2,
+      place_of_service_code: "",
     }],
   });
 
@@ -182,7 +183,7 @@ test("billing blockers hold the captured charge instead of blocking clinical com
   assert.equal(repo.charges[0].service_line_id, "line-1");
   assert.equal(repo.charges[0].units, 2);
   assert.equal(repo.charges[0].charge_status, "blocked");
-  assert.match(String(repo.charges[0].block_reason), /Eligibility/i);
+  assert.match(String(repo.charges[0].block_reason), /service line/i);
   assert.equal(repo.encounterUpdate.billing_status, "held");
   assert.equal(repo.serviceLineUpdates[0].values.ready_for_claim, false);
 });
@@ -365,3 +366,14 @@ test("changed readiness cannot move an already claimed encounter into billing ho
   assert.equal(repo.work.length, 0);
   assert.equal(repo.charges[0].charge_status, "claim_created");
 });
+for (const eligibilityStatus of [null, "not_verified", "pending", "inactive"]) {
+  test(`eligibility ${eligibilityStatus} warns without holding charge capture`, async () => {
+    const repo = fakeRepo({ ...cleanContext, eligibilityStatus });
+    const result = await createChargeFromEncounterWorkflow(repo, "enc-1");
+    assert.equal(result.ok, true);
+    assert.equal(repo.charges[0].charge_status, "ready_for_claim");
+    assert.equal(repo.encounterUpdate.billing_status, "charged");
+    assert.equal(repo.work.length, 0);
+    assert.ok(repo.readinessChecks.some(check => check.check_code === "eligibility_not_active" && check.check_status === "warn" && check.blocking === false));
+  });
+}
