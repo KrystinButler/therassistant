@@ -14,3 +14,12 @@ enable_confirmations = false
 
 [functions.smart-oauth-token]
 verify_jwt = false
+
+[functions.credentialing-verification-worker]
+verify_jwt = false
+
+[functions.credentialing-catalog-sync]
+verify_jwt = false
+
+[functions.credentialing-directory-monitor]
+verify_jwt = false
