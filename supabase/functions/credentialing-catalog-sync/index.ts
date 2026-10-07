@@ -369,7 +369,7 @@ async function syncCigna() {
   let recordsChanged = 0;
   let plansSeen = 0;
   let coloradoPlansSeen = 0;
-  let nextUrl =
+  let nextUrl: string | null =
     stringValue(checkpoint, "next_cursor_url") ?? INITIAL_CIGNA_CATALOG_URL;
   let pagesProcessed = numberValue(checkpoint, "pages_processed");
   const previousAdded = numberValue(checkpoint, "records_added");
