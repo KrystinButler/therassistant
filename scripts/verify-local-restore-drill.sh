@@ -36,14 +36,17 @@ docker exec "$DB_CONTAINER" pg_dump \
   --format=custom \
   --no-owner \
   --no-acl \
+  --exclude-schema=cron \
   --file="$DUMP_PATH"
 
 # pg_cron is intentionally database-bound in Supabase. The production/local
 # scheduler remains in the configured postgres database, while this rehearsal
-# restores application schema/data into a disposable database. pg_restore TOC
-# rows include an owner after the object name, so match whitespace or end-of-line
-# after pg_cron. Credentialing tables, functions, evidence, and all other
-# extensions remain in the drill.
+# restores application schema/data into a disposable database. Excluding the
+# cron schema prevents extension-owned cron.job data from being replayed into a
+# database where pg_cron cannot be installed. pg_restore TOC rows can still
+# contain extension metadata with an owner suffix, so remove only those two
+# pg_cron metadata entries. Credentialing tables, functions, evidence, and all
+# other application data remain in the drill.
 docker exec "$DB_CONTAINER" sh -c \
   "pg_restore --list '$DUMP_PATH' | sed -e '/EXTENSION - pg_cron\([[:space:]]\|$\)/d' -e '/COMMENT - EXTENSION pg_cron\([[:space:]]\|$\)/d' > '$TOC_PATH'"
 
