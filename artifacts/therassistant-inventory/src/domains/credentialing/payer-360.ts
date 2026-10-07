@@ -1,4 +1,7 @@
 type Row = Record<string, any>;
+type EnrolledProviderRow = Row & { providerName: string };
+type FeeScheduleRow = Row & { lines: Row[] };
+type ContractRow = Row & { feeSchedules: FeeScheduleRow[] };
 
 function providerName(provider?: Row | null) {
   if (!provider) return "—";
@@ -27,15 +30,15 @@ export function buildPayer360View(input: {
     plans: input.plans.filter((row) => row.payer_id === input.payerId),
     enrolledProviders: input.enrollments
       .filter((row) => row.payer_id === input.payerId)
-      .map((row) => ({
+      .map((row): EnrolledProviderRow => ({
         ...row,
         providerName: providerName(providerMap.get(row.provider_id)),
       })),
-    contracts: payerContracts.map((contract) => ({
+    contracts: payerContracts.map((contract): ContractRow => ({
       ...contract,
       feeSchedules: input.feeSchedules
         .filter((schedule) => schedule.payer_contract_id === contract.id)
-        .map((schedule) => ({
+        .map((schedule): FeeScheduleRow => ({
           ...schedule,
           lines: input.feeScheduleLines.filter(
             (line) => line.fee_schedule_id === schedule.id,
