@@ -102,3 +102,27 @@ export function cignaNetworkIds(plan: CignaInsurancePlan) {
     ),
   ];
 }
+
+export async function resolveCignaNetworkNames(
+  networkIds: string[],
+  cache: Map<string, string | null>,
+  fetchName: (networkId: string) => Promise<string | null>,
+  concurrency = 12,
+) {
+  const missing = [
+    ...new Set(networkIds.filter((networkId) => !cache.has(networkId))),
+  ];
+  const width = Math.max(1, Math.floor(concurrency));
+
+  for (let offset = 0; offset < missing.length; offset += width) {
+    const batch = missing.slice(offset, offset + width);
+    const results = await Promise.all(
+      batch.map(async (networkId) => [networkId, await fetchName(networkId)] as const),
+    );
+    for (const [networkId, name] of results) {
+      cache.set(networkId, name);
+    }
+  }
+
+  return cache;
+}
