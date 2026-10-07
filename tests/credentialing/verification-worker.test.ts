@@ -2,7 +2,8 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 
-const workerPath = "supabase/functions/credentialing-verification-worker/index.ts";
+const entryPath = "supabase/functions/credentialing-verification-worker/index.ts";
+const processorPath = "supabase/functions/credentialing-verification-worker/processor.ts";
 const migrationPath = "supabase/migrations/20261007030000_credentialing_verification_worker.sql";
 
 async function text(path: string) {
@@ -28,15 +29,15 @@ test("worker queue access stays behind service-role-only database RPCs", async (
 });
 
 test("worker requires JWT and never converts source failure to NOT_FOUND", async () => {
-  const worker = await text(workerPath);
-  assert.match(worker, /authorization/i);
-  assert.match(worker, /SOURCE_UNAVAILABLE/);
-  assert.match(worker, /UNABLE_TO_VERIFY/);
-  assert.doesNotMatch(worker, /SOURCE_UNAVAILABLE[^\n]{0,120}NOT_FOUND/);
+  const [entry, processor] = await Promise.all([text(entryPath), text(processorPath)]);
+  assert.match(entry, /authorization/i);
+  assert.match(processor, /SOURCE_UNAVAILABLE/);
+  assert.match(processor, /UNABLE_TO_VERIFY/);
+  assert.doesNotMatch(processor, /SOURCE_UNAVAILABLE[^\n]{0,120}NOT_FOUND/);
 });
 
 test("worker archives terminal results and retries only bounded transient failures", async () => {
-  const worker = await text(workerPath);
+  const worker = await text(processorPath);
   assert.match(worker, /credentialing_worker_archive_message/);
   assert.match(worker, /credentialing_worker_retry_message/);
   assert.match(worker, /TRANSIENT_NETWORK/);
@@ -46,11 +47,12 @@ test("worker archives terminal results and retries only bounded transient failur
 });
 
 test("worker writes evidence before completing every verification decision", async () => {
-  const worker = await text(workerPath);
+  const worker = await text(processorPath);
   const unable = functionBody(worker, "completeUnable", "completeSynthetic");
-  const synthetic = functionBody(worker, "completeSynthetic", "processMessage");
+  const synthetic = functionBody(worker, "completeSynthetic", "completeCigna");
+  const cigna = functionBody(worker, "completeCigna", "processMessage");
 
-  for (const completionPath of [unable, synthetic]) {
+  for (const completionPath of [unable, synthetic, cigna]) {
     const evidence = completionPath.indexOf("await recordEvidence");
     const completion = completionPath.indexOf("await patchRun");
     assert.ok(evidence >= 0, "completion path must persist evidence");
