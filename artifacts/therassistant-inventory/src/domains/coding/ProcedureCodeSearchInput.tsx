@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 
+import { getEncounterServiceFee } from "../encounters/repository";
 import {
   procedureCodeReferenceSummary,
   searchProcedureCodes,
@@ -13,6 +14,35 @@ type Props = {
   onSelect: (result: ProcedureCodeSearchResult) => void;
 };
 
+function currentEncounterId() {
+  if (typeof window === "undefined") return "";
+  const match = window.location.pathname.match(/^\/encounters\/([^/]+)/);
+  return match ? decodeURIComponent(match[1]) : "";
+}
+
+function setControlledInputValue(input: HTMLInputElement, value: string) {
+  const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
+  if (setter) setter.call(input, value);
+  else input.value = value;
+  input.dispatchEvent(new Event("input", { bubbles: true }));
+}
+
+async function populateEncounterCharge(code: string, serviceDate?: string, replaceExisting = false) {
+  if (typeof document === "undefined") return;
+  const encounterId = currentEncounterId();
+  const chargeInput = document.getElementById("encounter-charge-amount");
+  if (!encounterId || !(chargeInput instanceof HTMLInputElement)) return;
+  if (!replaceExisting && chargeInput.value.trim()) return;
+
+  try {
+    const fee = await getEncounterServiceFee(encounterId, code, "", serviceDate);
+    if (!fee) return;
+    setControlledInputValue(chargeInput, (fee.rateCents / 100).toFixed(2));
+  } catch {
+    // A missing/unavailable fee leaves the charge editable for manual entry.
+  }
+}
+
 export function ProcedureCodeSearchInput({ code, disabled = false, serviceDate, onSelect }: Props) {
   const [query, setQuery] = useState(code);
   const [results, setResults] = useState<ProcedureCodeSearchResult[]>([]);
@@ -24,6 +54,13 @@ export function ProcedureCodeSearchInput({ code, disabled = false, serviceDate, 
   useEffect(() => {
     setQuery(code);
   }, [code]);
+
+  useEffect(() => {
+    const exactCode = code.trim().toUpperCase();
+    if (/^[A-Z0-9]{4,5}$/.test(exactCode)) {
+      void populateEncounterCharge(exactCode, serviceDate, false);
+    }
+  }, [code, serviceDate]);
 
   useEffect(() => {
     const exactCode = code.trim().toUpperCase();
@@ -85,6 +122,7 @@ export function ProcedureCodeSearchInput({ code, disabled = false, serviceDate, 
 
   function choose(result: ProcedureCodeSearchResult) {
     onSelect(result);
+    void populateEncounterCharge(result.code, serviceDate, true);
     setSelectedReference(result);
     setReferenceChecked(true);
     setQuery(result.code);
@@ -106,7 +144,7 @@ export function ProcedureCodeSearchInput({ code, disabled = false, serviceDate, 
           const value = event.target.value.toUpperCase();
           setQuery(value);
           if (/^[A-Z0-9]{4,5}$/.test(value.trim())) {
-            onSelect({
+            const selected = {
               code: value.trim(),
               name: "",
               system: "",
@@ -114,7 +152,9 @@ export function ProcedureCodeSearchInput({ code, disabled = false, serviceDate, 
               effectiveFrom: "",
               effectiveTo: "",
               descriptionSource: "",
-            });
+            };
+            onSelect(selected);
+            void populateEncounterCharge(selected.code, serviceDate, true);
           }
         }}
       />
