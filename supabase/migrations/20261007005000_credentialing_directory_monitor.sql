@@ -13,7 +13,8 @@ CREATE TABLE IF NOT EXISTS public.credentialing_directory_expectations (
   active boolean NOT NULL DEFAULT true,
   created_at timestamptz NOT NULL DEFAULT now(),
   updated_at timestamptz NOT NULL DEFAULT now(),
-  UNIQUE (tenant_id, provider_id, payer_id, source_key)
+  CONSTRAINT credentialing_directory_expectations_identity_uniq
+    UNIQUE NULLS NOT DISTINCT (tenant_id, provider_id, payer_id, source_key)
 );
 
 CREATE INDEX IF NOT EXISTS credentialing_directory_expectations_provider_idx
