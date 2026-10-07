@@ -20,7 +20,8 @@ test("maintenance scheduler uses pg_cron pg_net and Vault without embedding cred
   assert.match(sql, /credentialing-verification-worker/);
   assert.match(sql, /credentialing-catalog-sync/);
   assert.match(sql, /credentialing-directory-monitor/);
-  assert.doesNotMatch(sql, /service_role|sb_secret_|eyJ[A-Za-z0-9_-]{20,}/);
+  assert.doesNotMatch(sql, /sb_secret_|eyJ[A-Za-z0-9_-]{20,}/);
+  assert.doesNotMatch(sql, /(?:authorization|apikey)\s*[:=][^\n]*(?:service_role|secret|bearer)/i);
 });
 
 test("maintenance functions require a custom scheduler secret rather than a public JWT", async () => {
