@@ -3,7 +3,7 @@ import { Link, useLocation } from "wouter";
 import { ClientSearchContext } from "../navigation/client-search-context";
 import {
   Bell, BookOpenText, BriefcaseBusiness, CalendarDays, ChartNoAxesCombined,
-  ChevronDown, ClipboardList, CreditCard, ExternalLink, FileText, Landmark, LayoutDashboard,
+  ChevronDown, ClipboardList, CreditCard, ExternalLink, FileText, LayoutDashboard,
   LogOut, Menu, Search, Settings, UsersRound, UserRoundCog, X,
   type LucideIcon,
 } from "lucide-react";
@@ -31,9 +31,8 @@ const navigation: NavGroup[] = [
   {
     label: "PRACTICE",
     items: [
-      { label: "Payers", href: "/payers-contracts", icon: Landmark, paths: ["/payers"] },
       { label: "Providers", href: "/providers", icon: UserRoundCog },
-      { label: "Credentialing", href: "/credentialing", icon: ClipboardList },
+      { label: "Credentialing Module", href: "/credentialing", icon: ClipboardList },
       { label: "Patient Journal", href: "/journal", icon: BookOpenText },
       { label: "Portal Preview", href: "/portal-preview", icon: ExternalLink },
       { label: "Patient Portal", href: PORTAL_LOGIN, icon: ExternalLink, external: true },
@@ -100,8 +99,6 @@ export function AppShell({ children }: Props) {
     const Icon = item.icon;
     const contents = <><Icon size={19} strokeWidth={1.75} aria-hidden="true" /><span>{item.label}</span></>;
     if (item.external) {
-      // This is the real patient portal, not a staff impersonation mode.
-      // A separate private browser session is required for simultaneous testing.
       return <a key={item.href} href={item.href} target="_blank" rel="noopener noreferrer"
         className="cw-nav-link" title="Open in a private window with an invited patient identity to test while staff remains signed in"
         onClick={() => setMobileOpen(false)}>{contents}<ExternalLink size={13} aria-hidden="true" /></a>;

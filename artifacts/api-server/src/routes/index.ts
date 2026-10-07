@@ -17,7 +17,7 @@ import clinicalRouter from "./clinical";
 import chargesRouter from "./charges";
 import demoControlRouter from "./demo-control";
 import restoredRouter from "./restored";
-import credentialingRouter from "./credentialing";
+import credentialingModuleRouter from "../modules/credentialing/router";
 import payersRouter from "./payers";
 
 const router: IRouter = Router();
@@ -35,7 +35,7 @@ router.use(readinessRouter);
 router.use(clinicalRouter);
 router.use(chargesRouter);
 router.use(demoControlRouter);
-router.use(credentialingRouter);
+router.use(credentialingModuleRouter);
 router.use(payersRouter);
 router.use(restoredRouter);
 

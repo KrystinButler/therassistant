@@ -2,11 +2,11 @@ import { useEffect, useState } from "react";
 import { Route, Switch, useLocation, useRoute } from "wouter";
 
 import { AuthProvider, useAuth } from "./auth/auth-context";
+import { AccountAccessChoice } from "./auth/AccountAccessChoice";
 import { LoginPage } from "./auth/LoginPage";
 import { OrganizationSetup } from "./auth/OrganizationSetup";
-import { AccountAccessChoice } from "./auth/AccountAccessChoice";
 import { PasswordRecoveryPage } from "./auth/PasswordRecoveryPage";
-import { TenantProvider, hasActiveStaffMembership, useTenant } from "./auth/tenant-context";
+import { hasActiveStaffMembership, TenantProvider, useTenant } from "./auth/tenant-context";
 import { AppShell } from "./components/app-shell";
 import { DenialsPage } from "./domains/ar/DenialsPage";
 import { BillingHubPage } from "./domains/billing/BillingHubPage";
@@ -14,15 +14,14 @@ import { BillingQueuePage } from "./domains/billing/BillingQueuePage";
 import { Claim360Page } from "./domains/claims/Claim360Page";
 import { ClaimsPage } from "./domains/claims/ClaimsPage";
 import { RejectionsPage } from "./domains/claims/RejectionsPage";
-import { CredentialingPage } from "./domains/credentialing/CredentialingPage";
 import { ClinicalPage } from "./domains/clinical/ClinicalPage";
-import { PayersContractsPage } from "./domains/credentialing/PayersContractsPage";
+import { CredentialingModuleApp } from "./domains/credentialing/CredentialingModuleApp";
 import { EncounterPage } from "./domains/encounters/EncounterPage";
-import { JournalPage } from "./domains/journal/JournalPage";
 import { ImportsPage } from "./domains/imports/ImportsPage";
-import { PaymentsPage } from "./domains/payments/PaymentsPage";
-import { EligibilityPage } from "./domains/payer-readiness/EligibilityPage";
+import { JournalPage } from "./domains/journal/JournalPage";
 import { PatientChartPage } from "./domains/patients/PatientChartPage";
+import { EligibilityPage } from "./domains/payer-readiness/EligibilityPage";
+import { PaymentsPage } from "./domains/payments/PaymentsPage";
 import { PatientCheckInPage } from "./domains/portal/PatientCheckInPage";
 import { PatientJournalPage } from "./domains/portal/PatientJournalPage";
 import { PatientPortalActivatePage } from "./domains/portal/PatientPortalActivatePage";
@@ -43,19 +42,18 @@ import {
 } from "./domains/portal/routes";
 import { SchedulePage } from "./domains/scheduling/SchedulePage";
 import { SpecialtyProgramTemplatesPage } from "./domains/specialty-programs/SpecialtyProgramTemplatesPage";
-import { DashboardPage } from "./pages/dashboard";
-import { WorkCenterPage } from "./pages/work-center";
 import { AdministrationPage } from "./pages/administration";
 import { AuditPage } from "./pages/audit";
 import { ClientsPage } from "./pages/clients";
-import { PayerDetailPage } from "./pages/payer-detail";
+import { ConnectedOperationsPage } from "./pages/connected-operations";
+import { DashboardPage } from "./pages/dashboard";
 import { PracticeConfigurationPage } from "./pages/practice-configuration";
 import { ProviderDetailPage } from "./pages/provider-detail";
 import { ProvidersPage } from "./pages/providers";
 import { ReportsPage } from "./pages/ReportsPage";
-import { ConnectedOperationsPage } from "./pages/connected-operations";
-import { UserRolesPage } from "./pages/users-roles";
 import { GoldenThreadPage } from "./pages/restored-modules";
+import { UserRolesPage } from "./pages/users-roles";
+import { WorkCenterPage } from "./pages/work-center";
 
 function Redirect({ to }: { to: string }) {
   const [, navigate] = useLocation();
@@ -66,6 +64,11 @@ function Redirect({ to }: { to: string }) {
 function ScheduleAppointmentRedirect() {
   const [, params] = useRoute<{ id: string }>("/schedule/:id");
   return <Redirect to={`/schedule?appointment=${encodeURIComponent(params?.id ?? "")}`} />;
+}
+
+function PayerModuleRedirect() {
+  const [, params] = useRoute<{ id: string }>("/payers/:id");
+  return <Redirect to={`/credentialing/payers/${encodeURIComponent(params?.id ?? "")}`} />;
 }
 
 function StaffRoutes() {
@@ -83,7 +86,8 @@ function StaffRoutes() {
         <Route path="/clients/:id"><PatientChartPage /></Route>
         <Route path="/claims/:id"><Claim360Page /></Route>
         <Route path="/providers/:id"><ProviderDetailPage /></Route>
-        <Route path="/payers/:id"><PayerDetailPage /></Route>
+        <Route path="/payers/:id"><PayerModuleRedirect /></Route>
+        <Route path="/payers-contracts"><Redirect to="/credentialing/payers" /></Route>
         <Route path="/billing/charges"><BillingQueuePage /></Route>
         <Route path="/rejections"><RejectionsPage /></Route>
         <Route path="/denials"><DenialsPage /></Route>
@@ -98,8 +102,6 @@ function StaffRoutes() {
         <Route path="/billing"><BillingHubPage /></Route>
         <Route path="/claims"><ClaimsPage /></Route>
         <Route path="/payments"><PaymentsPage /></Route>
-        <Route path="/credentialing"><CredentialingPage /></Route>
-        <Route path="/payers-contracts"><PayersContractsPage /></Route>
         <Route path="/operations/connected"><ConnectedOperationsPage /></Route>
         <Route path="/reports"><ReportsPage /></Route>
         <Route path="/administration/imports"><ImportsPage /></Route>
@@ -124,6 +126,7 @@ function TenantGate() {
     return location === "/organization-setup" ? <OrganizationSetup /> : <AccountAccessChoice />;
   }
   if (!tenantId) return <div className="thera-state error">No active organization is available.</div>;
+  if (location.startsWith("/credentialing")) return <CredentialingModuleApp />;
   return <StaffRoutes />;
 }
 
@@ -169,9 +172,6 @@ function ApplicationRoutes() {
   const [rootPortalDestination, setRootPortalDestination] = useState<string | null>(null);
   const patientRoute = isPatientPortalPath(location);
 
-  // Verified invitations can fall back to Supabase's Site URL (/), sometimes
-  // without type=invite. Resolve server-side portal mapping and staff membership
-  // before choosing a patient or staff landing page.
   useEffect(() => {
     let active = true;
     if (loading || !session || patientRoute || !["/", "/login"].includes(location) || session.flowType) {

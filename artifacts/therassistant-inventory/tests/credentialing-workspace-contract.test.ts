@@ -35,11 +35,17 @@ test("credentialing case drawer exposes application workflow context without a s
   assert.doesNotMatch(credentialingPage, /credentialing_issues/);
 });
 
-test("Provider 360 consumes the normalized credentialing profile sources", () => {
-  assert.match(providerDetail, /tenantSelect\("provider_credentials"/);
-  assert.match(providerDetail, /tenantSelect\("v_credentialing_case_summary"/);
-  assert.match(providerDetail, /tenantSelect\("v_credentialing_expirations"/);
-  assert.match(providerDetail, /CAQH/i);
-  assert.match(providerDetail, /Credentials (?:&|&amp;) Licenses/i);
-  assert.match(providerDetail, /Credentialing Applications/i);
+test("Provider 360 keeps credentialing-owned records behind the credentialing module boundary", () => {
+  for (const forbidden of [
+    /tenantSelect\("provider_credentials"/,
+    /tenantSelect\("provider_payer_enrollments"/,
+    /tenantSelect\("v_credentialing_case_summary"/,
+    /tenantSelect\("v_credentialing_expirations"/,
+    /buildProviderCredentialingView/,
+    /PayerIntelligencePanel/,
+  ]) {
+    assert.doesNotMatch(providerDetail, forbidden);
+  }
+
+  assert.match(providerDetail, /Open Credentialing Module/);
 });
