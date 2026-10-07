@@ -1,3 +1,4 @@
+import { TelehealthVisit } from "../scheduling/TelehealthVisit";
 import { useEffect, useState } from "react";
 import { Link } from "wouter";
 
@@ -50,6 +51,12 @@ export function PatientPortalPage() {
   }
 
   useEffect(() => { void load(); }, []);
+  useEffect(() => {
+    if (!data || loading) return;
+    const scroll = () => document.getElementById(window.location.hash.slice(1))?.scrollIntoView({ block: "start" });
+    scroll(); window.addEventListener("hashchange", scroll);
+    return () => window.removeEventListener("hashchange", scroll);
+  }, [data, loading]);
 
   async function checkIn(appointmentId: string, step: "on_my_way" | "arrived" | "checked_in") {
     setWorking(`${appointmentId}-${step}`); setError(null);
@@ -193,7 +200,7 @@ export function PatientPortalPage() {
             : "Arrival and final check-in open 1 hour before your appointment."
           : "";
         const canRequestScheduleChange = ["scheduled", "confirmed"].includes(String(appointment.appointment_status ?? "scheduled").toLowerCase()) && new Date(String(appointment.starts_at ?? "")).getTime() > Date.now();
-        return <article className="thera-work-card" key={appointment.id}><div className="thera-work-card-top"><div><strong>{dateTime(String(appointment.starts_at ?? ""))}</strong><div className="thera-table-subtext">{String(appointment.service_type ?? "Appointment")} · {String(appointment.location_type ?? "").replaceAll("_", " ")}</div></div><StatusBadge value={String(appointment.appointment_status ?? "scheduled")} /></div><div className="thera-filter-row"><Link href={portalCheckInPath(appointment.id)} className="thera-action">{preVisitSubmitted ? "Review Pre-Visit Check-In" : preVisitStarted ? "Continue Pre-Visit Check-In" : "Start Pre-Visit Check-In"}</Link><button type="button" className={checkedIn || !arrivalEnabled ? "thera-action secondary" : "thera-action"} disabled={checkedIn || working !== null || arrivalStep === null || !arrivalEnabled} onClick={() => arrivalStep && arrivalEnabled && void checkIn(appointment.id, arrivalStep)}>{working?.startsWith(`${appointment.id}-`) ? "Updating..." : arrivalLabel}</button>{canRequestScheduleChange && <><button type="button" className="thera-action secondary" onClick={() => { setScheduleRequest({ appointmentId: appointment.id, type: "reschedule" }); setScheduleDetails(""); setNotice(null); }}>Request Reschedule</button><button type="button" className="thera-action secondary" onClick={() => { setScheduleRequest({ appointmentId: appointment.id, type: "cancel" }); setScheduleDetails(""); setNotice(null); }}>Request Cancellation</button></>}</div>{arrivalTimingText && <div className="thera-muted" style={{ marginTop: 8 }}>{arrivalTimingText}</div>}{scheduleRequest?.appointmentId === appointment.id && <ScheduleRequestForm type={scheduleRequest.type} details={scheduleDetails} working={scheduleWorking} onDetails={setScheduleDetails} onSubmit={() => void submitScheduleRequest()} onCancel={() => { setScheduleRequest(null); setScheduleDetails(""); }} />}</article>;
+        return <article className="thera-work-card" key={appointment.id}><div className="thera-work-card-top"><div><strong>{dateTime(String(appointment.starts_at ?? ""))}</strong><div className="thera-table-subtext">{String(appointment.service_type ?? "Appointment")} · {String(appointment.location_type ?? "").replaceAll("_", " ")}</div></div><StatusBadge value={String(appointment.appointment_status ?? "scheduled")} /></div><div className="thera-filter-row"><Link href={portalCheckInPath(appointment.id)} className="thera-action">{preVisitSubmitted ? "Review Pre-Visit Check-In" : preVisitStarted ? "Continue Pre-Visit Check-In" : "Start Pre-Visit Check-In"}</Link><button type="button" className={checkedIn || !arrivalEnabled ? "thera-action secondary" : "thera-action"} disabled={checkedIn || working !== null || arrivalStep === null || !arrivalEnabled} onClick={() => arrivalStep && arrivalEnabled && void checkIn(appointment.id, arrivalStep)}>{working?.startsWith(`${appointment.id}-`) ? "Updating..." : arrivalLabel}</button>{canRequestScheduleChange && <><button type="button" className="thera-action secondary" onClick={() => { setScheduleRequest({ appointmentId: appointment.id, type: "reschedule" }); setScheduleDetails(""); setNotice(null); }}>Request Reschedule</button><button type="button" className="thera-action secondary" onClick={() => { setScheduleRequest({ appointmentId: appointment.id, type: "cancel" }); setScheduleDetails(""); setNotice(null); }}>Request Cancellation</button></>}</div><TelehealthVisit appointment={appointment} />{arrivalTimingText && <div className="thera-muted" style={{ marginTop: 8 }}>{arrivalTimingText}</div>}{scheduleRequest?.appointmentId === appointment.id && <ScheduleRequestForm type={scheduleRequest.type} details={scheduleDetails} working={scheduleWorking} onDetails={setScheduleDetails} onSubmit={() => void submitScheduleRequest()} onCancel={() => { setScheduleRequest(null); setScheduleDetails(""); }} />}</article>;
       })}</div> : <div className="thera-empty">No upcoming appointments.</div>}</section>
 
       <section id="appointment-history" className="thera-card thera-span-2">

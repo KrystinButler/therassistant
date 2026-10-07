@@ -33,9 +33,9 @@ const navigation: NavGroup[] = [
     items: [
       { label: "Providers", href: "/providers", icon: UserRoundCog },
       { label: "Credentialing Module", href: "/credentialing", icon: ClipboardList },
-      { label: "Patient Journal", href: "/journal", icon: BookOpenText },
-      { label: "Portal Preview", href: "/portal-preview", icon: ExternalLink },
-      { label: "Patient Portal", href: PORTAL_LOGIN, icon: ExternalLink, external: true },
+      { label: "Messaging", href: "/messaging", icon: BookOpenText },
+      { label: "Patient Portal Module", href: "/portal-module", icon: ExternalLink },
+      { label: "Practice Setup", href: "/organization-setup", icon: Settings },
       { label: "Work Center", href: "/work-center", icon: BriefcaseBusiness },
     ],
   },

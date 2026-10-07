@@ -1,3 +1,6 @@
+import { PracticeOnboarding } from "./pages/practice-onboarding";
+import { MessagingPage } from "./domains/portal/MessagingPage";
+import { PortalModulePage } from "./domains/portal/PortalModulePage";
 import { useEffect, useState } from "react";
 import { Route, Switch, useLocation, useRoute } from "wouter";
 
@@ -108,6 +111,9 @@ function StaffRoutes() {
         <Route path="/administration/imports"><ImportsPage /></Route>
         <Route path="/administration/users"><UserRolesPage /></Route>
         <Route path="/administration/audit"><AuditPage /></Route>
+        <Route path="/organization-setup"><PracticeOnboarding /></Route>
+        <Route path="/messaging"><MessagingPage /></Route>
+        <Route path="/portal-module"><PortalModulePage /></Route>
         <Route path="/administration/practices"><PracticeConfigurationPage /></Route>
         <Route path="/administration/program-templates"><SpecialtyProgramTemplatesPage /></Route>
         <Route path="/administration"><AdministrationPage /></Route>

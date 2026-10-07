@@ -5,7 +5,7 @@ const gate=readFileSync(new URL("../src/domains/portal/PatientPortalGate.tsx",im
 const view=readFileSync(new URL("../src/domains/portal/StaffPortalPreviewPage.tsx",import.meta.url),"utf8");
 test("staff portal preview lives behind StaffGate and never reads PHI or patient RPC",()=>{
  assert.match(app,/<Route path="\/portal-preview"><StaffPortalPreviewPage/);
- assert.match(shell,/label: "Portal Preview", href: "\/portal-preview"/);
+ assert.match(shell,/label: "Patient Portal Module", href: "\/portal-module"/);
  assert.match(view,/STAFF DESIGN PREVIEW · SYNTHETIC DATA/);
  assert.doesNotMatch(view,/getMyPortalContext|portalRpc|getPatientPortalData/);
  assert.match(view,/private browser window/);

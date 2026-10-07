@@ -1,3 +1,5 @@
+import { ClinicianSigningSetup } from "../clinical/ClinicianSigningSetup";
+import { TelehealthVisit } from "../scheduling/TelehealthVisit";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useRoute } from "wouter";
 
@@ -268,7 +270,7 @@ export function EncounterPage() {
   async function saveNote() {
     await withSave(
       () => saveClinicalNote(encounterId, { noteType, noteText, goalAddressed, structuredSelections, generatedNarrative, carryForwardContext }),
-      "Clinical note saved and marked ready for signature.",
+      "Clinical note saved as a draft.",
     );
   }
 
@@ -395,6 +397,10 @@ export function EncounterPage() {
     }
     if (!data?.encounter.provider_id) {
       setError("This encounter has no rendering provider. Assign a provider before signing.");
+      return;
+    }
+    if (!data.diagnoses.some(row => String(row.diagnosis_code ?? "").trim()) || !data.serviceLines.length || data.serviceLines.some(row => !String(row.cpt_hcpcs_code ?? "").trim())) {
+      setError("Add the visit diagnosis and procedure code before signing. You can save the note as a draft.");
       return;
     }
     setSaving(true);
@@ -698,26 +704,6 @@ export function EncounterPage() {
             {note && <StatusBadge value={String(note.note_status)} />}
           </div>
           <div className="encounter-note-controls">
-            {noteType === "psychotherapy" && <div className="encounter-session-time encounter-scheduled-time" id="encounter-session-time">
-              <div className="encounter-time-summary">
-                <div><div className="thera-field-label">Actual psychotherapy time</div><strong aria-live="polite">{actualTimeConfirmed ? calculatedMinutes + " minutes" : "Not yet confirmed"}</strong></div>
-                <span>{actualTimeConfirmed
-                  ? structuredSelections.psychotherapyTimeSource === "actual_start_stop"
-                    ? "Calculated from documented actual start and stop times"
-                    : "Provider confirmed scheduled time matched actual psychotherapy delivered"
-                  : scheduleTime ? `Scheduled: ${scheduleTime.minutes} minutes (reference only)` : "No recorded actual time"}</span>
-              </div>
-              {!signed && scheduleTime && <button type="button" className="thera-action secondary"
-                onClick={confirmScheduledTime}>Confirm actual time matches schedule</button>}
-              {!signed && <button type="button" className="thera-action secondary" aria-expanded={showTimeAdjustment} aria-controls="encounter-time-adjustment"
-                onClick={() => setShowTimeAdjustment((open) => !open)}>{showTimeAdjustment ? "Hide actual time entry" : "Enter actual start and stop"}</button>}
-              {showTimeAdjustment && !signed && <div className="encounter-time-adjustment" id="encounter-time-adjustment">
-                <label>Actual start<input type="time" className="thera-input" value={psychStart} onChange={(event) => updateSessionTime(event.target.value, psychStop)} /></label>
-                <label>Actual stop<input type="time" className="thera-input" value={psychStop} onChange={(event) => updateSessionTime(psychStart, event.target.value)} /></label>
-                <span>Actual minutes calculate from entered times. Exclude any separate E/M service time.</span>
-              </div>}
-              {!signed && <small>Scheduled duration is not evidence of actual psychotherapy time. Confirm or correct it before billing; the clinical note may still be signed.</small>}
-            </div>}
             <label><div className="thera-field-label">Note Type</div><select className="thera-input" value={noteType} disabled={signed} onChange={(event) => changeNoteType(event.target.value)}><option value="psychotherapy">Psychotherapy</option><option value="assessment">Assessment</option><option value="intake">Intake</option><option value="crisis">Crisis</option><option value="case_management">Case Management</option><option value="medication_management">Medication Management</option><option value="other">Other</option></select></label>
             <label><div className="thera-field-label">Treatment Plan — Goal / Objective</div><select className="thera-input" value={goalAddressed} disabled={signed} onChange={(event) => setGoalAddressed(event.target.value)}><option value="">Select a goal</option>{activeGoals.map((goal) => { const label = displayText(goal, ["goal_text", "description", "goal", "title"], "Goal"); return <option key={goal.id} value={label}>{label}</option>; })}{goalAddressed && !activeGoals.some((goal) => displayText(goal, ["goal_text", "description", "goal", "title"], "Goal") === goalAddressed) && <option value={goalAddressed}>{goalAddressed} (previous selection)</option>}</select>{activeGoals.length === 0 && <small>No linked treatment-plan goals. <button type="button" className="encounter-goal-create-link" onClick={() => { setContextTab("treatment"); setContextOpen(true); setPlanComposer(currentTreatmentPlan ? { mode: "goal", planId: String(currentTreatmentPlan.id) } : { mode: "plan" }); }}>Create a treatment plan or goal →</button></small>}</label>
           </div>
@@ -775,16 +761,17 @@ export function EncounterPage() {
               <div id="encounter-progress-note-hint" className="encounter-editor-meta"><strong>{noteWordCount} words</strong><span aria-hidden="true">·</span><span>Type / for quick inserts</span><span aria-hidden="true">·</span><span>{signed ? "Signed note is locked" : "Save to keep your draft"}</span></div>
               {!signed && <button type="button" className="thera-action encounter-editor-save" disabled={saving || !noteText.trim()} onClick={() => void saveNote()}>{saving ? "Saving..." : "Save Note"}</button>}
             </div>
+            <TelehealthVisit appointment={data.appointment} editable />
             <div className="encounter-inline-signature" id="encounter-signature">
               {signed ? <div className="encounter-signed-handoff"><div><strong>Signed clinical record → Charge Capture</strong><span>The note is locked. All claim and charge corrections remain available in revenue-cycle workqueues.</span></div><Link href="/billing/charges" className="thera-action secondary">Open Charge Capture</Link></div> : <>
+                <ClinicianSigningSetup providerId={String(data.encounter.provider_id ?? "")} />
                 <div className="encounter-sign-row"><label><span className="thera-field-label">Rendering Provider Signature</span><input ref={signatureRef} className="thera-input" value={signatureText} onChange={(event) => setSignatureText(event.target.value)} placeholder="Provider signature" /></label>
                   <button type="button" className="thera-action" disabled={saving} onClick={() => void sign()}>{saving ? "Signing…" : "Sign & Lock Note"}</button></div>
                 {!noteText.trim() && <button type="button" className="thera-action secondary" onClick={() => { noteRef.current?.scrollIntoView({ behavior: "smooth", block: "center" }); noteRef.current?.focus({ preventScroll: true }); }}>Go to Note Editor</button>}
-                <p className="thera-table-subtext">Billing follow-up never prevents completion of the clinical record. You may still sign the clinical note when a claim has outstanding corrections.</p>
+                <p className="thera-table-subtext">Save Note keeps a draft. Add the visit diagnosis and procedure code before Sign & Lock. Eligibility verification does not hold billing.</p>
               </>}
             </div>
           </div>
-          <FastChartingPanel signed={signed} noteType={noteType} phrases={smartPhrases} selections={structuredSelections} generatedNarrative={generatedNarrative} priorContext={priorStructuredContext} noteSimilarity={noteSimilarity} onSelectionsChange={setStructuredSelections} onInsertNarrative={() => injectIntoNote("\n" + generatedNarrative + "\n")} onInsertPhrase={injectIntoNote} onCarryForward={carryForwardStructured} onCreatePhrase={addSmartPhrase} />
           
           {signed && data.signatures[0] && <div className="thera-alert" style={{ marginTop: 12 }}>Signed {dateTime(String(data.signatures[0].signed_at ?? ""))} by {String(data.signatures[0].signature_text ?? "provider")}</div>}
         </section>

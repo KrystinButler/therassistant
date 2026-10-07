@@ -23,6 +23,15 @@ test("provider completes a synthetic visit from schedule through signed note and
     "Synthetic psychotherapy progress note. Client participated in supportive psychotherapy and collaborative problem solving. No acute safety concerns were reported. Continue current treatment plan and reassess at next visit.",
   );
 
+  // Signing requires persisted diagnosis and procedure coding for the visit.
+  const recordedDiagnoses = page.locator("#encounter-diagnoses .thera-table tbody tr");
+  if ((await recordedDiagnoses.count()) === 0) {
+    await page.getByPlaceholder("Search ICD-10-CM code or diagnosis").fill("F41.1");
+    await page.getByPlaceholder("Diagnosis description").fill("Generalized anxiety disorder");
+    await page.getByRole("button", { name: "+ Add Diagnosis" }).click();
+    await expect(recordedDiagnoses).toHaveCount(1, { timeout: 15_000 });
+  }
+
   // The redundant readiness dashboard was removed; use the actual persisted service-line table.
   const recordedServices = page.locator("#encounter-coding-service .encounter-saved-services tbody tr");
   if ((await recordedServices.count()) === 0) {

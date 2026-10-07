@@ -22,9 +22,9 @@ test("encounter follows the manual's provider preparation-to-documentation flow"
   }
 });
 
-test("billing follow-up is explicitly nonblocking for clinical signature", () => {
-  assert.match(encounter, /Billing follow-up never prevents completion of the clinical record/);
-  assert.match(encounter, /You may still sign the clinical note/);
+test("coding is required while eligibility remains advisory", () => {
+  assert.match(encounter, /Add the visit diagnosis and procedure code before Sign &amp; Lock|Add the visit diagnosis and procedure code before Sign & Lock/);
+  assert.match(encounter, /Eligibility verification does not hold billing/);
   assert.doesNotMatch(encounter, /Documentation Readiness & Signature/);
   assert.doesNotMatch(encounter, /<ExternalSummaryPanel/);
   assert.doesNotMatch(encounter, /id="encounter-billing-source"/);
