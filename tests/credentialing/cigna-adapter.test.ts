@@ -135,6 +135,7 @@ test("Cigna catalog sync is bounded, resumable, and does not restart a fresh com
   assert.match(catalog, /next_cursor_url/);
   assert.match(catalog, /last_progress_at/);
   assert.match(catalog, /status=eq\.in_progress/);
+  assert.match(catalog, /status=eq\.completed&pages_processed=gt\.0/);
 });
 
 test("Cigna catalog sync resolves unique network names before persisting plan-network rows", async () => {
