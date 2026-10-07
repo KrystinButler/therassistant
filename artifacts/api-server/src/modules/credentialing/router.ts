@@ -2,6 +2,7 @@ import { Router, type IRouter } from "express";
 
 import credentialingRouter from "../../routes/credentialing";
 import credentialingMedicareRouter from "../../routes/credentialing-medicare";
+import catalogRoutes from "./catalog-routes";
 
 /**
  * Credentialing module facade.
@@ -14,5 +15,6 @@ const router: IRouter = Router();
 
 router.use(credentialingRouter);
 router.use(credentialingMedicareRouter);
+router.use(catalogRoutes);
 
 export default router;
