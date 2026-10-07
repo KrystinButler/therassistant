@@ -9,6 +9,14 @@ async function text(path: string) {
   return readFile(path, "utf8");
 }
 
+function functionBody(source: string, name: string, nextName: string) {
+  const start = source.indexOf(`async function ${name}`);
+  const end = source.indexOf(`async function ${nextName}`, start + 1);
+  assert.ok(start >= 0, `${name} must exist`);
+  assert.ok(end > start, `${nextName} must follow ${name}`);
+  return source.slice(start, end);
+}
+
 test("worker queue access stays behind service-role-only database RPCs", async () => {
   const migration = await text(migrationPath);
   assert.match(migration, /credentialing_worker_read_message/);
@@ -37,11 +45,17 @@ test("worker archives terminal results and retries only bounded transient failur
   assert.match(worker, /read_ct/);
 });
 
-test("worker writes evidence before completing a verification decision", async () => {
+test("worker writes evidence before completing every verification decision", async () => {
   const worker = await text(workerPath);
-  const evidence = worker.indexOf("participation_verification_evidence");
-  const completion = worker.indexOf("participation_verification_runs?id=eq.");
-  assert.ok(evidence >= 0, "worker must persist evidence");
-  assert.ok(completion > evidence, "evidence must be persisted before run completion");
+  const unable = functionBody(worker, "completeUnable", "completeSynthetic");
+  const synthetic = functionBody(worker, "completeSynthetic", "processMessage");
+
+  for (const completionPath of [unable, synthetic]) {
+    const evidence = completionPath.indexOf("await recordEvidence");
+    const completion = completionPath.indexOf("await patchRun");
+    assert.ok(evidence >= 0, "completion path must persist evidence");
+    assert.ok(completion > evidence, "evidence must be persisted before run completion");
+  }
+
   assert.match(worker, /VERIFICATION_COMPLETED/);
 });
