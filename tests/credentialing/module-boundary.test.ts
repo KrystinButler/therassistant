@@ -5,6 +5,14 @@ import test from "node:test";
 const uiRoot = "artifacts/therassistant-inventory/src";
 const apiRoot = "artifacts/api-server/src";
 
+const forbiddenClaimCredentialingDependencies = [
+  /provider_payer_enrollments/i,
+  /provider_network_participation/i,
+  /participation_verification_runs/i,
+  /credentialing_directory_/i,
+  /\/credentialing\//i,
+];
+
 test("EHR mounts credentialing only through the module entry point", async () => {
   const app = await readFile(`${uiRoot}/App.tsx`, "utf8");
 
@@ -64,6 +72,18 @@ test("API root mounts credentialing through one module facade", async () => {
   assert.doesNotMatch(routeIndex, /from "\.\/credentialing-medicare"/);
   assert.match(moduleRouter, /credentialingRouter/);
   assert.match(moduleRouter, /credentialingMedicareRouter/);
+});
+
+test("claim and charge routes never read credentialing state", async () => {
+  const [claims, charges] = await Promise.all([
+    readFile(`${apiRoot}/routes/claims.ts`, "utf8"),
+    readFile(`${apiRoot}/routes/charges.ts`, "utf8"),
+  ]);
+  const source = `${claims}\n${charges}`;
+
+  for (const forbidden of forbiddenClaimCredentialingDependencies) {
+    assert.doesNotMatch(source, forbidden);
+  }
 });
 
 test("credentialing backend cannot mutate or gate professional claims", async () => {
