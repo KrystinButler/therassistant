@@ -80,6 +80,14 @@ test("Cigna catalog still recognizes referenced Colorado coverage locations", ()
   assert.equal(isColoradoInsurancePlan(plan, locations), true);
 });
 
+test("Cigna catalog uses a supported page size and rejects OperationOutcome bundles", async () => {
+  const catalog = await text(catalogPath);
+  assert.match(catalog, /InsurancePlan\?_count=50/);
+  assert.match(catalog, /OperationOutcome/);
+  assert.match(catalog, /Cigna Provider Directory returned an OperationOutcome/);
+  assert.doesNotMatch(catalog, /InsurancePlan\?_count=200/);
+});
+
 test("Cigna catalog sync derives plans and networks from InsurancePlan references", async () => {
   const catalog = await text(catalogPath);
   assert.match(catalog, /InsurancePlan/);
