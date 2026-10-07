@@ -174,7 +174,7 @@ function ApplicationRoutes() {
 
   useEffect(() => {
     let active = true;
-    if (loading || !session || patientRoute || !["/", "/login"].includes(location) || session.flowType) {
+    if (loading || !session || patientRoute || !["/", "/login"].includes(location) || session.flowType === "recovery") {
       setRootPortalDestination("none");
       return () => { active = false; };
     }
@@ -197,11 +197,10 @@ function ApplicationRoutes() {
     return () => { active = false; };
   }, [loading, location, patientRoute, session?.access_token, session?.flowType, session?.user?.id, session?.user?.email]);
 
-  if (!patientRoute && session?.flowType === "invite") return <Redirect to={PORTAL_ACTIVATE} />;
   if (!patientRoute && rootPortalDestination && rootPortalDestination !== "none") {
     return <Redirect to={rootPortalDestination} />;
   }
-  if (!patientRoute && !loading && session && !session.flowType
+  if (!patientRoute && !loading && session && session.flowType !== "recovery"
       && ["/", "/login"].includes(location) && rootPortalDestination === null) {
     return <div className="thera-state">Checking account access...</div>;
   }
