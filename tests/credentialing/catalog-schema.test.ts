@@ -55,7 +55,8 @@ test("versioned catalog routes expose active records by default and history expl
   assert.match(routes, /router\.get\("\/v1\/payers\/:payerId\/plans"/);
   assert.match(routes, /router\.get\("\/v1\/plans\/:planId\/networks"/);
   assert.doesNotMatch(routes, /router\.get\("\/api\/v1\//);
-  assert.match(apiApp, /app\.use\("\/api",\s*rootRouter\)/);
+  assert.match(apiApp, /import\s+router\s+from\s+"\.\/routes"/);
+  assert.match(apiApp, /app\.use\("\/api",\s*router\)/);
   assert.match(routes, /includeInactive/);
   assert.match(routes, /active\s*=\s*true/i);
   assert.match(routes, /state\s*=\s*'CO'/i);
