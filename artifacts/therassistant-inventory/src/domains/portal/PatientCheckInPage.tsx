@@ -1,3 +1,4 @@
+import { TelehealthVisit } from "../scheduling/TelehealthVisit";
 import { useEffect, useMemo, useState } from "react";
 import {
   CalendarDays,
@@ -285,6 +286,7 @@ export function PatientCheckInPage() {
           {error && <div className="pj-message error">{error}</div>}
           {notice && <div className="pj-message success"><CheckCircle2 size={16} /> {notice}</div>}
 
+          <TelehealthVisit appointment={appointment} />
           <section className="pci-appointment-card">
             <div className="pci-appointment-block"><CalendarDays size={22} /><div><strong>{formatDate(appointment.starts_at)}</strong><span>{formatTime(appointment.starts_at)} – {formatTime(appointment.ends_at)}</span></div></div>
             <div className="pci-appointment-block"><Heart size={20} /><div><strong>{String(appointment.service_type ?? "Individual Therapy")}</strong><span>{String(appointment.location_type ?? "Office").replaceAll("_", " ")}</span></div></div>

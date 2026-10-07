@@ -136,14 +136,12 @@ test("signing requires clinical note text", async () => {
   assert.equal(repo.signatures.length, 0);
 });
 
-test("diagnosis and service-line gaps do not block the clinical signature", async () => {
+test("uncoded visits cannot be signed", async () => {
   const repo = clinicalRepo({ diagnoses: [], serviceLines: [] });
   const result = await signNoteWorkflow(repo, "encounter-1", "provider-1", "Jamie Parker, LCSW");
-
-  assert.equal(result.ok, true);
-  assert.equal(repo.signatures.length, 1);
-  assert.equal(repo.noteStatus, "signed");
-  assert.equal(repo.readinessRuns, 1);
+  assert.equal(result.ok, false);
+  assert.equal(repo.signatures.length, 0);
+  assert.equal(repo.readinessRuns, 0);
 });
 
 test("signing records provider identity, locks note, then runs billing readiness", async () => {

@@ -33,7 +33,7 @@ export function PatientPortalNavigation({ active, checkInHref }: Props) {
     <nav className="pj-nav" aria-label="Patient portal navigation">
       {items.map((item) => {
         const Icon = item.icon;
-        return <Link key={item.key} href={item.href} className={active === item.key ? "active" : undefined}><Icon size={17} /> {item.label}</Link>;
+        return <a key={item.key} href={item.href} className={active === item.key ? "active" : undefined}><Icon size={17} /> {item.label}</a>;
       })}
     </nav>
   );
@@ -53,7 +53,7 @@ export function PatientPortalMobileNavigation({ active }: Pick<Props, "active">)
     <nav className="ppn-mobile" aria-label="Patient portal mobile navigation">
       {items.map((item) => {
         const Icon = item.icon;
-        return <Link key={item.key} href={item.href} className={active === item.key ? "active" : undefined}><Icon size={19} /><span>{item.label}</span></Link>;
+        return <a key={item.key} href={item.href} className={active === item.key ? "active" : undefined}><Icon size={19} /><span>{item.label}</span></a>;
       })}
     </nav>
   );

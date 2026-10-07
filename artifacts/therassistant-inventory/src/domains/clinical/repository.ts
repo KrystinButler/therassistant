@@ -86,7 +86,7 @@ export async function saveClinicalNote(
     }
     saved = await tenantUpdate<DataRow>("clinical_notes", state.note.id, {
       note_type: values.noteType || state.note.note_type || "psychotherapy",
-      note_status: "ready_for_signature",
+      note_status: "draft",
       note_text: values.noteText,
       goal_addressed: values.goalAddressed || null,
     });
@@ -105,7 +105,7 @@ export async function saveClinicalNote(
       appointment_id: state.encounter.appointment_id || null,
       provider_id: state.encounter.provider_id || null,
       note_type: values.noteType || "psychotherapy",
-      note_status: "ready_for_signature",
+      note_status: "draft",
       service_date: serviceDate,
       note_text: values.noteText,
       goal_addressed: values.goalAddressed || null,

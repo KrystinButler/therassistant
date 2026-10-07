@@ -35,6 +35,15 @@ begin
   insert into public.clinical_notes(id,tenant_id,encounter_id,client_id,provider_id,note_type,note_text,service_date)
   values(v_failed_note,v_tenant,v_failed_encounter,v_client,v_provider,'assessment','Synthetic rollback test',current_date-1);
   begin
+    perform public.sign_encounter_note(v_failed_encounter,v_failed_note,v_provider,'Uncoded synthetic signature');
+    raise exception 'Uncoded visit was signed';
+  exception when invalid_parameter_value then null;
+  end;
+  insert into public.encounter_diagnoses(tenant_id,encounter_id,diagnosis_code,sequence_number,is_primary,present_on_claim)
+  values(v_tenant,v_failed_encounter,'F41.1',1,true,true);
+  insert into public.encounter_service_lines(tenant_id,encounter_id,cpt_hcpcs_code,units,charge_amount_cents,place_of_service_code)
+  values(v_tenant,v_failed_encounter,'90791',1,15000,'02');
+  begin
     perform public.sign_encounter_note(v_failed_encounter,v_failed_note,v_provider,'Synthetic signature');
   exception when raise_exception then
     if sqlerrm <> 'Synthetic handoff storage failure' then raise; end if;

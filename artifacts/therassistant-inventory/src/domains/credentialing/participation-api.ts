@@ -55,7 +55,10 @@ async function api<T>(path: string, init?: RequestInit): Promise<T> {
       ...(init?.headers ?? {}),
     },
   });
-  const payload = await response.json().catch(() => ({}));
+  if (!response.headers.get("content-type")?.includes("application/json")) {
+    throw new Error("Participation verification is unavailable: the verification service is not connected to this deployment. Please use the payer’s official provider directory until the service is connected.");
+  }
+  const payload = await response.json();
   if (!response.ok) {
     throw new Error(
       String(
@@ -67,16 +70,22 @@ async function api<T>(path: string, init?: RequestInit): Promise<T> {
   return payload as T;
 }
 
+async function list<T>(path: string): Promise<T[]> {
+  const payload = await api<unknown>(path);
+  if (!Array.isArray(payload)) throw new Error("The verification service returned an invalid list. Please retry.");
+  return payload as T[];
+}
+
 export function loadPayers() {
-  return api<CatalogPayer[]>("/api/v1/payers");
+  return list<CatalogPayer>("/api/v1/payers");
 }
 
 export function loadPlans(payerId: string) {
-  return api<CatalogPlan[]>(`/api/v1/payers/${encodeURIComponent(payerId)}/plans`);
+  return list<CatalogPlan>(`/api/v1/payers/${encodeURIComponent(payerId)}/plans`);
 }
 
 export function loadNetworks(planId: string) {
-  return api<CatalogNetwork[]>(`/api/v1/plans/${encodeURIComponent(planId)}/networks`);
+  return list<CatalogNetwork>(`/api/v1/plans/${encodeURIComponent(planId)}/networks`);
 }
 
 export function createParticipationVerification(input: VerificationCreateInput) {
@@ -93,7 +102,7 @@ export function loadParticipationVerification(verificationId: string) {
 }
 
 export function loadVerificationHistory(providerId: string) {
-  return api<VerificationResult[]>(
+  return list<VerificationResult>(
     `/api/v1/providers/${encodeURIComponent(providerId)}/verification-history`,
   );
 }
