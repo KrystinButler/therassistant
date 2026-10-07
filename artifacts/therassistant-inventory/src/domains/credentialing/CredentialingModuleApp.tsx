@@ -4,6 +4,7 @@ import { Link, Route, Switch, useLocation } from "wouter";
 import { useTenant } from "../../auth/tenant-context";
 import { PayerDetailPage } from "../../pages/payer-detail";
 import { CredentialingPage } from "./CredentialingPage";
+import { ParticipationVerificationPage } from "./ParticipationVerificationPage";
 import { PayersContractsPage } from "./PayersContractsPage";
 
 function moduleMatch(path: string, href: string) {
@@ -44,6 +45,13 @@ function CredentialingModuleShell({ children }: { children: ReactNode }) {
               <span>Workqueue & Applications</span>
             </Link>
             <Link
+              href="/credentialing/participation"
+              className={moduleMatch(location, "/credentialing/participation") ? "cw-nav-link active" : "cw-nav-link"}
+              aria-current={moduleMatch(location, "/credentialing/participation") ? "page" : undefined}
+            >
+              <span>Verify Participation</span>
+            </Link>
+            <Link
               href="/credentialing/payers"
               className={moduleMatch(location, "/credentialing/payers") ? "cw-nav-link active" : "cw-nav-link"}
               aria-current={moduleMatch(location, "/credentialing/payers") ? "page" : undefined}
@@ -69,6 +77,7 @@ export function CredentialingModuleApp() {
   return (
     <CredentialingModuleShell>
       <Switch>
+        <Route path="/credentialing/participation"><ParticipationVerificationPage /></Route>
         <Route path="/credentialing/payers/:id"><PayerDetailPage /></Route>
         <Route path="/credentialing/payers"><PayersContractsPage /></Route>
         <Route path="/credentialing"><CredentialingPage /></Route>
