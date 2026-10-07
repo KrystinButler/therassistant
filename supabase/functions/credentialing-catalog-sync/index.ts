@@ -149,7 +149,7 @@ async function getOrStartSync(payerId: string): Promise<SyncState> {
 
   const freshnessCutoff = new Date(now - CATALOG_REFRESH_INTERVAL_MS).toISOString();
   const recentCompleted = await getOne(
-    `payer_catalog_syncs?payer_id=eq.${encodeURIComponent(payerId)}&status=eq.completed&completed_at=gte.${encodeURIComponent(freshnessCutoff)}&select=id,completed_at&order=completed_at.desc`,
+    `payer_catalog_syncs?payer_id=eq.${encodeURIComponent(payerId)}&status=eq.completed&pages_processed=gt.0&completed_at=gte.${encodeURIComponent(freshnessCutoff)}&select=id,completed_at&order=completed_at.desc`,
   );
   if (recentCompleted?.id) {
     return {
