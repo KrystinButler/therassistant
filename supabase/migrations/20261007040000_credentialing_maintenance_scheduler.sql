@@ -19,13 +19,13 @@ CREATE OR REPLACE FUNCTION public.credentialing_internal_secret_valid(p_secret t
 RETURNS boolean
 LANGUAGE sql
 SECURITY DEFINER
-SET search_path = private, public, pg_temp
+SET search_path = private, public, extensions, pg_temp
 AS $$
   SELECT EXISTS (
     SELECT 1
     FROM private.integration_secret_hashes s
     WHERE s.name = 'therassistant_credentialing_scheduler'
-      AND s.secret_hash = encode(digest(COALESCE(p_secret, ''), 'sha256'), 'hex')
+      AND s.secret_hash = encode(extensions.digest(COALESCE(p_secret, ''), 'sha256'), 'hex')
   );
 $$;
 
