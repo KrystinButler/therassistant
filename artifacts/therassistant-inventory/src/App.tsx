@@ -3,6 +3,7 @@ import { Route, Switch, useLocation, useRoute } from "wouter";
 
 import { AuthProvider, useAuth } from "./auth/auth-context";
 import { AccountAccessChoice } from "./auth/AccountAccessChoice";
+import { InvitationGate } from "./auth/InvitationGate";
 import { LoginPage } from "./auth/LoginPage";
 import { OrganizationSetup } from "./auth/OrganizationSetup";
 import { PasswordRecoveryPage } from "./auth/PasswordRecoveryPage";
@@ -197,7 +198,7 @@ function ApplicationRoutes() {
     return () => { active = false; };
   }, [loading, location, patientRoute, session?.access_token, session?.flowType, session?.user?.id, session?.user?.email]);
 
-  if (!patientRoute && session?.flowType === "invite") return <Redirect to={PORTAL_ACTIVATE} />;
+  if (!loading && session?.flowType === "invite") return <InvitationGate />;
   if (!patientRoute && rootPortalDestination && rootPortalDestination !== "none") {
     return <Redirect to={rootPortalDestination} />;
   }

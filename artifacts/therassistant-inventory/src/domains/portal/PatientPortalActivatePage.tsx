@@ -34,6 +34,7 @@ export function PatientPortalActivatePage() {
     void getMyPortalContext().then((context) => {
       if (!active) return;
       if (context?.status === "active") {
+        clearAuthFlowType();
         navigate(PORTAL_HOME, { replace: true });
         return;
       }
