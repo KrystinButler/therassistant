@@ -3,6 +3,7 @@ import { readFile } from "node:fs/promises";
 import test from "node:test";
 
 import {
+  cignaCanonicalPlanKey,
   insurancePlanProduct,
   isColoradoInsurancePlan,
   resolveCignaNetworkNames,
@@ -81,6 +82,17 @@ test("Cigna catalog still recognizes referenced Colorado coverage locations", ()
   assert.equal(isColoradoInsurancePlan(plan, locations), true);
 });
 
+test("Cigna canonical plan key collapses duplicate source records with the same normalized name and product", () => {
+  assert.equal(
+    cignaCanonicalPlanKey(" Open Access Plus ", "commppo"),
+    cignaCanonicalPlanKey("open access plus", "COMM PPO"),
+  );
+  assert.notEqual(
+    cignaCanonicalPlanKey("Open Access Plus", "commppo"),
+    cignaCanonicalPlanKey("Open Access Plus", "commhmo"),
+  );
+});
+
 test("Cigna network-name resolver deduplicates network lookups and preserves existing cache", async () => {
   const calls: string[] = [];
   const cache = new Map<string, string | null>([["existing", "Existing Network"]]);
@@ -114,6 +126,13 @@ test("Cigna catalog sync resolves unique network names before persisting plan-ne
   assert.match(catalog, /networkNameCache/);
   assert.match(catalog, /saveNetworks/);
   assert.match(catalog, /external_network_id/);
+});
+
+test("Cigna catalog reuses canonical plan rows when source IDs repeat the same plan name and product", async () => {
+  const catalog = await text(catalogPath);
+  assert.match(catalog, /canonicalPlanCache/);
+  assert.match(catalog, /cignaCanonicalPlanKey/);
+  assert.match(catalog, /externalPlanCache/);
 });
 
 test("Cigna catalog sync derives plans and networks from InsurancePlan references", async () => {
