@@ -5,6 +5,7 @@ import test from "node:test";
 const migrationPath = "supabase/migrations/20261007010000_credentialing_plan_network_catalog.sql";
 const catalogRoutesPath = "artifacts/api-server/src/modules/credentialing/catalog-routes.ts";
 const moduleRouterPath = "artifacts/api-server/src/modules/credentialing/router.ts";
+const apiAppPath = "artifacts/api-server/src/app.ts";
 
 test("credentialing catalog migration is additive, effective-dated, and shared read-only", async () => {
   const sql = await readFile(migrationPath, "utf8");
@@ -44,14 +45,17 @@ test("Colorado ACC Phase III relationships are effective-dated rather than hard-
 });
 
 test("versioned catalog routes expose active records by default and history explicitly", async () => {
-  const [routes, moduleRouter] = await Promise.all([
+  const [routes, moduleRouter, apiApp] = await Promise.all([
     readFile(catalogRoutesPath, "utf8"),
     readFile(moduleRouterPath, "utf8"),
+    readFile(apiAppPath, "utf8"),
   ]);
 
-  assert.match(routes, /router\.get\("\/api\/v1\/payers"/);
-  assert.match(routes, /router\.get\("\/api\/v1\/payers\/:payerId\/plans"/);
-  assert.match(routes, /router\.get\("\/api\/v1\/plans\/:planId\/networks"/);
+  assert.match(routes, /router\.get\("\/v1\/payers"/);
+  assert.match(routes, /router\.get\("\/v1\/payers\/:payerId\/plans"/);
+  assert.match(routes, /router\.get\("\/v1\/plans\/:planId\/networks"/);
+  assert.doesNotMatch(routes, /router\.get\("\/api\/v1\//);
+  assert.match(apiApp, /app\.use\("\/api",\s*rootRouter\)/);
   assert.match(routes, /includeInactive/);
   assert.match(routes, /active\s*=\s*true/i);
   assert.match(routes, /state\s*=\s*'CO'/i);
