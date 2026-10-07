@@ -90,6 +90,102 @@ export async function createUnscheduledEncounter(input: DirectDocumentationInput
   return tenantInsert<EncounterRecord>("encounters", values);
 }
 
+type FeeRateRow = Row & {
+  payer_id?: string | null;
+  provider_level?: string | null;
+  cpt_code?: string | null;
+  code?: string | null;
+  modifier?: string | null;
+  rate_cents?: number | string | null;
+  fee_schedule_status?: string | null;
+  effective_date?: string | null;
+  termination_date?: string | null;
+  effective_from?: string | null;
+  effective_to?: string | null;
+  is_reference?: boolean | null;
+};
+
+export type EncounterServiceFee = {
+  rateCents: number;
+  source: "tenant" | "reference";
+  providerLevel: "Masters-Level" | "Prescriber-Level";
+};
+
+function providerFeeLevel(provider?: Row | null): EncounterServiceFee["providerLevel"] {
+  const profile = [provider?.credentials, provider?.primary_specialty, provider?.taxonomy_code]
+    .filter(Boolean)
+    .join(" ")
+    .toUpperCase();
+  return /\b(MD|DO|NP|APRN|PMHNP|PA-C|PHYSICIAN|PSYCHIATR|NURSE PRACTITIONER|PHYSICIAN ASSISTANT)\b/.test(profile)
+    ? "Prescriber-Level"
+    : "Masters-Level";
+}
+
+function inFeeDateRange(row: FeeRateRow, serviceDate: string) {
+  const start = String(row.effective_date ?? row.effective_from ?? "");
+  const end = String(row.termination_date ?? row.effective_to ?? "");
+  return (!start || start <= serviceDate) && (!end || end >= serviceDate);
+}
+
+function chooseFeeRate(rows: FeeRateRow[], serviceDate: string, modifier: string, providerLevel: EncounterServiceFee["providerLevel"]) {
+  const wantedModifier = modifier.trim().toUpperCase();
+  return rows
+    .filter((row) => {
+      const rowModifier = String(row.modifier ?? "").trim().toUpperCase();
+      const rowProviderLevel = String(row.provider_level ?? "").trim();
+      return inFeeDateRange(row, serviceDate)
+        && (!rowModifier || rowModifier === wantedModifier)
+        && (!rowProviderLevel || rowProviderLevel === providerLevel);
+    })
+    .sort((a, b) => {
+      const score = (row: FeeRateRow) =>
+        (String(row.modifier ?? "").trim().toUpperCase() === wantedModifier && wantedModifier ? 4 : 0)
+        + (String(row.provider_level ?? "").trim() === providerLevel ? 2 : 0)
+        + (row.payer_id ? 1 : 0);
+      return score(b) - score(a)
+        || String(b.effective_date ?? b.effective_from ?? "").localeCompare(String(a.effective_date ?? a.effective_from ?? ""));
+    })[0] ?? null;
+}
+
+export async function getEncounterServiceFee(
+  encounterId: string,
+  cptCode: string,
+  modifier = "",
+  requestedServiceDate?: string,
+): Promise<EncounterServiceFee | null> {
+  const code = cptCode.trim().toUpperCase();
+  if (!encounterId || !code) return null;
+
+  const encounter = first(await tenantSelect<DataRow>("encounters", { id: `eq.${encounterId}`, limit: "1" }));
+  if (!encounter) return null;
+  const serviceDate = requestedServiceDate || String(encounter.started_at ?? "").slice(0, 10) || new Date().toISOString().slice(0, 10);
+  const provider = encounter.provider_id
+    ? first(await tenantSelect<DataRow>("providers", { id: `eq.${String(encounter.provider_id)}`, limit: "1" }))
+    : null;
+  const providerLevel = providerFeeLevel(provider);
+  const payerId = String(encounter.payer_id ?? "").trim();
+
+  const tenantRates = await tenantSelect<FeeRateRow>("v_fee_schedule_rates", { cpt_code: `eq.${code}` });
+  const tenantCandidates = tenantRates.filter((row) =>
+    String(row.fee_schedule_status ?? "").toLowerCase() === "active"
+    && row.is_reference !== true
+    && (!row.payer_id || String(row.payer_id) === payerId),
+  );
+  const tenantRate = chooseFeeRate(tenantCandidates, serviceDate, modifier, providerLevel);
+  if (tenantRate && Number(tenantRate.rate_cents) > 0) {
+    return { rateCents: Number(tenantRate.rate_cents), source: "tenant", providerLevel };
+  }
+
+  if (!payerId) return null;
+  const referenceRates = await referenceSelect<FeeRateRow>("v_reference_fee_rates", {
+    payer_id: `eq.${payerId}`,
+    code: `eq.${code}`,
+  });
+  const referenceRate = chooseFeeRate(referenceRates, serviceDate, modifier, providerLevel);
+  if (!referenceRate || Number(referenceRate.rate_cents) <= 0) return null;
+  return { rateCents: Number(referenceRate.rate_cents), source: "reference", providerLevel };
+}
+
 export async function getEncounterDetail(encounterId: string) {
   const encounter = first(
     await tenantSelect<DataRow>("encounters", { id: `eq.${encounterId}`, limit: "1" }),
