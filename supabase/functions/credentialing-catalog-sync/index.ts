@@ -92,6 +92,12 @@ async function fetchCignaBundle(url: string): Promise<Bundle> {
   if (body.resourceType !== "Bundle") {
     throw new Error("Cigna Provider Directory returned a non-Bundle response");
   }
+  const operationOutcome = body.entry?.find(
+    (entry) => (entry.resource as Row | undefined)?.resourceType === "OperationOutcome",
+  );
+  if (operationOutcome) {
+    throw new Error("Cigna Provider Directory returned an OperationOutcome");
+  }
   return body;
 }
 
@@ -195,7 +201,7 @@ async function syncCigna() {
   let plansSeen = 0;
   let coloradoPlansSeen = 0;
   let nextUrl: string | null =
-    `${CIGNA_BASE_URL}InsurancePlan?_count=200&_include=InsurancePlan%3Acoverage-area`;
+    `${CIGNA_BASE_URL}InsurancePlan?_count=50&_include=InsurancePlan%3Acoverage-area`;
   let pageCount = 0;
 
   try {
