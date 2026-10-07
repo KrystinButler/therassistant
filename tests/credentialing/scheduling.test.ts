@@ -7,6 +7,7 @@ const directoryMonitorPath = "supabase/functions/credentialing-directory-monitor
 const workerPath = "supabase/functions/credentialing-verification-worker/index.ts";
 const catalogPath = "supabase/functions/credentialing-catalog-sync/index.ts";
 const supabaseConfigPath = "supabase/config.toml";
+const restoreDrillPath = "scripts/verify-local-restore-drill.sh";
 
 async function text(path: string) {
   return readFile(path, "utf8");
@@ -46,6 +47,15 @@ test("maintenance Edge Functions disable gateway JWT verification because custom
       new RegExp(`\\[functions\\.${escaped}\\]\\s+verify_jwt\\s*=\\s*false`, "m"),
     );
   }
+});
+
+test("restore rehearsal excludes only database-bound pg_cron extension metadata", async () => {
+  const script = await text(restoreDrillPath);
+  assert.match(script, /pg_restore\s+.*--list/s);
+  assert.match(script, /EXTENSION - pg_cron/);
+  assert.match(script, /COMMENT - EXTENSION pg_cron/);
+  assert.match(script, /--use-list/);
+  assert.doesNotMatch(script, /--exclude-table=.*credentialing|--exclude-schema=.*credentialing/i);
 });
 
 test("directory monitor refreshes NPPES snapshots without changing manual credentialing state", async () => {
