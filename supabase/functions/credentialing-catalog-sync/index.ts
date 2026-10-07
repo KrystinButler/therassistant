@@ -11,6 +11,11 @@ import {
 } from "../_shared/credentialing/cigna-catalog.ts";
 
 const CIGNA_BASE_URL = "https://fhir.cigna.com/ProviderDirectory/v1/";
+const INITIAL_CIGNA_CATALOG_URL =
+  `${CIGNA_BASE_URL}InsurancePlan?_count=50&_include=InsurancePlan%3Acoverage-area`;
+const MAX_PAGES_PER_INVOCATION = 1;
+const CATALOG_REFRESH_INTERVAL_MS = 20 * 60 * 60 * 1000;
+const ACTIVE_SYNC_LEASE_MS = 10 * 60 * 1000;
 const base = (Deno.env.get("SUPABASE_URL") ?? "").replace(/\/$/, "");
 
 function secretKey() {
@@ -38,6 +43,11 @@ type PlanCaches = {
   canonicalPlanCache: Map<string, string>;
   externalPlanCache: Map<string, string>;
 };
+
+type SyncState =
+  | { mode: "fresh"; completedAt: string | null }
+  | { mode: "busy"; syncId: string }
+  | { mode: "work"; row: Row };
 
 function headers(extra: HeadersInit = {}) {
   return {
@@ -77,6 +87,91 @@ async function credentialing_internal_secret_valid(value: string | null) {
 async function getOne(path: string): Promise<Row | null> {
   const rows = (await rest(`${path}&limit=1`)) as Row[];
   return rows?.[0] ?? null;
+}
+
+function stringValue(row: Row, key: string) {
+  return typeof row[key] === "string" ? String(row[key]) : null;
+}
+
+function numberValue(row: Row, key: string) {
+  const value = Number(row[key] ?? 0);
+  return Number.isFinite(value) ? value : 0;
+}
+
+async function patchSync(syncId: string, patch: Row) {
+  await rest(`payer_catalog_syncs?id=eq.${encodeURIComponent(syncId)}`, {
+    method: "PATCH",
+    headers: { Prefer: "return=minimal" },
+    body: JSON.stringify(patch),
+  });
+}
+
+async function getOrStartSync(payerId: string): Promise<SyncState> {
+  const now = Date.now();
+  let open = await getOne(
+    `payer_catalog_syncs?payer_id=eq.${encodeURIComponent(payerId)}&status=eq.in_progress&select=id,started_at,last_progress_at,next_cursor_url,pages_processed,records_added,records_changed,records_deactivated&order=started_at.desc`,
+  );
+
+  if (open?.id) {
+    const syncId = String(open.id);
+    const lastProgressText =
+      stringValue(open, "last_progress_at") ?? stringValue(open, "started_at");
+    const lastProgressMs = lastProgressText ? Date.parse(lastProgressText) : 0;
+    const ageMs = lastProgressMs > 0 ? now - lastProgressMs : ACTIVE_SYNC_LEASE_MS + 1;
+    const pagesProcessed = numberValue(open, "pages_processed");
+    const nextCursor = stringValue(open, "next_cursor_url");
+
+    if (ageMs < ACTIVE_SYNC_LEASE_MS) {
+      return { mode: "busy", syncId };
+    }
+
+    if (!nextCursor && pagesProcessed === 0) {
+      await patchSync(syncId, {
+        status: "failed",
+        completed_at: new Date().toISOString(),
+        error_summary:
+          "Catalog synchronization was interrupted before its first durable page checkpoint.",
+      });
+      open = null;
+    } else if (!nextCursor && pagesProcessed > 0) {
+      const completedAt = new Date().toISOString();
+      await patchSync(syncId, {
+        status: "completed",
+        completed_at: completedAt,
+        last_progress_at: completedAt,
+        error_summary: null,
+      });
+      return { mode: "fresh", completedAt };
+    } else {
+      return { mode: "work", row: open };
+    }
+  }
+
+  const freshnessCutoff = new Date(now - CATALOG_REFRESH_INTERVAL_MS).toISOString();
+  const recentCompleted = await getOne(
+    `payer_catalog_syncs?payer_id=eq.${encodeURIComponent(payerId)}&status=eq.completed&completed_at=gte.${encodeURIComponent(freshnessCutoff)}&select=id,completed_at&order=completed_at.desc`,
+  );
+  if (recentCompleted?.id) {
+    return {
+      mode: "fresh",
+      completedAt: stringValue(recentCompleted, "completed_at"),
+    };
+  }
+
+  const startedAt = new Date().toISOString();
+  const rows = (await rest("payer_catalog_syncs?select=*", {
+    method: "POST",
+    headers: { Prefer: "return=representation" },
+    body: JSON.stringify({
+      payer_id: payerId,
+      status: "in_progress",
+      source_version: "cigna-plan-net-r4",
+      next_cursor_url: INITIAL_CIGNA_CATALOG_URL,
+      pages_processed: 0,
+      last_progress_at: startedAt,
+    }),
+  })) as Row[];
+  return { mode: "work", row: rows[0] };
 }
 
 function externalPlanId(plan: CignaInsurancePlan) {
@@ -255,31 +350,41 @@ async function syncCigna() {
   const payer = await getOne("payers?adapter_key=eq.cigna&select=id,name");
   if (!payer?.id) throw new Error("Cigna payer reference is not configured");
   const payerId = String(payer.id);
-  const syncRows = (await rest("payer_catalog_syncs?select=id", {
-    method: "POST",
-    headers: { Prefer: "return=representation" },
-    body: JSON.stringify({
-      payer_id: payerId,
-      status: "in_progress",
-      source_version: "cigna-plan-net-r4",
-    }),
-  })) as Row[];
-  const syncId = String(syncRows[0].id);
+  const syncState = await getOrStartSync(payerId);
 
+  if (syncState.mode === "fresh") {
+    return {
+      payer: "Cigna",
+      status: "fresh",
+      completedAt: syncState.completedAt,
+    };
+  }
+  if (syncState.mode === "busy") {
+    return { payer: "Cigna", status: "busy", syncId: syncState.syncId };
+  }
+
+  const checkpoint = syncState.row;
+  const syncId = String(checkpoint.id);
   let recordsAdded = 0;
   let recordsChanged = 0;
   let plansSeen = 0;
   let coloradoPlansSeen = 0;
-  let nextUrl: string | null =
-    `${CIGNA_BASE_URL}InsurancePlan?_count=50&_include=InsurancePlan%3Acoverage-area`;
-  let pageCount = 0;
+  let nextUrl =
+    stringValue(checkpoint, "next_cursor_url") ?? INITIAL_CIGNA_CATALOG_URL;
+  let pagesProcessed = numberValue(checkpoint, "pages_processed");
+  const previousAdded = numberValue(checkpoint, "records_added");
+  const previousChanged = numberValue(checkpoint, "records_changed");
+  const previousDeactivated = numberValue(checkpoint, "records_deactivated");
   const networkNameCache = new Map<string, string | null>();
   const planCaches = await loadPlanCaches(payerId);
   const { canonicalPlanCache, externalPlanCache } = planCaches;
 
   try {
-    while (nextUrl && pageCount < 50) {
-      pageCount += 1;
+    for (
+      let page = 0;
+      nextUrl && page < MAX_PAGES_PER_INVOCATION;
+      page += 1
+    ) {
       const bundle = await fetchCignaBundle(nextUrl);
       const includedLocations = new Map(
         (bundle.entry ?? [])
@@ -333,21 +438,27 @@ async function syncCigna() {
       }
 
       nextUrl = bundle.link?.find((link) => link.relation === "next")?.url ?? null;
+      pagesProcessed += 1;
     }
 
-    await rest(`payer_catalog_syncs?id=eq.${encodeURIComponent(syncId)}`, {
-      method: "PATCH",
-      headers: { Prefer: "return=minimal" },
-      body: JSON.stringify({
-        status: "completed",
-        completed_at: new Date().toISOString(),
-        records_added: recordsAdded,
-        records_changed: recordsChanged,
-        records_deactivated: 0,
-      }),
+    const checkpointAt = new Date().toISOString();
+    const completed = !nextUrl;
+    await patchSync(syncId, {
+      status: completed ? "completed" : "in_progress",
+      completed_at: completed ? checkpointAt : null,
+      last_progress_at: checkpointAt,
+      next_cursor_url: nextUrl,
+      pages_processed: pagesProcessed,
+      records_added: previousAdded + recordsAdded,
+      records_changed: previousChanged + recordsChanged,
+      records_deactivated: previousDeactivated,
+      error_summary: null,
     });
+
     return {
       payer: "Cigna",
+      status: completed ? "completed" : "in_progress",
+      syncId,
       recordsAdded,
       recordsChanged,
       plansSeen,
@@ -355,21 +466,14 @@ async function syncCigna() {
       canonicalPlans: canonicalPlanCache.size,
       externalPlanIdsSeen: externalPlanCache.size,
       uniqueNetworksResolved: networkNameCache.size,
-      pages: pageCount,
+      pagesProcessed,
+      hasMore: Boolean(nextUrl),
     };
   } catch (error) {
-    await rest(`payer_catalog_syncs?id=eq.${encodeURIComponent(syncId)}`, {
-      method: "PATCH",
-      headers: { Prefer: "return=minimal" },
-      body: JSON.stringify({
-        status: "failed",
-        completed_at: new Date().toISOString(),
-        records_added: recordsAdded,
-        records_changed: recordsChanged,
-        records_deactivated: 0,
-        error_summary:
-          error instanceof Error ? error.message : "Cigna catalog sync failed",
-      }),
+    await patchSync(syncId, {
+      last_progress_at: new Date().toISOString(),
+      error_summary:
+        error instanceof Error ? error.message : "Cigna catalog sync failed",
     });
     throw error;
   }
