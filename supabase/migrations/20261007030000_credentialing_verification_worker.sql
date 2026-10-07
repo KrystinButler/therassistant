@@ -37,6 +37,7 @@ SET search_path = pgmq, public, pg_temp
 AS $$
 DECLARE
   v_message jsonb;
+  v_attempt integer;
 BEGIN
   SELECT q.message INTO v_message
   FROM pgmq.q_credentialing_participation_verification q
@@ -45,6 +46,9 @@ BEGIN
   IF v_message IS NULL THEN
     RETURN false;
   END IF;
+
+  v_attempt := COALESCE((v_message ->> 'attempt')::integer, 0) + 1;
+  v_message := jsonb_set(v_message, '{attempt}', to_jsonb(v_attempt), true);
 
   PERFORM pgmq.archive('credentialing_participation_verification', p_msg_id);
   PERFORM pgmq.send(
