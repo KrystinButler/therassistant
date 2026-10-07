@@ -4,6 +4,7 @@ import {
   cignaNetworkIds,
   insurancePlanProduct,
   isColoradoInsurancePlan,
+  resolveCignaNetworkNames,
   type CignaInsurancePlan,
   type CignaLocation,
 } from "../_shared/credentialing/cigna-catalog.ts";
@@ -101,17 +102,21 @@ async function fetchCignaBundle(url: string): Promise<Bundle> {
   return body;
 }
 
-async function fetchNetwork(networkId: string): Promise<Organization | null> {
-  const response = await fetch(
-    `${CIGNA_BASE_URL}Organization/${encodeURIComponent(networkId)}`,
-    {
-      headers: { accept: "application/fhir+json, application/json" },
-      signal: AbortSignal.timeout(15_000),
-    },
-  );
-  if (!response.ok) return null;
-  const body = (await response.json()) as Organization;
-  return body.resourceType === "Organization" ? body : null;
+async function fetchNetworkName(networkId: string): Promise<string | null> {
+  try {
+    const response = await fetch(
+      `${CIGNA_BASE_URL}Organization/${encodeURIComponent(networkId)}`,
+      {
+        headers: { accept: "application/fhir+json, application/json" },
+        signal: AbortSignal.timeout(10_000),
+      },
+    );
+    if (!response.ok) return null;
+    const body = (await response.json()) as Organization;
+    return body.resourceType === "Organization" ? body.name ?? null : null;
+  } catch {
+    return null;
+  }
 }
 
 async function savePlan(payerId: string, plan: CignaInsurancePlan) {
@@ -151,34 +156,50 @@ async function savePlan(payerId: string, plan: CignaInsurancePlan) {
   return { id: String(rows[0].id), added: true };
 }
 
-async function saveNetwork(planId: string, externalNetworkId: string) {
-  const existing = await getOne(
-    `payer_networks?plan_id=eq.${encodeURIComponent(planId)}&external_network_id=eq.${encodeURIComponent(externalNetworkId)}&select=id`,
-  );
-  const network = await fetchNetwork(externalNetworkId);
-  const payload = {
-    plan_id: planId,
-    external_network_id: externalNetworkId,
-    name: network?.name ?? `Cigna Network ${externalNetworkId}`,
-    active: true,
-    source_updated_at: new Date().toISOString(),
-  };
+async function saveNetworks(
+  planId: string,
+  externalNetworkIds: string[],
+  networkNameCache: Map<string, string | null>,
+) {
+  if (!externalNetworkIds.length) return { added: 0, existing: 0 };
 
-  if (existing?.id) {
-    await rest(`payer_networks?id=eq.${encodeURIComponent(String(existing.id))}`, {
-      method: "PATCH",
+  const existingRows = (await rest(
+    `payer_networks?plan_id=eq.${encodeURIComponent(planId)}&select=external_network_id`,
+  )) as Row[];
+  const existing = new Set(
+    existingRows
+      .map((row) =>
+        typeof row.external_network_id === "string"
+          ? row.external_network_id
+          : null,
+      )
+      .filter((value): value is string => Boolean(value)),
+  );
+
+  const now = new Date().toISOString();
+  const newRows = externalNetworkIds
+    .filter((networkId) => !existing.has(networkId))
+    .map((networkId) => ({
+      plan_id: planId,
+      external_network_id: networkId,
+      name:
+        networkNameCache.get(networkId) ?? `Cigna Network ${networkId}`,
+      active: true,
+      source_updated_at: now,
+    }));
+
+  if (newRows.length) {
+    await rest("payer_networks", {
+      method: "POST",
       headers: { Prefer: "return=minimal" },
-      body: JSON.stringify(payload),
+      body: JSON.stringify(newRows),
     });
-    return false;
   }
 
-  await rest("payer_networks", {
-    method: "POST",
-    headers: { Prefer: "return=minimal" },
-    body: JSON.stringify(payload),
-  });
-  return true;
+  return {
+    added: newRows.length,
+    existing: externalNetworkIds.length - newRows.length,
+  };
 }
 
 async function syncCigna() {
@@ -203,6 +224,7 @@ async function syncCigna() {
   let nextUrl: string | null =
     `${CIGNA_BASE_URL}InsurancePlan?_count=50&_include=InsurancePlan%3Acoverage-area`;
   let pageCount = 0;
+  const networkNameCache = new Map<string, string | null>();
 
   try {
     while (nextUrl && pageCount < 50) {
@@ -226,18 +248,34 @@ async function syncCigna() {
         );
       plansSeen += plans.length;
 
-      for (const plan of plans) {
-        if (!isColoradoInsurancePlan(plan, includedLocations)) continue;
-        coloradoPlansSeen += 1;
+      const coloradoPlans = plans.filter((plan) =>
+        isColoradoInsurancePlan(plan, includedLocations),
+      );
+      coloradoPlansSeen += coloradoPlans.length;
+
+      const pageNetworkIds = [
+        ...new Set(coloradoPlans.flatMap((plan) => cignaNetworkIds(plan))),
+      ];
+      await resolveCignaNetworkNames(
+        pageNetworkIds,
+        networkNameCache,
+        fetchNetworkName,
+        12,
+      );
+
+      for (const plan of coloradoPlans) {
         const saved = await savePlan(payerId, plan);
         if (!saved) continue;
         if (saved.added) recordsAdded += 1;
         else recordsChanged += 1;
 
-        for (const networkId of cignaNetworkIds(plan)) {
-          if (await saveNetwork(saved.id, networkId)) recordsAdded += 1;
-          else recordsChanged += 1;
-        }
+        const networkResult = await saveNetworks(
+          saved.id,
+          cignaNetworkIds(plan),
+          networkNameCache,
+        );
+        recordsAdded += networkResult.added;
+        recordsChanged += networkResult.existing;
       }
 
       nextUrl = bundle.link?.find((link) => link.relation === "next")?.url ?? null;
@@ -260,6 +298,7 @@ async function syncCigna() {
       recordsChanged,
       plansSeen,
       coloradoPlansSeen,
+      uniqueNetworksResolved: networkNameCache.size,
       pages: pageCount,
     };
   } catch (error) {
