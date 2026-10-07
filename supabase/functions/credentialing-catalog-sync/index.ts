@@ -1,6 +1,7 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 
 import {
+  cignaCanonicalPlanKey,
   cignaNetworkIds,
   insurancePlanProduct,
   isColoradoInsurancePlan,
@@ -31,6 +32,11 @@ type Bundle = {
     search?: { mode?: string };
   }>;
   link?: Array<{ relation?: string; url?: string }>;
+};
+
+type PlanCaches = {
+  canonicalPlanCache: Map<string, string>;
+  externalPlanCache: Map<string, string>;
 };
 
 function headers(extra: HeadersInit = {}) {
@@ -119,17 +125,55 @@ async function fetchNetworkName(networkId: string): Promise<string | null> {
   }
 }
 
-async function savePlan(payerId: string, plan: CignaInsurancePlan) {
+async function loadPlanCaches(payerId: string): Promise<PlanCaches> {
+  const rows = (await rest(
+    `payer_plans?payer_id=eq.${encodeURIComponent(payerId)}&state=eq.CO&select=id,external_plan_id,name,plan_type,product_type`,
+  )) as Row[];
+  const canonicalPlanCache = new Map<string, string>();
+  const externalPlanCache = new Map<string, string>();
+
+  for (const row of rows) {
+    const id = typeof row.id === "string" ? row.id : null;
+    if (!id) continue;
+
+    const externalId =
+      typeof row.external_plan_id === "string" ? row.external_plan_id : null;
+    if (externalId) externalPlanCache.set(externalId, id);
+
+    const product =
+      typeof row.plan_type === "string"
+        ? row.plan_type
+        : typeof row.product_type === "string"
+          ? row.product_type
+          : null;
+    const key = cignaCanonicalPlanKey(
+      typeof row.name === "string" ? row.name : null,
+      product,
+    );
+    if (key !== "|") canonicalPlanCache.set(key, id);
+  }
+
+  return { canonicalPlanCache, externalPlanCache };
+}
+
+async function savePlan(
+  payerId: string,
+  plan: CignaInsurancePlan,
+  caches: PlanCaches,
+) {
   const externalId = externalPlanId(plan);
   if (!externalId || !plan.name) return null;
 
-  const existing = await getOne(
-    `payer_plans?payer_id=eq.${encodeURIComponent(payerId)}&external_plan_id=eq.${encodeURIComponent(externalId)}&select=id`,
-  );
   const product = insurancePlanProduct(plan);
+  const canonicalKey = cignaCanonicalPlanKey(
+    plan.name,
+    product.code ?? product.display,
+  );
+  const cachedByExternal = caches.externalPlanCache.get(externalId);
+  const cachedByCanonical = caches.canonicalPlanCache.get(canonicalKey);
+  const existingId = cachedByExternal ?? cachedByCanonical ?? null;
   const payload = {
     payer_id: payerId,
-    external_plan_id: externalId,
     name: plan.name,
     product_type: product.display,
     plan_type: product.code,
@@ -139,21 +183,26 @@ async function savePlan(payerId: string, plan: CignaInsurancePlan) {
     source_updated_at: plan.meta?.lastUpdated ?? new Date().toISOString(),
   };
 
-  if (existing?.id) {
-    await rest(`payer_plans?id=eq.${encodeURIComponent(String(existing.id))}`, {
+  if (existingId) {
+    await rest(`payer_plans?id=eq.${encodeURIComponent(existingId)}`, {
       method: "PATCH",
       headers: { Prefer: "return=minimal" },
       body: JSON.stringify(payload),
     });
-    return { id: String(existing.id), added: false };
+    caches.externalPlanCache.set(externalId, existingId);
+    caches.canonicalPlanCache.set(canonicalKey, existingId);
+    return { id: existingId, added: false };
   }
 
   const rows = (await rest("payer_plans?select=id", {
     method: "POST",
     headers: { Prefer: "return=representation" },
-    body: JSON.stringify(payload),
+    body: JSON.stringify({ ...payload, external_plan_id: externalId }),
   })) as Row[];
-  return { id: String(rows[0].id), added: true };
+  const id = String(rows[0].id);
+  caches.externalPlanCache.set(externalId, id);
+  caches.canonicalPlanCache.set(canonicalKey, id);
+  return { id, added: true };
 }
 
 async function saveNetworks(
@@ -225,6 +274,8 @@ async function syncCigna() {
     `${CIGNA_BASE_URL}InsurancePlan?_count=50&_include=InsurancePlan%3Acoverage-area`;
   let pageCount = 0;
   const networkNameCache = new Map<string, string | null>();
+  const planCaches = await loadPlanCaches(payerId);
+  const { canonicalPlanCache, externalPlanCache } = planCaches;
 
   try {
     while (nextUrl && pageCount < 50) {
@@ -264,7 +315,10 @@ async function syncCigna() {
       );
 
       for (const plan of coloradoPlans) {
-        const saved = await savePlan(payerId, plan);
+        const saved = await savePlan(payerId, plan, {
+          canonicalPlanCache,
+          externalPlanCache,
+        });
         if (!saved) continue;
         if (saved.added) recordsAdded += 1;
         else recordsChanged += 1;
@@ -298,6 +352,8 @@ async function syncCigna() {
       recordsChanged,
       plansSeen,
       coloradoPlansSeen,
+      canonicalPlans: canonicalPlanCache.size,
+      externalPlanIdsSeen: externalPlanCache.size,
       uniqueNetworksResolved: networkNameCache.size,
       pages: pageCount,
     };
