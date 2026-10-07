@@ -5,6 +5,7 @@ import test from "node:test";
 import {
   insurancePlanProduct,
   isColoradoInsurancePlan,
+  resolveCignaNetworkNames,
 } from "../../supabase/functions/_shared/credentialing/cigna-catalog.ts";
 
 const adapterPath = "supabase/functions/_shared/credentialing/cigna.ts";
@@ -80,12 +81,39 @@ test("Cigna catalog still recognizes referenced Colorado coverage locations", ()
   assert.equal(isColoradoInsurancePlan(plan, locations), true);
 });
 
+test("Cigna network-name resolver deduplicates network lookups and preserves existing cache", async () => {
+  const calls: string[] = [];
+  const cache = new Map<string, string | null>([["existing", "Existing Network"]]);
+  const resolved = await resolveCignaNetworkNames(
+    ["existing", "network-a", "network-a", "network-b"],
+    cache,
+    async (id) => {
+      calls.push(id);
+      return id === "network-a" ? "Network A" : null;
+    },
+    2,
+  );
+
+  assert.deepEqual(calls.sort(), ["network-a", "network-b"]);
+  assert.equal(resolved.get("existing"), "Existing Network");
+  assert.equal(resolved.get("network-a"), "Network A");
+  assert.equal(resolved.get("network-b"), null);
+});
+
 test("Cigna catalog uses a supported page size and rejects OperationOutcome bundles", async () => {
   const catalog = await text(catalogPath);
   assert.match(catalog, /InsurancePlan\?_count=50/);
   assert.match(catalog, /OperationOutcome/);
   assert.match(catalog, /Cigna Provider Directory returned an OperationOutcome/);
   assert.doesNotMatch(catalog, /InsurancePlan\?_count=200/);
+});
+
+test("Cigna catalog sync resolves unique network names before persisting plan-network rows", async () => {
+  const catalog = await text(catalogPath);
+  assert.match(catalog, /resolveCignaNetworkNames/);
+  assert.match(catalog, /networkNameCache/);
+  assert.match(catalog, /saveNetworks/);
+  assert.match(catalog, /external_network_id/);
 });
 
 test("Cigna catalog sync derives plans and networks from InsurancePlan references", async () => {
