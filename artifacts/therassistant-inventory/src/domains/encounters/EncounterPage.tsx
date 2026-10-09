@@ -1,6 +1,6 @@
 import { ClinicianSigningSetup } from "../clinical/ClinicianSigningSetup";
 import { TelehealthVisit } from "../scheduling/TelehealthVisit";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useRoute } from "wouter";
 
 import { StatusBadge } from "../../components/status-badge";
@@ -122,6 +122,8 @@ export function EncounterPage() {
   const [units, setUnits] = useState(1);
   const [chargeDollars, setChargeDollars] = useState("");
   const [placeOfService, setPlaceOfService] = useState("11");
+  const [signingReady, setSigningReady] = useState<{ready:boolean;providerId:string}>({ready:false,providerId:""});
+  const updateSigningReady = useCallback((ready:boolean, providerId:string) => setSigningReady({ready,providerId}), []);
   const [signatureText, setSignatureText] = useState("");
   const [fundingSourceType, setFundingSourceType] = useState<FundingSourceType>("insurance");
   const [fundingSourceSubtype, setFundingSourceSubtype] = useState("");
@@ -384,6 +386,10 @@ export function EncounterPage() {
 
   async function sign() {
     if (saving || signed) return;
+    if (!signingReady.ready || signingReady.providerId !== String(data?.encounter.provider_id ?? "")) {
+      setError("Complete clinician signing setup at the top of this encounter. Your draft remains available.");
+      return;
+    }
     if (!noteText.trim()) {
       setError("Enter clinical documentation in the note editor before signing.");
       noteRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
@@ -682,6 +688,7 @@ export function EncounterPage() {
         </div>
       </div>
 
+      {!signed && <ClinicianSigningSetup providerId={String(data.encounter.provider_id ?? "")} onReadinessChange={updateSigningReady} />}
       <section className="encounter-focus-banner">
         <div>
           <div className="thera-eyebrow">TODAY&apos;S FOCUS</div>
@@ -764,9 +771,8 @@ export function EncounterPage() {
             <TelehealthVisit appointment={data.appointment} editable />
             <div className="encounter-inline-signature" id="encounter-signature">
               {signed ? <div className="encounter-signed-handoff"><div><strong>Signed clinical record → Charge Capture</strong><span>The note is locked. All claim and charge corrections remain available in revenue-cycle workqueues.</span></div><Link href="/billing/charges" className="thera-action secondary">Open Charge Capture</Link></div> : <>
-                <ClinicianSigningSetup providerId={String(data.encounter.provider_id ?? "")} />
                 <div className="encounter-sign-row"><label><span className="thera-field-label">Rendering Provider Signature</span><input ref={signatureRef} className="thera-input" value={signatureText} onChange={(event) => setSignatureText(event.target.value)} placeholder="Provider signature" /></label>
-                  <button type="button" className="thera-action" disabled={saving} onClick={() => void sign()}>{saving ? "Signing…" : "Sign & Lock Note"}</button></div>
+                  <button type="button" className="thera-action" disabled={saving || !signingReady.ready || signingReady.providerId !== String(data.encounter.provider_id ?? "")} onClick={() => void sign()}>{saving ? "Signing…" : "Sign & Lock Note"}</button></div>
                 {!noteText.trim() && <button type="button" className="thera-action secondary" onClick={() => { noteRef.current?.scrollIntoView({ behavior: "smooth", block: "center" }); noteRef.current?.focus({ preventScroll: true }); }}>Go to Note Editor</button>}
                 <p className="thera-table-subtext">Save Note keeps a draft. Add the visit diagnosis and procedure code before Sign & Lock. Eligibility verification does not hold billing.</p>
               </>}

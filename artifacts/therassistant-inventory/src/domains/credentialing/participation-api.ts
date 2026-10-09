@@ -1,4 +1,4 @@
-import { authenticatedFetch } from "../../lib/supabase-client";
+import { getCurrentTenantId, referenceSelect, tenantRpc, tenantSelect } from "../../lib/tenant-data-client";
 
 export type CatalogPayer = {
   id: string;
@@ -46,65 +46,38 @@ export type VerificationResult = Record<string, any> & {
   matches?: Array<Record<string, any>>;
 };
 
-async function api<T>(path: string, init?: RequestInit): Promise<T> {
-  const response = await authenticatedFetch(path, {
-    ...init,
-    headers: {
-      Accept: "application/json",
-      "Content-Type": "application/json",
-      ...(init?.headers ?? {}),
-    },
-  });
-  if (!response.headers.get("content-type")?.includes("application/json")) {
-    throw new Error("Participation verification is unavailable: the verification service is not connected to this deployment. Please use the payer’s official provider directory until the service is connected.");
-  }
-  const payload = await response.json();
-  if (!response.ok) {
-    throw new Error(
-      String(
-        (payload as Record<string, unknown>)?.error ??
-          `Credentialing API request failed (${response.status}).`,
-      ),
-    );
-  }
-  return payload as T;
+function activeCatalogFilters() {
+  const today = new Date().toISOString().slice(0, 10);
+  return { active: "eq.true", and: `(or(effective_from.is.null,effective_from.lte.${today}),or(effective_to.is.null,effective_to.gte.${today}))`, order: "name.asc" };
 }
-
-async function list<T>(path: string): Promise<T[]> {
-  const payload = await api<unknown>(path);
-  if (!Array.isArray(payload)) throw new Error("The verification service returned an invalid list. Please retry.");
-  return payload as T[];
-}
-
 export function loadPayers() {
-  return list<CatalogPayer>("/api/v1/payers");
+  return referenceSelect<CatalogPayer>("payers", { ...activeCatalogFilters(), select: "id,name,adapterKey:adapter_key,active" });
 }
-
 export function loadPlans(payerId: string) {
-  return list<CatalogPlan>(`/api/v1/payers/${encodeURIComponent(payerId)}/plans`);
+  return referenceSelect<CatalogPlan>("payer_plans", { ...activeCatalogFilters(), payer_id: `eq.${payerId}`, state: "eq.CO", select: "id,payerId:payer_id,name,productType:product_type,marketSegment:market_segment,active" });
 }
-
 export function loadNetworks(planId: string) {
-  return list<CatalogNetwork>(`/api/v1/plans/${encodeURIComponent(planId)}/networks`);
+  return referenceSelect<CatalogNetwork>("payer_networks", { ...activeCatalogFilters(), plan_id: `eq.${planId}`, select: "id,planId:plan_id,name,active" });
 }
-
-export function createParticipationVerification(input: VerificationCreateInput) {
-  return api<{ verificationId: string; status: "IN_PROGRESS" }>(
-    "/api/v1/participation-verifications",
-    { method: "POST", body: JSON.stringify(input) },
-  );
+export async function createParticipationVerification(input: VerificationCreateInput) {
+  return tenantRpc<{verificationId:string;status:"IN_PROGRESS"}>("request_participation_verification", {
+    p_tenant_id: await getCurrentTenantId(), p_provider_id: input.provider_id,
+    p_payer_id: input.payer_id, p_plan_id: input.plan_id,
+    p_network_id: input.network_id ?? null, p_organization_id: input.organization_id ?? null,
+    p_practice_location_id: input.practice_location_id ?? null,
+  });
 }
-
-export function loadParticipationVerification(verificationId: string) {
-  return api<VerificationResult>(
-    `/api/v1/participation-verifications/${encodeURIComponent(verificationId)}`,
-  );
+export async function loadParticipationVerification(verificationId: string) {
+  const [runs, evidence, matches] = await Promise.all([
+    tenantSelect<VerificationResult>("participation_verification_runs", {id: `eq.${verificationId}`, limit:"1"}),
+    tenantSelect("participation_verification_evidence", {verification_id: `eq.${verificationId}`, order:"retrieved_at.asc,created_at.asc"}),
+    tenantSelect("participation_verification_matches", {verification_id: `eq.${verificationId}`, order:"created_at.asc,match_type.asc"}),
+  ]);
+  if (!runs[0]) throw new Error("Verification was not found in this practice.");
+  return {...runs[0], evidence, matches};
 }
-
 export function loadVerificationHistory(providerId: string) {
-  return list<VerificationResult>(
-    `/api/v1/providers/${encodeURIComponent(providerId)}/verification-history`,
-  );
+  return tenantSelect<VerificationResult>("participation_verification_runs", {provider_id:`eq.${providerId}`,order:"requested_at.desc",limit:"200"});
 }
 
 export async function pollParticipationVerification(
