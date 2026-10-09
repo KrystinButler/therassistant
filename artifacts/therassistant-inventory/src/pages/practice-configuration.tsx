@@ -2,6 +2,7 @@ import { WorkDrawer } from "../components/work-drawer";
 import { useEffect, useState } from "react";
 import { Link } from "wouter";
 import { resolvePayerEdiConfig } from "../domains/billing/payer-edi-defaults";
+import { OfficeAllyConnectionPanel } from "../domains/edi/OfficeAllyConnectionPanel";
 
 import {
   getCurrentTenantId,
@@ -168,7 +169,7 @@ export function PracticeConfigurationPage() {
       setForm(normalized);
       setMessage(
         normalized.billingProviderName.trim()
-          ? "Practice configuration, entity, and primary location saved. Office Ally EDI is managed automatically by THERASSISTANT."
+          ? "Practice configuration, entity, and primary location saved. Office Ally routing remains preconfigured; connect the practice account separately below."
           : "Practice configuration saved. Add a billing provider/legal name to create the practice entity and primary location required for patient intake.",
       );
     } catch (err) {
@@ -191,7 +192,7 @@ export function PracticeConfigurationPage() {
         <div>
           <div className="thera-eyebrow">ADMINISTRATION</div>
           <h1>Practice Configuration</h1>
-          <p>{tenantName} · Office Ally EDI transactions are connected automatically; configure only your practice and payer data.</p>
+          <p>{tenantName} · Office Ally routing is preconfigured by THERASSISTANT. Connect this practice's Office Ally account once, then maintain only practice and payer data.</p>
         </div>
         <button type="button" className="thera-action" disabled={saving} onClick={() => void save()}>
           {saving ? "Saving..." : "Save Configuration"}
@@ -200,6 +201,8 @@ export function PracticeConfigurationPage() {
 
       {error && <div className="thera-state error" style={{ marginBottom: 12 }}>{error}</div>}
       {message && <div className="thera-alert" style={{ marginBottom: 12 }}>{message}</div>}
+
+      <OfficeAllyConnectionPanel />
 
       <div className="thera-filter-row">{([['entity', 'Practice Entity'], ['location', 'Location Setup'], ['payers', 'Payers']] as const).map(([key,label]) => <button key={key} type="button" className="thera-action secondary" onClick={() => setDrawer(key)}>{label}</button>)}</div>
       <WorkDrawer open={drawer !== null} onOpenChange={open => { if (!open) setDrawer(null); }} title={drawer === "entity" ? "Practice Entity" : drawer === "location" ? "Location Setup" : "Payers"} footer={<button className="thera-action" disabled={saving} onClick={() => void save()}>{saving ? "Saving…" : "Save Settings"}</button>}>
@@ -211,7 +214,7 @@ export function PracticeConfigurationPage() {
             <div>
               <div className="thera-eyebrow">SHARED COLORADO REFERENCE</div>
               <h2 id="colorado-payer-routing">Colorado Payer Claim Routing</h2>
-              <p>Claim-filing categories and available payer IDs are loaded automatically from the shared catalog. Office Ally is already connected at the platform level. Outbound 837P and inbound ERA identifiers remain separate.</p>
+              <p>Claim-filing categories and available payer IDs are loaded automatically from the shared catalog. Office Ally technical routing is centrally maintained; this practice uses the connection shown above. Outbound 837P and inbound ERA identifiers remain separate.</p>
             </div>
             <span className="thera-table-subtext">{readyOutboundCount} of {payers.length} outbound payer IDs available</span>
           </div>
