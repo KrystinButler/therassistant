@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 
-const migrationPath = "supabase/migrations/20261007040000_credentialing_maintenance_scheduler.sql";
+const migrationPath = "supabase/migrations/20261007035054_credentialing_maintenance_scheduler.sql";
 const directoryMonitorPath = "supabase/functions/credentialing-directory-monitor/index.ts";
 const workerPath = "supabase/functions/credentialing-verification-worker/index.ts";
 const catalogPath = "supabase/functions/credentialing-catalog-sync/index.ts";
