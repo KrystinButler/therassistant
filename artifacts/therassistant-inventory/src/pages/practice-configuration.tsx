@@ -27,7 +27,7 @@ type PayerRow = DataRow & {
 };
 
 export function PracticeConfigurationPage() {
-  const [drawer, setDrawer] = useState<"entity" | "location" | "payers" | "edi" | null>(null);
+  const [drawer, setDrawer] = useState<"entity" | "location" | "payers" | null>(null);
   const [tenantId, setTenantId] = useState("");
   const [tenantName, setTenantName] = useState("");
   const [payers, setPayers] = useState<PayerRow[]>([]);
@@ -100,7 +100,7 @@ export function PracticeConfigurationPage() {
     setError(null);
     setMessage(null);
     try {
-      const normalized: Edi837PConfig = {
+      const normalized: Edi837PConfig = resolvePayerEdiConfig({
         ...form,
         state: form.state.trim().toUpperCase(),
         billingProviderNpi: form.billingProviderNpi.replace(/\D/g, ""),
@@ -122,7 +122,7 @@ export function PracticeConfigurationPage() {
             .map(([key, value]) => [key, value.trim()])
             .filter(([, value]) => Boolean(value)),
         ),
-      };
+      }, payers);
       await tenantRpc("update_claims_edi_settings", {
         p_tenant_id: tenantId,
         p_config: normalized,
@@ -168,11 +168,11 @@ export function PracticeConfigurationPage() {
       setForm(normalized);
       setMessage(
         normalized.billingProviderName.trim()
-          ? "Practice configuration, entity, and primary location saved."
-          : "837P configuration saved. Add a billing provider/legal name to create the practice entity and primary location required for patient intake.",
+          ? "Practice configuration, entity, and primary location saved. Office Ally EDI is managed automatically by THERASSISTANT."
+          : "Practice configuration saved. Add a billing provider/legal name to create the practice entity and primary location required for patient intake.",
       );
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Unable to save claims EDI configuration.");
+      setError(err instanceof Error ? err.message : "Unable to save practice configuration.");
     } finally {
       setSaving(false);
     }
@@ -182,8 +182,6 @@ export function PracticeConfigurationPage() {
   if (error && !form) return <div className="thera-state error">{error}</div>;
   if (!form) return <div className="thera-state error">Practice configuration is unavailable.</div>;
 
-  // Values come from the shared payer catalog each time this screen loads.
-  // Practice-specific overrides remain in the saved EDI configuration.
   const routing = resolvePayerEdiConfig(form, payers);
   const readyOutboundCount = payers.filter((payer) => Boolean(routing.payerIds[payer.id])).length;
 
@@ -193,7 +191,7 @@ export function PracticeConfigurationPage() {
         <div>
           <div className="thera-eyebrow">ADMINISTRATION</div>
           <h1>Practice Configuration</h1>
-          <p>{tenantName} · configure the data required for professional claim export.</p>
+          <p>{tenantName} · Office Ally EDI transactions are connected automatically; configure only your practice and payer data.</p>
         </div>
         <button type="button" className="thera-action" disabled={saving} onClick={() => void save()}>
           {saving ? "Saving..." : "Save Configuration"}
@@ -203,47 +201,23 @@ export function PracticeConfigurationPage() {
       {error && <div className="thera-state error" style={{ marginBottom: 12 }}>{error}</div>}
       {message && <div className="thera-alert" style={{ marginBottom: 12 }}>{message}</div>}
 
-      <div className="thera-filter-row">{([['entity', 'Practice Entity'], ['location', 'Location Setup'], ['payers', 'Payers'], ['edi', 'Clearinghouse Settings']] as const).map(([key,label]) => <button key={key} type="button" className="thera-action secondary" onClick={() => setDrawer(key)}>{label}</button>)}</div>
-      <WorkDrawer open={drawer !== null} onOpenChange={open => { if (!open) setDrawer(null); }} title={drawer === "entity" ? "Practice Entity" : drawer === "location" ? "Location Setup" : drawer === "payers" ? "Payers" : "Clearinghouse Settings"} footer={<button className="thera-action" disabled={saving} onClick={() => void save()}>{saving ? "Saving…" : "Save Settings"}</button>}>
+      <div className="thera-filter-row">{([['entity', 'Practice Entity'], ['location', 'Location Setup'], ['payers', 'Payers']] as const).map(([key,label]) => <button key={key} type="button" className="thera-action secondary" onClick={() => setDrawer(key)}>{label}</button>)}</div>
+      <WorkDrawer open={drawer !== null} onOpenChange={open => { if (!open) setDrawer(null); }} title={drawer === "entity" ? "Practice Entity" : drawer === "location" ? "Location Setup" : "Payers"} footer={<button className="thera-action" disabled={saving} onClick={() => void save()}>{saving ? "Saving…" : "Save Settings"}</button>}>
         {error && <div className="thera-state error">{error}</div>}{message && <div role="status">{message}</div>}
         {drawer === "entity" && (<div className="thera-form-grid"><Input label="Practice Entity / Legal Name" value={form.billingProviderName} onChange={value => update("billingProviderName", value)} /><Input label="Billing Provider NPI" value={form.billingProviderNpi} onChange={value => update("billingProviderNpi", value)} /><Input label="Federal Tax ID / EIN" value={form.billingProviderTaxId} onChange={value => update("billingProviderTaxId", value)} /><Input label="Billing Taxonomy" value={form.billingProviderTaxonomy} onChange={value => update("billingProviderTaxonomy", value)} /></div>)}
         {drawer === "location" && (<div className="thera-form-grid"><Input label="Location Name" value={locationName} onChange={setLocationName} /><Input label="Address Line 1" value={form.addressLine1 || ""} onChange={value => update("addressLine1", value)} /><Input label="Address Line 2" value={form.addressLine2 || ""} onChange={value => update("addressLine2", value)} /><Input label="City" value={form.city || ""} onChange={value => update("city", value)} /><Input label="State" value={form.state || ""} onChange={value => update("state", value)} /><Input label="ZIP Code" value={form.postalCode || ""} onChange={value => update("postalCode", value)} /><Input label="Phone" value={form.contactPhone || ""} onChange={value => update("contactPhone", value)} /></div>)}
-        {drawer === "edi" && (        <section className="thera-card">
-          <div className="thera-card-header">
-            <div>
-              <h2>837P Trading Partner</h2>
-              <p>Use the submitter and receiver identifiers assigned for your clearinghouse connection.</p>
-            </div>
-          </div>
-          <div className="thera-form-grid">
-            <Input label="Submitter Name" value={form.submitterName} onChange={(value) => update("submitterName", value)} />
-            <Input label="Submitter ID" value={form.submitterId} onChange={(value) => update("submitterId", value)} />
-            <Input label="Receiver / Clearinghouse Name" value={form.receiverName} onChange={(value) => update("receiverName", value)} />
-            <Input label="Receiver / Clearinghouse ID" value={form.receiverId} onChange={(value) => update("receiverId", value)} />
-            <Input label="EDI Contact Name" value={form.contactName} onChange={(value) => update("contactName", value)} />
-            <Input label="EDI Contact Phone" value={form.contactPhone} onChange={(value) => update("contactPhone", value)} />
-            <Input label="EDI Contact Email" type="email" value={form.contactEmail} onChange={(value) => update("contactEmail", value)} />
-            <label className="thera-field">
-              <span className="thera-field-label">Usage Indicator</span>
-              <select className="thera-input" value={form.usageIndicator} onChange={(event) => update("usageIndicator", event.target.value as "P" | "T")}>
-                <option value="T">Test</option>
-                <option value="P">Production</option>
-              </select>
-            </label>
-          </div>
-        </section>)}
         {drawer === "payers" && (        <section className="thera-card" aria-labelledby="colorado-payer-routing">
           <div className="thera-card-header split">
             <div>
               <div className="thera-eyebrow">SHARED COLORADO REFERENCE</div>
               <h2 id="colorado-payer-routing">Colorado Payer Claim Routing</h2>
-              <p>Claim-filing categories and available payer IDs are loaded automatically from the shared catalog. This is not a practice setup task. Outbound 837P and inbound ERA identifiers remain separate.</p>
+              <p>Claim-filing categories and available payer IDs are loaded automatically from the shared catalog. Office Ally is already connected at the platform level. Outbound 837P and inbound ERA identifiers remain separate.</p>
             </div>
             <span className="thera-table-subtext">{readyOutboundCount} of {payers.length} outbound payer IDs available</span>
           </div>
           {readyOutboundCount < payers.length && (
             <div className="thera-alert" role="status" style={{ marginBottom: 12 }}>
-              {payers.length - readyOutboundCount} payer ID{payers.length - readyOutboundCount === 1 ? "" : "s"} not yet loaded in the shared catalog. Those clearinghouse-specific routes need central verification; they are not invented or marked ready.
+              {payers.length - readyOutboundCount} payer ID{payers.length - readyOutboundCount === 1 ? "" : "s"} not yet loaded in the shared catalog. Those Office Ally payer routes need central verification; they are not invented or marked ready.
             </div>
           )}
           <div className="thera-table-wrap">
@@ -256,16 +230,16 @@ export function PracticeConfigurationPage() {
                   const inbound = routing.eraPayerIdentifiers[payer.id] ?? "";
                   return <tr key={payer.id}>
                     <td><Link className="thera-table-link" href={"/payers/" + payer.id}>{String(payer.name ?? "Payer")}</Link></td>
-                    <td>{filing || "Needs classification"}<div className="thera-table-subtext">{form.claimFilingIndicators[payer.id] ? "Existing partner override" : filing ? "Colorado catalog default" : "No safe category default"}</div></td>
-                    <td><input aria-label={`837P routing ID for ${payer.name}`} className="thera-input" value={form.payerIds[payer.id] ?? outbound} onChange={e => update("payerIds", { ...form.payerIds, [payer.id]: e.target.value })} /><div className="thera-table-subtext">{form.payerIds[payer.id] ? "Existing partner override" : outbound ? "Shared reference value" : "Awaiting partner-specific mapping"}</div></td>
-                    <td><input aria-label={`ERA identifier for ${payer.name}`} className="thera-input" value={form.eraPayerIdentifiers[payer.id] ?? inbound} onChange={e => update("eraPayerIdentifiers", { ...form.eraPayerIdentifiers, [payer.id]: e.target.value })} /><div className="thera-table-subtext">{inbound ? "Existing partner mapping" : "Kept separate from outbound ID"}</div></td>
-                    <td><span className="thera-table-subtext">{outbound && filing ? "Available for partner validation" : "Central catalog review needed"}</span></td>
+                    <td>{filing || "Needs classification"}<div className="thera-table-subtext">{form.claimFilingIndicators[payer.id] ? "Existing payer override" : filing ? "Colorado catalog default" : "No safe category default"}</div></td>
+                    <td><input aria-label={`837P routing ID for ${payer.name}`} className="thera-input" value={form.payerIds[payer.id] ?? outbound} onChange={e => update("payerIds", { ...form.payerIds, [payer.id]: e.target.value })} /><div className="thera-table-subtext">{form.payerIds[payer.id] ? "Existing payer override" : outbound ? "Shared reference value" : "Awaiting Office Ally payer mapping"}</div></td>
+                    <td><input aria-label={`ERA identifier for ${payer.name}`} className="thera-input" value={form.eraPayerIdentifiers[payer.id] ?? inbound} onChange={e => update("eraPayerIdentifiers", { ...form.eraPayerIdentifiers, [payer.id]: e.target.value })} /><div className="thera-table-subtext">{inbound ? "Existing ERA mapping" : "Kept separate from outbound ID"}</div></td>
+                    <td><span className="thera-table-subtext">{outbound && filing ? "Available for Office Ally validation" : "Central catalog review needed"}</span></td>
                   </tr>;
                 })}
               </tbody>
             </table>
           </div>
-          <p className="thera-muted" style={{ marginTop: 10 }}>These mappings are centrally maintained. A catalog value alone is not proof of clearinghouse enrollment, acceptance, or a verified plan-specific route.</p>
+          <p className="thera-muted" style={{ marginTop: 10 }}>These mappings are centrally maintained. A catalog value alone is not proof of payer enrollment or acceptance.</p>
         </section>)}
       </WorkDrawer>
     </>
