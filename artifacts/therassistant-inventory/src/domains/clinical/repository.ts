@@ -49,7 +49,10 @@ async function clinicalState(encounterId: string) {
 
 const signingRepository: ClinicalSigningRepository = {
   getClinicalState: clinicalState,
-  signNoteAtomically(encounterId, noteId, providerId, signatureText) {
+  async signNoteAtomically(encounterId, noteId, providerId, signatureText) {
+    await tenantRpc<{ linked: boolean; provider_id: string; provider_name: string }>("link_current_user_to_provider", {
+      p_provider_id: providerId,
+    });
     return tenantRpc<{ note_id: string; signed_at: string }>("sign_encounter_note", {
       p_encounter_id: encounterId, p_note_id: noteId,
       p_provider_id: providerId, p_signature_text: signatureText,
