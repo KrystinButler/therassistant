@@ -11,7 +11,7 @@ import {
 
 const adapterPath = "supabase/functions/_shared/credentialing/cigna.ts";
 const catalogPath = "supabase/functions/credentialing-catalog-sync/index.ts";
-const catalogResumeMigrationPath = "supabase/migrations/20261007050000_credentialing_catalog_sync_resume.sql";
+const catalogResumeMigrationPath = "supabase/migrations/20261007045325_credentialing_catalog_sync_resume.sql";
 const workerPath = "supabase/functions/credentialing-verification-worker/processor.ts";
 
 async function text(path: string) {
