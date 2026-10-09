@@ -43,6 +43,8 @@ test("Office Ally connection panel exposes test and production states without te
   assert.match(source, /Disconnect/);
   assert.match(source, /type="password"/);
   assert.match(source, /API Key/);
+  assert.match(source, /Production credentials were not changed/);
+  assert.match(source, /status\?\.status === "production_connected"/);
   assert.doesNotMatch(source, /endpoint|base url|http method|receiver id/i);
 });
 
