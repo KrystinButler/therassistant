@@ -144,10 +144,8 @@ begin
     end if;
     v_status := 'production_connected';
   else
-    if v_secret_id is not null then
-      delete from vault.secrets where id = v_secret_id;
-      v_secret_id := null;
-    end if;
+    -- Test mode is internal to THERASSISTANT. Never destroy an existing
+    -- production credential just because the practice runs a synthetic test.
     v_status := 'test_ready';
   end if;
 
