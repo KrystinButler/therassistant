@@ -167,10 +167,9 @@ export function SchedulePage() {
     roles.includes("clinician") &&
     !roles.some((role) => ["platform_admin", "practice_admin", "billing_company_admin", "billing_manager", "front_desk"].includes(role));
   const signedInProvider = useMemo(() => {
-    const email = String(user?.email ?? "").trim().toLowerCase();
-    if (!data || !email) return null;
-    return data.providers.find((provider) => String(provider.email ?? "").trim().toLowerCase() === email) ?? null;
-  }, [data, user?.email]);
+    const link = data?.providerLinks.find(link => link.user_id === user?.id);
+    return data?.providers.find(provider => provider.id === link?.provider_id) ?? null;
+  }, [data, user?.id]);
 
   useEffect(() => {
     if (!clinicianView || !signedInProvider) return;
@@ -287,7 +286,7 @@ export function SchedulePage() {
       <span>{attentionCount} check-in{attentionCount === 1 ? "" : "s"} pending or needing attention</span>
     </div>
 
-    {clinicianView && !signedInProvider && data && <div className="thera-state error" style={{ marginBottom: 12 }}>Your clinician login is not linked to a provider profile. The schedule is hidden until the provider email matches your sign-in email.</div>}
+    {clinicianView && !signedInProvider && data && <div className="thera-state error" style={{ marginBottom: 12 }}>Your clinician login is not linked to a provider profile. Ask a practice administrator to assign your rendering provider in Users & Roles before starting a visit.</div>}
     {error && <div className="thera-state error" style={{ marginBottom: 12 }}>{error}</div>}
     {loading && <div className="thera-state">Loading schedule...</div>}
 

@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import {
   getCurrentTenantId,
   tenantRpc,
+  tenantSelect,
 } from "../lib/tenant-data-client";
 
 type AdminUser = {
@@ -35,6 +36,8 @@ function userName(user: AdminUser) {
 }
 
 export function UserRolesPage() {
+  const [providers, setProviders] = useState<Array<Record<string, any>>>([]);
+  const [providerAssignments, setProviderAssignments] = useState<Record<string, string>>({});
   const [tenantId, setTenantId] = useState("");
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [draftRoles, setDraftRoles] = useState<Record<string, string[]>>({});
@@ -52,6 +55,12 @@ export function UserRolesPage() {
         p_tenant_id: currentTenantId,
       });
       if (!Array.isArray(payload)) throw new Error("Unable to load tenant users.");
+      const [providerRows, links] = await Promise.all([
+        tenantSelect("providers", { provider_status: "eq.active", order: "last_name.asc" }),
+        tenantSelect("provider_user_links", { status: "eq.active" }),
+      ]);
+      setProviders(providerRows);
+      setProviderAssignments(Object.fromEntries(links.map(link => [String(link.user_id), String(link.provider_id)])));
       setTenantId(currentTenantId);
       setUsers(payload);
       setDraftRoles(Object.fromEntries(payload.map((user) => [user.user_id, [...(user.roles ?? [])]])));
@@ -100,6 +109,19 @@ export function UserRolesPage() {
     }
   }
 
+  async function linkProvider(user: AdminUser) {
+    const providerId = providerAssignments[user.user_id];
+    const provider = providers.find(row => row.id === providerId);
+    if (!provider || !window.confirm(`Confirm that ${userName(user)} is the clinician ${provider.first_name} ${provider.last_name}. This assignment allows that account to sign this provider's notes.`)) return;
+    setWorkingUserId(user.user_id); setError(null); setNotice(null);
+    try {
+      await tenantRpc("admin_link_clinician_provider", {p_tenant_id: tenantId, p_user_id: user.user_id, p_provider_id: providerId});
+      await load();
+      setNotice(`Provider linked for ${userName(user)}.`);
+    } catch (err) { setError(err instanceof Error ? err.message : "Unable to link provider."); }
+    finally { setWorkingUserId(null); }
+  }
+
   async function updateStatus(user: AdminUser, status: string) {
     setWorkingUserId(user.user_id);
     setError(null);
@@ -136,7 +158,7 @@ export function UserRolesPage() {
         <div className="thera-table-wrap">
           <table className="thera-table">
             <thead>
-              <tr><th>User</th><th>Status</th><th>Roles</th><th>Action</th></tr>
+              <tr><th>User</th><th>Status</th><th>Roles</th><th>Rendering Provider</th><th>Action</th></tr>
             </thead>
             <tbody>
               {users.map((user) => (
@@ -172,6 +194,15 @@ export function UserRolesPage() {
                     </div>
                   </td>
                   <td>
+                    {user.roles.includes("clinician") && user.status === "active" ? <>
+                      <select className="thera-input" aria-label={`Rendering provider for ${userName(user)}`} value={providerAssignments[user.user_id] ?? ""} disabled={workingUserId === user.user_id} onChange={event => setProviderAssignments(current => ({...current, [user.user_id]: event.target.value}))}>
+                        <option value="">Select rendering provider</option>
+                        {providers.map(provider => <option key={provider.id} value={provider.id}>{provider.first_name} {provider.last_name}</option>)}
+                      </select>
+                      <button className="thera-action secondary" type="button" disabled={workingUserId === user.user_id || !providerAssignments[user.user_id]} onClick={() => void linkProvider(user)}>Link Provider</button>
+                    </> : <small>Save the Clinician role and activate this user before assigning a provider.</small>}
+                  </td>
+                  <td>
                     <button
                       type="button"
                       className="thera-action"
@@ -184,7 +215,7 @@ export function UserRolesPage() {
                 </tr>
               ))}
               {users.length === 0 && (
-                <tr><td colSpan={4}><div className="thera-empty">No tenant users found.</div></td></tr>
+                <tr><td colSpan={5}><div className="thera-empty">No tenant users found.</div></td></tr>
               )}
             </tbody>
           </table>

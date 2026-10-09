@@ -19,10 +19,11 @@ test('practice forms open in named drawers', async ({page}) => {
   await expect(page.getByRole('dialog')).toBeVisible();
   await expect(page.getByLabel('Practice Entity / Legal Name')).toBeVisible();
 });
-test('participation HTML fallback shows a service error without crashing the page', async ({page}) => {
+test('participation loads its catalog directly from the authenticated data service', async ({page}) => {
   await staff(page); await page.route('**/api/v1/payers',route => route.fulfill({contentType:'text/html',body:'<!doctype html><html>SPA fallback</html>'}));
   await page.goto('/credentialing/participation');
   await expect(page.getByRole('heading',{name:'Verify Participation',exact:true})).toBeVisible();
-  await expect(page.getByText(/verification service is not connected/)).toBeVisible();
+  await expect(page.getByText(/verification service is not connected/)).toHaveCount(0);
+  await expect(page.getByLabel('Payer', {exact:true})).toBeVisible();
   await expect(page.getByText('Something went wrong',{exact:true})).toHaveCount(0);
 });

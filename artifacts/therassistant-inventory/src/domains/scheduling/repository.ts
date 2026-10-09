@@ -52,6 +52,7 @@ export type ScheduleData = {
   appointments: ScheduleAppointment[];
   clients: DataRow[];
   providers: DataRow[];
+  providerLinks: DataRow[];
 };
 
 function name(row?: Row | null) {
@@ -147,6 +148,7 @@ export async function getScheduleData(): Promise<ScheduleData> {
     tenantRows,
     payers,
     plans,
+    providerLinks,
   ] = await Promise.all([
     tenantSelect<DataRow>("appointments", { order: "starts_at.asc" }),
     tenantSelect<DataRow>("clients", { order: "last_name.asc,first_name.asc" }),
@@ -163,6 +165,7 @@ export async function getScheduleData(): Promise<ScheduleData> {
     referenceSelect<DataRow>("tenants", { id: `eq.${tenantId}`, limit: "1" }),
     referenceSelect<DataRow>("payers", { order: "name.asc" }),
     referenceSelect<DataRow>("payer_plans", { order: "name.asc" }),
+    tenantSelect<DataRow>("provider_user_links", {status: "eq.active"}),
   ]);
 
   const clientsById = byId(clients);
@@ -317,7 +320,7 @@ export async function getScheduleData(): Promise<ScheduleData> {
     };
   });
 
-  return { appointments: enriched, clients, providers };
+  return { appointments: enriched, clients, providers, providerLinks };
 }
 
 export async function getPreSessionData(appointmentId: string) {
