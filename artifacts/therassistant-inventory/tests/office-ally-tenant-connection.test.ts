@@ -50,6 +50,13 @@ test("tenant connection table has no direct authenticated write policy", () => {
   assert.doesNotMatch(migration, /create policy[\s\S]{0,200}tenant_edi_connections[\s\S]{0,200}for\s+(?:insert|update|delete|all)\s+to\s+authenticated/i);
 });
 
+test("synthetic test readiness never deletes an existing production credential", () => {
+  const saveFunction = migration.match(/create or replace function public\.save_office_ally_connection[\s\S]*?\$\$;/i)?.[0] ?? "";
+  const disconnectFunction = migration.match(/create or replace function public\.disconnect_office_ally_connection[\s\S]*?\$\$;/i)?.[0] ?? "";
+  assert.doesNotMatch(saveFunction, /delete from vault\.secrets/i);
+  assert.match(disconnectFunction, /delete from vault\.secrets/i);
+});
+
 test("server-only resolver can decrypt only the tenant production secret", () => {
   assert.match(migration, /resolve_office_ally_connection_secret\s*\(p_tenant_id uuid\)/i);
   assert.match(migration, /vault\.decrypted_secrets/i);
