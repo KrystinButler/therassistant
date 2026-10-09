@@ -6,7 +6,7 @@ import { fileURLToPath } from "node:url";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const migration = readFileSync(
-  join(here, "../../../supabase/migrations/20261006221500_connect_fee_schedules_to_canonical_service_codes.sql"),
+  join(here, "../../../supabase/migrations/20261006221754_connect_fee_schedules_to_canonical_service_codes.sql"),
   "utf8",
 );
 
