@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 
-const migrationPath = "supabase/migrations/20261007010000_credentialing_plan_network_catalog.sql";
+const migrationPath = "supabase/migrations/20261007005507_credentialing_plan_network_catalog.sql";
 const catalogRoutesPath = "artifacts/api-server/src/modules/credentialing/catalog-routes.ts";
 const moduleRouterPath = "artifacts/api-server/src/modules/credentialing/router.ts";
 const apiAppPath = "artifacts/api-server/src/app.ts";
