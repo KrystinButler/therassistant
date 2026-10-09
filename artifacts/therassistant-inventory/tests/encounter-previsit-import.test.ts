@@ -8,7 +8,7 @@ test("encounter displays import control beside actual editor, preserving attribu
   const button=page.indexOf("Import Answers into Note");
   const editor=page.indexOf('id="encounter-progress-note-editor"');
   assert.ok(button>0 && editor>button,"Import must be immediately above the editor");
-  assert.match(page,/disabled=\{signed \|\| !preVisitInsert \|\| preVisitAlreadyImported\}/);
+  assert.match(page,/disabled=\{clinicalEditorReadOnly \|\| !preVisitInsert \|\| preVisitAlreadyImported\}/);
   assert.match(page,/buildClinicalSourceProvenance\("pre_visit_checkin", currentCheckin\)/);
   assert.match(page,/Preview patient answers/);
 });
