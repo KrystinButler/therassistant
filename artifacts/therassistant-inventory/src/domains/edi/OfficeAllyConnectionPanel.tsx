@@ -60,16 +60,23 @@ export function OfficeAllyConnectionPanel() {
     setError(null);
     setMessage(null);
     try {
-      const result = await saveOfficeAllyTestConnection(accountLabel || undefined);
+      const productionConnected = status?.status === "production_connected";
+      const result = productionConnected
+        ? status
+        : await saveOfficeAllyTestConnection(accountLabel || undefined);
       await sendOfficeAllyTransaction({
         environment: "test",
         transaction: "270/271",
         payload: {},
       });
-      setStatus(result);
+      if (result) setStatus(result);
       setApiKey("");
       setReplaceMode(false);
-      setMessage("Test connection passed without sending data to Office Ally.");
+      setMessage(
+        productionConnected
+          ? "Internal test passed without sending data to Office Ally. Production credentials were not changed."
+          : "Test connection passed without sending data to Office Ally.",
+      );
     } catch (err) {
       setError(err instanceof Error ? err.message : "Office Ally test failed.");
     } finally {
