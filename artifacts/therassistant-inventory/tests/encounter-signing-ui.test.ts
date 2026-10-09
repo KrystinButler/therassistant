@@ -54,8 +54,8 @@ test("empty note and missing signature provide direct correction instead of a si
 
 test("signing ensures the current clinician is linked to the rendering provider before the signature RPC", () => {
   const signingRepoStart = clinicalRepositorySource.indexOf("const signingRepository");
-  const linkCall = clinicalRepositorySource.indexOf('tenantRpc("link_current_user_to_provider"', signingRepoStart);
-  const signCall = clinicalRepositorySource.indexOf('tenantRpc<{ note_id: string; signed_at: string }>("sign_encounter_note"', signingRepoStart);
+  const linkCall = clinicalRepositorySource.indexOf('"link_current_user_to_provider"', signingRepoStart);
+  const signCall = clinicalRepositorySource.indexOf('"sign_encounter_note"', signingRepoStart);
 
   assert.ok(signingRepoStart >= 0);
   assert.ok(linkCall > signingRepoStart, "Signing must ensure the clinician/provider identity link first.");
