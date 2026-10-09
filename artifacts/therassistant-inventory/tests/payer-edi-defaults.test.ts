@@ -4,10 +4,37 @@ import type { Edi837PConfig } from "../src/domains/billing/claim-output";
 import { defaultClaimFilingIndicator, resolvePayerEdiConfig } from "../src/domains/billing/payer-edi-defaults";
 
 const blank = {
+  submitterName: "",
+  submitterId: "",
+  receiverName: "",
+  receiverId: "",
+  contactName: "",
+  contactPhone: "3035550100",
+  contactEmail: "billing@example.com",
+  billingProviderName: "Example Practice",
+  billingProviderNpi: "1234567890",
+  billingProviderTaxId: "12-3456789",
+  billingProviderTaxonomy: "261QM0801X",
+  addressLine1: "1 Main St",
+  addressLine2: "",
+  city: "Denver",
+  state: "CO",
+  postalCode: "80202",
+  usageIndicator: "T" as const,
   payerIds: {},
   claimFilingIndicators: {},
   eraPayerIdentifiers: {},
-} as Edi837PConfig;
+} satisfies Edi837PConfig;
+
+test("Office Ally 837P trading partner values load automatically with no practice setup", () => {
+  const actual = resolvePayerEdiConfig(blank, []);
+  assert.equal(actual.submitterName, "Example Practice");
+  assert.equal(actual.submitterId, "123456789");
+  assert.equal(actual.receiverName, "OFFICE ALLY");
+  assert.equal(actual.receiverId, "330897513");
+  assert.equal(actual.contactName, "Example Practice");
+  assert.equal(actual.usageIndicator, "P");
+});
 
 test("known Colorado claim filing categories load without practice configuration", () => {
   const payers = [
@@ -27,7 +54,7 @@ test("known Colorado claim filing categories load without practice configuration
   assert.deepEqual(actual.eraPayerIdentifiers, {});
 });
 
-test("existing partner-specific values override the shared catalog, without mutating saved settings", () => {
+test("existing payer-specific values override the shared catalog, without mutating saved settings", () => {
   const current = {
     ...blank,
     payerIds: { anthem: "PRIVATE-PARTNER" },
