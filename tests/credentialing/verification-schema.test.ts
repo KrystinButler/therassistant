@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 
-const migrationPath = "supabase/migrations/20261007020000_credentialing_verification_engine.sql";
+const migrationPath = "supabase/migrations/20261007005545_credentialing_verification_engine.sql";
 const typesPath = "artifacts/api-server/src/modules/credentialing/types.ts";
 const queuePath = "artifacts/api-server/src/modules/credentialing/queue.ts";
 
