@@ -127,7 +127,7 @@ test("claim and charge API routes have no credentialing dependency", async () =>
 
 test("directory monitor schema is part of clean Supabase replay", async () => {
   const migration = await readFile(
-    "supabase/migrations/20261007005000_credentialing_directory_monitor.sql",
+    "supabase/migrations/20261006232853_credentialing_directory_monitor.sql",
     "utf8",
   );
 
