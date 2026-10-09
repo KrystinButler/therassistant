@@ -7,6 +7,10 @@ const source = readFileSync(
   fileURLToPath(new URL("../src/domains/encounters/EncounterPage.tsx", import.meta.url)),
   "utf8",
 );
+const clinicalRepositorySource = readFileSync(
+  fileURLToPath(new URL("../src/domains/clinical/repository.ts", import.meta.url)),
+  "utf8",
+);
 
 test("signing saves the current editable note before locking it", () => {
   const signStart = source.indexOf("async function sign()");
@@ -46,4 +50,14 @@ test("empty note and missing signature provide direct correction instead of a si
   assert.match(source,/Go to Note Editor/);
   assert.match(source,/setData\(\(current\) => current \?/);
   assert.doesNotMatch(source,/disabled=\{saving \|\| !noteText\.trim\(\) \|\| !signatureText\.trim\(\)\}/);
+});
+
+test("signing ensures the current clinician is linked to the rendering provider before the signature RPC", () => {
+  const signingRepoStart = clinicalRepositorySource.indexOf("const signingRepository");
+  const linkCall = clinicalRepositorySource.indexOf('tenantRpc("link_current_user_to_provider"', signingRepoStart);
+  const signCall = clinicalRepositorySource.indexOf('tenantRpc<{ note_id: string; signed_at: string }>("sign_encounter_note"', signingRepoStart);
+
+  assert.ok(signingRepoStart >= 0);
+  assert.ok(linkCall > signingRepoStart, "Signing must ensure the clinician/provider identity link first.");
+  assert.ok(signCall > linkCall, "The provider link must be ensured before the signature RPC runs.");
 });
