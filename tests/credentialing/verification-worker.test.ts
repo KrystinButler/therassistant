@@ -4,7 +4,7 @@ import test from "node:test";
 
 const entryPath = "supabase/functions/credentialing-verification-worker/index.ts";
 const processorPath = "supabase/functions/credentialing-verification-worker/processor.ts";
-const migrationPath = "supabase/migrations/20261007030000_credentialing_verification_worker.sql";
+const migrationPath = "supabase/migrations/20261007010554_credentialing_verification_worker.sql";
 
 async function text(path: string) {
   return readFile(path, "utf8");
