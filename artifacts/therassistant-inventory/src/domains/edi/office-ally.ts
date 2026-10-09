@@ -3,18 +3,18 @@ import { requireActiveTenantId } from "../../lib/tenant-session";
 
 export const OFFICE_ALLY_TRANSACTIONS = ["837P", "270/271", "276/277", "835"] as const;
 export type OfficeAllyTransaction = (typeof OFFICE_ALLY_TRANSACTIONS)[number];
+export type OfficeAllyEnvironment = "test" | "production";
 
 /**
- * Office Ally is a THERASSISTANT platform integration. Practices never enter
- * clearinghouse credentials, choose a clearinghouse, or maintain API URLs.
- * Payer/trading-partner enrollment can still be required before a payer will
- * accept a given transaction type.
+ * THERASSISTANT owns the Office Ally integration configuration, while each
+ * practice owns the Office Ally account used for its transactions.
  */
 export const PLATFORM_CLEARINGHOUSE = Object.freeze({
   id: "office_ally",
   name: "Office Ally",
-  platformManaged: true,
-  practiceSetupRequired: false,
+  platformConfigured: true,
+  accountOwnedBy: "practice" as const,
+  practiceSetupRequired: true,
   transactions: [...OFFICE_ALLY_TRANSACTIONS],
 });
 
@@ -23,6 +23,7 @@ export function officeAllyFunctionUrl(supabaseUrl = SUPABASE_URL) {
 }
 
 export type OfficeAllyRequest = {
+  environment: OfficeAllyEnvironment;
   transaction: OfficeAllyTransaction;
   /** Transaction body/query data only. Never include Office Ally credentials. */
   payload: Record<string, unknown>;
@@ -30,7 +31,9 @@ export type OfficeAllyRequest = {
 
 export type OfficeAllyResponse<T = unknown> = {
   ok: boolean;
+  environment: OfficeAllyEnvironment;
   transaction: OfficeAllyTransaction;
+  synthetic?: boolean;
   data?: T;
   error?: string;
   upstreamStatus?: number;
@@ -42,6 +45,9 @@ export async function sendOfficeAllyTransaction<T = unknown>(
   if (!OFFICE_ALLY_TRANSACTIONS.includes(request.transaction)) {
     throw new Error("Unsupported Office Ally transaction.");
   }
+  if (request.environment !== "test" && request.environment !== "production") {
+    throw new Error("Office Ally environment must be test or production.");
+  }
 
   const response = await authenticatedFetch(officeAllyFunctionUrl(), {
     method: "POST",
@@ -51,6 +57,7 @@ export async function sendOfficeAllyTransaction<T = unknown>(
     },
     body: JSON.stringify({
       tenantId: requireActiveTenantId(),
+      environment: request.environment,
       transaction: request.transaction,
       payload: request.payload,
     }),
