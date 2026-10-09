@@ -15,6 +15,17 @@ test("Office Ally is the platform-managed EDI default with no practice setup", (
   assert.deepEqual(PLATFORM_CLEARINGHOUSE.transactions, ["837P", "270/271", "276/277", "835"]);
 });
 
+test("practice configuration never asks users to configure Office Ally or clearinghouse credentials", () => {
+  const source = fs.readFileSync(
+    path.resolve(process.cwd(), "../artifacts/therassistant-inventory/src/pages/practice-configuration.tsx"),
+    "utf8",
+  );
+  assert.doesNotMatch(source, /Clearinghouse Settings/);
+  assert.doesNotMatch(source, /label="Submitter ID"/);
+  assert.doesNotMatch(source, /label="Receiver \/ Clearinghouse ID"/);
+  assert.match(source, /Office Ally EDI transactions are connected automatically/);
+});
+
 test("browser routes EDI through the authenticated server function and never Office Ally directly", () => {
   assert.equal(
     officeAllyFunctionUrl("https://example.supabase.co/"),
