@@ -62,3 +62,10 @@ test("versioned catalog routes expose active records by default and history expl
   assert.match(routes, /state\s*=\s*'CO'/i);
   assert.match(moduleRouter, /catalogRoutes/);
 });
+
+test("credentialing catalog route params are normalized before UUID validation", async () => {
+  const routes = await readFile(catalogRoutesPath, "utf8");
+  assert.match(routes, /function singleParam\(value: string \| string\[\]\)/);
+  assert.match(routes, /const payerId = singleParam\(req\.params\.payerId\)/);
+  assert.match(routes, /const planId = singleParam\(req\.params\.planId\)/);
+});

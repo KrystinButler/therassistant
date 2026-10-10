@@ -99,7 +99,7 @@ async function referenceRows(table: string) {
   return supabaseRows(table);
 }
 
-async function claimRows() {
+async function claimRows(): Promise<Row[]> {
   const [
     claims,
     clients,
@@ -157,7 +157,7 @@ async function claimRows() {
   });
 }
 
-async function clientRows(search = "") {
+async function clientRows(search = ""): Promise<Row[]> {
   const [
     clients,
     policies,
@@ -243,7 +243,7 @@ async function clientRows(search = "") {
     });
 }
 
-async function providerRows() {
+async function providerRows(): Promise<Row[]> {
   const [providers, claims, workItems] = await Promise.all([
     tenantRows("providers"),
     tenantRows("professional_claims"),
@@ -283,7 +283,7 @@ async function providerRows() {
   });
 }
 
-async function workqueueRows() {
+async function workqueueRows(): Promise<Row[]> {
   const [items, clients, providers, claims, payers] =
     await Promise.all([
       tenantRows("workqueue_items"),
@@ -607,7 +607,7 @@ async function claimDetail(id: string) {
   };
 }
 
-async function scheduleRows() {
+async function scheduleRows(): Promise<Row[]> {
   const [appointments, clients, providers] = await Promise.all([
     tenantRows("appointments"),
     tenantRows("clients"),
@@ -627,7 +627,7 @@ async function scheduleRows() {
     }));
 }
 
-async function eligibilityRows() {
+async function eligibilityRows(): Promise<Row[]> {
   const [checks, clients, payers] = await Promise.all([
     tenantRows("eligibility_checks"),
     tenantRows("clients"),
@@ -643,7 +643,7 @@ async function eligibilityRows() {
   }));
 }
 
-async function authorizationData() {
+async function authorizationData(): Promise<{ authorizations: Row[]; authorizationUnits: Row[] }> {
   const [authorizations, units, clients, payers] =
     await Promise.all([
       tenantRows("authorizations"),
