@@ -13,9 +13,14 @@ export type PortalDataInput = {
   now?: Date;
 };
 
-const PORTAL_APPOINTMENT_GRACE_MS = 4 * 60 * 60 * 1000;
 export const PORTAL_ON_MY_WAY_WINDOW_MS = 4 * 60 * 60 * 1000;
 export const PORTAL_ARRIVAL_WINDOW_MS = 60 * 60 * 1000;
+
+function isSameLocalServiceDate(left: Date, right: Date) {
+  return left.getFullYear() === right.getFullYear()
+    && left.getMonth() === right.getMonth()
+    && left.getDate() === right.getDate();
+}
 
 export function isPortalAppointmentAvailable(row: PortalRow, now = new Date()) {
   const status = String(row.appointment_status ?? "scheduled").toLowerCase();
@@ -25,29 +30,32 @@ export function isPortalAppointmentAvailable(row: PortalRow, now = new Date()) {
   if (!Number.isFinite(startsAt.getTime())) return false;
   if (startsAt >= now) return true;
 
-  const endsAt = new Date(String(row.ends_at ?? ""));
-  const effectiveEnd = Number.isFinite(endsAt.getTime()) && endsAt >= startsAt
-    ? endsAt
-    : new Date(startsAt.getTime() + 90 * 60 * 1000);
+  return isSameLocalServiceDate(startsAt, now);
+}
 
-  return now.getTime() <= effectiveEnd.getTime() + PORTAL_APPOINTMENT_GRACE_MS;
+export function getPortalArrivalStep(row: PortalRow, checkin: PortalRow | Record<string, unknown>, now = new Date()): CheckInStep | null {
+  if (checkin.checked_in_at) return null;
+  if (checkin.arrived_at) return "checked_in";
+  if (checkin.on_my_way_at) return "arrived";
+
+  const availability = getPortalArrivalAvailability(row, now);
+  if (availability.arrival && !availability.onMyWay) return "arrived";
+  return "on_my_way";
 }
 
 export function getPortalArrivalAvailability(row: PortalRow, now = new Date()) {
   const status = String(row.appointment_status ?? "scheduled").toLowerCase();
-  if (["cancelled", "no_show", "late_cancel", "completed", "rescheduled", "in_session"].includes(status)) {
+  if (["cancelled", "no_show", "late_cancel", "completed", "rescheduled", "in_session", "checked_in"].includes(status)) {
     return { onMyWay: false, arrival: false };
   }
 
   const startsAt = new Date(String(row.starts_at ?? ""));
   if (!Number.isFinite(startsAt.getTime())) return { onMyWay: false, arrival: false };
 
-  const endsAt = new Date(String(row.ends_at ?? ""));
-  const effectiveEnd = Number.isFinite(endsAt.getTime()) && endsAt >= startsAt
-    ? endsAt
-    : new Date(startsAt.getTime() + 90 * 60 * 1000);
-  if (now.getTime() > effectiveEnd.getTime() + PORTAL_APPOINTMENT_GRACE_MS) {
-    return { onMyWay: false, arrival: false };
+  if (startsAt <= now) {
+    return isSameLocalServiceDate(startsAt, now)
+      ? { onMyWay: false, arrival: true }
+      : { onMyWay: false, arrival: false };
   }
 
   const untilStart = startsAt.getTime() - now.getTime();
