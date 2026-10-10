@@ -16,10 +16,20 @@ export type PortalDataInput = {
 export const PORTAL_ON_MY_WAY_WINDOW_MS = 4 * 60 * 60 * 1000;
 export const PORTAL_ARRIVAL_WINDOW_MS = 60 * 60 * 1000;
 
+const PORTAL_SERVICE_TIME_ZONE = "America/Denver";
+const portalServiceDateFormatter = new Intl.DateTimeFormat("en-CA", {
+  timeZone: PORTAL_SERVICE_TIME_ZONE,
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit",
+});
+
+function serviceDateKey(value: Date) {
+  return portalServiceDateFormatter.format(value);
+}
+
 function isSameLocalServiceDate(left: Date, right: Date) {
-  return left.getFullYear() === right.getFullYear()
-    && left.getMonth() === right.getMonth()
-    && left.getDate() === right.getDate();
+  return serviceDateKey(left) === serviceDateKey(right);
 }
 
 export function isPortalAppointmentAvailable(row: PortalRow, now = new Date()) {
