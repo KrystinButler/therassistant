@@ -29,13 +29,12 @@ test("actual time confirmation provenance survives normalization", () => {
   assert.equal(normalizeStructuredSelections({ psychotherapyMinutes: 60, psychotherapyTimeSource: "scheduled" }).psychotherapyTimeSource, undefined);
 });
 
-test("provider must explicitly confirm scheduled duration or enter actual times; signing stays nonblocking", () => {
+test("encounter does not display or require psychotherapy time confirmation", () => {
   const page = readFileSync(new URL("../src/domains/encounters/EncounterPage.tsx", import.meta.url), "utf8");
-  assert.match(page, /setStructuredSelections\(initialSelections\)/);
-  assert.doesNotMatch(page, /psychotherapyMinutes:\s*plannedSession\.minutes/);
-  assert.doesNotMatch(page, />Confirm actual time matches schedule</);
-  assert.match(page, /psychotherapyTimeSource: "confirmed_schedule"/);
-  assert.match(page, /psychotherapyTimeSource: minutes === null \? undefined : "actual_start_stop"/);
-  assert.match(page, /Actual face-to-face psychotherapy time:/);
-  assert.match(page, /Add the visit diagnosis and procedure code before signing/);
+  assert.doesNotMatch(page, /Actual psychotherapy time/);
+  assert.doesNotMatch(page, /Actual face-to-face psychotherapy time:/);
+  assert.doesNotMatch(page, /Confirm actual time matches schedule/);
+  assert.doesNotMatch(page, /Enter actual start and stop/);
+  assert.doesNotMatch(page, /psychotherapyTimeSource: "confirmed_schedule"/);
+  assert.doesNotMatch(page, /Add the visit diagnosis and procedure code before signing/);
 });
