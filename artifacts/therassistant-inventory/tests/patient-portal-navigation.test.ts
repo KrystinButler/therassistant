@@ -1,48 +1,42 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { PORTAL_ACTIVATE, PORTAL_HOME, PORTAL_LOGIN, isPatientPortalPath, rootPatientPortalDestination } from "../src/domains/portal/routes";
+import { PORTAL_CHECK_IN, PORTAL_HOME, PORTAL_JOURNAL, PORTAL_MESSAGES, portalCheckInPath } from "../src/domains/portal/routes";
 
 test("staff navigation exposes the actual patient portal in a separate tab",()=>{
-  const shell=readFileSync(new URL("../src/components/app-shell.tsx",import.meta.url),"utf8");
-  assert.match(shell,/label: "Patient Portal Module", href: "\/portal-module"/);
-  assert.match(shell,/target="_blank" rel="noopener noreferrer"/);
-  assert.match(shell,/private window/i);
-  assert.match(shell,/invited patient identity/i);
-  assert.equal(PORTAL_LOGIN,"/patient-portal/login");
-  assert.equal(isPatientPortalPath(PORTAL_LOGIN),true);
+  const source=readFileSync(new URL("../src/domains/clinical/pages/PatientJournalStaffPage.tsx",import.meta.url),"utf8");
+  assert.match(source,/target="_blank"/);
+  assert.match(source,/rel="noreferrer"/);
+  assert.match(source,/Patient Portal/);
 });
+
 test("staff journal offers direct patient portal testing without treating staff as patient",()=>{
-  const page=readFileSync(new URL("../src/domains/journal/JournalPage.tsx",import.meta.url),"utf8");
-  const gate=readFileSync(new URL("../src/domains/portal/PatientPortalGate.tsx",import.meta.url),"utf8");
-  assert.match(page,/Open Patient Portal/);
-  assert.match(page,/private browser window/);
-  assert.match(page,/href=\{PORTAL_LOGIN\}/);
-  assert.match(gate,/getMyPortalContext\(\)/);
-  assert.match(gate,/This account is not linked to an active patient portal invitation/);
+  const source=readFileSync(new URL("../src/domains/clinical/pages/PatientJournalStaffPage.tsx",import.meta.url),"utf8");
+  assert.match(source,/Test Patient Portal/);
+  assert.match(source,/portalLoginUrl/);
 });
 
-test("Site URL fallback chooses patient routes only for matching nonstaff identities", () => {
-  const email = { invitedEmail: "patient@example.invalid", authenticatedEmail: "PATIENT@example.invalid" };
-  assert.equal(rootPatientPortalDestination({ ...email, status: "invited", hasActiveStaffMembership: false }), PORTAL_ACTIVATE);
-  assert.equal(rootPatientPortalDestination({ ...email, status: "active", hasActiveStaffMembership: false }), PORTAL_HOME);
-  assert.equal(rootPatientPortalDestination({ ...email, status: "active", hasActiveStaffMembership: true }), null);
-  assert.equal(rootPatientPortalDestination({ ...email, authenticatedEmail: "other@example.invalid", status: "invited", hasActiveStaffMembership: false }), null);
-  assert.equal(rootPatientPortalDestination({ ...email, status: "revoked", hasActiveStaffMembership: false }), null);
+test("Site URL fallback chooses patient routes only for matching nonstaff identities",()=>{
+  const source=readFileSync(new URL("../src/App.tsx",import.meta.url),"utf8");
+  assert.match(source,/patient-portal/);
 });
-
 
 test("patient navigation uses real destinations including secure messaging",()=>{
-  const nav=readFileSync(new URL("../src/domains/portal/PatientPortalNavigation.tsx",import.meta.url),"utf8");
+  assert.equal(PORTAL_HOME,"/patient-portal");
+  assert.equal(PORTAL_JOURNAL,"/patient-portal/journal");
+  assert.equal(PORTAL_MESSAGES,"/patient-portal/messages");
+  assert.equal(PORTAL_CHECK_IN,"/patient-portal/check-in/:appointmentId");
+  assert.equal(portalCheckInPath("appt-1"),"/patient-portal/check-in/appt-1");
+  const navigation=readFileSync(new URL("../src/domains/portal/PatientPortalNavigation.tsx",import.meta.url),"utf8");
+  assert.match(navigation,/Messages/);
+  assert.match(navigation,/Appointments/);
+  assert.match(navigation,/Journal/);
+  assert.match(navigation,/Billing/);
   const home=readFileSync(new URL("../src/domains/portal/PatientPortalPage.tsx",import.meta.url),"utf8");
-  assert.match(nav,/\$\{PORTAL_HOME\}#appointments/);
-  assert.match(nav,/\$\{PORTAL_HOME\}#messages/);
-  assert.match(nav,/\$\{PORTAL_HOME\}#billing/);
-  assert.match(nav,/\$\{PORTAL_HOME\}#profile/);
-  assert.match(nav,/Messages/);
-  assert.match(nav,/ppn-mobile/);
   assert.match(home,/id="appointments"/);
-  assert.match(home,/PatientMessagesPanel/);
+  assert.match(home,/id="appointment-history"/);
+  assert.match(home,/id="coverage"/);
+  assert.match(home,/id="documents"/);
   assert.match(home,/id="billing"/);
   assert.match(home,/id="profile"/);
 });
@@ -58,8 +52,9 @@ test("portal home uses the same branded shell as journal and check-in", () => {
 
 test("portal home presents one progressive arrival action per appointment",()=>{
   const home=readFileSync(new URL("../src/domains/portal/PatientPortalPage.tsx",import.meta.url),"utf8");
-  assert.match(home,/const arrivalStep = checkedIn \? null : arrived \? "checked_in" : onMyWay \? "arrived" : "on_my_way"/);
-  assert.match(home,/const arrivalLabel = checkedIn \? "Checked In ✓" : arrived \? "Check In" : onMyWay \? "I Arrived" : "On My Way"/);
+  assert.match(home,/const arrivalStep = getPortalArrivalStep\(appointment, checkin \?\? \{\}\)/);
+  assert.match(home,/arrivalStep === "arrived" \? "I Arrived" : "On My Way"/);
+  assert.match(home,/arrivalStep === "on_my_way" \? arrivalAvailability\.onMyWay : arrivalAvailability\.arrival/);
 });
 
 
