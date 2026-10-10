@@ -12,6 +12,10 @@ function includeInactiveRecords(value: unknown) {
   return value === "true";
 }
 
+function singleParam(value: string | string[]) {
+  return Array.isArray(value) ? value[0] ?? "" : value;
+}
+
 router.get("/v1/payers", requireAuthenticatedTenant, async (req, res, next) => {
   try {
     const includeInactive = includeInactiveRecords(req.query.includeInactive);
@@ -47,7 +51,7 @@ router.get("/v1/payers", requireAuthenticatedTenant, async (req, res, next) => {
 
 router.get("/v1/payers/:payerId/plans", requireAuthenticatedTenant, async (req, res, next) => {
   try {
-    const payerId = req.params.payerId;
+    const payerId = singleParam(req.params.payerId);
     const includeInactive = includeInactiveRecords(req.query.includeInactive);
 
     if (!UUID_PATTERN.test(payerId)) {
@@ -90,7 +94,7 @@ router.get("/v1/payers/:payerId/plans", requireAuthenticatedTenant, async (req, 
 
 router.get("/v1/plans/:planId/networks", requireAuthenticatedTenant, async (req, res, next) => {
   try {
-    const planId = req.params.planId;
+    const planId = singleParam(req.params.planId);
     const includeInactive = includeInactiveRecords(req.query.includeInactive);
 
     if (!UUID_PATTERN.test(planId)) {
