@@ -51,6 +51,15 @@ export function isPortalAppointmentAvailable(row: PortalRow, now = new Date()) {
   return appointmentServiceDate(row) === serviceDateKey(now);
 }
 
+export function portalAppointmentDisplayStatus(row: PortalRow, now = new Date()) {
+  const status = String(row.appointment_status ?? "scheduled").toLowerCase();
+  if (!["scheduled", "confirmed"].includes(status)) return status;
+
+  const serviceDate = appointmentServiceDate(row);
+  if (serviceDate && serviceDate < serviceDateKey(now)) return "check_in_closed";
+  return status;
+}
+
 export function getPortalArrivalStep(row: PortalRow, checkin: PortalRow | Record<string, unknown>, now = new Date()): CheckInStep | null {
   if (checkin.checked_in_at) return null;
   if (checkin.arrived_at) return "checked_in";
