@@ -22,9 +22,9 @@ test("encounter follows the manual's provider preparation-to-documentation flow"
   }
 });
 
-test("coding is required while eligibility remains advisory", () => {
-  assert.match(encounter, /Add the visit diagnosis and procedure code before Sign &amp; Lock|Add the visit diagnosis and procedure code before Sign & Lock/);
-  assert.match(encounter, /Eligibility verification does not hold billing/);
+test("coding and eligibility remain billing follow-up and do not block clinical signature", () => {
+  assert.match(encounter, /Diagnosis, coding, and eligibility issues are handled in billing workflow and do not block clinical signature/);
+  assert.doesNotMatch(encounter, /Add the visit diagnosis and procedure code before Sign &amp; Lock|Add the visit diagnosis and procedure code before Sign & Lock/);
   assert.doesNotMatch(encounter, /Documentation Readiness & Signature/);
   assert.doesNotMatch(encounter, /<ExternalSummaryPanel/);
   assert.doesNotMatch(encounter, /id="encounter-billing-source"/);
