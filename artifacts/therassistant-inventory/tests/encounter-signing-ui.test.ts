@@ -12,16 +12,19 @@ const clinicalRepositorySource = readFileSync(
   "utf8",
 );
 
-test("signing saves the current editable note before locking it", () => {
+test("Save Note and Sign & Lock are separate actions", () => {
   const signStart = source.indexOf("async function sign()");
-  const saveCall = source.indexOf("await saveClinicalNote(encounterId", signStart);
-  const signCall = source.indexOf("await signEncounterNote(encounterId", signStart);
+  const signEnd = source.indexOf("if (loading && !data)", signStart);
+  const signHandler = source.slice(signStart, signEnd);
 
-  assert.ok(signStart >= 0);
-  assert.ok(saveCall > signStart, "Sign action must persist the current editor content.");
-  assert.ok(signCall > saveCall, "The persisted current note must be saved before signature.");
+  assert.ok(signStart >= 0 && signEnd > signStart);
+  assert.doesNotMatch(signHandler, /saveClinicalNote\(/, "Sign & Lock must not save the editable note.");
+  assert.match(signHandler, /noteHasUnsavedText/, "Unsaved note edits must be saved explicitly before signing.");
+  assert.match(signHandler, /Save the note before signing/);
+  assert.match(signHandler, /signEncounterNote\(/);
+  assert.doesNotMatch(signHandler, /data\.diagnoses/);
+  assert.doesNotMatch(signHandler, /data\.serviceLines/);
 });
-
 
 test("diagnosis and service-line saves preserve an unsaved clinical draft", () => {
   const helperStart = source.indexOf("async function withSave(");
