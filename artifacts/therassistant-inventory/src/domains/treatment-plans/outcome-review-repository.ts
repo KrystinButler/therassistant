@@ -11,7 +11,7 @@ export async function getOutcomeWorkspace(patientId:string){
   return {measures,reviews,visits,signatures};
 }
 export async function recordOutcome(patientId:string,input:{instrument:Instrument;score:number;assessedOn:string;source:"clinician_entered"|"patient_reported";notes?:string}){
-  if(!validateScore(input.instrument,input.score))throw new Error(input.instrument+" score must be an integer from 0 to "+maxScore(input.instrument)+".");
+  if(!validateScore(input.instrument,input.score)){ const min=input.instrument==="PRSDS"?1:0; throw new Error(input.instrument+" score must be an integer from "+min+" to "+maxScore(input.instrument)+"."); }
   if(!/^\d{4}-\d{2}-\d{2}$/.test(input.assessedOn))throw new Error("Assessment date is required.");
   return tenantInsert<DataRow>("clinical_outcome_measures",{
     client_id:patientId,instrument:input.instrument,score:input.score,assessed_on:input.assessedOn,source:input.source,notes:input.notes?.trim()||null

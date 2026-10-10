@@ -758,3 +758,29 @@
 .clinical-code-row span { color:var(--thera-text-muted); }
 @media (max-width:1100px) { .clinical-note-demographics { grid-template-columns:repeat(2,minmax(0,1fr)); } .clinical-note-top-grid { grid-template-columns:1fr; } }
 @media (max-width:760px) { .clinical-objective-grid,.clinical-mse-grid,.clinical-coding-grid { grid-template-columns:1fr; } .clinical-note-demographics { grid-template-columns:1fr; } }
+
+
+/* Cross-system clinical documentation engine */
+.clinical-telemetry { margin: 16px 0; padding: 16px; border: 1px solid #d8e2e2; border-radius: 14px; background: #fff; }
+.clinical-telemetry-heading { display: flex; align-items: end; justify-content: space-between; gap: 16px; margin-bottom: 10px; }
+.clinical-telemetry-heading h3 { margin: 3px 0 0; color: #1f3547; font-size: 15px; }
+.clinical-telemetry-heading small, .clinical-telemetry-empty { color: #647783; font-size: 12px; }
+.clinical-telemetry-chart { min-height: 230px; }
+.cross-system-smartphrases { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin: 10px 0; padding: 11px 12px; border: 1px solid #c9d9d4; border-radius: 12px; background: #f6f9f6; }
+.cross-system-smartphrases > div:first-child { display: grid; gap: 2px; }
+.cross-system-smartphrases > div:first-child span { color: #60737a; font-size: 11px; }
+.cross-system-smartphrases > div:last-child { display: flex; flex-wrap: wrap; gap: 7px; justify-content: flex-end; }
+.cross-system-modal-backdrop { position: fixed; inset: 0; z-index: 1000; display: grid; place-items: center; padding: 20px; background: rgba(20,35,46,.58); }
+.cross-system-modal { width: min(640px, 96vw); max-height: 88vh; overflow: auto; padding: 22px; border-radius: 16px; background: #fff; box-shadow: 0 22px 60px rgba(15,31,43,.28); }
+.cross-system-modal.emergency { border-top: 5px solid #8f3d35; }
+.cross-system-modal h2 { margin: 6px 0 14px; color: #1f3547; }
+.cross-system-alert-item { padding: 12px; border: 1px solid #dfcbc7; border-radius: 10px; background: #fff8f6; margin-bottom: 10px; }
+.cross-system-alert-item strong { text-transform: capitalize; }
+.cross-system-alert-item p, .cross-system-modal-note { margin: 5px 0 0; line-height: 1.45; }
+.cross-system-modal-note { color: #5d6a70; font-size: 12px; margin-bottom: 14px; }
+.cross-system-code-sequence { display: grid; gap: 8px; margin: 12px 0; }
+.cross-system-code-sequence > div { display: grid; grid-template-columns: 58px 80px 1fr; gap: 10px; align-items: center; padding: 9px 10px; border: 1px solid #d7e2df; border-radius: 9px; }
+.cross-system-code-sequence span, .cross-system-code-sequence small { color: #61747b; font-size: 11px; }
+.cross-system-modal textarea { min-height: 86px; margin-top: 6px; resize: vertical; }
+.cross-system-modal-actions { display: flex; flex-wrap: wrap; gap: 9px; margin-top: 14px; }
+@media (max-width: 720px) { .clinical-telemetry-heading, .cross-system-smartphrases { align-items: stretch; flex-direction: column; } .cross-system-smartphrases > div:last-child { justify-content: flex-start; } .cross-system-code-sequence > div { grid-template-columns: 48px 72px 1fr; } }

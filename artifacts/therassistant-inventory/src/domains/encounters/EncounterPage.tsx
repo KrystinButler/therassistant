@@ -13,6 +13,8 @@ import {
   voidPreclaimServiceLine,
   saveClinicalNote,
   signEncounterNote,
+  applyCrossSystemDiagnosisSequence,
+  rejectCrossSystemCodingRecommendation,
 } from "../clinical/repository";
 import { buildPatientReviewCheckIn } from "../scheduling/patient-review-model";
 import { treatmentPlanAlert } from "../treatment-plans/workflow";
@@ -50,6 +52,7 @@ import { getEncounterDetail, updateEncounter } from "./repository";
 import { createChargeFromEncounter, routeEncounterToBilling } from "../billing/repository";
 import { scheduledSessionTime } from "./scheduled-session-time";
 import { noteTypeForService } from "./service-note-template";
+import { appendImportedText, evaluateCrossSystemEngine, sanitizeImportedText } from "../clinical/cross-system-engine";
 import "./encounter-page.css";
 
 type EncounterDetail = Awaited<ReturnType<typeof getEncounterDetail>>;
@@ -125,6 +128,9 @@ export function EncounterPage() {
   const [priorStructuredContext, setPriorStructuredContext] = useState<PriorStructuredContext | null>(null);
   const [privateNoteText, setPrivateNoteText] = useState("");
   const [privateSaving, setPrivateSaving] = useState(false);
+  const [acknowledgedEmergencyKey, setAcknowledgedEmergencyKey] = useState("");
+  const [codingReviewDismissedKey, setCodingReviewDismissedKey] = useState("");
+  const [rejectionJustification, setRejectionJustification] = useState("");
 
   async function load() {
     if (!encounterId) return;
@@ -204,6 +210,21 @@ export function EncounterPage() {
     () => clinicalNoteSimilarity(noteText, priorStructuredContext?.noteText ?? ""),
     [noteText, priorStructuredContext?.noteText],
   );
+  const activeDiagnoses = (data?.diagnoses ?? []).filter((row) => row.present_on_claim !== false);
+  const crossSystemEvaluation = useMemo(() => evaluateCrossSystemEngine({
+    narrativeText: [noteText, generatedNarrative, JSON.stringify(data?.checkins ?? []), JSON.stringify(data?.journalEntries ?? [])].join("\n"),
+    diagnosisCodes: activeDiagnoses.map((row) => String(row.diagnosis_code ?? "")),
+  }), [noteText, generatedNarrative, data]);
+  const emergencyKey = crossSystemEvaluation.emergencyAlerts.map((alert) => `${alert.ruleId}:${alert.trigger}`).join("|");
+  const suggestedDiagnosisSequence = crossSystemEvaluation.suggestedDiagnosisSequence;
+  const codingRuleId = crossSystemEvaluation.combinationSuggestion ? "SUD-PSYCHOSIS-COMBINATION" : (crossSystemEvaluation.matchedRules[0]?.id ?? "cross-system");
+  const codingReviewKey = suggestedDiagnosisSequence ? `${codingRuleId}:${suggestedDiagnosisSequence.map((item) => item.code).join(",")}` : "";
+  const currentDiagnosisCodes = activeDiagnoses.map((row) => String(row.diagnosis_code ?? "").toUpperCase());
+  const needsCodingReview = Boolean(
+    suggestedDiagnosisSequence?.length &&
+    suggestedDiagnosisSequence.map((item) => item.code).join("|") !== currentDiagnosisCodes.join("|") &&
+    codingReviewDismissedKey !== codingReviewKey
+  );
 
   async function withSave(
     action: () => Promise<unknown>,
@@ -262,6 +283,33 @@ export function EncounterPage() {
       () => saveClinicalNote(encounterId, { noteType, noteText, goalAddressed, structuredSelections, generatedNarrative, carryForwardContext }),
       "Clinical note saved as a draft.",
     );
+  }
+
+  async function applySuggestedCrossSystemCoding() {
+    if (!suggestedDiagnosisSequence?.length) return;
+    const success = await withSave(
+      () => applyCrossSystemDiagnosisSequence(encounterId, codingRuleId, suggestedDiagnosisSequence),
+      "Cross-system diagnosis sequence applied and recorded for audit.",
+      true,
+    );
+    if (success) {
+      setCodingReviewDismissedKey("");
+      setRejectionJustification("");
+    }
+  }
+
+  async function keepCurrentCrossSystemCoding() {
+    if (!suggestedDiagnosisSequence?.length) return;
+    if (!rejectionJustification.trim()) {
+      setError("A justification is required to keep the current coding.");
+      return;
+    }
+    const success = await withSave(
+      () => rejectCrossSystemCodingRecommendation(encounterId, codingRuleId, suggestedDiagnosisSequence, rejectionJustification),
+      "Current coding retained with the clinician justification recorded for audit.",
+      true,
+    );
+    if (success) setCodingReviewDismissedKey(codingReviewKey);
   }
 
   async function savePrivatePsychotherapyNote() {
@@ -562,7 +610,7 @@ export function EncounterPage() {
 
   function importPreVisit() {
     if (signed || !preVisitInsert || preVisitAlreadyImported) return;
-    setNoteText((current) => appendClinicalSource(current, preVisitInsert));
+    setNoteText((current) => appendClinicalSource(current, sanitizeImportedText(preVisitInsert)));
     setCarryForwardContext((current) =>
       withClinicalSourceImport(
         current,
@@ -578,7 +626,7 @@ export function EncounterPage() {
 
   function importJournal() {
     if (signed || !journalInsert) return;
-    setNoteText((current) => appendClinicalSource(current, journalInsert));
+    setNoteText((current) => appendClinicalSource(current, sanitizeImportedText(journalInsert)));
     setCarryForwardContext((current) =>
       withClinicalSourceImport(
         current,
@@ -615,6 +663,8 @@ export function EncounterPage() {
 
   return (
     <>
+      {emergencyKey && acknowledgedEmergencyKey !== emergencyKey && <div className="cross-system-modal-backdrop" role="alertdialog" aria-modal="true" aria-labelledby="cross-system-safety-title"><div className="cross-system-modal emergency"><span className="thera-eyebrow">IMMEDIATE REVIEW</span><h2 id="cross-system-safety-title">Cross-System Safety Alert</h2>{crossSystemEvaluation.emergencyAlerts.map((alert) => <div key={`${alert.ruleId}-${alert.trigger}`} className="cross-system-alert-item"><strong>{alert.trigger}</strong><p>{alert.text}</p></div>)}<p className="cross-system-modal-note">This alert is based on documented patient-reported text. Use clinical judgment and appropriate emergency protocols.</p><button type="button" className="thera-action" onClick={() => setAcknowledgedEmergencyKey(emergencyKey)}>Acknowledge and continue</button></div></div>}
+      {needsCodingReview && (!emergencyKey || acknowledgedEmergencyKey === emergencyKey) && <div className="cross-system-modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="cross-system-coding-title"><div className="cross-system-modal"><span className="thera-eyebrow">CODING DECISION SUPPORT</span><h2 id="cross-system-coding-title">Coding Safety Review</h2>{crossSystemEvaluation.combinationSuggestion?.duplicationTrap && <p><strong>Duplication Trap:</strong> Separate diagnosis entries overlap the configured combination-code pathway.</p>}<div className="cross-system-code-sequence">{suggestedDiagnosisSequence?.map((item, index) => <div key={`${item.code}-${index}`}><span>Slot {String.fromCharCode(65 + index)}</span><strong>{item.code}</strong><small>{item.description}</small></div>)}</div><p>Nothing changes until you explicitly apply this recommendation. Clinical signing remains separate from this billing/coding review.</p><label><span className="thera-field-label">Justification if keeping current coding</span><textarea className="thera-input" value={rejectionJustification} onChange={(event) => setRejectionJustification(event.target.value)} placeholder="Required when rejecting the recommendation" /></label><div className="cross-system-modal-actions"><button type="button" className="thera-action" disabled={saving} onClick={() => void applySuggestedCrossSystemCoding()}>Apply Suggested Sequence</button><button type="button" className="thera-action secondary" disabled={saving || !rejectionJustification.trim()} onClick={() => void keepCurrentCrossSystemCoding()}>Keep Current Coding</button></div></div></div>}
       <div className="thera-breadcrumb">
         <Link href="/schedule" className="thera-link">Schedule</Link>
         <span>/</span>
@@ -674,12 +724,13 @@ export function EncounterPage() {
             safetyScreenings={data.safetyScreenings}
             diagnoses={data.diagnoses}
             serviceLines={data.serviceLines}
+            serviceDate={serviceDate}
             signed={signed}
             privateNoteText={privateNoteText}
             privateSaving={privateSaving}
             onPrivateNoteChange={setPrivateNoteText}
             onSavePrivateNote={() => void savePrivatePsychotherapyNote()}
-            onInsertNarrative={(text) => injectIntoNote(`${noteText.trim() ? "\n\n" : ""}${text}`)}
+            onInsertNarrative={(text) => setNoteText((current) => appendImportedText(current, text))}
           />
           <SessionTimelinePanel signed={signed} selections={structuredSelections} onSelectionsChange={setStructuredSelections} onInsertPhrase={injectIntoNote} />
           <div className="encounter-editor-surface">
@@ -710,7 +761,8 @@ export function EncounterPage() {
                 {preVisitAlreadyImported ? "Answers imported" : "Import Answers into Note"}
               </button>
             </div>
-            <div className="encounter-editor-toolbar" role="toolbar" aria-label="Progress note writing tools">
+            {crossSystemEvaluation.matchedRules.length > 0 && !signed && <div className="cross-system-smartphrases"><div><strong>Suggested SmartPhrases</strong><span>Matched to current documentation; insertion is always clinician-controlled.</span></div><div>{crossSystemEvaluation.matchedRules.map((rule) => <button type="button" className="thera-action secondary" key={rule.id} title={rule.category} onClick={() => setNoteText((current) => appendImportedText(current, rule.macroText))}>{rule.dotPhrase}</button>)}</div></div>}
+          <div className="encounter-editor-toolbar" role="toolbar" aria-label="Progress note writing tools">
               <div className="encounter-section-tools">
                 <span className="encounter-tool-label">Insert section</span>
                 <div className="encounter-section-buttons">
@@ -773,7 +825,7 @@ export function EncounterPage() {
       </div>
 
       <div className="encounter-lower-grid">
-        <section className="thera-card" id="encounter-diagnoses"><div className="thera-card-header"><div><div className="thera-eyebrow">CLINICAL CONTEXT</div><h2>Diagnoses</h2></div></div>{data.diagnoses.length > 0 && <div className="thera-table-wrap"><table className="thera-table"><thead><tr><th>Code</th><th>Description</th><th>Primary</th></tr></thead><tbody>{data.diagnoses.map((diagnosis) => <tr key={diagnosis.id}><td><strong>{String(diagnosis.diagnosis_code)}</strong></td><td>{String(diagnosis.diagnosis_description ?? "—")}</td><td>{diagnosis.is_primary ? "Yes" : "No"}</td></tr>)}</tbody></table></div>}{(!signed || data.claims.length === 0) && <div className="encounter-compact-form">{signed && <p className="thera-table-subtext">Add a billing diagnosis without unlocking or altering the signed clinical note. Verify that the diagnosis is supported by the documented assessment.</p>}<Icd10SearchInput code={diagnosisCode} description={diagnosisDescription} serviceDate={serviceDate} onSelect={(result) => { setDiagnosisCode(result.code); if (result.name) setDiagnosisDescription(result.name); }} /><input className="thera-input" placeholder="Diagnosis description" value={diagnosisDescription} onChange={(event) => setDiagnosisDescription(event.target.value)} /><button type="button" className="thera-action secondary" disabled={saving || !diagnosisCode.trim()} onClick={() => void addDiagnosis()}>+ Add Diagnosis</button></div>}</section>
+        <section className="thera-card" id="encounter-diagnoses"><div className="thera-card-header"><div><div className="thera-eyebrow">CLINICAL CONTEXT</div><h2>Diagnoses</h2></div></div>{activeDiagnoses.length > 0 && <div className="thera-table-wrap"><table className="thera-table"><thead><tr><th>Code</th><th>Description</th><th>Primary</th></tr></thead><tbody>{activeDiagnoses.map((diagnosis) => <tr key={diagnosis.id}><td><strong>{String(diagnosis.diagnosis_code)}</strong></td><td>{String(diagnosis.diagnosis_description ?? "—")}</td><td>{diagnosis.is_primary ? "Yes" : "No"}</td></tr>)}</tbody></table></div>}{(!signed || data.claims.length === 0) && <div className="encounter-compact-form">{signed && <p className="thera-table-subtext">Add a billing diagnosis without unlocking or altering the signed clinical note. Verify that the diagnosis is supported by the documented assessment.</p>}<Icd10SearchInput code={diagnosisCode} description={diagnosisDescription} serviceDate={serviceDate} onSelect={(result) => { setDiagnosisCode(result.code); if (result.name) setDiagnosisDescription(result.name); }} /><input className="thera-input" placeholder="Diagnosis description" value={diagnosisDescription} onChange={(event) => setDiagnosisDescription(event.target.value)} /><button type="button" className="thera-action secondary" disabled={saving || !diagnosisCode.trim()} onClick={() => void addDiagnosis()}>+ Add Diagnosis</button></div>}</section>
         <section className="thera-card" id="encounter-coding-service">
           <div className="thera-card-header split"><div><div className="thera-eyebrow">CLAIM CORRECTIONS</div><h2>Coding & Service</h2><p>Correct rejected or held claim fields in the revenue-cycle workqueue; signed clinical notes stay locked.</p></div><div className="thera-filter-row">{data.chargeLines.some((charge) => charge.charge_status === "blocked") && <button type="button" className="thera-action secondary" disabled={saving} onClick={() => void withSave(async () => { const result = await createChargeFromEncounter(encounterId); if (!result.ok) throw new Error(result.details?.join(" ") || result.message); }, "Existing charges reconciled against the corrected service lines.")}>Reconcile Charges</button>}<button type="button" className="thera-action secondary" disabled={saving} onClick={() => void withSave(async () => { const result = await routeEncounterToBilling(encounterId); if (!result.ok && !result.blocked) throw new Error(result.message); }, "Billing readiness rechecked against current encounter data.", true)}>Recheck Billing</button><Link href="/rejections" className="thera-action secondary">Open Rejections →</Link></div></div>
           <div className="encounter-claim-actions" role="group" aria-label="Correct and release claims">

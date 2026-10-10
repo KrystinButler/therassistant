@@ -14,6 +14,7 @@ import { saveStructuredClinicalData } from "./fast-charting-repository";
 import type { StructuredSelections } from "./fast-charting";
 import { clinicalServiceDate } from "./service-date";
 import { signNoteWorkflow, type ClinicalSigningRepository } from "./workflow";
+import { appendScopeDisclaimer, evaluateCrossSystemEngine, type DiagnosisSuggestion } from "./cross-system-engine";
 
 type DataRow = Row & { id: string };
 
@@ -80,6 +81,11 @@ export async function saveClinicalNote(
 ) {
   const state = await clinicalState(encounterId);
   if (!state.encounter) throw new Error("Encounter not found.");
+  const crossSystemEvaluation = evaluateCrossSystemEngine({
+    narrativeText: values.noteText,
+    diagnosisCodes: state.diagnoses.filter((row) => row.present_on_claim !== false).map((row) => String(row.diagnosis_code ?? "")),
+  });
+  const finalNoteText = appendScopeDisclaimer(values.noteText, crossSystemEvaluation.requiresScopeDisclaimer);
 
   let saved: DataRow;
   if (state.note) {
@@ -90,7 +96,7 @@ export async function saveClinicalNote(
     saved = await tenantUpdate<DataRow>("clinical_notes", state.note.id, {
       note_type: values.noteType || state.note.note_type || "psychotherapy",
       note_status: "draft",
-      note_text: values.noteText,
+      note_text: finalNoteText,
       goal_addressed: values.goalAddressed || null,
     });
   } else {
@@ -110,7 +116,7 @@ export async function saveClinicalNote(
       note_type: values.noteType || "psychotherapy",
       note_status: "draft",
       service_date: serviceDate,
-      note_text: values.noteText,
+      note_text: finalNoteText,
       goal_addressed: values.goalAddressed || null,
     });
   }
@@ -217,4 +223,32 @@ export async function signEncounterNote(
   expectedNoteId?: string,
 ) {
   return signNoteWorkflow(signingRepository, encounterId, signerId, signatureText, expectedNoteId);
+}
+
+
+export function applyCrossSystemDiagnosisSequence(
+  encounterId: string,
+  ruleId: string,
+  sequence: DiagnosisSuggestion[],
+) {
+  return tenantRpc<{ applied: boolean; encounter_id: string; diagnosis_count: number }>(
+    "apply_cross_system_diagnosis_sequence",
+    { p_encounter_id: encounterId, p_rule_id: ruleId, p_recommendation: sequence },
+  );
+}
+
+export function rejectCrossSystemCodingRecommendation(
+  encounterId: string,
+  ruleId: string,
+  recommendation: DiagnosisSuggestion[],
+  justification: string,
+) {
+  const clean = justification.trim();
+  if (!clean) throw new Error("A justification is required to keep the current coding.");
+  return tenantRpc<{ recorded: boolean }>("record_cross_system_coding_rejection", {
+    p_encounter_id: encounterId,
+    p_rule_id: ruleId,
+    p_recommendation: recommendation,
+    p_justification: clean,
+  });
 }

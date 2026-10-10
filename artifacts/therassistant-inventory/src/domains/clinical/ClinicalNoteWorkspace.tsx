@@ -1,4 +1,5 @@
 import { phqImportNarrative, gadImportNarrative, cssrsImportNarrative } from "./clinical-note-imports";
+import { ClinicalTelemetryChart } from "./ClinicalTelemetryChart";
 
 type Row = Record<string, any>;
 
@@ -26,6 +27,7 @@ type Props = {
   safetyScreenings: Row[];
   diagnoses: Row[];
   serviceLines: Row[];
+  serviceDate: string;
   signed: boolean;
   privateNoteText: string;
   privateSaving: boolean;
@@ -76,6 +78,7 @@ export function ClinicalNoteWorkspace(props: Props) {
   const phq = phqImportNarrative(props.outcomeMeasures);
   const gad = gadImportNarrative(props.outcomeMeasures);
   const risk = cssrsImportNarrative(props.safetyScreenings);
+  const activeDiagnoses = props.diagnoses.filter((row) => row.present_on_claim !== false);
   const journalText = value(props.journalEntry, ["entry_text"], "");
   const goalWork = question(props.currentCheckin, ["goal_to_work_on", "treatment_goal", "focus_goal"]);
   const goalUpdate = question(props.currentCheckin, ["goal_to_update", "goal_update"]);
@@ -98,6 +101,8 @@ export function ClinicalNoteWorkspace(props: Props) {
       <article className="thera-card clinical-screening-panel"><div className="thera-eyebrow">STANDARDIZED SCREENINGS</div><ScreeningCard title="PHQ-9" importLabel="IMPORT 3" narrative={phq} rows={phqRows} /><ScreeningCard title="GAD-7" importLabel="IMPORT 4" narrative={gad} rows={gadRows} /><ScreeningCard title="C-SSRS" importLabel="IMPORT 5" narrative={risk} rows={cssrsRows} /></article>
     </div>
 
+    <ClinicalTelemetryChart measures={props.outcomeMeasures} asOfDate={props.serviceDate} />
+
     <details className="clinical-note-section" open><summary>Subjective <span>collapsible</span></summary><div className="clinical-note-section-body"><h4>CC</h4><p>{cc || "No check-in concern available to import."}</p><InsertButton value={cc} disabled={props.signed} onInsert={props.onInsertNarrative}>Insert CC</InsertButton><h4>HPI</h4><p>{hpi || "No shared journal entry available to import."}</p><InsertButton value={hpi} disabled={props.signed} onInsert={props.onInsertNarrative}>Insert HPI</InsertButton></div></details>
 
     <details className="clinical-note-section" open><summary>Objective <span>collapsible</span></summary><div className="clinical-note-section-body"><div className="clinical-objective-grid"><Objective label="Depression" text={phq} importLabel="IMPORT 3" /><Objective label="Anxiety" text={gad} importLabel="IMPORT 4" /><Objective label="Risk" text={risk} importLabel="IMPORT 5" /></div><div className="clinical-mse-grid"><Mse label="Appearance" help="Grooming, hygiene, dress, and physical posture." /><Mse label="Behavior" help="Eye contact, engagement, psychomotor activity, and cooperation." /><Mse label="Speech" help="Rate, volume, tone, and articulation." /><Mse label="Mood and Affect" help="Apparent emotional state and congruence of affect." /><Mse label="Thought Process & Content" help="Coherence, logical flow, delusions, or obsessions." /><Mse label="Cognition & Orientation" help="Alertness, orientation, and general memory function." /></div></div></details>
@@ -107,7 +112,7 @@ export function ClinicalNoteWorkspace(props: Props) {
 
     <details className="clinical-note-section psychotherapy-private"><summary>Psychotherapy Note <span>private · collapsible</span></summary><div className="clinical-note-section-body"><p>This private psychotherapy note is stored separately from the ordinary clinical note and billing record.</p><textarea className="thera-input clinical-private-note" value={props.privateNoteText} onChange={(event) => props.onPrivateNoteChange(event.target.value)} placeholder="Clinician private psychotherapy note" /><button type="button" className="thera-action secondary" disabled={props.privateSaving} onClick={props.onSavePrivateNote}>{props.privateSaving ? "Saving…" : "Save Private Note"}</button></div></details>
 
-    <details className="clinical-note-section" open><summary>Coding Review <span>collapsible</span></summary><div className="clinical-note-section-body"><p>Code suggestions are never fabricated. Review documented diagnoses and services below; additions and corrections remain in the coding controls after the note.</p><div className="clinical-coding-grid"><div><h4>ICD-10</h4>{props.diagnoses.length ? props.diagnoses.map((row) => <div key={String(row.id)} className="clinical-code-row"><strong>{String(row.diagnosis_code ?? "—")}</strong><span>{String(row.diagnosis_description ?? "")}</span></div>) : <p>No ICD-10 codes recorded.</p>}</div><div><h4>CPT / HCPCS</h4>{props.serviceLines.length ? props.serviceLines.map((row) => <div key={String(row.id)} className="clinical-code-row"><strong>{String(row.cpt_hcpcs_code ?? "—")}</strong><span>{row.modifier1 ? `Modifier ${String(row.modifier1)}` : ""}</span></div>) : <p>No CPT / HCPCS lines recorded.</p>}</div></div></div></details>
+    <details className="clinical-note-section" open><summary>Coding Review <span>collapsible</span></summary><div className="clinical-note-section-body"><p>Code suggestions are never fabricated. Review documented diagnoses and services below; additions and corrections remain in the coding controls after the note.</p><div className="clinical-coding-grid"><div><h4>ICD-10</h4>{activeDiagnoses.length ? activeDiagnoses.map((row) => <div key={String(row.id)} className="clinical-code-row"><strong>{String(row.diagnosis_code ?? "—")}</strong><span>{String(row.diagnosis_description ?? "")}</span></div>) : <p>No ICD-10 codes recorded.</p>}</div><div><h4>CPT / HCPCS</h4>{props.serviceLines.length ? props.serviceLines.map((row) => <div key={String(row.id)} className="clinical-code-row"><strong>{String(row.cpt_hcpcs_code ?? "—")}</strong><span>{row.modifier1 ? `Modifier ${String(row.modifier1)}` : ""}</span></div>) : <p>No CPT / HCPCS lines recorded.</p>}</div></div></div></details>
   </section>;
 }
 
