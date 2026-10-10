@@ -28,6 +28,7 @@ type VisitQuestions = {
   important_changes: string;
   safety_concerns: string;
   treatment_goal: string;
+  somatic_distress_score: number | null;
   anything_else: string;
 };
 
@@ -43,6 +44,7 @@ const emptyQuestions: VisitQuestions = {
   important_changes: "",
   safety_concerns: "",
   treatment_goal: "",
+  somatic_distress_score: null,
   anything_else: "",
 };
 
@@ -81,12 +83,14 @@ function formatTime(value: unknown) {
 
 function readQuestions(value: unknown): VisitQuestions {
   const row = recordOf(value);
+  const rawSomaticScore = Number(row.somatic_distress_score);
   return {
     focus_today: String(row.focus_today ?? ""),
     feeling_since_last_visit: String(row.feeling_since_last_visit ?? ""),
     important_changes: String(row.important_changes ?? ""),
     safety_concerns: String(row.safety_concerns ?? ""),
     treatment_goal: String(row.treatment_goal ?? ""),
+    somatic_distress_score: Number.isInteger(rawSomaticScore) && rawSomaticScore >= 1 && rawSomaticScore <= 10 ? rawSomaticScore : null,
     anything_else: String(row.anything_else ?? ""),
   };
 }
@@ -169,7 +173,7 @@ export function PatientCheckInPage() {
   const allConsentsAccepted = Object.values(consents).every(Boolean);
   const hasConsentProgress = Object.values(consents).some(Boolean);
   const hasVisitAnswers = useMemo(
-    () => Object.values(visitQuestions).some((value) => value.trim().length > 0),
+    () => Object.values(visitQuestions).some((value) => typeof value === "number" || (typeof value === "string" && value.trim().length > 0)),
     [visitQuestions],
   );
 
@@ -346,6 +350,7 @@ export function PatientCheckInPage() {
               <Question label="What would you like to focus on today?" value={visitQuestions.focus_today} onChange={(value) => setVisitQuestions((current) => ({ ...current, focus_today: value }))} />
               <Question label="How have you been feeling since your last visit?" value={visitQuestions.feeling_since_last_visit} onChange={(value) => setVisitQuestions((current) => ({ ...current, feeling_since_last_visit: value }))} />
               <Question label="Any important changes since your last appointment?" value={visitQuestions.important_changes} onChange={(value) => setVisitQuestions((current) => ({ ...current, important_changes: value }))} />
+              <label className="pci-question"><span><Heart size={17} /> Physical / somatic distress today (1-10)</span><select value={visitQuestions.somatic_distress_score ?? ""} onChange={(event) => setVisitQuestions((current) => ({ ...current, somatic_distress_score: event.target.value ? Number(event.target.value) : null }))}><option value="">Not answered</option>{Array.from({ length: 10 }, (_, index) => index + 1).map((score) => <option key={score} value={score}>{score}</option>)}</select><small>Patient-reported physical symptom impact only. Discuss new or concerning physical symptoms with your provider and appropriate medical clinician.</small></label>
               <Question label="Are there any safety concerns you want your provider to know about today?" value={visitQuestions.safety_concerns} onChange={(value) => setVisitQuestions((current) => ({ ...current, safety_concerns: value }))} />
               <div className="pj-message" role="note">Portal responses are not monitored as an emergency service. If you are in immediate danger or need emergency help, call 911 or go to the nearest emergency department.</div>
               <label className="pci-question"><span><ShieldCheck size={17} /> Which treatment goal feels most important right now?</span><select value={visitQuestions.treatment_goal} onChange={(event) => setVisitQuestions((current) => ({ ...current, treatment_goal: event.target.value }))}><option value="">Select a treatment goal</option>{data.treatmentGoals.map((goal) => <option key={goal.id} value={String(goal.goal_text ?? goal.id)}>{String(goal.goal_text ?? "Treatment goal")}</option>)}</select></label>

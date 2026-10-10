@@ -1,4 +1,4 @@
-export type Instrument = "PHQ-9" | "GAD-7";
+export type Instrument = "PHQ-9" | "GAD-7" | "PRSDS";
 export type Measure = { id: string; instrument: Instrument; score: number; assessed_on: string; source?: string; };
 export type Goal = { goal_text?: unknown; objective_text?: unknown; status?: unknown; };
 export type Visit = { service_date?: unknown; note_status?: unknown; };
@@ -7,9 +7,12 @@ export type Plan = {
   problem_statement?: unknown; interventions?: unknown; provider_id?: unknown;
   goals?: Goal[];
 };
-export function maxScore(instrument: Instrument) { return instrument === "PHQ-9" ? 27 : 21; }
+export function maxScore(instrument: Instrument) {
+  return instrument === "PHQ-9" ? 27 : instrument === "GAD-7" ? 21 : 10;
+}
 export function validateScore(instrument: Instrument, score: number) {
-  return Number.isInteger(score) && score >= 0 && score <= maxScore(instrument);
+  const minimum = instrument === "PRSDS" ? 1 : 0;
+  return Number.isInteger(score) && score >= minimum && score <= maxScore(instrument);
 }
 export function outcomeTrend(measures: Measure[], instrument: Instrument) {
   const list = measures.filter(m => m.instrument === instrument)
@@ -50,7 +53,7 @@ export function buildReviewDraft(args: { plan: Plan; measures: Measure[]; visits
       : "No signed visits in this review period were found in the record.",
     "Outcome measures:",
   ];
-  for (const instrument of ["PHQ-9","GAD-7"] as Instrument[]) {
+  for (const instrument of ["PHQ-9","GAD-7","PRSDS"] as Instrument[]) {
     const series = measures.filter(m => m.assessed_on <= reviewDate && (!start || m.assessed_on >= start));
     const trend = outcomeTrend(series, instrument);
     (evidence.outcome_trends as Record<string,unknown>)[instrument] = trend

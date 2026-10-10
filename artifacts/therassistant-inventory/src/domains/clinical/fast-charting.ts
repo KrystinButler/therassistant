@@ -15,6 +15,7 @@ import {
   normalizePsychedelicContext,
   type PsychedelicContext,
 } from "./psychedelic-context";
+import { CROSS_SYSTEM_RULES } from "./cross-system-engine";
 
 export type SmartPhraseScope = "built_in" | "user" | "practice";
 export type SmartPhrase = {
@@ -95,6 +96,14 @@ export const DEFAULT_SMART_PHRASES: SmartPhrase[] = [
     scope: "built_in",
     content: "GAD-7: Score ___/21. Severity: ___. Functional impact: ___.",
   },
+  ...CROSS_SYSTEM_RULES.map((rule) => ({
+    id: `builtin-${rule.id.toLowerCase()}`,
+    shortcut: rule.dotPhrase,
+    label: rule.category,
+    category: "somatic",
+    scope: "built_in" as const,
+    content: rule.macroText,
+  })),
 ];
 
 export function emptyStructuredSelections(): StructuredSelections {
