@@ -204,6 +204,8 @@ export async function getEncounterDetail(encounterId: string) {
     checkins,
     journalEntries,
     documents,
+    outcomeMeasures,
+    safetyScreenings,
   ] = await Promise.all([
     tenantSelect<DataRow>("clients", { id: `eq.${String(encounter.client_id)}`, limit: "1" }),
     encounter.provider_id
@@ -243,6 +245,15 @@ export async function getEncounterDetail(encounterId: string) {
     tenantSelect<DataRow>("documents", {
       client_id: `eq.${String(encounter.client_id)}`,
       order: "created_at.desc",
+    }),
+    tenantSelect<DataRow>("clinical_outcome_measures", {
+      client_id: `eq.${String(encounter.client_id)}`,
+      order: "assessed_on.desc,created_at.desc",
+    }),
+    tenantSelect<DataRow>("clinical_safety_screenings", {
+      client_id: `eq.${String(encounter.client_id)}`,
+      instrument: "eq.C-SSRS",
+      order: "assessed_on.desc,created_at.desc",
     }),
   ]);
 
@@ -304,6 +315,8 @@ export async function getEncounterDetail(encounterId: string) {
     checkins,
     journalEntries,
     documents,
+    outcomeMeasures,
+    safetyScreenings,
   };
 }
 

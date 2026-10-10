@@ -711,3 +711,50 @@
 .encounter-claim-actions{display:grid;gap:8px;padding:11px 13px;margin:8px 0;border:1px solid #cddfd0;border-radius:8px;background:#f6faf5}
 .encounter-linked-claim{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:9px;font-size:.72rem}
 .encounter-linked-claim>div{display:flex;align-items:center;gap:9px;flex-wrap:wrap}.encounter-claim-actions>p{margin:3px 0 0;color:var(--thera-muted);font-size:.67rem;line-height:1.5}
+
+/* Integrated clinical note workspace */
+.clinical-note-workspace { display:grid; gap:14px; margin:16px 0 20px; }
+.clinical-note-demographics { display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); gap:10px; padding:12px; border:1px solid var(--thera-border); border-radius:14px; background:var(--thera-surface-muted,#f7f9f8); }
+.clinical-note-demographics > div { min-width:0; display:flex; flex-direction:column; gap:2px; }
+.clinical-note-demographics span,.clinical-field span { font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.05em; color:var(--thera-text-muted); }
+.clinical-note-demographics strong { overflow-wrap:anywhere; }
+.clinical-note-coverage small { color:var(--thera-text-muted); }
+.clinical-note-top-grid { display:grid; grid-template-columns:1.05fr 1fr 1.3fr; gap:12px; align-items:start; }
+.clinical-source-panel,.clinical-screening-panel { padding:14px; }
+.clinical-source-panel h3 { margin:10px 0 4px; font-size:13px; }
+.clinical-source-panel p { margin:0; color:var(--thera-text-muted); }
+.clinical-field { display:flex; flex-direction:column; gap:3px; padding:8px 0; border-bottom:1px solid var(--thera-border); }
+.clinical-screening-panel { display:grid; gap:8px; }
+.clinical-screening-card { padding:10px; border:1px solid var(--thera-border); border-radius:10px; background:var(--thera-surface,#fff); }
+.clinical-screening-card > div:first-child { display:flex; justify-content:space-between; gap:10px; }
+.clinical-screening-card > div:first-child span { font-size:10px; font-weight:800; letter-spacing:.05em; color:var(--thera-accent); }
+.clinical-screening-card dl { display:flex; gap:18px; margin:8px 0; }
+.clinical-screening-card dl div { display:flex; gap:5px; }
+.clinical-screening-card dt { color:var(--thera-text-muted); }
+.clinical-screening-card dd { margin:0; font-weight:700; }
+.clinical-screening-card p { margin:0; font-size:12px; line-height:1.45; }
+.clinical-note-section { border:1px solid var(--thera-border); border-radius:12px; overflow:hidden; background:var(--thera-surface,#fff); }
+.clinical-note-section > summary { cursor:pointer; list-style:none; display:flex; justify-content:space-between; gap:10px; padding:11px 14px; font-weight:800; background:var(--thera-surface-muted,#f7f9f8); }
+.clinical-note-section > summary::-webkit-details-marker { display:none; }
+.clinical-note-section > summary span { font-size:11px; font-weight:600; color:var(--thera-text-muted); }
+.clinical-note-section-body { padding:14px; }
+.clinical-note-section-body h4 { margin:8px 0 4px; }
+.clinical-note-section-body p { margin:4px 0 10px; line-height:1.5; }
+.clinical-insert { margin:0 8px 8px 0; }
+.clinical-objective-grid,.clinical-mse-grid,.clinical-coding-grid { display:grid; gap:10px; }
+.clinical-objective-grid { grid-template-columns:repeat(3,minmax(0,1fr)); margin-bottom:12px; }
+.clinical-objective { border-left:3px solid var(--thera-accent); padding:8px 10px; background:var(--thera-surface-muted,#f7f9f8); }
+.clinical-objective > span { display:block; font-weight:800; }
+.clinical-objective > strong { font-size:10px; color:var(--thera-accent); }
+.clinical-objective p { font-size:12px; }
+.clinical-mse-grid { grid-template-columns:repeat(3,minmax(0,1fr)); }
+.clinical-mse { display:flex; flex-direction:column; gap:3px; padding:10px; border:1px solid var(--thera-border); border-radius:9px; }
+.clinical-mse span { color:var(--thera-text-muted); font-size:12px; }
+.psychotherapy-private { border-style:dashed; }
+.psychotherapy-private > summary { background:color-mix(in srgb,var(--thera-accent) 7%,white); }
+.clinical-private-note { min-height:140px; resize:vertical; margin-bottom:10px; }
+.clinical-coding-grid { grid-template-columns:1fr 1fr; }
+.clinical-code-row { display:flex; gap:8px; padding:7px 0; border-bottom:1px solid var(--thera-border); }
+.clinical-code-row span { color:var(--thera-text-muted); }
+@media (max-width:1100px) { .clinical-note-demographics { grid-template-columns:repeat(2,minmax(0,1fr)); } .clinical-note-top-grid { grid-template-columns:1fr; } }
+@media (max-width:760px) { .clinical-objective-grid,.clinical-mse-grid,.clinical-coding-grid { grid-template-columns:1fr; } .clinical-note-demographics { grid-template-columns:1fr; } }
