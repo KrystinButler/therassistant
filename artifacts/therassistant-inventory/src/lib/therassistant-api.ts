@@ -60,34 +60,40 @@ function sortNewest(rows: Row[]) {
   });
 }
 
+const SUPABASE_PAGE_SIZE = 1000;
+
 async function supabaseRows(
   table: string,
   filters: Record<string, string> = {},
 ): Promise<Row[]> {
-  const url = new URL(
-    `${SUPABASE_URL}/rest/v1/${table}`,
-  );
-  url.searchParams.set("select", "*");
+  const rows: Row[] = [];
 
-  for (const [key, value] of Object.entries(filters)) {
-    url.searchParams.set(key, value);
+  for (let offset = 0; ; offset += SUPABASE_PAGE_SIZE) {
+    const url = new URL(`${SUPABASE_URL}/rest/v1/${table}`);
+    url.searchParams.set("select", "*");
+
+    for (const [key, value] of Object.entries(filters)) {
+      url.searchParams.set(key, value);
+    }
+
+    const response = await authenticatedFetch(url, {
+      headers: {
+        Accept: "application/json",
+        Range: `${offset}-${offset + SUPABASE_PAGE_SIZE - 1}`,
+      },
+    });
+
+    if (!response.ok) {
+      const text = await response.text();
+      throw new Error(`Supabase ${table} request failed (${response.status})${text ? `: ${text}` : ""}`);
+    }
+
+    const data = (await response.json()) as Row[];
+    rows.push(...data);
+    if (data.length < SUPABASE_PAGE_SIZE) break;
   }
 
-  const response = await authenticatedFetch(url, {
-    headers: { Accept: "application/json" },
-  });
-
-  if (!response.ok) {
-    const text = await response.text();
-    throw new Error(
-      `Supabase ${table} request failed (${response.status})${
-        text ? `: ${text}` : ""
-      }`,
-    );
-  }
-
-  const data = (await response.json()) as Row[];
-  return hybridRows(data);
+  return hybridRows(rows);
 }
 
 async function tenantRows(table: string) {
