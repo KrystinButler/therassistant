@@ -21,6 +21,8 @@ export const encountersTable = pgTable("encounters", {
   appointmentId: uuid("appointment_id").unique().references(() => appointmentsTable.id),
   clientId: uuid("client_id").notNull().references(() => clientsTable.id),
   providerId: uuid("provider_id").references(() => providersTable.id),
+  providerLocationId: uuid("provider_location_id"),
+  tenantUserId: uuid("tenant_user_id"),
   insurancePolicyId: uuid("insurance_policy_id").references(() => clientInsurancePoliciesTable.id),
   payerId: uuid("payer_id").references(() => payersTable.id),
   encounterStatus: text("encounter_status").notNull().default("in_progress"),

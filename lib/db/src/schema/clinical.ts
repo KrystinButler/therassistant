@@ -98,6 +98,8 @@ export const clinicalNoteSignaturesTable = pgTable("clinical_note_signatures", {
   signatureText: text("signature_text"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   providerId: uuid("provider_id").references(() => providersTable.id),
+  encounterId: uuid("encounter_id"),
+  tenantUserId: uuid("tenant_user_id"),
 });
 
 export const chargeCaptureItemsTable = pgTable("charge_capture_items", {

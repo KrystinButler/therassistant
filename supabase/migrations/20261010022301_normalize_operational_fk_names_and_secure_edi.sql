@@ -1,0 +1,57 @@
+drop policy if exists "tenant_edi_connections tenant select" on public.tenant_edi_connections;
+drop policy if exists "tenant_edi_connections tenant insert" on public.tenant_edi_connections;
+drop policy if exists "tenant_edi_connections tenant update" on public.tenant_edi_connections;
+create policy "tenant_edi_connections tenant select" on public.tenant_edi_connections for select to authenticated using (private.has_tenant_read_access(tenant_id));
+create policy "tenant_edi_connections tenant insert" on public.tenant_edi_connections for insert to authenticated with check (private.has_tenant_admin_access(tenant_id));
+create policy "tenant_edi_connections tenant update" on public.tenant_edi_connections for update to authenticated using (private.has_tenant_admin_access(tenant_id)) with check (private.has_tenant_admin_access(tenant_id));
+
+alter table public.encounters add column if not exists provider_location_id uuid, add column if not exists tenant_user_id uuid;
+update public.encounters set provider_location_id=coalesce(provider_location_id,location), tenant_user_id=coalesce(tenant_user_id,"User_id");
+alter table public.clinical_note_signatures add column if not exists encounter_id uuid, add column if not exists tenant_user_id uuid;
+update public.clinical_note_signatures set encounter_id=coalesce(encounter_id,"Encounter_Id"), tenant_user_id=coalesce(tenant_user_id,"User_id");
+alter table public.client_diagnoses add column if not exists encounter_id uuid, add column if not exists treatment_plan_id uuid;
+update public.client_diagnoses set encounter_id=coalesce(encounter_id,"Encounter_Id"), treatment_plan_id=coalesce(treatment_plan_id,plan);
+alter table public.eligibility_benefits add column if not exists insurance_policy_id uuid;
+update public.eligibility_benefits set insurance_policy_id=coalesce(insurance_policy_id,"Insurance");
+alter table public.denials add column if not exists encounter_id uuid;
+update public.denials set encounter_id=coalesce(encounter_id,"Encounter_Id");
+alter table public.encounter_diagnoses add column if not exists client_id uuid;
+update public.encounter_diagnoses ed set client_id=coalesce(ed.client_id,ed."Patient",e.client_id) from public.encounters e where e.id=ed.encounter_id and ed.client_id is null;
+alter table public.credentialing_application_events add column if not exists provider_id uuid;
+update public.credentialing_application_events set provider_id=coalesce(provider_id,"Provder_Id");
+alter table public.claim_status_history add column if not exists appointment_id uuid, add column if not exists encounter_id uuid, add column if not exists client_id uuid;
+update public.claim_status_history set appointment_id=coalesce(appointment_id,appointment), encounter_id=coalesce(encounter_id,"Encounter"), client_id=coalesce(client_id,"Client");
+alter table public.claim_diagnoses add column if not exists appointment_id uuid;
+update public.claim_diagnoses set appointment_id=coalesce(appointment_id,"Appointment");
+
+do $$ begin
+  if not exists(select 1 from pg_constraint where conname='encounters_provider_location_id_fkey') then alter table public.encounters add constraint encounters_provider_location_id_fkey foreign key(provider_location_id) references public.provider_locations(id) on delete set null; end if;
+  if not exists(select 1 from pg_constraint where conname='encounters_tenant_user_id_fkey') then alter table public.encounters add constraint encounters_tenant_user_id_fkey foreign key(tenant_user_id) references public.tenant_users(id) on delete set null; end if;
+  if not exists(select 1 from pg_constraint where conname='clinical_note_signatures_encounter_id_fkey') then alter table public.clinical_note_signatures add constraint clinical_note_signatures_encounter_id_fkey foreign key(encounter_id) references public.encounters(id) on delete set null; end if;
+  if not exists(select 1 from pg_constraint where conname='clinical_note_signatures_tenant_user_id_fkey') then alter table public.clinical_note_signatures add constraint clinical_note_signatures_tenant_user_id_fkey foreign key(tenant_user_id) references public.tenant_users(id) on delete set null; end if;
+  if not exists(select 1 from pg_constraint where conname='client_diagnoses_encounter_id_fkey') then alter table public.client_diagnoses add constraint client_diagnoses_encounter_id_fkey foreign key(encounter_id) references public.encounters(id) on delete set null; end if;
+  if not exists(select 1 from pg_constraint where conname='client_diagnoses_treatment_plan_id_fkey') then alter table public.client_diagnoses add constraint client_diagnoses_treatment_plan_id_fkey foreign key(treatment_plan_id) references public.treatment_plans(id) on delete set null; end if;
+  if not exists(select 1 from pg_constraint where conname='eligibility_benefits_insurance_policy_id_fkey') then alter table public.eligibility_benefits add constraint eligibility_benefits_insurance_policy_id_fkey foreign key(insurance_policy_id) references public.client_insurance_policies(id) on delete set null; end if;
+  if not exists(select 1 from pg_constraint where conname='denials_encounter_id_fkey') then alter table public.denials add constraint denials_encounter_id_fkey foreign key(encounter_id) references public.encounters(id) on delete set null; end if;
+  if not exists(select 1 from pg_constraint where conname='encounter_diagnoses_client_id_fkey') then alter table public.encounter_diagnoses add constraint encounter_diagnoses_client_id_fkey foreign key(client_id) references public.clients(id) on delete set null; end if;
+  if not exists(select 1 from pg_constraint where conname='credentialing_application_events_provider_id_fkey') then alter table public.credentialing_application_events add constraint credentialing_application_events_provider_id_fkey foreign key(provider_id) references public.providers(id) on delete set null; end if;
+  if not exists(select 1 from pg_constraint where conname='claim_status_history_appointment_id_fkey') then alter table public.claim_status_history add constraint claim_status_history_appointment_id_fkey foreign key(appointment_id) references public.appointments(id) on delete set null; end if;
+  if not exists(select 1 from pg_constraint where conname='claim_status_history_encounter_id_fkey') then alter table public.claim_status_history add constraint claim_status_history_encounter_id_fkey foreign key(encounter_id) references public.encounters(id) on delete set null; end if;
+  if not exists(select 1 from pg_constraint where conname='claim_status_history_client_id_fkey') then alter table public.claim_status_history add constraint claim_status_history_client_id_fkey foreign key(client_id) references public.clients(id) on delete set null; end if;
+  if not exists(select 1 from pg_constraint where conname='claim_diagnoses_appointment_id_fkey') then alter table public.claim_diagnoses add constraint claim_diagnoses_appointment_id_fkey foreign key(appointment_id) references public.appointments(id) on delete set null; end if;
+end $$;
+
+create index if not exists idx_encounters_provider_location_id on public.encounters(provider_location_id);
+create index if not exists idx_encounters_tenant_user_id on public.encounters(tenant_user_id);
+create index if not exists idx_clinical_note_signatures_encounter_id on public.clinical_note_signatures(encounter_id);
+create index if not exists idx_clinical_note_signatures_tenant_user_id on public.clinical_note_signatures(tenant_user_id);
+create index if not exists idx_client_diagnoses_encounter_id on public.client_diagnoses(encounter_id);
+create index if not exists idx_client_diagnoses_treatment_plan_id on public.client_diagnoses(treatment_plan_id);
+create index if not exists idx_eligibility_benefits_insurance_policy_id on public.eligibility_benefits(insurance_policy_id);
+create index if not exists idx_denials_encounter_id on public.denials(encounter_id);
+create index if not exists idx_encounter_diagnoses_client_id on public.encounter_diagnoses(client_id);
+create index if not exists idx_credentialing_application_events_provider_id on public.credentialing_application_events(provider_id);
+create index if not exists idx_claim_status_history_appointment_id on public.claim_status_history(appointment_id);
+create index if not exists idx_claim_status_history_encounter_id on public.claim_status_history(encounter_id);
+create index if not exists idx_claim_status_history_client_id on public.claim_status_history(client_id);
+create index if not exists idx_claim_diagnoses_appointment_id on public.claim_diagnoses(appointment_id);
