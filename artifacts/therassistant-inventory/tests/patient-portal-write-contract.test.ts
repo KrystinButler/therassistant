@@ -20,6 +20,22 @@ function functionStatement(sql: string, qualifiedName: string) {
   return sql.slice(start, end + 3);
 }
 
+function latestFunctionStatement(qualifiedName: string) {
+  const dir = fileURLToPath(new URL("../../../supabase/migrations/", import.meta.url));
+  const marker = `create or replace function ${qualifiedName}(`.toLowerCase();
+  const files = readdirSync(dir).filter((entry) => entry.endsWith(".sql")).sort();
+  let latest = "";
+  for (const file of files) {
+    const sql = readFileSync(join(dir, file), "utf8");
+    const start = sql.toLowerCase().lastIndexOf(marker);
+    if (start < 0) continue;
+    const end = sql.indexOf("$$;", start);
+    assert.notEqual(end, -1, `unterminated function: ${qualifiedName} in ${file}`);
+    latest = sql.slice(start, end + 3);
+  }
+  assert.ok(latest, `missing function: ${qualifiedName}`);
+  return latest;
+}
 test("patient portal writes derive authorization from auth identity", () => {
   const sql = migration("secure_patient_portal_writes");
 
@@ -129,12 +145,13 @@ test("patient schedule change requests derive identity and never mutate appointm
 });
 
 
-test("patient arrival states are enforced by appointment time on the server", () => {
-  const sql = migration("patient_portal_testing_regression_fixes");
-  const impl = functionStatement(sql, "private.record_client_checkin_impl");
+test("patient arrival stays available through the scheduled service date", () => {
+  const impl = latestFunctionStatement("private.record_client_checkin_impl");
 
   assert.match(impl, /starts_at\s*-\s*interval '4 hours'/i);
   assert.match(impl, /starts_at\s*-\s*interval '1 hour'/i);
+  assert.match(impl, /America\/Denver/i);
+  assert.doesNotMatch(impl, /ends_at[\s\S]{0,120}\+\s*interval '4 hours'/i);
   assert.match(impl, /lower\(p_status\)\s*=\s*'checked_in'/i);
   assert.match(impl, /existing_checkin\.arrived_at\s+is\s+not\s+null/i);
   assert.match(impl, /if v_patient_access and not v_staff_access/i);

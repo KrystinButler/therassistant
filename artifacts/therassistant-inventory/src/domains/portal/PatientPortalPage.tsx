@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { Link } from "wouter";
 
 import { StatusBadge } from "../../components/status-badge";
+import { useAuth } from "../../auth/auth-context";
 import { dateTime, money } from "../../lib/format";
 import { PatientMessagesPanel } from "./PatientMessagesPanel";
 import { PatientPortalMobileNavigation, PatientPortalNavigation } from "./PatientPortalNavigation";
@@ -29,6 +30,7 @@ function recordOf(value: unknown): Record<string, unknown> {
 }
 
 export function PatientPortalPage() {
+  const { signOut } = useAuth();
   const [data, setData] = useState<PortalData | null>(null);
   const [loading, setLoading] = useState(true);
   const [working, setWorking] = useState<string | null>(null);
@@ -153,6 +155,7 @@ export function PatientPortalPage() {
         <span className="pj-care-message">Care today. A healthier tomorrow.</span>
         <span className="pj-avatar">{firstName(data.patient).slice(0, 1).toUpperCase()}</span>
         <span className="pj-user"><strong>{patientDisplayName}</strong><small>Patient Portal</small></span>
+        <button type="button" className="thera-action secondary" onClick={() => void signOut()}>Sign out</button>
       </div>
     </header>
 

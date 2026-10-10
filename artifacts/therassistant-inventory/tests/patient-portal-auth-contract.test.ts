@@ -239,3 +239,13 @@ test("portal repository reads through the narrow aggregate RPC", () => {
   assert.match(source, /get_my_patient_portal_data/);
   assert.doesNotMatch(source, /portalSelect/);
 });
+
+test("active patient portal exposes a real logout action", () => {
+  const page = readFileSync(
+    fileURLToPath(new URL("../src/domains/portal/PatientPortalPage.tsx", import.meta.url)),
+    "utf8",
+  );
+  assert.match(page, /useAuth/);
+  assert.match(page, /signOut/);
+  assert.match(page, />Sign out</);
+});

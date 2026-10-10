@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { PORTAL_ACTIVATE, PORTAL_HOME, PORTAL_LOGIN, isPatientPortalPath, rootPatientPortalDestination } from "../src/domains/portal/routes";
+import { PORTAL_ACTIVATE, PORTAL_HOME, PORTAL_LOGIN, isPatientPortalPath, rootPatientPortalDestination } from "../src/domains/portal/routes.ts";
 
 test("staff navigation exposes the actual patient portal in a separate tab",()=>{
   const shell=readFileSync(new URL("../src/components/app-shell.tsx",import.meta.url),"utf8");
