@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { buildPatientPortalData, buildJournalEntryValues, getPortalArrivalAvailability, isPortalAppointmentAvailable, planCheckInUpdate } from "../src/domains/portal/workflow.ts";
+import { buildPatientPortalData, buildJournalEntryValues, getPortalArrivalAvailability, getPortalArrivalStep, isPortalAppointmentAvailable, planCheckInUpdate } from "../src/domains/portal/workflow.ts";
 
 test("portal returns only patient-facing data", () => {
   const result = buildPatientPortalData({
@@ -25,16 +25,31 @@ test("portal returns only patient-facing data", () => {
 });
 
 
-
-test("same-day appointment remains available after its start time", () => {
+test("same-day scheduled appointment remains actionable through the service date", () => {
   const appointment = {
     id: "appt-current",
-    starts_at: "2026-09-29T18:00:00Z",
-    ends_at: "2026-09-29T19:00:00Z",
+    starts_at: "2026-09-29T15:00:00Z",
+    ends_at: "2026-09-29T16:00:00Z",
     appointment_status: "scheduled",
   };
-  assert.equal(isPortalAppointmentAvailable(appointment, new Date("2026-09-29T18:15:00Z")), true);
-  assert.equal(isPortalAppointmentAvailable(appointment, new Date("2026-09-29T23:01:00Z")), false);
+  assert.equal(isPortalAppointmentAvailable(appointment, new Date("2026-09-29T15:15:00Z")), true);
+  assert.equal(isPortalAppointmentAvailable(appointment, new Date("2026-09-30T03:30:00Z")), true);
+  assert.equal(isPortalAppointmentAvailable(appointment, new Date("2026-09-30T07:00:00Z")), false);
+});
+
+test("late same-day arrival skips on-my-way and allows direct arrival", () => {
+  const appointment = {
+    id: "appt-current",
+    starts_at: "2026-09-29T15:00:00Z",
+    ends_at: "2026-09-29T16:00:00Z",
+    appointment_status: "scheduled",
+  };
+  const now = new Date("2026-09-30T03:30:00Z");
+  assert.deepEqual(
+    getPortalArrivalAvailability(appointment, now),
+    { onMyWay: false, arrival: true },
+  );
+  assert.equal(getPortalArrivalStep(appointment, {}, now), "arrived");
 });
 
 test("completed and cancelled appointments are not patient check-in eligible", () => {
