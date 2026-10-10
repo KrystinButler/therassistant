@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 
-import { getEncounterServiceFee } from "../encounters/repository";
+import { getEncounterServiceFee, type EncounterServiceFee } from "../encounters/repository";
 import {
   procedureCodeReferenceSummary,
   searchProcedureCodes,
@@ -12,6 +12,7 @@ type Props = {
   disabled?: boolean;
   serviceDate?: string;
   onSelect: (result: ProcedureCodeSearchResult) => void;
+  onFeeResolved?: (fee: EncounterServiceFee | null, replaceExisting: boolean) => void;
 };
 
 function currentEncounterId() {
@@ -20,30 +21,23 @@ function currentEncounterId() {
   return match ? decodeURIComponent(match[1]) : "";
 }
 
-function setControlledInputValue(input: HTMLInputElement, value: string) {
-  const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
-  if (setter) setter.call(input, value);
-  else input.value = value;
-  input.dispatchEvent(new Event("input", { bubbles: true }));
-}
-
-async function populateEncounterCharge(code: string, serviceDate?: string, replaceExisting = false) {
-  if (typeof document === "undefined") return;
+async function resolveEncounterFee(
+  code: string,
+  serviceDate: string | undefined,
+  onFeeResolved: ((fee: EncounterServiceFee | null, replaceExisting: boolean) => void) | undefined,
+  replaceExisting = false,
+) {
+  if (!onFeeResolved) return;
   const encounterId = currentEncounterId();
-  const chargeInput = document.getElementById("encounter-charge-amount");
-  if (!encounterId || !(chargeInput instanceof HTMLInputElement)) return;
-  if (!replaceExisting && chargeInput.value.trim()) return;
+  if (!encounterId) return;
 
   try {
-    const fee = await getEncounterServiceFee(encounterId, code, "", serviceDate);
-    if (!fee) return;
-    setControlledInputValue(chargeInput, (fee.rateCents / 100).toFixed(2));
+    onFeeResolved(await getEncounterServiceFee(encounterId, code, "", serviceDate), replaceExisting);
   } catch {
-    // A missing/unavailable fee leaves the charge editable for manual entry.
+    onFeeResolved(null, replaceExisting);
   }
 }
-
-export function ProcedureCodeSearchInput({ code, disabled = false, serviceDate, onSelect }: Props) {
+export function ProcedureCodeSearchInput({ code, disabled = false, serviceDate, onSelect, onFeeResolved }: Props) {
   const [query, setQuery] = useState(code);
   const [results, setResults] = useState<ProcedureCodeSearchResult[]>([]);
   const [searching, setSearching] = useState(false);
@@ -58,7 +52,7 @@ export function ProcedureCodeSearchInput({ code, disabled = false, serviceDate, 
   useEffect(() => {
     const exactCode = code.trim().toUpperCase();
     if (/^[A-Z0-9]{4,5}$/.test(exactCode)) {
-      void populateEncounterCharge(exactCode, serviceDate, false);
+      void resolveEncounterFee(exactCode, serviceDate, onFeeResolved, false);
     }
   }, [code, serviceDate]);
 
@@ -122,7 +116,7 @@ export function ProcedureCodeSearchInput({ code, disabled = false, serviceDate, 
 
   function choose(result: ProcedureCodeSearchResult) {
     onSelect(result);
-    void populateEncounterCharge(result.code, serviceDate, true);
+    void resolveEncounterFee(result.code, serviceDate, onFeeResolved, true);
     setSelectedReference(result);
     setReferenceChecked(true);
     setQuery(result.code);
@@ -154,7 +148,7 @@ export function ProcedureCodeSearchInput({ code, disabled = false, serviceDate, 
               descriptionSource: "",
             };
             onSelect(selected);
-            void populateEncounterCharge(selected.code, serviceDate, true);
+            void resolveEncounterFee(selected.code, serviceDate, onFeeResolved, true);
           }
         }}
       />

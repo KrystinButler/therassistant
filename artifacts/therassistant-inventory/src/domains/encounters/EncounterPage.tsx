@@ -61,14 +61,6 @@ const noteLayouts: Record<string, { title: string; sections: string[] }> = {
  medication_management: { title: "Medication Management Note", sections: ["Symptoms", "Adherence", "Side effects", "Mental status", "Risk assessment", "Medication plan"] },
  other: { title: "Clinical Note", sections: ["Reason for visit", "Findings", "Intervention", "Response", "Plan"] },
 };
-function sessionMinutes(start: string, end: string): number | null {
- if (!start || !end) return null;
- const [sh, sm] = start.split(":").map(Number);
- const [eh, em] = end.split(":").map(Number);
- const minutes = eh * 60 + em - sh * 60 - sm;
- return Number.isFinite(minutes) && minutes > 0 && minutes <= 1440 ? minutes : null;
-}
-
 function personName(row?: Record<string, any> | null) {
   if (!row) return "—";
   return [row.first_name, row.last_name].filter(Boolean).join(" ") || "—";
@@ -109,9 +101,6 @@ export function EncounterPage() {
   const [message, setMessage] = useState<string | null>(null);
   const [noteText, setNoteText] = useState("");
   const [noteType, setNoteType] = useState("psychotherapy");
-  const [psychStart, setPsychStart] = useState("");
-  const [psychStop, setPsychStop] = useState("");
-  const [showTimeAdjustment, setShowTimeAdjustment] = useState(false);
   const [goalAddressed, setGoalAddressed] = useState("");
   const [diagnosisCode, setDiagnosisCode] = useState("");
   const [diagnosisDescription, setDiagnosisDescription] = useState("");
@@ -144,12 +133,7 @@ export function EncounterPage() {
       const fastCharting = await getFastChartingContext(String(result.encounter.client_id ?? ""), encounterId, note?.id ? String(note.id) : undefined);
       setSmartPhrases(fastCharting.phrases);
       const initialSelections = fastCharting.current?.selections ?? emptyStructuredSelections();
-      const plannedSession = scheduledSessionTime(result.appointment);
-      // The schedule is context, never evidence of the psychotherapy actually delivered.
       setStructuredSelections(initialSelections);
-      setPsychStart(initialSelections.psychotherapyStartTime ?? plannedSession?.start ?? "");
-      setPsychStop(initialSelections.psychotherapyStopTime ?? plannedSession?.end ?? "");
-      setShowTimeAdjustment(false);
       setCarryForwardContext(fastCharting.current?.carryForwardContext ?? {});
       setPriorStructuredContext(fastCharting.prior);
       setNoteText(String(note?.note_text ?? ""));
@@ -255,8 +239,6 @@ export function EncounterPage() {
   }
 
   async function refreshEncounterTreatmentPlans(goalText?: string, focusId?: string) {
-    // Update only the treatment-plan slice. Reloading the whole encounter would
-    // overwrite unsaved clinical documentation and may overfetch journal rows.
     const plans = await getTreatmentPlanWorkspace(String(data?.encounter.client_id ?? ""));
     setData((current) => current ? {
       ...current,
@@ -390,6 +372,11 @@ export function EncounterPage() {
       noteRef.current?.focus({ preventScroll: true });
       return;
     }
+    if (noteHasUnsavedText) {
+      setError("Save the note before signing. Sign & Lock only signs the saved clinical record.");
+      noteRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+      return;
+    }
     if (!signatureText.trim()) {
       setError("Enter the rendering provider's signature before signing.");
       signatureRef.current?.focus();
@@ -399,31 +386,26 @@ export function EncounterPage() {
       setError("This encounter has no rendering provider. Assign a provider before signing.");
       return;
     }
-    if (!data.diagnoses.some(row => String(row.diagnosis_code ?? "").trim()) || !data.serviceLines.length || data.serviceLines.some(row => !String(row.cpt_hcpcs_code ?? "").trim())) {
-      setError("Add the visit diagnosis and procedure code before signing. You can save the note as a draft.");
+    const noteId = String(data.notes[0]?.id ?? "");
+    if (!noteId) {
+      setError("Save the note before signing.");
       return;
     }
     setSaving(true);
     setError(null);
     setMessage(null);
     try {
-      const providerId = String(data?.encounter.provider_id ?? "");
-      const timeStatement = noteType === "psychotherapy" && actualTimeConfirmed
-        ? `Actual face-to-face psychotherapy time: ${structuredSelections.psychotherapyMinutes} minutes${structuredSelections.psychotherapyTimeSource === "actual_start_stop" && structuredSelections.psychotherapyStartTime && structuredSelections.psychotherapyStopTime
-          ? ` (${structuredSelections.psychotherapyStartTime}–${structuredSelections.psychotherapyStopTime})`
-          : " (provider confirmed scheduled duration matched the actual service)"}.`
-        : "";
-      const signedNoteText = timeStatement && !/actual (?:face-to-face )?psychotherapy time:/i.test(noteText)
-        ? `${noteText.trim()}\n\n${timeStatement}`
-        : noteText;
-      const saved = await saveClinicalNote(encounterId, { noteType, noteText: signedNoteText, goalAddressed, structuredSelections, generatedNarrative, carryForwardContext });
-      const result = await signEncounterNote(encounterId, providerId, signatureText, saved.id);
+      const providerId = String(data.encounter.provider_id);
+      const result = await signEncounterNote(encounterId, providerId, signatureText, noteId);
       if (!result.ok) {
         setError(result.details?.length ? `${result.message} ${result.details.join(" ")}` : result.message);
         return;
       }
-      setData((current) => current ? { ...current,
-        notes: [{ ...saved, note_status: "signed", locked_at: result.value.signedAt }, ...current.notes.filter((row) => row.id !== saved.id)],
+      setData((current) => current ? {
+        ...current,
+        notes: current.notes.map((row) => String(row.id) === noteId
+          ? { ...row, note_status: "signed", locked_at: result.value.signedAt }
+          : row),
       } : current);
       setMessage(result.value.billingPending
         ? "Clinical note signed and locked. Billing follow-up is pending in Work Center; you do not need to sign again."
@@ -435,7 +417,6 @@ export function EncounterPage() {
       setSaving(false);
     }
   }
-
   if (loading && !data) return <div className="thera-state">Loading encounter...</div>;
   if (error && !data) return <div className="thera-state error">{error}</div>;
   if (!data) return <div className="thera-state error">Encounter not found.</div>;
@@ -466,8 +447,6 @@ export function EncounterPage() {
       )
     : null;
 
-  // A check-in must belong to this exact scheduled visit. Never import a
-  // different visit’s answers into an unscheduled encounter.
   const currentCheckin = encounter.appointment_id
     ? data.checkins.find((row) => String(row.appointment_id ?? "") === String(encounter.appointment_id)) ?? null
     : null;
@@ -487,64 +466,11 @@ export function EncounterPage() {
   const noteLayout = noteLayouts[noteType] ?? noteLayouts.other;
   const noteWordCount = noteText.trim() ? noteText.trim().split(/\s+/).length : 0;
   const noteHasUnsavedText = noteText !== String(note?.note_text ?? "");
-  const scheduleTime = scheduledSessionTime(data.appointment);
-  const calculatedMinutes = structuredSelections.psychotherapyMinutes;
-  const actualTimeConfirmed = calculatedMinutes !== null
-    && (structuredSelections.psychotherapyTimeSource === "confirmed_schedule"
-      || structuredSelections.psychotherapyTimeSource === "actual_start_stop");
-  function confirmScheduledTime() {
-    if (!scheduleTime) return;
-    setPsychStart(scheduleTime.start); setPsychStop(scheduleTime.end);
-    setStructuredSelections((current) => ({
-      ...current, psychotherapyMinutes: scheduleTime.minutes,
-      psychotherapyTimeSource: "confirmed_schedule",
-      psychotherapyStartTime: scheduleTime.start, psychotherapyStopTime: scheduleTime.end,
-    }));
-  }
-  function updateSessionTime(start: string, stop: string) {
-    const minutes = sessionMinutes(start, stop);
-    setPsychStart(start); setPsychStop(stop);
-    setStructuredSelections((current) => ({
-      ...current, psychotherapyMinutes: minutes,
-      psychotherapyTimeSource: minutes === null ? undefined : "actual_start_stop",
-      psychotherapyStartTime: start || null, psychotherapyStopTime: stop || null,
-    }));
-  }
   function changeNoteType(value: string) {
     setNoteType(value);
     if (["assessment", "intake", "psychotherapy"].includes(value)) setStructuredSelections((current) => ({ ...current, templateType: value === "psychotherapy" ? "standard_therapy" : "intake" }));
   }
   const visitFocus = preVisit.focus || goalAddressed || activeGoalText || "No patient focus was submitted for this visit.";
-
-  const completionChecks = [
-    {
-      label: "Clinical note",
-      status: noteText.trim() ? "pass" : "attention",
-      detail: noteText.trim() ? "Documentation entered." : "Clinical documentation is still empty.",
-    },
-    {
-      label: "Diagnosis",
-      status: data.diagnoses.length ? "pass" : "attention",
-      detail: data.diagnoses.length ? `${data.diagnoses.length} diagnosis record(s) connected.` : "No encounter diagnosis is saved yet.",
-    },
-    {
-      label: "Coding / service",
-      status: data.serviceLines.length ? "pass" : "attention",
-      detail: data.serviceLines.length ? `${data.serviceLines.length} service line(s) connected.` : "No service line is saved yet.",
-    },
-    {
-      label: noteType === "psychotherapy" ? "Actual psychotherapy time" : "Scheduled visit time",
-      status: noteType === "psychotherapy" ? (actualTimeConfirmed ? "pass" : "attention") : (duration > 0 ? "pass" : "attention"),
-      detail: noteType === "psychotherapy"
-        ? actualTimeConfirmed
-          ? `${calculatedMinutes} actual psychotherapy minutes confirmed by the provider.`
-          : "Confirm actual psychotherapy time or enter actual start and stop. Billing follow-up is needed; signing remains available."
-        : duration > 0
-          ? `${duration} scheduled minutes available as planning context, not proof of billable time.`
-          : "Visit duration is not available from the appointment.",
-    },
-  ] as const;
-  const billingFollowUpCount = completionChecks.filter((check) => check.status !== "pass").length;
 
   function handleNoteChange(value: string, cursor: number) {
     const expansion = expandSmartPhraseAtCursor(value, cursor, smartPhrases);
@@ -768,11 +694,10 @@ export function EncounterPage() {
                 <div className="encounter-sign-row"><label><span className="thera-field-label">Rendering Provider Signature</span><input ref={signatureRef} className="thera-input" value={signatureText} onChange={(event) => setSignatureText(event.target.value)} placeholder="Provider signature" /></label>
                   <button type="button" className="thera-action" disabled={saving} onClick={() => void sign()}>{saving ? "Signing…" : "Sign & Lock Note"}</button></div>
                 {!noteText.trim() && <button type="button" className="thera-action secondary" onClick={() => { noteRef.current?.scrollIntoView({ behavior: "smooth", block: "center" }); noteRef.current?.focus({ preventScroll: true }); }}>Go to Note Editor</button>}
-                <p className="thera-table-subtext">Save Note keeps a draft. Add the visit diagnosis and procedure code before Sign & Lock. Eligibility verification does not hold billing.</p>
+                <p className="thera-table-subtext">Save Note stores the clinical draft. Sign & Lock signs only the saved note. Diagnosis, coding, and eligibility issues are handled in billing workflow and do not block clinical signature.</p>
               </>}
             </div>
           </div>
-          
           {signed && data.signatures[0] && <div className="thera-alert" style={{ marginTop: 12 }}>Signed {dateTime(String(data.signatures[0].signed_at ?? ""))} by {String(data.signatures[0].signature_text ?? "provider")}</div>}
         </section>
         <aside className={contextOpen ? "encounter-context-rail open" : "encounter-context-rail"}>
@@ -787,20 +712,11 @@ export function EncounterPage() {
             {contextTab === "lastVisit" && <><div className="encounter-context-heading"><div><span>LAST VISIT</span><h3>Prior Session Context</h3></div></div><div className="encounter-context-section"><Field label="Current visit focus" value={visitFocus} /><Field label="Goal / objective" value={goalAddressed || activeGoalText || "—"} />{preVisit.hasSubmittedPreVisit && <div className="encounter-context-source"><strong>Pre-Visit Check-In</strong>{preVisit.focus && <p>{preVisit.focus}</p>}{preVisit.mood && <small>Since last visit: {preVisit.mood}</small>}{!signed && preVisitInsert && <button type="button" className="thera-action secondary" onClick={importPreVisit} disabled={preVisitAlreadyImported}>{preVisitAlreadyImported ? "Imported" : "Cite Check-In"}</button>}</div>}<div className="encounter-context-source"><strong>Previous clinical note</strong><p>{data.notes.length > 1 ? String(data.notes[1]?.note_text ?? "No prior note text available.") : "No earlier signed note is available in this encounter record."}</p></div></div></>}
             {contextTab === "treatment" && <><div className="encounter-context-heading encounter-plan-heading" id="encounter-treatment-plans"><div><span>GOLDEN THREAD</span><h3>Treatment Plan</h3></div><div className="encounter-plan-heading-actions">{treatmentPlanReadiness && <StatusBadge value={treatmentPlanReadiness.code} />}<button type="button" className="thera-action secondary" aria-label="Create treatment plan for this patient" onClick={() => setPlanComposer({ mode: "plan" })}>+ New Plan</button></div></div><div className="encounter-context-section encounter-treatment-section">
                 {data.treatmentPlans.length > 1 && <label className="encounter-plan-switcher">Select plan<select className="thera-input" value={String(currentTreatmentPlan?.id ?? "")} onChange={(event) => setFocusedTreatmentPlanId(event.target.value)}>{data.treatmentPlans.map((plan) => <option value={String(plan.id)} key={String(plan.id)}>{String(plan.plan_text ?? "Treatment Plan").slice(0, 58)} · {String(plan.status ?? "draft")}</option>)}</select></label>}
-                {currentTreatmentPlan ? <div className="encounter-context-source">
-                  <strong>{String(currentTreatmentPlan.plan_text ?? "Treatment plan")}</strong>
-                  <small>Effective {shortDate(String(currentTreatmentPlan.effective_date ?? ""))} · {String(currentTreatmentPlan.status ?? "draft").replaceAll("_", " ")}</small>
-                  {Boolean(currentTreatmentPlan.review_due_date) && <small>Review due {shortDate(String(currentTreatmentPlan.review_due_date))}</small>}
-                </div> : <div className="thera-empty">No treatment plan on file. Create a draft here without leaving the encounter.</div>}
+                {currentTreatmentPlan ? <div className="encounter-context-source"><strong>{String(currentTreatmentPlan.plan_text ?? "Treatment plan")}</strong><small>Effective {shortDate(String(currentTreatmentPlan.effective_date ?? ""))} · {String(currentTreatmentPlan.status ?? "draft").replaceAll("_", " ")}</small>{Boolean(currentTreatmentPlan.review_due_date) && <small>Review due {shortDate(String(currentTreatmentPlan.review_due_date))}</small>}</div> : <div className="thera-empty">No treatment plan on file. Create a draft here without leaving the encounter.</div>}
                 {activeGoals.map((goal) => { const goalText = displayText(goal, ["goal_text", "description", "goal", "title"], "Goal"); return <div className="encounter-context-goal" key={goal.id}><div><strong>{goalText}</strong><small>{String(goal.goal_status ?? goal.status ?? "active").replaceAll("_", " ")}</small></div>{!signed && <button type="button" onClick={() => injectIntoNote(`\nProgress regarding treatment goal: ${goalText}\nIntervention: \nPatient response/progress: \n`)}>Cite →</button>}</div>; })}
                 {!activeGoals.length && currentTreatmentPlan && <p className="encounter-plan-empty">No goals recorded for the current plan.</p>}
                 {currentTreatmentPlan && <button type="button" className="thera-action secondary encounter-add-plan-goal" onClick={() => setPlanComposer({ mode: "goal", planId: String(currentTreatmentPlan.id) })}>+ Add Goal / Objective</button>}
-                {planComposer && <EncounterTreatmentPlanComposer key={planComposer.mode + (planComposer.planId ?? "")}
-                  mode={planComposer.mode} existingPlanId={planComposer.planId}
-                  patientId={String(encounter.client_id)} defaultProviderId={String(encounter.provider_id ?? "")} serviceDate={serviceDate}
-                  onCancel={() => setPlanComposer(null)}
-                  onPlanPersisted={async (planId) => { await refreshEncounterTreatmentPlans(undefined, planId); }}
-                  onSaved={async (planId, goalText) => { await refreshEncounterTreatmentPlans(goalText, planId); setPlanComposer(null); }} />}
+                {planComposer && <EncounterTreatmentPlanComposer key={planComposer.mode + (planComposer.planId ?? "")} mode={planComposer.mode} existingPlanId={planComposer.planId} patientId={String(encounter.client_id)} defaultProviderId={String(encounter.provider_id ?? "")} serviceDate={serviceDate} onCancel={() => setPlanComposer(null)} onPlanPersisted={async (planId) => { await refreshEncounterTreatmentPlans(undefined, planId); }} onSaved={async (planId, goalText) => { await refreshEncounterTreatmentPlans(goalText, planId); setPlanComposer(null); }} />}
               </div></>}
             {contextTab === "journal" && <><div className="encounter-context-heading"><div><span>PATIENT CONTEXT</span><h3>Journal</h3></div></div><div className="encounter-context-section">{sharedJournal ? <div className="encounter-context-source"><Field label="Entry Date" value={shortDate(String(sharedJournal.entry_date ?? sharedJournal.created_at ?? ""))} /><p>{String(sharedJournal.entry_text ?? "")}</p>{!signed && journalInsert && <button type="button" className="thera-action secondary" onClick={importJournal}>Cite Journal</button>}</div> : <div className="thera-empty">No journal entry is shared with the provider.</div>}</div></>}
             {contextTab === "documents" && <><div className="encounter-context-heading"><div><span>CHART CONTEXT</span><h3>Documents</h3></div></div><div className="encounter-context-section">{data.documents.length ? data.documents.slice(0,12).map((document) => <div className="encounter-document-row" key={document.id}><div><strong>{String(document.file_name ?? "Document")}</strong><small>{String(document.document_type ?? "other").replaceAll("_", " ")} · {shortDate(String(document.created_at ?? ""))}</small></div><StatusBadge value={String(document.document_status ?? "uploaded")} /></div>) : <div className="thera-empty">No patient documents are indexed.</div>}<Link href={`/clients/${String(encounter.client_id)}`} className="thera-action secondary">Open Patient Documents</Link></div></>}
@@ -811,65 +727,14 @@ export function EncounterPage() {
       <div className="encounter-lower-grid">
         <section className="thera-card" id="encounter-diagnoses"><div className="thera-card-header"><div><div className="thera-eyebrow">CLINICAL CONTEXT</div><h2>Diagnoses</h2></div></div>{data.diagnoses.length > 0 && <div className="thera-table-wrap"><table className="thera-table"><thead><tr><th>Code</th><th>Description</th><th>Primary</th></tr></thead><tbody>{data.diagnoses.map((diagnosis) => <tr key={diagnosis.id}><td><strong>{String(diagnosis.diagnosis_code)}</strong></td><td>{String(diagnosis.diagnosis_description ?? "—")}</td><td>{diagnosis.is_primary ? "Yes" : "No"}</td></tr>)}</tbody></table></div>}{(!signed || data.claims.length === 0) && <div className="encounter-compact-form">{signed && <p className="thera-table-subtext">Add a billing diagnosis without unlocking or altering the signed clinical note. Verify that the diagnosis is supported by the documented assessment.</p>}<Icd10SearchInput code={diagnosisCode} description={diagnosisDescription} serviceDate={serviceDate} onSelect={(result) => { setDiagnosisCode(result.code); if (result.name) setDiagnosisDescription(result.name); }} /><input className="thera-input" placeholder="Diagnosis description" value={diagnosisDescription} onChange={(event) => setDiagnosisDescription(event.target.value)} /><button type="button" className="thera-action secondary" disabled={saving || !diagnosisCode.trim()} onClick={() => void addDiagnosis()}>+ Add Diagnosis</button></div>}</section>
         <section className="thera-card" id="encounter-coding-service">
-          <div className="thera-card-header split"><div><div className="thera-eyebrow">CLAIM CORRECTIONS</div><h2>Coding & Service</h2><p>Correct rejected or held claim fields in the revenue-cycle workqueue; signed clinical notes stay locked.</p></div><div className="thera-filter-row">{data.chargeLines.some((charge) => charge.charge_status === "blocked") && <button type="button" className="thera-action secondary" disabled={saving} onClick={() => void withSave(async () => {
-            const result = await createChargeFromEncounter(encounterId);
-            if (!result.ok) throw new Error(result.details?.join(" ") || result.message);
-          }, "Existing charges reconciled against the corrected service lines.")}>Reconcile Charges</button>}<button type="button" className="thera-action secondary" disabled={saving} onClick={() => void withSave(async () => {
-             const result = await routeEncounterToBilling(encounterId);
-             if (!result.ok && !result.blocked) throw new Error(result.message);
-           }, "Billing readiness rechecked against current encounter data.", true)}>Recheck Billing</button><Link href="/rejections" className="thera-action secondary">Open Rejections →</Link></div></div>
+          <div className="thera-card-header split"><div><div className="thera-eyebrow">CLAIM CORRECTIONS</div><h2>Coding & Service</h2><p>Correct rejected or held claim fields in the revenue-cycle workqueue; signed clinical notes stay locked.</p></div><div className="thera-filter-row">{data.chargeLines.some((charge) => charge.charge_status === "blocked") && <button type="button" className="thera-action secondary" disabled={saving} onClick={() => void withSave(async () => { const result = await createChargeFromEncounter(encounterId); if (!result.ok) throw new Error(result.details?.join(" ") || result.message); }, "Existing charges reconciled against the corrected service lines.")}>Reconcile Charges</button>}<button type="button" className="thera-action secondary" disabled={saving} onClick={() => void withSave(async () => { const result = await routeEncounterToBilling(encounterId); if (!result.ok && !result.blocked) throw new Error(result.message); }, "Billing readiness rechecked against current encounter data.", true)}>Recheck Billing</button><Link href="/rejections" className="thera-action secondary">Open Rejections →</Link></div></div>
           <div className="encounter-claim-actions" role="group" aria-label="Correct and release claims">
-            {data.claims.length ? data.claims.map((claim) => {
-              const status = String(claim.claim_status ?? "draft");
-              const rejected = ["rejected", "validation_failed"].includes(status);
-              const ready = ["draft", "ready_for_validation", "ready_for_batch"].includes(status);
-              const href = rejected ? `/rejections?claim=${encodeURIComponent(String(claim.id))}`
-                : ready ? `/billing/charges?tab=unbatched&claim=${encodeURIComponent(String(claim.id))}`
-                : `/claims?claim=${encodeURIComponent(String(claim.id))}`;
-              return <div key={String(claim.id)} className="encounter-linked-claim">
-                <div><strong>{String(claim.patient_control_number ?? "Claim")}</strong><StatusBadge value={status} /></div>
-                <Link className="thera-action secondary" href={href}>{rejected ? "Correct Held Claim" : ready ? "Validate / Batch Claim" : "Work Claim"} →</Link>
-              </div>;
-            }) : <div className="encounter-linked-claim"><span>No claim has been generated for this encounter.</span><Link className="thera-action secondary" href={`/billing/charges?tab=blocked&encounter=${encodeURIComponent(encounterId)}`}>Review Billing Issues →</Link></div>}
+            {data.claims.length ? data.claims.map((claim) => { const status = String(claim.claim_status ?? "draft"); const rejected = ["rejected", "validation_failed"].includes(status); const ready = ["draft", "ready_for_validation", "ready_for_batch"].includes(status); const href = rejected ? `/rejections?claim=${encodeURIComponent(String(claim.id))}` : ready ? `/billing/charges?tab=unbatched&claim=${encodeURIComponent(String(claim.id))}` : `/claims?claim=${encodeURIComponent(String(claim.id))}`; return <div key={String(claim.id)} className="encounter-linked-claim"><div><strong>{String(claim.patient_control_number ?? "Claim")}</strong><StatusBadge value={status} /></div><Link className="thera-action secondary" href={href}>{rejected ? "Correct Held Claim" : ready ? "Validate / Batch Claim" : "Work Claim"} →</Link></div>; }) : <div className="encounter-linked-claim"><span>No claim has been generated for this encounter.</span><Link className="thera-action secondary" href={`/billing/charges?tab=blocked&encounter=${encodeURIComponent(encounterId)}`}>Review Billing Issues →</Link></div>}
             <p>Corrections are made to the actual claim in revenue-cycle workqueues, never by changing a signed clinical note.</p>
           </div>
-          <div className="encounter-coding-summary">
-            <Field label="Scheduled Time" value={duration ? `${duration} minutes` : "Not available"} />
-            <Field label="Visit Location" value={String(encounter.location_type ?? "—").replaceAll("_", " ")} />
-            <Field label="Current POS" value={placeOfService || "—"} />
-            <Field label="Payer" value={String(data.payer?.name ?? "—")} />
-          </div>
-          <div className="encounter-saved-services">
-            <div className="thera-card-header"><div><h3>Recorded service lines ({data.serviceLines.length})</h3><p>Unclaimed source lines—including ready-for-claim charges—can be edited or voided after signing. Submitted claims and posted balances remain locked.</p></div></div>
-            {data.serviceLines.length ? <div className="thera-table-wrap"><table className="thera-table">
-              <thead><tr><th>CPT / HCPCS</th><th>Modifier</th><th>Units</th><th>POS</th><th>Charge</th>{canEditUnbilledServices && <th>Actions</th>}</tr></thead>
-              <tbody>{data.serviceLines.map((line) => <tr key={String(line.id)}>
-                <td><strong>{String(line.cpt_hcpcs_code ?? "—")}</strong></td><td>{String(line.modifier1 ?? "—")}</td>
-                <td>{String(line.units ?? 1)}</td><td>{String(line.place_of_service_code ?? "—")}</td>
-                <td>{Number(line.charge_amount_cents ?? 0) > 0 ? money(Number(line.charge_amount_cents)) : <><span className="encounter-service-warning">Missing charge</span>{canEditUnbilledServices && !billedLineIds.has(String(line.id)) && <button type="button" className="thera-link" disabled={saving} onClick={() => { editServiceLine(line); window.setTimeout(() => document.getElementById("encounter-charge-amount")?.focus(), 0); }}>Fix amount →</button>}</>}</td>
-                {canEditUnbilledServices && <td><div className="thera-filter-row">
-                  <button type="button" className="thera-action secondary" disabled={saving || billedLineIds.has(String(line.id))} onClick={() => editServiceLine(line)}>Edit</button>
-                  <button type="button" className="thera-action secondary" disabled={saving || !removableLineIds.has(String(line.id))} onClick={() => void removeServiceLine(String(line.id))}>Remove</button>{billedLineIds.has(String(line.id)) && <Link className="thera-link" href="/billing/charges">Open charge →</Link>}
-                </div></td>}
-              </tr>)}</tbody>
-            </table></div> : <div className="thera-empty">No service lines recorded for this visit.</div>}
-          </div>
-          {canEditUnbilledServices && <div className="encounter-service-editor" id="encounter-service-editor">
-            <div className="thera-card-header split"><div><h3>{editingServiceLineId ? "Edit service line" : "Add service line"}</h3><p>Enter the code, units, place of service and a charge greater than $0.</p></div>
-              {editingServiceLineId && <button className="thera-action secondary" type="button" disabled={saving} onClick={resetServiceEditor}>Cancel edit</button>}
-            </div>
-            <div className="encounter-service-form">
-              <label>Procedure code <ProcedureCodeSearchInput code={serviceCode} serviceDate={serviceDate} onSelect={(result) => setServiceCode(result.code)} /></label>
-              <label>Modifier (optional) <input className="thera-input" maxLength={2} placeholder="e.g., 95" value={modifier1} onChange={(event) => setModifier1(event.target.value.toUpperCase())} /></label>
-              <label>Units <input aria-label="Service units" className="thera-input" type="number" min={1} step={1} value={units} onChange={(event) => setUnits(Number(event.target.value))} /></label>
-              <label>Place of service <PlaceOfServiceSearchInput code={placeOfService} onSelect={(result) => setPlaceOfService(result.code)} /></label>
-              <label>Charge ($) <input id="encounter-charge-amount" aria-label="Service charge" className="thera-input" type="number" step="0.01" min="0.01" placeholder="0.00" value={chargeDollars} onChange={(event) => setChargeDollars(event.target.value)} /></label>
-              <div className="encounter-service-submit"><button type="button" className="thera-action" disabled={saving} onClick={() => void addServiceLine()}>
-                {saving ? "Saving…" : editingServiceLineId ? "Save Service Line" : "+ Add Service Line"}
-              </button></div>
-            </div>
-            {serviceError && <div className="thera-state error" role="alert" style={{ marginTop: 9 }}>{serviceError}</div>}
-          </div>}
+          <div className="encounter-coding-summary"><Field label="Scheduled Time" value={duration ? `${duration} minutes` : "Not available"} /><Field label="Visit Location" value={String(encounter.location_type ?? "—").replaceAll("_", " ")} /><Field label="Current POS" value={placeOfService || "—"} /><Field label="Payer" value={String(data.payer?.name ?? "—")} /></div>
+          <div className="encounter-saved-services"><div className="thera-card-header"><div><h3>Recorded service lines ({data.serviceLines.length})</h3><p>Unclaimed source lines—including ready-for-claim charges—can be edited or voided after signing. Submitted claims and posted balances remain locked.</p></div></div>{data.serviceLines.length ? <div className="thera-table-wrap"><table className="thera-table"><thead><tr><th>CPT / HCPCS</th><th>Modifier</th><th>Units</th><th>POS</th><th>Charge</th>{canEditUnbilledServices && <th>Actions</th>}</tr></thead><tbody>{data.serviceLines.map((line) => <tr key={String(line.id)}><td><strong>{String(line.cpt_hcpcs_code ?? "—")}</strong></td><td>{String(line.modifier1 ?? "—")}</td><td>{String(line.units ?? 1)}</td><td>{String(line.place_of_service_code ?? "—")}</td><td>{Number(line.charge_amount_cents ?? 0) > 0 ? money(Number(line.charge_amount_cents)) : <><span className="encounter-service-warning">Missing charge</span>{canEditUnbilledServices && !billedLineIds.has(String(line.id)) && <button type="button" className="thera-link" disabled={saving} onClick={() => { editServiceLine(line); window.setTimeout(() => document.getElementById("encounter-charge-amount")?.focus(), 0); }}>Fix amount →</button>}</>}</td>{canEditUnbilledServices && <td><div className="thera-filter-row"><button type="button" className="thera-action secondary" disabled={saving || billedLineIds.has(String(line.id))} onClick={() => editServiceLine(line)}>Edit</button><button type="button" className="thera-action secondary" disabled={saving || !removableLineIds.has(String(line.id))} onClick={() => void removeServiceLine(String(line.id))}>Remove</button>{billedLineIds.has(String(line.id)) && <Link className="thera-link" href="/billing/charges">Open charge →</Link>}</div></td>}</tr>)}</tbody></table></div> : <div className="thera-empty">No service lines recorded for this visit.</div>}</div>
+          {canEditUnbilledServices && <div className="encounter-service-editor" id="encounter-service-editor"><div className="thera-card-header split"><div><h3>{editingServiceLineId ? "Edit service line" : "Add service line"}</h3><p>Enter the code, units, place of service and a charge greater than $0.</p></div>{editingServiceLineId && <button className="thera-action secondary" type="button" disabled={saving} onClick={resetServiceEditor}>Cancel edit</button>}</div><div className="encounter-service-form"><label>Procedure code <ProcedureCodeSearchInput code={serviceCode} serviceDate={serviceDate} onSelect={(result) => setServiceCode(result.code)} onFeeResolved={(fee, replaceExisting) => { if (fee) setChargeDollars((fee.rateCents / 100).toFixed(2)); else if (replaceExisting) setChargeDollars(""); }} /></label><label>Modifier (optional) <input className="thera-input" maxLength={2} placeholder="e.g., 95" value={modifier1} onChange={(event) => setModifier1(event.target.value.toUpperCase())} /></label><label>Units <input aria-label="Service units" className="thera-input" type="number" min={1} step={1} value={units} onChange={(event) => setUnits(Number(event.target.value))} /></label><label>Place of service <PlaceOfServiceSearchInput code={placeOfService} onSelect={(result) => setPlaceOfService(result.code)} /></label><label>Charge ($) <input id="encounter-charge-amount" aria-label="Service charge" className="thera-input" type="number" step="0.01" min="0.01" placeholder="0.00" value={chargeDollars} onChange={(event) => setChargeDollars(event.target.value)} /></label><div className="encounter-service-submit"><button type="button" className="thera-action" disabled={saving} onClick={() => void addServiceLine()}>{saving ? "Saving…" : editingServiceLineId ? "Save Service Line" : "+ Add Service Line"}</button></div></div>{serviceError && <div className="thera-state error" role="alert" style={{ marginTop: 9 }}>{serviceError}</div>}</div>}
         </section>
       </div>
     </>

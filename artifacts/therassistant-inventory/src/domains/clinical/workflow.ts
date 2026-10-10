@@ -50,11 +50,6 @@ export async function signNoteWorkflow(
   if (!noteText) {
     return blocked("note_text_missing", "Clinical note text is required before signing.");
   }
-  if (!["signed", "locked"].includes(String(state.note.note_status)) &&
-      (!state.diagnoses.some(row => String(row.diagnosis_code ?? "").trim()) ||
-       !state.serviceLines.length || state.serviceLines.some(row => !String(row.cpt_hcpcs_code ?? "").trim()))) {
-    return blocked("visit_not_coded", "Add the visit diagnosis and procedure code before signing. Save Note keeps your documentation as a draft.");
-  }
 
   let signed: { note_id: string; signed_at: string };
 
