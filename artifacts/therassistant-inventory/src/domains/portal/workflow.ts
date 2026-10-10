@@ -32,6 +32,14 @@ function isSameLocalServiceDate(left: Date, right: Date) {
   return serviceDateKey(left) === serviceDateKey(right);
 }
 
+function appointmentServiceDate(row: PortalRow) {
+  const explicit = String(row.service_date ?? "").trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(explicit)) return explicit;
+
+  const startsAt = new Date(String(row.starts_at ?? ""));
+  return Number.isFinite(startsAt.getTime()) ? serviceDateKey(startsAt) : "";
+}
+
 export function isPortalAppointmentAvailable(row: PortalRow, now = new Date()) {
   const status = String(row.appointment_status ?? "scheduled").toLowerCase();
   if (["cancelled", "no_show", "late_cancel", "completed", "rescheduled"].includes(status)) return false;
@@ -40,7 +48,7 @@ export function isPortalAppointmentAvailable(row: PortalRow, now = new Date()) {
   if (!Number.isFinite(startsAt.getTime())) return false;
   if (startsAt >= now) return true;
 
-  return isSameLocalServiceDate(startsAt, now);
+  return appointmentServiceDate(row) === serviceDateKey(now);
 }
 
 export function getPortalArrivalStep(row: PortalRow, checkin: PortalRow | Record<string, unknown>, now = new Date()): CheckInStep | null {
@@ -63,7 +71,7 @@ export function getPortalArrivalAvailability(row: PortalRow, now = new Date()) {
   if (!Number.isFinite(startsAt.getTime())) return { onMyWay: false, arrival: false };
 
   if (startsAt <= now) {
-    return isSameLocalServiceDate(startsAt, now)
+    return appointmentServiceDate(row) === serviceDateKey(now)
       ? { onMyWay: false, arrival: true }
       : { onMyWay: false, arrival: false };
   }
