@@ -8,7 +8,7 @@ import { PatientMessagesPanel } from "./PatientMessagesPanel";
 import { PatientPortalMobileNavigation, PatientPortalNavigation } from "./PatientPortalNavigation";
 import { downloadPortalDocument, getPatientPortalData, openPortalDocument, recordCheckIn, submitPortalChangeRequest, submitPortalScheduleChange, uploadPortalInsuranceCard } from "./repository";
 import { PORTAL_JOURNAL, portalCheckInPath } from "./routes";
-import { getPortalArrivalAvailability } from "./workflow";
+import { getPortalArrivalAvailability, getPortalArrivalStep } from "./workflow";
 import "./patient-journal.css";
 
 type PortalData = Awaited<ReturnType<typeof getPatientPortalData>>;
@@ -190,9 +190,9 @@ export function PatientPortalPage() {
         const checkedIn = Boolean(checkin?.checked_in_at);
         const arrived = Boolean(checkin?.arrived_at);
         const onMyWay = Boolean(checkin?.on_my_way_at);
-        const arrivalStep = checkedIn ? null : arrived ? "checked_in" : onMyWay ? "arrived" : "on_my_way";
-        const arrivalLabel = checkedIn ? "Checked In ✓" : arrived ? "Check In" : onMyWay ? "I Arrived" : "On My Way";
         const arrivalAvailability = getPortalArrivalAvailability(appointment);
+        const arrivalStep = getPortalArrivalStep(appointment, checkin ?? {});
+        const arrivalLabel = checkedIn ? "Checked In ✓" : arrived ? "Check In" : onMyWay ? "I Arrived" : arrivalStep === "arrived" ? "I Arrived" : "On My Way";
         const arrivalEnabled = arrivalStep === "on_my_way" ? arrivalAvailability.onMyWay : arrivalAvailability.arrival;
         const arrivalTimingText = !checkedIn && !arrivalEnabled
           ? arrivalStep === "on_my_way"
@@ -267,7 +267,6 @@ function ChangeRequestForm({ type, details, working, onDetails, onSubmit, onCanc
     <div className="thera-filter-row"><button type="button" className="thera-action" disabled={working || !details.trim()} onClick={onSubmit}>{working ? "Sending..." : "Send Update Request"}</button><button type="button" className="thera-action secondary" disabled={working} onClick={onCancel}>Cancel</button></div>
   </div>;
 }
-
 
 function ScheduleRequestForm({ type, details, working, onDetails, onSubmit, onCancel }: {
   type: "cancel" | "reschedule";
