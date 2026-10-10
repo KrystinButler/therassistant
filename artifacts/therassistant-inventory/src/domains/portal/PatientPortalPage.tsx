@@ -8,7 +8,7 @@ import { PatientMessagesPanel } from "./PatientMessagesPanel";
 import { PatientPortalMobileNavigation, PatientPortalNavigation } from "./PatientPortalNavigation";
 import { downloadPortalDocument, getPatientPortalData, openPortalDocument, recordCheckIn, submitPortalChangeRequest, submitPortalScheduleChange, uploadPortalInsuranceCard } from "./repository";
 import { PORTAL_JOURNAL, portalCheckInPath } from "./routes";
-import { getPortalArrivalAvailability, getPortalArrivalStep } from "./workflow";
+import { getPortalArrivalAvailability, getPortalArrivalStep, portalAppointmentDisplayStatus } from "./workflow";
 import "./patient-journal.css";
 
 type PortalData = Awaited<ReturnType<typeof getPatientPortalData>>;
@@ -205,7 +205,10 @@ export function PatientPortalPage() {
 
       <section id="appointment-history" className="thera-card thera-span-2">
         <div className="thera-card-header"><div><h2>Appointment History</h2><p>Recent completed, cancelled, rescheduled, and past appointments.</p></div></div>
-        {data.appointmentHistory.length ? <div className="thera-table-wrap"><table className="thera-table"><thead><tr><th>Date</th><th>Service</th><th>Location</th><th>Status</th></tr></thead><tbody>{data.appointmentHistory.slice(0, 12).map((appointment) => <tr key={appointment.id}><td>{dateTime(String(appointment.starts_at ?? ""))}</td><td>{String(appointment.service_type ?? "Appointment")}</td><td>{String(appointment.location_type ?? "—").replaceAll("_", " ")}</td><td><StatusBadge value={String(appointment.appointment_status ?? "scheduled")} /></td></tr>)}</tbody></table></div> : <div className="thera-empty">No appointment history yet.</div>}
+        {data.appointmentHistory.length ? <div className="thera-table-wrap"><table className="thera-table"><thead><tr><th>Date</th><th>Service</th><th>Location</th><th>Status</th></tr></thead><tbody>{data.appointmentHistory.slice(0, 12).map((appointment) => {
+          const displayStatus = portalAppointmentDisplayStatus(appointment);
+          return <tr key={appointment.id}><td>{dateTime(String(appointment.starts_at ?? ""))}</td><td>{String(appointment.service_type ?? "Appointment")}</td><td>{String(appointment.location_type ?? "—").replaceAll("_", " ")}</td><td><StatusBadge value={displayStatus} />{displayStatus === "check_in_closed" && <div className="thera-table-subtext">The service date has ended. The practice has not finalized this visit yet.</div>}</td></tr>;
+        })}</tbody></table></div> : <div className="thera-empty">No appointment history yet.</div>}
       </section>
 
       <section id="profile" className="thera-card"><div className="thera-card-header split"><div><h2>Demographics</h2><p>Review the information the practice has on file.</p></div><button type="button" className="thera-action secondary" onClick={() => { setChangeRequestType("demographics"); setChangeDetails(""); setNotice(null); }}>Report a Change</button></div><div className="thera-definition-grid"><Field label="Name" value={patientName(data.patient)} /><Field label="DOB" value={String(data.patient.date_of_birth ?? "—")} /><Field label="Phone" value={String(data.patient.phone ?? "—")} /><Field label="Email" value={String(data.patient.email ?? "—")} /><Field label="Address" value={[data.patient.address_line1, data.patient.city, data.patient.state, data.patient.postal_code].filter(Boolean).join(", ") || "—"} /></div>{changeRequestType === "demographics" && <ChangeRequestForm type="demographics" details={changeDetails} working={changeWorking} onDetails={setChangeDetails} onSubmit={() => void submitChangeRequest()} onCancel={() => { setChangeRequestType(null); setChangeDetails(""); }} />}</section>
