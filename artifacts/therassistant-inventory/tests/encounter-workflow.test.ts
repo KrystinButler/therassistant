@@ -51,7 +51,6 @@ test("starting the same appointment twice returns one encounter", async () => {
   const repo = encounterRepo();
   const first = await startEncounterWorkflow(repo, "appt-1");
   const second = await startEncounterWorkflow(repo, "appt-1");
-
   assert.equal(first.ok, true);
   assert.equal(second.ok, true);
   assert.equal(repo.encounters.length, 1);
@@ -62,7 +61,6 @@ test("starting the same appointment twice returns one encounter", async () => {
 test("payer readiness issues do not prevent encounter start", async () => {
   const repo = encounterRepo({ ready: false });
   const result = await startEncounterWorkflow(repo, "appt-1");
-
   assert.equal(result.ok, true);
   assert.equal(repo.encounters.length, 1);
   assert.equal(repo.appointmentStatus, "in_session");
@@ -81,7 +79,6 @@ test("cancelled, no-show, and rescheduled appointments cannot start encounters",
 test("completed appointments can still be documented when no encounter exists", async () => {
   const repo = encounterRepo({ appointmentStatus: "completed" });
   const result = await startEncounterWorkflow(repo, "appt-1");
-
   assert.equal(result.ok, true);
   assert.equal(repo.encounters.length, 1);
 });
@@ -127,27 +124,33 @@ function clinicalRepo(overrides: Record<string, unknown> = {}) {
 }
 
 test("signing requires clinical note text", async () => {
-  const repo = clinicalRepo({
-    note: { id: "note-1", note_text: "", note_status: "ready_for_signature" },
-  });
+  const repo = clinicalRepo({ note: { id: "note-1", note_text: "", note_status: "ready_for_signature" } });
   const result = await signNoteWorkflow(repo, "encounter-1", "provider-1", "Jamie Parker, LCSW");
-
   assert.equal(result.ok, false);
   assert.equal(repo.signatures.length, 0);
 });
 
-test("uncoded visits cannot be signed", async () => {
-  const repo = clinicalRepo({ diagnoses: [], serviceLines: [] });
+test("missing diagnosis does not block clinical signature", async () => {
+  const repo = clinicalRepo({ diagnoses: [] });
   const result = await signNoteWorkflow(repo, "encounter-1", "provider-1", "Jamie Parker, LCSW");
-  assert.equal(result.ok, false);
-  assert.equal(repo.signatures.length, 0);
-  assert.equal(repo.readinessRuns, 0);
+  assert.equal(result.ok, true);
+  assert.equal(repo.signatures.length, 1);
+  assert.equal(repo.noteStatus, "signed");
+  assert.equal(repo.readinessRuns, 1);
+});
+
+test("missing CPT service line does not block clinical signature", async () => {
+  const repo = clinicalRepo({ serviceLines: [] });
+  const result = await signNoteWorkflow(repo, "encounter-1", "provider-1", "Jamie Parker, LCSW");
+  assert.equal(result.ok, true);
+  assert.equal(repo.signatures.length, 1);
+  assert.equal(repo.noteStatus, "signed");
+  assert.equal(repo.readinessRuns, 1);
 });
 
 test("signing records provider identity, locks note, then runs billing readiness", async () => {
   const repo = clinicalRepo();
   const result = await signNoteWorkflow(repo, "encounter-1", "provider-1", "Jamie Parker, LCSW");
-
   assert.equal(result.ok, true);
   assert.equal(repo.signatures.length, 1);
   assert.equal(repo.signatures[0].provider_id, "provider-1");
@@ -158,12 +161,8 @@ test("signing records provider identity, locks note, then runs billing readiness
 
 test("billing-readiness failure does not undo a clinical signature", async () => {
   const repo = clinicalRepo();
-  repo.runBillingReadiness = async () => {
-    throw new Error("Billing service unavailable");
-  };
-
+  repo.runBillingReadiness = async () => { throw new Error("Billing service unavailable"); };
   const result = await signNoteWorkflow(repo, "encounter-1", "provider-1", "Jamie Parker, LCSW");
-
   assert.equal(result.ok, true);
   assert.equal(repo.signatures.length, 1);
   assert.equal(repo.noteStatus, "signed");
