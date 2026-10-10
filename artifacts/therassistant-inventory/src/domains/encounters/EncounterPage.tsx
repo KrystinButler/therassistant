@@ -20,6 +20,8 @@ import { getTreatmentPlanWorkspace } from "../treatment-plans/repository";
 import { EncounterTreatmentPlanComposer } from "../treatment-plans/EncounterTreatmentPlanComposer";
 import { FastChartingPanel } from "../clinical/FastChartingPanel";
 import { SessionTimelinePanel } from "../clinical/SessionTimelinePanel";
+import { ClinicalNoteWorkspace } from "../clinical/ClinicalNoteWorkspace";
+import { getPsychotherapyNote, savePsychotherapyNote } from "../clinical/psychotherapy-note-repository";
 import { createSmartPhrase, getFastChartingContext, getSmartPhrases } from "../clinical/fast-charting-repository";
 import { clinicalNoteSimilarity, emptyStructuredSelections, expandSmartPhraseAtCursor, synthesizeStructuredNarrative, type PriorStructuredContext, type SmartPhrase, type StructuredSelections } from "../clinical/fast-charting";
 import { forensicContextForCarryForward } from "../clinical/forensic-context";
@@ -121,6 +123,8 @@ export function EncounterPage() {
   const [structuredSelections, setStructuredSelections] = useState<StructuredSelections>(() => emptyStructuredSelections());
   const [carryForwardContext, setCarryForwardContext] = useState<Record<string, unknown>>({});
   const [priorStructuredContext, setPriorStructuredContext] = useState<PriorStructuredContext | null>(null);
+  const [privateNoteText, setPrivateNoteText] = useState("");
+  const [privateSaving, setPrivateSaving] = useState(false);
 
   async function load() {
     if (!encounterId) return;
@@ -130,7 +134,11 @@ export function EncounterPage() {
       const result = await getEncounterDetail(encounterId);
       setData(result);
       const note = result.notes[0];
-      const fastCharting = await getFastChartingContext(String(result.encounter.client_id ?? ""), encounterId, note?.id ? String(note.id) : undefined);
+      const [fastCharting, privateNote] = await Promise.all([
+        getFastChartingContext(String(result.encounter.client_id ?? ""), encounterId, note?.id ? String(note.id) : undefined),
+        getPsychotherapyNote(encounterId).catch(() => null),
+      ]);
+      setPrivateNoteText(String(privateNote?.note_text ?? ""));
       setSmartPhrases(fastCharting.phrases);
       const initialSelections = fastCharting.current?.selections ?? emptyStructuredSelections();
       setStructuredSelections(initialSelections);
@@ -254,6 +262,25 @@ export function EncounterPage() {
       () => saveClinicalNote(encounterId, { noteType, noteText, goalAddressed, structuredSelections, generatedNarrative, carryForwardContext }),
       "Clinical note saved as a draft.",
     );
+  }
+
+  async function savePrivatePsychotherapyNote() {
+    if (!data) return;
+    setPrivateSaving(true);
+    setError(null);
+    try {
+      await savePsychotherapyNote({
+        encounterId,
+        clientId: String(data.encounter.client_id ?? ""),
+        providerId: data.encounter.provider_id ? String(data.encounter.provider_id) : null,
+        noteText: privateNoteText,
+      });
+      setMessage("Private psychotherapy note saved separately from the clinical and billing record.");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to save private psychotherapy note.");
+    } finally {
+      setPrivateSaving(false);
+    }
   }
 
   async function addDiagnosis() {
@@ -633,6 +660,27 @@ export function EncounterPage() {
             <label><div className="thera-field-label">Note Type</div><select className="thera-input" value={noteType} disabled={signed} onChange={(event) => changeNoteType(event.target.value)}><option value="psychotherapy">Psychotherapy</option><option value="assessment">Assessment</option><option value="intake">Intake</option><option value="crisis">Crisis</option><option value="case_management">Case Management</option><option value="medication_management">Medication Management</option><option value="other">Other</option></select></label>
             <label><div className="thera-field-label">Treatment Plan — Goal / Objective</div><select className="thera-input" value={goalAddressed} disabled={signed} onChange={(event) => setGoalAddressed(event.target.value)}><option value="">Select a goal</option>{activeGoals.map((goal) => { const label = displayText(goal, ["goal_text", "description", "goal", "title"], "Goal"); return <option key={goal.id} value={label}>{label}</option>; })}{goalAddressed && !activeGoals.some((goal) => displayText(goal, ["goal_text", "description", "goal", "title"], "Goal") === goalAddressed) && <option value={goalAddressed}>{goalAddressed} (previous selection)</option>}</select>{activeGoals.length === 0 && <small>No linked treatment-plan goals. <button type="button" className="encounter-goal-create-link" onClick={() => { setContextTab("treatment"); setContextOpen(true); setPlanComposer(currentTreatmentPlan ? { mode: "goal", planId: String(currentTreatmentPlan.id) } : { mode: "plan" }); }}>Create a treatment plan or goal →</button></small>}</label>
           </div>
+          <ClinicalNoteWorkspace
+            client={data.client}
+            policy={data.policy}
+            payer={data.payer}
+            plan={data.plan}
+            currentCheckin={currentCheckin}
+            preVisit={preVisit}
+            journalEntry={sharedJournal}
+            activeGoalText={activeGoalText}
+            goalAddressed={goalAddressed}
+            outcomeMeasures={data.outcomeMeasures}
+            safetyScreenings={data.safetyScreenings}
+            diagnoses={data.diagnoses}
+            serviceLines={data.serviceLines}
+            signed={signed}
+            privateNoteText={privateNoteText}
+            privateSaving={privateSaving}
+            onPrivateNoteChange={setPrivateNoteText}
+            onSavePrivateNote={() => void savePrivatePsychotherapyNote()}
+            onInsertNarrative={(text) => injectIntoNote(`${noteText.trim() ? "\n\n" : ""}${text}`)}
+          />
           <SessionTimelinePanel signed={signed} selections={structuredSelections} onSelectionsChange={setStructuredSelections} onInsertPhrase={injectIntoNote} />
           <div className="encounter-editor-surface">
             <div className="encounter-editor-heading">

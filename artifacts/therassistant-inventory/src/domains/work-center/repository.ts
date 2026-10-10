@@ -15,6 +15,18 @@ import {
 } from "./workflow";
 
 type DataRow = Row & { id: string };
+export type WorkCenterItem = DataRow & {
+  sourceRoute: string;
+  workRoute: string;
+  history: DataRow[];
+  clientId: string;
+  providerId: string;
+  payerId: string;
+  patientName: string;
+  providerName: string;
+  payerName: string;
+  relatedName: string;
+};
 
 function first<T>(rows: T[]) {
   return rows[0] ?? null;
@@ -173,7 +185,7 @@ export function workRouteForWorkItem(
   return sourceRouteForWorkItem(type, id);
 }
 
-export async function getWorkCenterData() {
+export async function getWorkCenterData(): Promise<WorkCenterItem[]> {
   const [
     workItems,
     history,
