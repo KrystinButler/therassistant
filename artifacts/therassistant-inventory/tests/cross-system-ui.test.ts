@@ -41,18 +41,19 @@ test("clinical workspace renders the 90-day three-series telemetry chart", () =>
   assert.match(chart, /PRSDS/);
 });
 
-test("clinician encounter exposes a visible clinical signals strip and cross-system review controls", () => {
-  const encounter = read("../src/domains/encounters/EncounterPage.tsx");
-  assert.match(encounter, /Clinical Signals/i);
-  assert.match(encounter, /Cross-System Monitoring/i);
-  assert.match(encounter, /Review Recommendation/i);
-  assert.match(encounter, /Safety review acknowledged/i);
+test("clinician workspace exposes a visible clinical signals strip and cross-system review controls", () => {
+  const workspace = read("../src/domains/clinical/ClinicalNoteWorkspace.tsx");
+  assert.match(workspace, /Clinical Signals/i);
+  assert.match(workspace, /Cross-System Monitoring/i);
+  assert.match(workspace, /Review Recommendation/i);
+  assert.match(workspace, /Safety trigger detected/i);
 });
 
 test("coding safety review compares current and recommended diagnosis sequences", () => {
+  const workspace = read("../src/domains/clinical/ClinicalNoteWorkspace.tsx");
   const encounter = read("../src/domains/encounters/EncounterPage.tsx");
-  assert.match(encounter, /Current diagnosis sequence/i);
-  assert.match(encounter, /Recommended sequence/i);
+  assert.match(workspace, /Current diagnosis sequence/i);
+  assert.match(workspace, /Recommended sequence/i);
   assert.match(encounter, /Apply Suggested Sequence/i);
   assert.match(encounter, /Keep Current Coding/i);
 });
