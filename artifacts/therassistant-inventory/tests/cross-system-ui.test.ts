@@ -40,3 +40,34 @@ test("clinical workspace renders the 90-day three-series telemetry chart", () =>
   assert.match(chart, /GAD-7/);
   assert.match(chart, /PRSDS/);
 });
+
+test("clinician encounter exposes a visible clinical signals strip and cross-system review controls", () => {
+  const encounter = read("../src/domains/encounters/EncounterPage.tsx");
+  assert.match(encounter, /Clinical Signals/i);
+  assert.match(encounter, /Cross-System Monitoring/i);
+  assert.match(encounter, /Review Recommendation/i);
+  assert.match(encounter, /Safety review acknowledged/i);
+});
+
+test("coding safety review compares current and recommended diagnosis sequences", () => {
+  const encounter = read("../src/domains/encounters/EncounterPage.tsx");
+  assert.match(encounter, /Current diagnosis sequence/i);
+  assert.match(encounter, /Recommended sequence/i);
+  assert.match(encounter, /Apply Suggested Sequence/i);
+  assert.match(encounter, /Keep Current Coding/i);
+});
+
+test("patient PRSDS input uses a visible 1-10 rating control instead of a plain select", () => {
+  const portal = read("../src/domains/portal/PatientCheckInPage.tsx");
+  assert.match(portal, /pci-prsds-rating/);
+  assert.match(portal, /Low physical symptom impact/i);
+  assert.match(portal, /High physical symptom impact/i);
+  assert.doesNotMatch(portal, /<select value=\{visitQuestions\.somatic_distress_score/);
+});
+
+test("90-day telemetry card shows latest scores and trend direction without hover", () => {
+  const chart = read("../src/domains/clinical/ClinicalTelemetryChart.tsx");
+  assert.match(chart, /Latest scores/i);
+  assert.match(chart, /Trend/i);
+  assert.match(chart, /latestClinicalTelemetrySnapshot/);
+});
