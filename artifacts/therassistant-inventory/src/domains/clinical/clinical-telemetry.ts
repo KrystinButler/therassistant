@@ -7,6 +7,16 @@ export type ClinicalTelemetryPoint = {
   prsds?: number;
 };
 
+export type ClinicalTelemetrySnapshot = {
+  label: "PHQ-9" | "GAD-7" | "PRSDS";
+  key: "phq9" | "gad7" | "prsds";
+  current: number | null;
+  currentDate: string | null;
+  previous: number | null;
+  previousDate: string | null;
+  trend: "up" | "down" | "same" | "new" | "none";
+};
+
 const SERIES_KEY = {
   "PHQ-9": "phq9",
   "GAD-7": "gad7",
@@ -42,4 +52,33 @@ export function buildClinicalTelemetry(rows: Row[], asOfDate: string, rollingDay
   }
 
   return [...byDate.values()].sort((a, b) => a.date.localeCompare(b.date));
+}
+
+export function latestClinicalTelemetrySnapshot(rows: Row[], asOfDate: string): ClinicalTelemetrySnapshot[] {
+  const points = buildClinicalTelemetry(rows, asOfDate);
+  const series = [
+    { label: "PHQ-9" as const, key: "phq9" as const },
+    { label: "GAD-7" as const, key: "gad7" as const },
+    { label: "PRSDS" as const, key: "prsds" as const },
+  ];
+
+  return series.map(({ label, key }) => {
+    const scored = points
+      .filter((point) => typeof point[key] === "number")
+      .map((point) => ({ date: point.date, score: Number(point[key]) }));
+    const current = scored.at(-1) ?? null;
+    const previous = scored.at(-2) ?? null;
+    let trend: ClinicalTelemetrySnapshot["trend"] = "none";
+    if (current && !previous) trend = "new";
+    if (current && previous) trend = current.score > previous.score ? "up" : current.score < previous.score ? "down" : "same";
+    return {
+      label,
+      key,
+      current: current?.score ?? null,
+      currentDate: current?.date ?? null,
+      previous: previous?.score ?? null,
+      previousDate: previous?.date ?? null,
+      trend,
+    };
+  });
 }

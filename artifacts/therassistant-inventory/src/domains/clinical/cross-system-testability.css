@@ -1,0 +1,260 @@
+.clinical-signals-strip,
+.cross-system-monitor,
+.clinical-telemetry-prominent {
+  margin-top: 16px;
+  border: 1px solid var(--thera-border, #d9e2e7);
+  border-radius: 16px;
+  background: #fff;
+  box-shadow: 0 8px 24px rgba(31, 53, 71, 0.06);
+}
+
+.clinical-signals-strip,
+.cross-system-monitor {
+  padding: 16px;
+}
+
+.clinical-signals-heading,
+.cross-system-monitor-heading,
+.clinical-telemetry-latest-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.clinical-signals-heading h3,
+.cross-system-monitor-heading h3,
+.clinical-telemetry-heading h3 {
+  margin: 2px 0 0;
+}
+
+.clinical-signals-heading small,
+.cross-system-monitor-heading small,
+.clinical-telemetry-latest-heading span {
+  color: var(--thera-muted, #667986);
+}
+
+.clinical-signals-grid,
+.clinical-telemetry-latest-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.clinical-signal-card,
+.clinical-telemetry-latest-card {
+  min-width: 0;
+  border: 1px solid var(--thera-border, #d9e2e7);
+  border-radius: 12px;
+  padding: 12px;
+  background: #f8fbfc;
+}
+
+.clinical-signal-card > span,
+.clinical-telemetry-latest-card > span {
+  display: block;
+  color: var(--thera-muted, #667986);
+  font-size: 0.76rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.clinical-signal-card > strong,
+.clinical-telemetry-latest-card > strong {
+  display: block;
+  margin-top: 4px;
+  color: var(--thera-navy, #1f3547);
+  font-size: 1.25rem;
+}
+
+.clinical-signal-card > small,
+.clinical-signal-card > em,
+.clinical-telemetry-latest-card > small,
+.clinical-telemetry-latest-card > em {
+  display: block;
+  margin-top: 3px;
+  color: var(--thera-muted, #667986);
+  font-size: 0.78rem;
+  font-style: normal;
+}
+
+.clinical-signal-risk {
+  border-color: #cbd9df;
+}
+
+.cross-system-monitor.active {
+  border-color: #9fc4bd;
+  background: #f7fbfa;
+}
+
+.cross-system-monitor.idle {
+  background: #fafcfd;
+}
+
+.cross-system-rule-chips {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.cross-system-rule-chip {
+  border: 1px solid #bdd5d0;
+  border-radius: 12px;
+  padding: 12px;
+  background: #fff;
+}
+
+.cross-system-rule-chip strong,
+.cross-system-rule-chip span,
+.cross-system-rule-chip small {
+  display: block;
+}
+
+.cross-system-rule-chip span {
+  margin-top: 5px;
+  color: var(--thera-teal, #3b7f7a);
+  font-weight: 700;
+}
+
+.cross-system-rule-chip small {
+  margin-top: 4px;
+  color: var(--thera-muted, #667986);
+}
+
+.cross-system-persistent-safety {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin-top: 12px;
+  border: 1px solid #d59a97;
+  border-radius: 12px;
+  padding: 11px 12px;
+  background: #fff6f5;
+  color: #7b312f;
+}
+
+.cross-system-persistent-safety strong {
+  white-space: nowrap;
+}
+
+.cross-system-inline-review {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  margin-top: 14px;
+  border-top: 1px solid #d8e6e2;
+  padding-top: 14px;
+}
+
+.cross-system-inline-review h4 {
+  margin: 0 0 8px;
+}
+
+.cross-system-inline-note {
+  grid-column: 1 / -1;
+  margin: 0;
+  color: var(--thera-muted, #667986);
+  font-size: 0.85rem;
+}
+
+.clinical-code-row.recommended {
+  border-left: 3px solid var(--thera-teal, #3b7f7a);
+  padding-left: 9px;
+}
+
+.clinical-telemetry-prominent {
+  overflow: hidden;
+}
+
+.clinical-telemetry-prominent .clinical-telemetry-heading {
+  padding: 16px 16px 0;
+}
+
+.clinical-telemetry-latest {
+  padding: 12px 16px 0;
+}
+
+.clinical-telemetry-latest-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.clinical-telemetry-chart {
+  padding: 8px 8px 12px;
+}
+
+.pci-prsds-block {
+  display: block;
+}
+
+.pci-prsds-rating {
+  display: grid;
+  grid-template-columns: repeat(10, minmax(34px, 1fr));
+  gap: 6px;
+  margin-top: 9px;
+}
+
+.pci-prsds-rating button {
+  min-height: 38px;
+  border: 1px solid #bfd0d7;
+  border-radius: 10px;
+  background: #fff;
+  color: #274453;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.pci-prsds-rating button:hover,
+.pci-prsds-rating button:focus-visible {
+  border-color: #4e807a;
+  outline: 2px solid rgba(78, 128, 122, 0.18);
+}
+
+.pci-prsds-rating button.selected {
+  border-color: #3b7f7a;
+  background: #eaf4f2;
+  color: #1f5c57;
+}
+
+.pci-prsds-endpoints {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 5px;
+  color: #687c86;
+  font-size: 0.76rem;
+}
+
+@media (max-width: 900px) {
+  .clinical-signals-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .cross-system-inline-review {
+    grid-template-columns: 1fr;
+  }
+
+  .cross-system-inline-note {
+    grid-column: 1;
+  }
+
+  .pci-prsds-rating {
+    grid-template-columns: repeat(5, minmax(38px, 1fr));
+  }
+}
+
+@media (max-width: 620px) {
+  .clinical-signals-heading,
+  .cross-system-monitor-heading,
+  .clinical-telemetry-latest-heading {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .clinical-signals-grid,
+  .clinical-telemetry-latest-grid {
+    grid-template-columns: 1fr;
+  }
+}

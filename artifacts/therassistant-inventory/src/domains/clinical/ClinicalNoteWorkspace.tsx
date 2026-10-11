@@ -1,5 +1,8 @@
+import { useState } from "react";
 import { phqImportNarrative, gadImportNarrative, cssrsImportNarrative } from "./clinical-note-imports";
 import { ClinicalTelemetryChart } from "./ClinicalTelemetryChart";
+import { evaluateCrossSystemEngine } from "./cross-system-engine";
+import "./cross-system-testability.css";
 
 type Row = Record<string, any>;
 
@@ -55,6 +58,29 @@ function latestTwo(rows: Row[], instrument: string) {
     .slice(0, 2);
 }
 
+function signalScore(row: Row | undefined) {
+  if (!row) return null;
+  const raw = row.score ?? row.score_text;
+  if (raw === undefined || raw === null || String(raw).trim() === "") return null;
+  const numeric = Number(raw);
+  return Number.isFinite(numeric) ? numeric : String(raw);
+}
+
+function signalDate(row: Row | undefined) {
+  const date = String(row?.assessed_on ?? row?.created_at ?? "").slice(0, 10);
+  return /^\d{4}-\d{2}-\d{2}$/.test(date) ? date : "";
+}
+
+function signalTrend(rows: Row[]) {
+  const current = Number(rows[0]?.score ?? rows[0]?.score_text);
+  const prior = Number(rows[1]?.score ?? rows[1]?.score_text);
+  if (!Number.isFinite(current)) return "No result";
+  if (!Number.isFinite(prior)) return "No prior result";
+  if (current > prior) return `↑ from ${prior}`;
+  if (current < prior) return `↓ from ${prior}`;
+  return `→ unchanged from ${prior}`;
+}
+
 function ScreeningCard({ title, importLabel, narrative, rows }: { title: string; importLabel: string; narrative: string; rows: Row[] }) {
   const current = rows[0];
   const prior = rows[1];
@@ -71,9 +97,21 @@ function InsertButton({ children, value, disabled, onInsert }: { children: React
   return <button type="button" className="thera-action secondary clinical-insert" disabled={disabled || !value.trim()} onClick={() => onInsert(value)}>{children}</button>;
 }
 
+function SignalCard({ label, rows, suffix = "" }: { label: string; rows: Row[]; suffix?: string }) {
+  const score = signalScore(rows[0]);
+  return <div className="clinical-signal-card">
+    <span>{label}</span>
+    <strong>{score ?? "No result"}{score !== null && suffix ? suffix : ""}</strong>
+    <small>{signalDate(rows[0]) || "No date"}</small>
+    <em>{signalTrend(rows)}</em>
+  </div>;
+}
+
 export function ClinicalNoteWorkspace(props: Props) {
+  const [showCrossSystemReview, setShowCrossSystemReview] = useState(false);
   const phqRows = latestTwo(props.outcomeMeasures, "PHQ-9");
   const gadRows = latestTwo(props.outcomeMeasures, "GAD-7");
+  const prsdsRows = latestTwo(props.outcomeMeasures, "PRSDS");
   const cssrsRows = latestTwo(props.safetyScreenings, "C-SSRS");
   const phq = phqImportNarrative(props.outcomeMeasures);
   const gad = gadImportNarrative(props.outcomeMeasures);
@@ -85,6 +123,23 @@ export function ClinicalNoteWorkspace(props: Props) {
   const goalAdd = question(props.currentCheckin, ["goal_to_add", "new_goal"]);
   const cc = props.preVisit.focus ? `Client completed the pre-visit portal intake check-in. Current presenting concerns are documented as: ${props.preVisit.focus}.` : "";
   const hpi = journalText ? `Review of client's submitted digital portal journal entries reflects the following recent updates, symptoms, and clinical stressors: ${journalText}` : "";
+  const crossSystemEvaluation = evaluateCrossSystemEngine({
+    narrativeText: [
+      props.preVisit.focus,
+      props.preVisit.mood,
+      props.preVisit.changes.join(" "),
+      props.preVisit.additionalContext,
+      props.preVisit.safetyText,
+      journalText,
+      goalWork,
+      goalUpdate,
+      goalAdd,
+    ].filter(Boolean).join("\n"),
+    diagnosisCodes: activeDiagnoses.map((row) => String(row.diagnosis_code ?? "")),
+  });
+  const suggestedDiagnosisSequence = crossSystemEvaluation.suggestedDiagnosisSequence ?? [];
+  const cssrsCurrent = cssrsRows[0];
+  const cssrsDisplay = cssrsCurrent ? value(cssrsCurrent, ["risk_level", "score_text", "score"], "No result") : "No result";
 
   return <section className="clinical-note-workspace" aria-label="Integrated clinical note workspace">
     <div className="clinical-note-demographics">
@@ -94,6 +149,30 @@ export function ClinicalNoteWorkspace(props: Props) {
       <div><span>Email</span><strong>{value(props.client, ["email"])}</strong></div>
       <div className="clinical-note-coverage"><span>Primary coverage</span><strong>{value(props.payer, ["name"])}</strong><small>{value(props.plan, ["plan_name", "name"], "")}</small></div>
     </div>
+
+    <section className="clinical-signals-strip" aria-label="Clinical Signals">
+      <div className="clinical-signals-heading"><div><span className="thera-eyebrow">CLINICAL SIGNALS</span><h3>Clinical Signals</h3></div><small>Current score, prior direction, and safety status</small></div>
+      <div className="clinical-signals-grid">
+        <SignalCard label="PHQ-9" rows={phqRows} />
+        <SignalCard label="GAD-7" rows={gadRows} />
+        <SignalCard label="PRSDS" rows={prsdsRows} suffix="/10" />
+        <div className="clinical-signal-card clinical-signal-risk"><span>C-SSRS</span><strong>{cssrsDisplay}</strong><small>{signalDate(cssrsCurrent) || "No date"}</small><em>{cssrsCurrent ? "Latest recorded safety screening" : "No result"}</em></div>
+      </div>
+    </section>
+
+    <section className={`cross-system-monitor ${crossSystemEvaluation.matchedRules.length ? "active" : "idle"}`} aria-label="Cross-System Monitoring">
+      <div className="cross-system-monitor-heading">
+        <div><span className="thera-eyebrow">CROSS-SYSTEM MONITORING</span><h3>Cross-System Monitoring: {crossSystemEvaluation.matchedRules.length ? "Active" : "No current match"}</h3></div>
+        {crossSystemEvaluation.matchedRules.length > 0 && <button type="button" className="thera-action secondary" onClick={() => setShowCrossSystemReview((current) => !current)}>{showCrossSystemReview ? "Hide Recommendation" : "Review Recommendation"}</button>}
+      </div>
+      {crossSystemEvaluation.emergencyAlerts.length > 0 && <div className="cross-system-persistent-safety" role="status"><strong>Safety trigger detected</strong><span>The disruptive safety dialog is handled at the encounter level; this indicator stays visible so the trigger remains apparent after the dialog is dismissed.</span></div>}
+      {crossSystemEvaluation.matchedRules.length ? <div className="cross-system-rule-chips">{crossSystemEvaluation.matchedRules.map((rule) => <div key={rule.id} className="cross-system-rule-chip"><strong>{rule.id} · {rule.category}</strong><span>{rule.dotPhrase}</span><small>{rule.matchedKeywords.length ? `Matched: ${rule.matchedKeywords.join(", ")}` : "Matched from active diagnosis or safety trigger"}</small></div>)}</div> : <p>No mapped somatic/SUD rule is currently triggered by the loaded patient check-in, journal context, or active diagnoses.</p>}
+      {showCrossSystemReview && <div className="cross-system-inline-review">
+        <div><h4>Current diagnosis sequence</h4>{activeDiagnoses.length ? activeDiagnoses.map((row, index) => <div className="clinical-code-row" key={String(row.id)}><strong>{index + 1}. {String(row.diagnosis_code ?? "—")}</strong><span>{String(row.diagnosis_description ?? "")}</span></div>) : <p>No active diagnosis sequence recorded.</p>}</div>
+        <div><h4>Recommended sequence</h4>{suggestedDiagnosisSequence.length ? suggestedDiagnosisSequence.map((item, index) => <div className="clinical-code-row recommended" key={`${item.code}-${index}`}><strong>{index + 1}. {item.code}</strong><span>{item.description}</span></div>) : <p>No cross-system diagnosis sequence is currently recommended.</p>}</div>
+        <p className="cross-system-inline-note">This panel is read-only decision support. The encounter-level Coding Safety Review still requires the clinician to explicitly apply or reject a recommendation.</p>
+      </div>}
+    </section>
 
     <div className="clinical-note-top-grid">
       <article className="thera-card clinical-source-panel"><div className="thera-eyebrow">PRESENTING PROBLEM</div><h3>Check-In Answers</h3><p>{props.preVisit.focus || "No presenting problem submitted."}</p><h3>Journal Entries</h3><p>{journalText || "No journal entry shared with the provider."}</p></article>
@@ -112,7 +191,7 @@ export function ClinicalNoteWorkspace(props: Props) {
 
     <details className="clinical-note-section psychotherapy-private"><summary>Psychotherapy Note <span>private · collapsible</span></summary><div className="clinical-note-section-body"><p>This private psychotherapy note is stored separately from the ordinary clinical note and billing record.</p><textarea className="thera-input clinical-private-note" value={props.privateNoteText} onChange={(event) => props.onPrivateNoteChange(event.target.value)} placeholder="Clinician private psychotherapy note" /><button type="button" className="thera-action secondary" disabled={props.privateSaving} onClick={props.onSavePrivateNote}>{props.privateSaving ? "Saving…" : "Save Private Note"}</button></div></details>
 
-    <details className="clinical-note-section" open><summary>Coding Review <span>collapsible</span></summary><div className="clinical-note-section-body"><p>Code suggestions are never fabricated. Review documented diagnoses and services below; additions and corrections remain in the coding controls after the note.</p><div className="clinical-coding-grid"><div><h4>ICD-10</h4>{activeDiagnoses.length ? activeDiagnoses.map((row) => <div key={String(row.id)} className="clinical-code-row"><strong>{String(row.diagnosis_code ?? "—")}</strong><span>{String(row.diagnosis_description ?? "")}</span></div>) : <p>No ICD-10 codes recorded.</p>}</div><div><h4>CPT / HCPCS</h4>{props.serviceLines.length ? props.serviceLines.map((row) => <div key={String(row.id)} className="clinical-code-row"><strong>{String(row.cpt_hcpcs_code ?? "—")}</strong><span>{row.modifier1 ? `Modifier ${String(row.modifier1)}` : ""}</span></div>) : <p>No CPT / HCPCS lines recorded.</p>}</div></div></div></details>
+    <details className="clinical-note-section" open><summary>Coding Review <span>collapsible</span></summary><div className="clinical-note-section-body"><p>Code suggestions are never fabricated. Review documented diagnoses and services below; additions and corrections remain in the coding controls after the note.</p><div className="clinical-coding-grid"><div><h4>Current diagnosis sequence</h4>{activeDiagnoses.length ? activeDiagnoses.map((row, index) => <div key={String(row.id)} className="clinical-code-row"><strong>{index + 1}. {String(row.diagnosis_code ?? "—")}</strong><span>{String(row.diagnosis_description ?? "")}</span></div>) : <p>No ICD-10 codes recorded.</p>}</div><div><h4>Recommended sequence</h4>{suggestedDiagnosisSequence.length ? suggestedDiagnosisSequence.map((item, index) => <div key={`${item.code}-${index}`} className="clinical-code-row recommended"><strong>{index + 1}. {item.code}</strong><span>{item.description}</span></div>) : <p>No cross-system diagnosis sequence is currently recommended.</p>}</div><div><h4>CPT / HCPCS</h4>{props.serviceLines.length ? props.serviceLines.map((row) => <div key={String(row.id)} className="clinical-code-row"><strong>{String(row.cpt_hcpcs_code ?? "—")}</strong><span>{row.modifier1 ? `Modifier ${String(row.modifier1)}` : ""}</span></div>) : <p>No CPT / HCPCS lines recorded.</p>}</div></div></div></details>
   </section>;
 }
 
