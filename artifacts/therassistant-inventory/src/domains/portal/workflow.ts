@@ -42,7 +42,7 @@ function appointmentServiceDate(row: PortalRow) {
 
 export function isPortalAppointmentAvailable(row: PortalRow, now = new Date()) {
   const status = String(row.appointment_status ?? "scheduled").toLowerCase();
-  if (["cancelled", "no_show", "late_cancel", "completed", "rescheduled"].includes(status)) return false;
+  if (["cancelled", "no_show", "late_cancel", "completed", "rescheduled", "in_session"].includes(status)) return false;
 
   const startsAt = new Date(String(row.starts_at ?? ""));
   if (!Number.isFinite(startsAt.getTime())) return false;
