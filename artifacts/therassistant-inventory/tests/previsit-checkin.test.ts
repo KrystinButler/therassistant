@@ -147,3 +147,30 @@ test("pre-visit safety question includes emergency-channel guidance", () => {
   assert.match(source, /Portal responses are not monitored as an emergency service/);
   assert.match(source, /call 911 or go to the nearest emergency department/);
 });
+
+test("pre-visit check-in closes when an appointment enters session", async () => {
+  const { buildPatientPortalData, isPortalAppointmentAvailable } = await import("../src/domains/portal/workflow.ts");
+  const now = new Date("2026-10-11T18:00:00.000Z");
+  const appointment = {
+    id: "appt-in-session",
+    appointment_status: "in_session",
+    starts_at: "2026-10-11T16:00:00.000Z",
+    service_date: "2026-10-11",
+  };
+
+  assert.equal(isPortalAppointmentAvailable(appointment, now), false);
+
+  const portal = buildPatientPortalData({
+    patient: { id: "patient-1" },
+    appointments: [appointment],
+    policies: [],
+    documents: [],
+    checkins: [],
+    journalEntries: [],
+    now,
+  });
+
+  assert.equal(portal.upcomingAppointments.length, 0);
+  assert.equal(portal.appointmentHistory.length, 1);
+  assert.equal(portal.appointmentHistory[0]?.id, "appt-in-session");
+});
