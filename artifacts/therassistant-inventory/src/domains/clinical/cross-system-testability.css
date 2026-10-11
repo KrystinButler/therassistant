@@ -1,3 +1,5 @@
+@import "./integrated-encounter-layout.css";
+
 .clinical-signals-strip,
 .cross-system-monitor,
 .clinical-telemetry-prominent {

@@ -1,0 +1,476 @@
+/*
+ * THERASSISTANT product-vision encounter layout.
+ * Desktop: live session left, active clinical documentation center, context right.
+ * PORTAL IMPORT and SESSION JOURNAL remain provider-controlled source material.
+ */
+
+.encounter-console {
+  display: block !important;
+  margin-bottom: 18px;
+}
+
+.encounter-console > .encounter-note-card {
+  --encounter-note-column: 1;
+  --encounter-context-column: 2;
+  display: grid !important;
+  grid-template-columns: minmax(520px, 1.45fr) minmax(300px, .72fr) !important;
+  grid-template-rows: auto repeat(14, auto);
+  gap: 12px 14px;
+  align-items: start;
+  padding: 14px;
+  border-radius: 14px !important;
+  overflow: visible;
+  background: #f7faf9;
+}
+
+.encounter-console > .encounter-note-card:has(.encounter-editor-surface > section[aria-label="Telehealth visit"]) {
+  --encounter-session-column: 1;
+  --encounter-note-column: 2;
+  --encounter-context-column: 3;
+  grid-template-columns: minmax(300px, .88fr) minmax(440px, 1.18fr) minmax(300px, .74fr) !important;
+}
+
+.encounter-note-card > .thera-card-header {
+  grid-column: 1 / -1;
+  grid-row: 1;
+  margin: -14px -14px 0;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--thera-border);
+  border-radius: 14px 14px 0 0;
+  background: #fff;
+}
+
+.encounter-note-card > .encounter-note-controls {
+  grid-column: var(--encounter-note-column);
+  grid-row: 2;
+  margin: 0;
+  padding: 12px;
+  border: 1px solid var(--thera-border);
+  border-radius: 10px;
+  background: #fff;
+}
+
+/* The workspace wrapper disappears so its sections can occupy the note/context columns. */
+.encounter-note-card > .clinical-note-workspace,
+.clinical-note-workspace {
+  display: contents !important;
+}
+
+/* Patient and coverage identity stays immediately available in the right context rail. */
+.clinical-note-workspace > .clinical-note-demographics {
+  grid-column: var(--encounter-context-column);
+  grid-row: 2;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 7px;
+  margin: 0;
+  padding: 10px;
+  border-radius: 10px;
+  background: #fff;
+}
+
+.clinical-note-workspace > .clinical-note-demographics .clinical-note-coverage {
+  grid-column: 1 / -1;
+}
+
+.clinical-note-workspace > .clinical-signals-strip {
+  grid-column: var(--encounter-context-column);
+  grid-row: 3;
+  margin: 0;
+  padding: 11px;
+  border-radius: 10px;
+}
+
+.clinical-signals-strip .clinical-signals-heading {
+  align-items: flex-start;
+}
+
+.clinical-signals-strip .clinical-signals-heading small {
+  display: none;
+}
+
+.clinical-signals-strip .clinical-signals-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 7px;
+  margin-top: 8px;
+}
+
+.clinical-signals-strip .clinical-signal-card {
+  padding: 9px;
+  border-radius: 8px;
+}
+
+/* Patient-submitted information and Golden Thread context. */
+.clinical-note-workspace > .clinical-note-top-grid {
+  grid-column: var(--encounter-context-column);
+  grid-row: 4;
+  display: grid !important;
+  grid-template-columns: 1fr !important;
+  gap: 8px;
+  margin: 0;
+}
+
+.clinical-note-top-grid::before {
+  content: "PATIENT-SUBMITTED INFORMATION";
+  display: block;
+  margin: 1px 0 -2px;
+  color: var(--thera-blue, #2b5f78);
+  font-size: .64rem;
+  font-weight: 800;
+  letter-spacing: .07em;
+}
+
+.clinical-note-top-grid > .thera-card {
+  padding: 11px;
+  border-radius: 9px;
+  box-shadow: none;
+}
+
+.clinical-note-top-grid .clinical-source-panel p,
+.clinical-note-top-grid .clinical-screening-card p {
+  font-size: .72rem;
+  line-height: 1.4;
+}
+
+.clinical-note-top-grid .clinical-screening-card dl {
+  margin: 6px 0;
+}
+
+.clinical-note-workspace > .cross-system-monitor {
+  grid-column: var(--encounter-context-column);
+  grid-row: 5;
+  margin: 0;
+  padding: 11px;
+  border-radius: 10px;
+}
+
+.cross-system-monitor .cross-system-monitor-heading {
+  align-items: flex-start;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.cross-system-monitor .cross-system-rule-chips {
+  grid-template-columns: 1fr;
+  gap: 7px;
+  margin-top: 8px;
+}
+
+.clinical-note-workspace > .clinical-telemetry-prominent,
+.clinical-note-workspace > .clinical-telemetry {
+  grid-column: var(--encounter-context-column);
+  grid-row: 6;
+  margin: 0;
+  border-radius: 10px;
+}
+
+.clinical-note-workspace > .psychotherapy-private {
+  grid-column: var(--encounter-context-column);
+  grid-row: 7;
+  margin: 0;
+}
+
+.clinical-note-workspace > details.clinical-note-section:last-child {
+  grid-column: var(--encounter-context-column);
+  grid-row: 8;
+  margin: 0;
+}
+
+/* SOAP sections are the primary documentation structure, not a secondary stack. */
+.clinical-note-workspace > details.clinical-note-section:not(.psychotherapy-private):not(:last-child) {
+  grid-column: var(--encounter-note-column);
+  margin: 0;
+  border-radius: 10px;
+}
+
+.clinical-note-workspace > details.clinical-note-section:nth-of-type(1) { grid-row: 3; }
+.clinical-note-workspace > details.clinical-note-section:nth-of-type(2) { grid-row: 4; }
+.clinical-note-workspace > details.clinical-note-section:nth-of-type(3) { grid-row: 5; }
+.clinical-note-workspace > details.clinical-note-section:nth-of-type(4) { grid-row: 6; }
+
+.clinical-note-workspace > details.clinical-note-section > summary {
+  padding: 10px 12px;
+  background: #edf5ef;
+  color: var(--thera-navy);
+}
+
+.clinical-note-workspace > details.clinical-note-section .clinical-note-section-body {
+  padding: 11px 12px;
+}
+
+.clinical-note-workspace .clinical-objective-grid,
+.clinical-note-workspace .clinical-mse-grid {
+  grid-template-columns: 1fr;
+}
+
+/* Session timeline stays with the clinical documentation column. */
+.encounter-note-card > .encounter-session-timeline {
+  grid-column: var(--encounter-note-column);
+  grid-row: 7;
+  margin: 0;
+}
+
+/* The old editor wrapper disappears so session and note controls can occupy separate columns. */
+.encounter-note-card > .encounter-editor-surface,
+.encounter-editor-surface {
+  display: contents !important;
+}
+
+.encounter-editor-surface > .encounter-editor-heading {
+  grid-column: var(--encounter-note-column);
+  grid-row: 8;
+  margin: 0;
+  padding: 12px 14px;
+  border: 1px solid var(--thera-border);
+  border-bottom: 0;
+  border-radius: 10px 10px 0 0;
+  background: #fff;
+}
+
+.encounter-editor-surface > .encounter-previsit-import {
+  grid-column: var(--encounter-note-column);
+  grid-row: 9;
+  margin: 0;
+  border: 1px solid var(--thera-border);
+  border-bottom: 0;
+  background: #eef6f0;
+}
+
+/* Product-vision label: PORTAL IMPORT stays visibly patient-submitted. */
+.encounter-previsit-import-copy > .thera-eyebrow {
+  font-size: 0;
+}
+
+.encounter-previsit-import-copy > .thera-eyebrow::after {
+  content: "PORTAL IMPORT · PATIENT-SUBMITTED";
+  font-size: .64rem;
+  font-weight: 800;
+  letter-spacing: .06em;
+}
+
+.encounter-editor-surface > .cross-system-smartphrases {
+  grid-column: var(--encounter-note-column);
+  grid-row: 10;
+  margin: 0;
+}
+
+.encounter-editor-surface > .encounter-editor-toolbar {
+  grid-column: var(--encounter-note-column);
+  grid-row: 11;
+  margin: 0;
+  border-left: 1px solid var(--thera-border);
+  border-right: 1px solid var(--thera-border);
+}
+
+.encounter-editor-surface > .encounter-editor-wrap {
+  grid-column: var(--encounter-note-column);
+  grid-row: 12;
+  margin: 0;
+  padding: 12px;
+  border-left: 1px solid var(--thera-border);
+  border-right: 1px solid var(--thera-border);
+  background: #fff;
+}
+
+.encounter-editor-surface > .encounter-editor-wrap .encounter-note-editor {
+  min-height: 300px;
+  border-radius: 8px;
+}
+
+.encounter-editor-surface > .encounter-editor-footer {
+  grid-column: var(--encounter-note-column);
+  grid-row: 13;
+  margin: 0;
+  border: 1px solid var(--thera-border);
+  border-top: 0;
+  border-radius: 0 0 10px 10px;
+  background: #fff;
+}
+
+.encounter-editor-surface > .encounter-inline-signature {
+  grid-column: var(--encounter-note-column);
+  grid-row: 14;
+  margin: 0;
+  border: 1px solid var(--thera-border);
+  border-radius: 10px;
+}
+
+/* The existing telehealth component becomes the persistent live-session column. */
+.encounter-editor-surface > section[aria-label="Telehealth visit"] {
+  grid-column: var(--encounter-session-column);
+  grid-row: 2 / 15;
+  align-self: start;
+  position: sticky;
+  top: 78px;
+  min-height: 620px;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  gap: 12px;
+  margin: 0;
+  padding: 18px;
+  overflow: hidden;
+  border-radius: 12px;
+  border: 1px solid #cbdad6;
+  background:
+    radial-gradient(circle at 50% 38%, rgba(255,255,255,.95) 0 11%, transparent 11.5%),
+    radial-gradient(circle at 50% 58%, rgba(255,255,255,.75) 0 21%, transparent 21.5%),
+    linear-gradient(155deg, #dbe9e4 0%, #b8d1ca 46%, #789e97 100%);
+  color: #173f4c;
+  box-shadow: inset 0 -120px 100px rgba(18, 49, 55, .12);
+}
+
+.encounter-editor-surface > section[aria-label="Telehealth visit"]::before {
+  content: "LIVE SESSION";
+  position: absolute;
+  top: 16px;
+  left: 16px;
+  padding: 5px 8px;
+  border-radius: 999px;
+  background: rgba(255,255,255,.88);
+  color: #295d61;
+  font-size: .62rem;
+  font-weight: 800;
+  letter-spacing: .08em;
+}
+
+.encounter-editor-surface > section[aria-label="Telehealth visit"] h3,
+.encounter-editor-surface > section[aria-label="Telehealth visit"] p,
+.encounter-editor-surface > section[aria-label="Telehealth visit"] .thera-form-grid,
+.encounter-editor-surface > section[aria-label="Telehealth visit"] > .thera-action,
+.encounter-editor-surface > section[aria-label="Telehealth visit"] > a.thera-action {
+  position: relative;
+  z-index: 1;
+}
+
+/* Related patient context remains one tab away without taking half the primary workspace. */
+.encounter-console > .encounter-context-rail,
+.encounter-console > .encounter-context-rail.open {
+  display: grid !important;
+  grid-template-columns: 1fr !important;
+  width: 100% !important;
+  min-width: 0;
+  margin: 12px 0 0 !important;
+  border: 1px solid var(--thera-border) !important;
+  border-radius: 12px !important;
+  overflow: hidden;
+  background: #fff;
+  box-shadow: none !important;
+}
+
+.encounter-console .encounter-context-tabs {
+  flex-direction: row !important;
+  align-items: stretch;
+  gap: 4px;
+  padding: 6px;
+  border-right: 0 !important;
+  border-bottom: 1px solid var(--thera-border);
+}
+
+.encounter-console .encounter-context-tab {
+  flex: 1;
+  min-height: 38px;
+  padding: 6px 10px;
+}
+
+.encounter-console .encounter-context-tab span {
+  display: none;
+}
+
+.encounter-console .encounter-context-tab small {
+  display: block !important;
+  font-size: .68rem;
+}
+
+.encounter-console .encounter-context-collapse {
+  flex: 0 0 42px;
+  min-height: 38px;
+  margin: 0;
+}
+
+.encounter-console .encounter-context-content {
+  max-height: 430px;
+  padding: 14px;
+}
+
+@media (max-width: 1380px) {
+  .encounter-console > .encounter-note-card:has(.encounter-editor-surface > section[aria-label="Telehealth visit"]) {
+    grid-template-columns: minmax(270px, .8fr) minmax(410px, 1.15fr) minmax(270px, .7fr) !important;
+    gap: 10px;
+  }
+
+  .clinical-signals-strip .clinical-signals-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 1180px) {
+  .encounter-console > .encounter-note-card,
+  .encounter-console > .encounter-note-card:has(.encounter-editor-surface > section[aria-label="Telehealth visit"]) {
+    --encounter-session-column: 1;
+    --encounter-note-column: 1;
+    --encounter-context-column: 2;
+    grid-template-columns: minmax(0, 1.35fr) minmax(280px, .7fr) !important;
+  }
+
+  .encounter-editor-surface > section[aria-label="Telehealth visit"] {
+    position: relative;
+    top: auto;
+    grid-column: var(--encounter-note-column);
+    grid-row: 2;
+    min-height: 360px;
+  }
+
+  .encounter-note-card > .encounter-note-controls { grid-row: 3; }
+  .clinical-note-workspace > details.clinical-note-section:nth-of-type(1) { grid-row: 4; }
+  .clinical-note-workspace > details.clinical-note-section:nth-of-type(2) { grid-row: 5; }
+  .clinical-note-workspace > details.clinical-note-section:nth-of-type(3) { grid-row: 6; }
+  .clinical-note-workspace > details.clinical-note-section:nth-of-type(4) { grid-row: 7; }
+  .encounter-note-card > .encounter-session-timeline { grid-row: 8; }
+  .encounter-editor-surface > .encounter-editor-heading { grid-row: 9; }
+  .encounter-editor-surface > .encounter-previsit-import { grid-row: 10; }
+  .encounter-editor-surface > .cross-system-smartphrases { grid-row: 11; }
+  .encounter-editor-surface > .encounter-editor-toolbar { grid-row: 12; }
+  .encounter-editor-surface > .encounter-editor-wrap { grid-row: 13; }
+  .encounter-editor-surface > .encounter-editor-footer { grid-row: 14; }
+  .encounter-editor-surface > .encounter-inline-signature { grid-row: 15; }
+}
+
+@media (max-width: 760px) {
+  .encounter-console > .encounter-note-card,
+  .encounter-console > .encounter-note-card:has(.encounter-editor-surface > section[aria-label="Telehealth visit"]) {
+    --encounter-session-column: 1;
+    --encounter-note-column: 1;
+    --encounter-context-column: 1;
+    display: block !important;
+    padding: 10px;
+  }
+
+  .encounter-note-card > .thera-card-header {
+    margin: -10px -10px 10px;
+  }
+
+  .encounter-note-card > .encounter-note-controls,
+  .encounter-note-card > .encounter-session-timeline,
+  .clinical-note-workspace > *,
+  .encounter-editor-surface > * {
+    margin-top: 10px !important;
+  }
+
+  .encounter-editor-surface > section[aria-label="Telehealth visit"] {
+    min-height: 300px;
+    position: relative;
+  }
+
+  .clinical-note-workspace > .clinical-note-demographics,
+  .clinical-signals-strip .clinical-signals-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .encounter-console .encounter-context-tabs {
+    overflow-x: auto;
+  }
+
+  .encounter-console .encounter-context-tab {
+    min-width: 92px;
+  }
+}
