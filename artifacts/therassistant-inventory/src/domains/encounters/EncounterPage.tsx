@@ -22,6 +22,7 @@ import { getTreatmentPlanWorkspace } from "../treatment-plans/repository";
 import { EncounterTreatmentPlanComposer } from "../treatment-plans/EncounterTreatmentPlanComposer";
 import { FastChartingPanel } from "../clinical/FastChartingPanel";
 import { SessionTimelinePanel } from "../clinical/SessionTimelinePanel";
+import { noteDraftFingerprint } from "../clinical/note-section-editing";
 import { ClinicalNoteWorkspace } from "../clinical/ClinicalNoteWorkspace";
 import { getPsychotherapyNote, savePsychotherapyNote } from "../clinical/psychotherapy-note-repository";
 import { createSmartPhrase, getFastChartingContext, getSmartPhrases } from "../clinical/fast-charting-repository";
@@ -123,6 +124,7 @@ export function EncounterPage() {
   const [fundingReference, setFundingReference] = useState("");
   const [fundingNotes, setFundingNotes] = useState("");
   const [smartPhrases, setSmartPhrases] = useState<SmartPhrase[]>([]);
+  const [savedDraftFingerprint, setSavedDraftFingerprint] = useState("");
   const [structuredSelections, setStructuredSelections] = useState<StructuredSelections>(() => emptyStructuredSelections());
   const [carryForwardContext, setCarryForwardContext] = useState<Record<string, unknown>>({});
   const [priorStructuredContext, setPriorStructuredContext] = useState<PriorStructuredContext | null>(null);
@@ -147,6 +149,13 @@ export function EncounterPage() {
       setPrivateNoteText(String(privateNote?.note_text ?? ""));
       setSmartPhrases(fastCharting.phrases);
       const initialSelections = fastCharting.current?.selections ?? emptyStructuredSelections();
+      setSavedDraftFingerprint(noteDraftFingerprint({
+        noteText: String(note?.note_text ?? ""),
+        noteType: String(note?.note_type ?? noteTypeForService(String(result.appointment?.service_type ?? result.encounter.service_type ?? ""))),
+        goalAddressed: String(note?.goal_addressed ?? ""),
+        structuredSelections: initialSelections,
+        carryForwardContext: fastCharting.current?.carryForwardContext ?? {},
+      }));
       setStructuredSelections(initialSelections);
       setCarryForwardContext(fastCharting.current?.carryForwardContext ?? {});
       setPriorStructuredContext(fastCharting.prior);
@@ -540,7 +549,7 @@ export function EncounterPage() {
   const activeGoalText = displayText(activeGoal, ["goal_text", "description", "goal", "title"], "");
   const noteLayout = noteLayouts[noteType] ?? noteLayouts.other;
   const noteWordCount = noteText.trim() ? noteText.trim().split(/\s+/).length : 0;
-  const noteHasUnsavedText = noteText !== String(note?.note_text ?? "");
+  const noteHasUnsavedText = noteDraftFingerprint({ noteText, noteType, goalAddressed, structuredSelections, carryForwardContext }) !== savedDraftFingerprint;
   function changeNoteType(value: string) {
     setNoteType(value);
     if (["assessment", "intake", "psychotherapy"].includes(value)) setStructuredSelections((current) => ({ ...current, templateType: value === "psychotherapy" ? "standard_therapy" : "intake" }));
@@ -661,6 +670,34 @@ export function EncounterPage() {
     setMessage("Structured clinical context carried forward. Prior narrative text was not copied.");
   }
 
+  function renderClinicalWorkspace(mode: "editor" | "context") {
+    if (!data) return null;
+    return <ClinicalNoteWorkspace mode={mode}
+            client={data.client}
+            policy={data.policy}
+            payer={data.payer}
+            plan={data.plan}
+            currentCheckin={currentCheckin}
+            preVisit={preVisit}
+            journalEntry={sharedJournal}
+            activeGoalText={activeGoalText}
+            goalAddressed={goalAddressed}
+            outcomeMeasures={data.outcomeMeasures}
+            safetyScreenings={data.safetyScreenings}
+            diagnoses={data.diagnoses}
+            serviceLines={data.serviceLines}
+            serviceDate={serviceDate}
+            signed={signed || saving}
+            noteText={noteText}
+            onNoteTextChange={(text) => { if (!signed && !saving) setNoteText(text); }}
+            privateNoteText={privateNoteText}
+            privateSaving={privateSaving}
+            onPrivateNoteChange={setPrivateNoteText}
+            onSavePrivateNote={() => void savePrivatePsychotherapyNote()}
+            onInsertNarrative={(text) => setNoteText((current) => appendImportedText(current, text))}
+          />;
+  }
+
   return (
     <>
       {emergencyKey && acknowledgedEmergencyKey !== emergencyKey && <div className="cross-system-modal-backdrop" role="alertdialog" aria-modal="true" aria-labelledby="cross-system-safety-title"><div className="cross-system-modal emergency"><span className="thera-eyebrow">IMMEDIATE REVIEW</span><h2 id="cross-system-safety-title">Cross-System Safety Alert</h2>{crossSystemEvaluation.emergencyAlerts.map((alert) => <div key={`${alert.ruleId}-${alert.trigger}`} className="cross-system-alert-item"><strong>{alert.trigger}</strong><p>{alert.text}</p></div>)}<p className="cross-system-modal-note">This alert is based on documented patient-reported text. Use clinical judgment and appropriate emergency protocols.</p><button type="button" className="thera-action" onClick={() => setAcknowledgedEmergencyKey(emergencyKey)}>Acknowledge and continue</button></div></div>}
@@ -706,33 +743,22 @@ export function EncounterPage() {
             <div><div className="thera-eyebrow">DOCUMENT</div><h2>Active Progress Note</h2><p>Keep documentation open while reviewing clinical context.</p></div>
             {note && <StatusBadge value={String(note.note_status)} />}
           </div>
+          {data.appointment?.location_type === "telehealth" && <div className="encounter-live-session"><TelehealthVisit appointment={data.appointment} editable /></div>}
+          <div className="encounter-documentation-column">
           <div className="encounter-note-controls">
-            <label><div className="thera-field-label">Note Type</div><select className="thera-input" value={noteType} disabled={signed} onChange={(event) => changeNoteType(event.target.value)}><option value="psychotherapy">Psychotherapy</option><option value="assessment">Assessment</option><option value="intake">Intake</option><option value="crisis">Crisis</option><option value="case_management">Case Management</option><option value="medication_management">Medication Management</option><option value="other">Other</option></select></label>
-            <label><div className="thera-field-label">Treatment Plan — Goal / Objective</div><select className="thera-input" value={goalAddressed} disabled={signed} onChange={(event) => setGoalAddressed(event.target.value)}><option value="">Select a goal</option>{activeGoals.map((goal) => { const label = displayText(goal, ["goal_text", "description", "goal", "title"], "Goal"); return <option key={goal.id} value={label}>{label}</option>; })}{goalAddressed && !activeGoals.some((goal) => displayText(goal, ["goal_text", "description", "goal", "title"], "Goal") === goalAddressed) && <option value={goalAddressed}>{goalAddressed} (previous selection)</option>}</select>{activeGoals.length === 0 && <small>No linked treatment-plan goals. <button type="button" className="encounter-goal-create-link" onClick={() => { setContextTab("treatment"); setContextOpen(true); setPlanComposer(currentTreatmentPlan ? { mode: "goal", planId: String(currentTreatmentPlan.id) } : { mode: "plan" }); }}>Create a treatment plan or goal →</button></small>}</label>
+            <label><div className="thera-field-label">Note Type</div><select className="thera-input" value={noteType} disabled={signed || saving} onChange={(event) => changeNoteType(event.target.value)}><option value="psychotherapy">Psychotherapy</option><option value="assessment">Assessment</option><option value="intake">Intake</option><option value="crisis">Crisis</option><option value="case_management">Case Management</option><option value="medication_management">Medication Management</option><option value="other">Other</option></select></label>
+            <label><div className="thera-field-label">Treatment Plan — Goal / Objective</div><select className="thera-input" value={goalAddressed} disabled={signed || saving} onChange={(event) => setGoalAddressed(event.target.value)}><option value="">Select a goal</option>{activeGoals.map((goal) => { const label = displayText(goal, ["goal_text", "description", "goal", "title"], "Goal"); return <option key={goal.id} value={label}>{label}</option>; })}{goalAddressed && !activeGoals.some((goal) => displayText(goal, ["goal_text", "description", "goal", "title"], "Goal") === goalAddressed) && <option value={goalAddressed}>{goalAddressed} (previous selection)</option>}</select>{activeGoals.length === 0 && <small>No linked treatment-plan goals. <button type="button" className="encounter-goal-create-link" onClick={() => { setContextTab("treatment"); setContextOpen(true); setPlanComposer(currentTreatmentPlan ? { mode: "goal", planId: String(currentTreatmentPlan.id) } : { mode: "plan" }); }}>Create a treatment plan or goal →</button></small>}</label>
           </div>
-          <ClinicalNoteWorkspace
-            client={data.client}
-            policy={data.policy}
-            payer={data.payer}
-            plan={data.plan}
-            currentCheckin={currentCheckin}
-            preVisit={preVisit}
-            journalEntry={sharedJournal}
-            activeGoalText={activeGoalText}
-            goalAddressed={goalAddressed}
-            outcomeMeasures={data.outcomeMeasures}
-            safetyScreenings={data.safetyScreenings}
-            diagnoses={data.diagnoses}
-            serviceLines={data.serviceLines}
-            serviceDate={serviceDate}
-            signed={signed}
-            privateNoteText={privateNoteText}
-            privateSaving={privateSaving}
-            onPrivateNoteChange={setPrivateNoteText}
-            onSavePrivateNote={() => void savePrivatePsychotherapyNote()}
-            onInsertNarrative={(text) => setNoteText((current) => appendImportedText(current, text))}
-          />
-          <SessionTimelinePanel signed={signed} selections={structuredSelections} onSelectionsChange={setStructuredSelections} onInsertPhrase={injectIntoNote} />
+          {renderClinicalWorkspace("editor")}
+          <SessionTimelinePanel signed={signed || saving} selections={structuredSelections} onSelectionsChange={setStructuredSelections} onInsertPhrase={injectIntoNote} />
+          <details className="encounter-structured-tools"><summary>Structured findings &amp; SmartPhrase library</summary>
+            <FastChartingPanel signed={signed || saving} noteType={noteType} phrases={smartPhrases}
+              selections={structuredSelections} generatedNarrative={generatedNarrative}
+              priorContext={priorStructuredContext} noteSimilarity={noteSimilarity}
+              onSelectionsChange={setStructuredSelections}
+              onInsertNarrative={() => injectIntoNote(generatedNarrative)} onInsertPhrase={injectIntoNote}
+              onCarryForward={carryForwardStructured} onCreatePhrase={addSmartPhrase} />
+          </details>
           <div className="encounter-editor-surface">
             <div className="encounter-editor-heading">
               <div><div className="thera-eyebrow">CLINICAL DOCUMENTATION</div><label htmlFor="encounter-progress-note-editor">{noteLayout.title}</label></div>
@@ -766,11 +792,11 @@ export function EncounterPage() {
               <div className="encounter-section-tools">
                 <span className="encounter-tool-label">Insert section</span>
                 <div className="encounter-section-buttons">
-                  {noteLayout.sections.map((section) => <button type="button" key={section} className="encounter-insert-chip" disabled={signed} onClick={() => insertNoteSection(section)} title={`Insert ${section} heading at the cursor`}>{section}</button>)}
+                  {noteLayout.sections.map((section) => <button type="button" key={section} className="encounter-insert-chip" disabled={signed || saving} onClick={() => insertNoteSection(section)} title={`Insert ${section} heading at the cursor`}>{section}</button>)}
                 </div>
               </div>
               <div className="encounter-phrase-control">
-                <button type="button" className="encounter-phrase-trigger" disabled={signed} aria-expanded={showPhraseMenu} aria-controls="encounter-smartphrase-quick-menu" onClick={() => setShowPhraseMenu((open) => !open)}>
+                <button type="button" className="encounter-phrase-trigger" disabled={signed || saving} aria-expanded={showPhraseMenu} aria-controls="encounter-smartphrase-quick-menu" onClick={() => setShowPhraseMenu((open) => !open)}>
                   SmartPhrases <span>{smartPhrases.length}</span> <span aria-hidden="true">▾</span>
                 </button>
                 {showPhraseMenu && !signed && <div id="encounter-smartphrase-quick-menu" className="encounter-phrase-menu" role="group" aria-label="Insert a SmartPhrase">
@@ -780,25 +806,26 @@ export function EncounterPage() {
               </div>
             </div>
             <div className="encounter-editor-wrap">
-              <textarea id="encounter-progress-note-editor" ref={noteRef} className="thera-input encounter-note-editor" value={noteText} disabled={signed} aria-describedby="encounter-progress-note-hint" onChange={(event) => handleNoteChange(event.target.value, event.target.selectionStart)} onKeyDown={(event) => { if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "s") { event.preventDefault(); if (!saving && !signed && noteText.trim()) void saveNote(); } }} placeholder={`Document the ${noteLayout.title.toLowerCase()} here. Use Insert section to structure your note.`} spellCheck />
+              <textarea id="encounter-progress-note-editor" ref={noteRef} className="thera-input encounter-note-editor" value={noteText} disabled={signed || saving} aria-describedby="encounter-progress-note-hint" onChange={(event) => handleNoteChange(event.target.value, event.target.selectionStart)} onKeyDown={(event) => { if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "s") { event.preventDefault(); if (!saving && !signed && noteText.trim()) void saveNote(); } }} placeholder={`Document the ${noteLayout.title.toLowerCase()} here. Use Insert section to structure your note.`} spellCheck />
               {showSlashMenu && !signed && <div className="encounter-slash-menu"><div>QUICK INSERTS</div><button type="button" onClick={() => injectQuickText("Risk Assessment (clinician-confirmed):\nSuicidal ideation: [assess and document]\nHomicidal ideation: [assess and document]\nRelevant risks and protective factors: [document findings]\nSafety plan or follow-up, if indicated: [document]")}>Risk: Assessment Template</button><button type="button" onClick={() => injectQuickText("Mental Status Examination (clinician-confirmed):\nAppearance / behavior: [observed]\nOrientation: [assessed]\nSpeech: [observed]\nThought process and content: [assessed]\nMood and affect: [assessed]\nOther relevant findings: [document]")}>MSE: Findings Template</button><button type="button" onClick={() => injectQuickText("Intervention: Supportive psychotherapy, reflective listening, validation, and collaborative problem solving were utilized.")}>Intervention: Supportive</button></div>}
             </div>
             <div className="encounter-editor-footer">
               <div id="encounter-progress-note-hint" className="encounter-editor-meta"><strong>{noteWordCount} words</strong><span aria-hidden="true">·</span><span>Type / for quick inserts</span><span aria-hidden="true">·</span><span>{signed ? "Signed note is locked" : "Save to keep your draft"}</span></div>
               {!signed && <button type="button" className="thera-action encounter-editor-save" disabled={saving || !noteText.trim()} onClick={() => void saveNote()}>{saving ? "Saving..." : "Save Note"}</button>}
             </div>
-            <TelehealthVisit appointment={data.appointment} editable />
             <div className="encounter-inline-signature" id="encounter-signature">
               {signed ? <div className="encounter-signed-handoff"><div><strong>Signed clinical record → Charge Capture</strong><span>The note is locked. All claim and charge corrections remain available in revenue-cycle workqueues.</span></div><Link href="/billing/charges" className="thera-action secondary">Open Charge Capture</Link></div> : <>
                 <ClinicianSigningSetup providerId={String(data.encounter.provider_id ?? "")} />
-                <div className="encounter-sign-row"><label><span className="thera-field-label">Rendering Provider Signature</span><input ref={signatureRef} className="thera-input" value={signatureText} onChange={(event) => setSignatureText(event.target.value)} placeholder="Provider signature" /></label>
-                  <button type="button" className="thera-action" disabled={saving} onClick={() => void sign()}>{saving ? "Signing…" : "Sign & Lock Note"}</button></div>
+                <div className="encounter-sign-row"><label><span className="thera-field-label">Rendering Provider Signature</span><input ref={signatureRef} disabled={saving} className="thera-input" value={signatureText} onChange={(event) => setSignatureText(event.target.value)} placeholder="Provider signature" /></label>
+                  <button type="button" className="thera-action" disabled={saving || noteHasUnsavedText || !noteText.trim() || !signatureText.trim()} onClick={() => void sign()}>{saving ? "Signing…" : "Sign & Lock Note"}</button></div>
                 {!noteText.trim() && <button type="button" className="thera-action secondary" onClick={() => { noteRef.current?.scrollIntoView({ behavior: "smooth", block: "center" }); noteRef.current?.focus({ preventScroll: true }); }}>Go to Note Editor</button>}
-                <p className="thera-table-subtext">Save Note stores the clinical draft. Sign & Lock signs only the saved note. Diagnosis, coding, and eligibility issues are handled in billing workflow and do not block clinical signature.</p>
+                <p className="thera-table-subtext" role="status">{noteHasUnsavedText ? "Save your changes before signing. " : ""}Save Note stores the clinical draft. Sign & Lock signs only the saved note. Diagnosis, coding, and eligibility issues are handled in billing workflow and do not block clinical signature.</p>
               </>}
             </div>
           </div>
           {signed && data.signatures[0] && <div className="thera-alert" style={{ marginTop: 12 }}>Signed {dateTime(String(data.signatures[0].signed_at ?? ""))} by {String(data.signatures[0].signature_text ?? "provider")}</div>}
+          </div>
+          <aside className="encounter-patient-context">{renderClinicalWorkspace("context")}</aside>
         </section>
         <aside className={contextOpen ? "encounter-context-rail open" : "encounter-context-rail"}>
           <div className="encounter-context-tabs" role="group" aria-label="Clinical context">

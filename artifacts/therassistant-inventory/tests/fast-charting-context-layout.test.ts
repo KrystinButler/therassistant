@@ -9,7 +9,8 @@ test("ordinary progress notes do not display a redundant second note-template gu
   assert.match(fast,/Optional\. Your Note Type above controls the main note layout/);
   assert.match(fast,/aria-expanded=\{advancedOpen\}/);
   assert.match(fast,/advancedOpen && <div id="fast-chart-advanced-content"/);
-  assert.doesNotMatch(encounter,/<FastChartingPanel/);
+  assert.match(encounter,/<details className="encounter-structured-tools"><summary>Structured findings/);
+  assert.match(encounter,/<FastChartingPanel signed=\{signed \|\| saving\}/);
 });
 test("optional specialty modules and clinical tags remain available and signed notes stay read-only",()=>{
   assert.match(fast,/DOCUMENTATION_TEMPLATES\.filter/);
