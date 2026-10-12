@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { readNoteSection, updateNoteSection } from "./note-section-editing";
 import { phqImportNarrative, gadImportNarrative, cssrsImportNarrative } from "./clinical-note-imports";
 import { ClinicalTelemetryChart } from "./ClinicalTelemetryChart";
 import { evaluateCrossSystemEngine } from "./cross-system-engine";
@@ -32,6 +33,8 @@ type Props = {
   serviceLines: Row[];
   serviceDate: string;
   signed: boolean;
+  noteText: string;
+  onNoteTextChange: (value: string) => void;
   privateNoteText: string;
   privateSaving: boolean;
   onPrivateNoteChange: (value: string) => void;
@@ -182,12 +185,12 @@ export function ClinicalNoteWorkspace(props: Props) {
 
     <ClinicalTelemetryChart measures={props.outcomeMeasures} asOfDate={props.serviceDate} />
 
-    <details className="clinical-note-section" open><summary>Subjective <span>collapsible</span></summary><div className="clinical-note-section-body"><h4>CC</h4><p>{cc || "No check-in concern available to import."}</p><InsertButton value={cc} disabled={props.signed} onInsert={props.onInsertNarrative}>Insert CC</InsertButton><h4>HPI</h4><p>{hpi || "No shared journal entry available to import."}</p><InsertButton value={hpi} disabled={props.signed} onInsert={props.onInsertNarrative}>Insert HPI</InsertButton></div></details>
+    <details className="clinical-note-section" open><summary>Subjective <span>collapsible</span></summary><div className="clinical-note-section-body"><NoteSection heading="Subjective" props={props} /><h4>CC</h4><p>{cc || "No check-in concern available to import."}</p><InsertButton value={cc} disabled={props.signed} onInsert={props.onInsertNarrative}>Insert CC</InsertButton><h4>HPI</h4><p>{hpi || "No shared journal entry available to import."}</p><InsertButton value={hpi} disabled={props.signed} onInsert={props.onInsertNarrative}>Insert HPI</InsertButton></div></details>
 
-    <details className="clinical-note-section" open><summary>Objective <span>collapsible</span></summary><div className="clinical-note-section-body"><div className="clinical-objective-grid"><Objective label="Depression" text={phq} importLabel="IMPORT 3" /><Objective label="Anxiety" text={gad} importLabel="IMPORT 4" /><Objective label="Risk" text={risk} importLabel="IMPORT 5" /></div><div className="clinical-mse-grid"><Mse label="Appearance" help="Grooming, hygiene, dress, and physical posture." /><Mse label="Behavior" help="Eye contact, engagement, psychomotor activity, and cooperation." /><Mse label="Speech" help="Rate, volume, tone, and articulation." /><Mse label="Mood and Affect" help="Apparent emotional state and congruence of affect." /><Mse label="Thought Process & Content" help="Coherence, logical flow, delusions, or obsessions." /><Mse label="Cognition & Orientation" help="Alertness, orientation, and general memory function." /></div></div></details>
+    <details className="clinical-note-section" open><summary>Objective <span>collapsible</span></summary><div className="clinical-note-section-body"><NoteSection heading="Objective" props={props} /><div className="clinical-objective-grid"><Objective label="Depression" text={phq} importLabel="IMPORT 3" /><Objective label="Anxiety" text={gad} importLabel="IMPORT 4" /><Objective label="Risk" text={risk} importLabel="IMPORT 5" /></div><div className="clinical-mse-grid"><NoteSection heading="Mental Status Examination" props={props} help="Document observed appearance, behavior, speech, mood and affect, thought process and content, cognition and orientation. No findings are preselected." /></div><div className="clinical-screening-imports"><InsertButton value={phq} disabled={props.signed} onInsert={props.onInsertNarrative}>Insert PHQ-9</InsertButton><InsertButton value={gad} disabled={props.signed} onInsert={props.onInsertNarrative}>Insert GAD-7</InsertButton><InsertButton value={risk} disabled={props.signed} onInsert={props.onInsertNarrative}>Insert C-SSRS</InsertButton></div></div></details>
 
-    <details className="clinical-note-section" open><summary>Assessment <span>collapsible</span></summary><div className="clinical-note-section-body"><p>Document the clinician's diagnostic impression, supporting findings, differential considerations, and other assessment in the main note editor.</p></div></details>
-    <details className="clinical-note-section" open><summary>Plan <span>collapsible</span></summary><div className="clinical-note-section-body"><Field label="Active Treatment Plan Focus" value={props.goalAddressed || props.activeGoalText || "No active goal documented"} />{goalWork && <InsertButton value={`Client identified the primary goal for today's clinical intervention as working directly on: ${goalWork}.`} disabled={props.signed} onInsert={props.onInsertNarrative}>Insert Goal to Work On</InsertButton>}{goalUpdate && <InsertButton value={`Reviewing progress on existing objectives. Client requested an evaluation and updates regarding the following current goal status: ${goalUpdate}.`} disabled={props.signed} onInsert={props.onInsertNarrative}>Insert Goal Update</InsertButton>}{goalAdd && <InsertButton value={`Client requested to introduce a new clinical focal point to the active treatment plan, specifically targeting: ${goalAdd}.`} disabled={props.signed} onInsert={props.onInsertNarrative}>Insert New Goal</InsertButton>}</div></details>
+    <details className="clinical-note-section" open><summary>Assessment <span>collapsible</span></summary><div className="clinical-note-section-body"><NoteSection heading="Assessment" props={props} help="Document your clinical impression and supporting findings." /></div></details>
+    <details className="clinical-note-section" open><summary>Plan <span>collapsible</span></summary><div className="clinical-note-section-body"><NoteSection heading="Plan" props={props} /><Field label="Active Treatment Plan Focus" value={props.goalAddressed || props.activeGoalText || "No active goal documented"} />{goalWork && <InsertButton value={`Client identified the primary goal for today's clinical intervention as working directly on: ${goalWork}.`} disabled={props.signed} onInsert={props.onInsertNarrative}>Insert Goal to Work On</InsertButton>}{goalUpdate && <InsertButton value={`Reviewing progress on existing objectives. Client requested an evaluation and updates regarding the following current goal status: ${goalUpdate}.`} disabled={props.signed} onInsert={props.onInsertNarrative}>Insert Goal Update</InsertButton>}{goalAdd && <InsertButton value={`Client requested to introduce a new clinical focal point to the active treatment plan, specifically targeting: ${goalAdd}.`} disabled={props.signed} onInsert={props.onInsertNarrative}>Insert New Goal</InsertButton>}</div></details>
 
     <details className="clinical-note-section psychotherapy-private"><summary>Psychotherapy Note <span>private · collapsible</span></summary><div className="clinical-note-section-body"><p>This private psychotherapy note is stored separately from the ordinary clinical note and billing record.</p><textarea className="thera-input clinical-private-note" value={props.privateNoteText} onChange={(event) => props.onPrivateNoteChange(event.target.value)} placeholder="Clinician private psychotherapy note" /><button type="button" className="thera-action secondary" disabled={props.privateSaving} onClick={props.onSavePrivateNote}>{props.privateSaving ? "Saving…" : "Save Private Note"}</button></div></details>
 
@@ -198,3 +201,14 @@ export function ClinicalNoteWorkspace(props: Props) {
 function Field({ label, value: fieldValue }: { label: string; value: React.ReactNode }) { return <div className="clinical-field"><span>{label}</span><strong>{fieldValue}</strong></div>; }
 function Objective({ label, text, importLabel }: { label: string; text: string; importLabel: string }) { return <div className="clinical-objective"><span>{label}</span><strong>{importLabel}</strong><p>{text || "No screening result recorded."}</p></div>; }
 function Mse({ label, help }: { label: string; help: string }) { return <div className="clinical-mse"><strong>{label}</strong><span>{help}</span></div>; }
+
+function NoteSection({ heading, props, help }: { heading: string; props: Props; help?: string }) {
+  const id = `clinical-section-${heading.toLowerCase().replaceAll(" ", "-")}`;
+  return <label className="clinical-section-editor" htmlFor={id}><span>{heading}</span>
+    {help && <small id={`${id}-help`}>{help}</small>}
+    <textarea id={id} className="thera-input" value={readNoteSection(props.noteText, heading)} disabled={props.signed}
+      aria-describedby={help ? `${id}-help` : undefined} placeholder={`Document ${heading.toLowerCase()}…`}
+      onChange={(event) => props.onNoteTextChange(updateNoteSection(props.noteText, heading, event.target.value))} />
+    <small>Included in the saved clinical note.</small>
+  </label>;
+}
