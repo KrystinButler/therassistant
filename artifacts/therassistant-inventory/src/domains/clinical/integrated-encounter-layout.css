@@ -54,7 +54,7 @@
 .clinical-note-workspace .clinical-note-top-grid > .thera-card { padding: 12px; box-shadow: none; }
 .clinical-note-workspace .cross-system-monitor-heading { flex-wrap: wrap; }
 .clinical-note-workspace .cross-system-rule-chips { grid-template-columns: 1fr; }
-.clinical-note-workspace .clinical-telemetry-latest { display: grid; grid-template-columns: 1fr; }
+.clinical-note-workspace .clinical-telemetry-latest-grid { display: grid; grid-template-columns: 1fr; }
 .clinical-note-workspace .clinical-note-section { border-radius: 10px; overflow: hidden; }
 .clinical-note-workspace .clinical-note-section > summary { cursor: pointer; padding: 12px; background: #edf5f1; }
 .clinical-note-workspace .clinical-note-section-body { padding: 12px; }
