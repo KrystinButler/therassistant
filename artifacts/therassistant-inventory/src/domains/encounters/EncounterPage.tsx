@@ -670,6 +670,34 @@ export function EncounterPage() {
     setMessage("Structured clinical context carried forward. Prior narrative text was not copied.");
   }
 
+  function renderClinicalWorkspace(mode: "editor" | "context") {
+    if (!data) return null;
+    return <ClinicalNoteWorkspace mode={mode}
+            client={data.client}
+            policy={data.policy}
+            payer={data.payer}
+            plan={data.plan}
+            currentCheckin={currentCheckin}
+            preVisit={preVisit}
+            journalEntry={sharedJournal}
+            activeGoalText={activeGoalText}
+            goalAddressed={goalAddressed}
+            outcomeMeasures={data.outcomeMeasures}
+            safetyScreenings={data.safetyScreenings}
+            diagnoses={data.diagnoses}
+            serviceLines={data.serviceLines}
+            serviceDate={serviceDate}
+            signed={signed || saving}
+            noteText={noteText}
+            onNoteTextChange={(text) => { if (!signed && !saving) setNoteText(text); }}
+            privateNoteText={privateNoteText}
+            privateSaving={privateSaving}
+            onPrivateNoteChange={setPrivateNoteText}
+            onSavePrivateNote={() => void savePrivatePsychotherapyNote()}
+            onInsertNarrative={(text) => setNoteText((current) => appendImportedText(current, text))}
+          />;
+  }
+
   return (
     <>
       {emergencyKey && acknowledgedEmergencyKey !== emergencyKey && <div className="cross-system-modal-backdrop" role="alertdialog" aria-modal="true" aria-labelledby="cross-system-safety-title"><div className="cross-system-modal emergency"><span className="thera-eyebrow">IMMEDIATE REVIEW</span><h2 id="cross-system-safety-title">Cross-System Safety Alert</h2>{crossSystemEvaluation.emergencyAlerts.map((alert) => <div key={`${alert.ruleId}-${alert.trigger}`} className="cross-system-alert-item"><strong>{alert.trigger}</strong><p>{alert.text}</p></div>)}<p className="cross-system-modal-note">This alert is based on documented patient-reported text. Use clinical judgment and appropriate emergency protocols.</p><button type="button" className="thera-action" onClick={() => setAcknowledgedEmergencyKey(emergencyKey)}>Acknowledge and continue</button></div></div>}
@@ -715,34 +743,13 @@ export function EncounterPage() {
             <div><div className="thera-eyebrow">DOCUMENT</div><h2>Active Progress Note</h2><p>Keep documentation open while reviewing clinical context.</p></div>
             {note && <StatusBadge value={String(note.note_status)} />}
           </div>
+          {data.appointment?.location_type === "telehealth" && <div className="encounter-live-session"><TelehealthVisit appointment={data.appointment} editable /></div>}
+          <div className="encounter-documentation-column">
           <div className="encounter-note-controls">
             <label><div className="thera-field-label">Note Type</div><select className="thera-input" value={noteType} disabled={signed || saving} onChange={(event) => changeNoteType(event.target.value)}><option value="psychotherapy">Psychotherapy</option><option value="assessment">Assessment</option><option value="intake">Intake</option><option value="crisis">Crisis</option><option value="case_management">Case Management</option><option value="medication_management">Medication Management</option><option value="other">Other</option></select></label>
             <label><div className="thera-field-label">Treatment Plan — Goal / Objective</div><select className="thera-input" value={goalAddressed} disabled={signed || saving} onChange={(event) => setGoalAddressed(event.target.value)}><option value="">Select a goal</option>{activeGoals.map((goal) => { const label = displayText(goal, ["goal_text", "description", "goal", "title"], "Goal"); return <option key={goal.id} value={label}>{label}</option>; })}{goalAddressed && !activeGoals.some((goal) => displayText(goal, ["goal_text", "description", "goal", "title"], "Goal") === goalAddressed) && <option value={goalAddressed}>{goalAddressed} (previous selection)</option>}</select>{activeGoals.length === 0 && <small>No linked treatment-plan goals. <button type="button" className="encounter-goal-create-link" onClick={() => { setContextTab("treatment"); setContextOpen(true); setPlanComposer(currentTreatmentPlan ? { mode: "goal", planId: String(currentTreatmentPlan.id) } : { mode: "plan" }); }}>Create a treatment plan or goal →</button></small>}</label>
           </div>
-          <ClinicalNoteWorkspace
-            client={data.client}
-            policy={data.policy}
-            payer={data.payer}
-            plan={data.plan}
-            currentCheckin={currentCheckin}
-            preVisit={preVisit}
-            journalEntry={sharedJournal}
-            activeGoalText={activeGoalText}
-            goalAddressed={goalAddressed}
-            outcomeMeasures={data.outcomeMeasures}
-            safetyScreenings={data.safetyScreenings}
-            diagnoses={data.diagnoses}
-            serviceLines={data.serviceLines}
-            serviceDate={serviceDate}
-            signed={signed || saving}
-            noteText={noteText}
-            onNoteTextChange={(text) => { if (!signed && !saving) setNoteText(text); }}
-            privateNoteText={privateNoteText}
-            privateSaving={privateSaving}
-            onPrivateNoteChange={setPrivateNoteText}
-            onSavePrivateNote={() => void savePrivatePsychotherapyNote()}
-            onInsertNarrative={(text) => setNoteText((current) => appendImportedText(current, text))}
-          />
+          {renderClinicalWorkspace("editor")}
           <SessionTimelinePanel signed={signed || saving} selections={structuredSelections} onSelectionsChange={setStructuredSelections} onInsertPhrase={injectIntoNote} />
           <details className="encounter-structured-tools"><summary>Structured findings &amp; SmartPhrase library</summary>
             <FastChartingPanel signed={signed || saving} noteType={noteType} phrases={smartPhrases}
@@ -806,7 +813,6 @@ export function EncounterPage() {
               <div id="encounter-progress-note-hint" className="encounter-editor-meta"><strong>{noteWordCount} words</strong><span aria-hidden="true">·</span><span>Type / for quick inserts</span><span aria-hidden="true">·</span><span>{signed ? "Signed note is locked" : "Save to keep your draft"}</span></div>
               {!signed && <button type="button" className="thera-action encounter-editor-save" disabled={saving || !noteText.trim()} onClick={() => void saveNote()}>{saving ? "Saving..." : "Save Note"}</button>}
             </div>
-            <TelehealthVisit appointment={data.appointment} editable />
             <div className="encounter-inline-signature" id="encounter-signature">
               {signed ? <div className="encounter-signed-handoff"><div><strong>Signed clinical record → Charge Capture</strong><span>The note is locked. All claim and charge corrections remain available in revenue-cycle workqueues.</span></div><Link href="/billing/charges" className="thera-action secondary">Open Charge Capture</Link></div> : <>
                 <ClinicianSigningSetup providerId={String(data.encounter.provider_id ?? "")} />
@@ -818,6 +824,8 @@ export function EncounterPage() {
             </div>
           </div>
           {signed && data.signatures[0] && <div className="thera-alert" style={{ marginTop: 12 }}>Signed {dateTime(String(data.signatures[0].signed_at ?? ""))} by {String(data.signatures[0].signature_text ?? "provider")}</div>}
+          </div>
+          <aside className="encounter-patient-context">{renderClinicalWorkspace("context")}</aside>
         </section>
         <aside className={contextOpen ? "encounter-context-rail open" : "encounter-context-rail"}>
           <div className="encounter-context-tabs" role="group" aria-label="Clinical context">

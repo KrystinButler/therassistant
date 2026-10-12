@@ -23,7 +23,9 @@ test("clinical encounter uses the intended integrated live-session note layout",
   assert.match(css, /section\[aria-label="Telehealth visit"\]/);
   assert.match(css, /--encounter-note-column/);
   assert.match(css, /--encounter-context-column/);
-  assert.match(css, /\.clinical-note-workspace\s*\{[^}]*display:\s*contents/s);
+  assert.match(encounter, /encounter-documentation-column/);
+  assert.match(encounter, /encounter-patient-context/);
+  assert.doesNotMatch(css, /grid-template-rows:\s*auto repeat/);
   assert.match(css, /PORTAL IMPORT/);
   assert.match(css, /@media\s*\(max-width:\s*1180px\)/);
   assert.match(css, /@media\s*\(max-width:\s*760px\)/);
