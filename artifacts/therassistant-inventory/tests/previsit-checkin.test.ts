@@ -49,9 +49,9 @@ test("pre-visit page includes the five approved workflow sections", () => {
 
 test("pre-visit page uses explicit saved markers for completion states", () => {
   const source = readFileSync(checkInPageUrl, "utf8");
-  assert.match(source, /visitQuestionsComplete = Boolean\(submittedAt \|\| questionsSavedAt\)/);
-  assert.match(source, /consentsComplete = allConsentsAccepted && Boolean\(submittedAt \|\| consentsSavedAt\)/);
-  assert.match(source, /visitQuestionsComplete \? "Completed" : hasVisitAnswers \? "In progress" : "Not started"/);
+  assert.match(source, /visitQuestionsComplete = portalSectionMatchesSaved\(visitQuestions, savedQuestions, questionsSavedAt \|\| submittedAt\)/);
+  assert.match(source, /consentsComplete = allConsentsAccepted && portalSectionMatchesSaved\(consents, savedConsents, consentsSavedAt \|\| submittedAt\)/);
+  assert.match(source, /visitQuestionsComplete \? "Completed" : questionsDirty \? "Unsaved changes" : hasVisitAnswers \? "In progress" : "Not started"/);
   assert.match(source, /consentsComplete \? "Completed" : hasConsentProgress \? "In progress" : "Not started"/);
 });
 

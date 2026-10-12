@@ -4,6 +4,7 @@ import { useTenant } from "../../auth/tenant-context";
 import { useAuth } from "../../auth/auth-context";
 import { tenantInsert, tenantSelect, type Row } from "../../lib/tenant-data-client";
 import { getClientPortalAccess, invitePatientPortal } from "./staff-portal-access";
+import { PortalVisitSummary } from "./PortalVisitSummary";
 import { PORTAL_HOME, PORTAL_JOURNAL, PORTAL_LOGIN } from "./routes";
 
 type TestPatient = Row & { id: string; metadata?: Record<string, unknown> };
@@ -110,6 +111,7 @@ export function StaffPortalPreviewPage() {
       <strong>Testing actual patient workflows</strong>
       <p>Activate the secure invitation in your separate test email, then sign in as that synthetic patient in a private browser window. The actual portal supports journal and pre-visit check-in; this preview does not save data.</p>
     </section>
+    <PortalVisitSummary preview appointment={{ id: "synthetic-preview", starts_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(), service_type: "Psychotherapy", location_type: "telehealth" }} />
     <div className="thera-metric-grid" style={{ marginBottom: 17 }}>
       <Metric label="Upcoming appointments" value="1" /><Metric label="Active coverage" value="Sample" />
       <Metric label="Portal documents" value="Sample" /><Metric label="Balance" value="$0.00" />

@@ -4,6 +4,9 @@ import { Link } from "wouter";
 
 import { StatusBadge } from "../../components/status-badge";
 import { dateTime, money } from "../../lib/format";
+import { PortalVisitSummary } from "./PortalVisitSummary";
+import { getJournalDisplayState } from "./portal-progress";
+import "./patient-portal-redesign.css";
 import { PatientMessagesPanel } from "./PatientMessagesPanel";
 import { PatientPortalMobileNavigation, PatientPortalNavigation } from "./PatientPortalNavigation";
 import { downloadPortalDocument, getPatientPortalData, openPortalDocument, recordCheckIn, submitPortalChangeRequest, submitPortalScheduleChange, uploadPortalInsuranceCard } from "./repository";
@@ -174,6 +177,13 @@ export function PatientPortalPage() {
         {error && <div className="pj-message error" style={{ marginBottom: 16 }}>{error}</div>}
         {notice && <div className="pj-message success" style={{ marginBottom: 16 }}>{notice}</div>}
 
+    <PortalVisitSummary appointment={data.upcomingAppointments[0]} checkin={checkinByAppointment.get(data.upcomingAppointments[0]?.id ?? "")} />
+    <nav className="portal-shortcuts" aria-label="Portal shortcuts">
+      <Link href={PORTAL_JOURNAL}>Write in Journal<span>Private or shared reflections</span></Link>
+      <a href="#messages">Messages<span>Contact your care team</span></a>
+      <a href="#documents">Forms &amp; Documents<span>Open shared files</span></a>
+      <a href="#billing">Billing<span>Balances and statements</span></a>
+    </nav>
     <div className="thera-metric-grid four" style={{ marginBottom: 18 }}>
       <Metric label="Upcoming Appointments" value={data.upcomingAppointments.length} />
       <Metric label="Active Coverage" value={data.insurancePolicies.filter((row) => row.status === "active").length} />
@@ -242,7 +252,7 @@ export function PatientPortalPage() {
 
       <section className="thera-card thera-span-2">
         <div className="thera-card-header"><div><h2>In-Between Session Journal</h2><p>Capture thoughts, symptoms, progress, and questions between visits. Entries stay patient-authored until a clinician deliberately incorporates relevant information into the clinical record.</p></div><Link href={PORTAL_JOURNAL} className="thera-action">Open Journal</Link></div>
-        {recentJournalEntries.length ? <div className="thera-stack">{recentJournalEntries.map((entry) => <article key={entry.id} className="thera-work-card"><div className="thera-work-card-top"><strong>{String(entry.mood ?? "Reflection").replaceAll("_", " ")}</strong><span className="thera-muted">{dateTime(String(entry.created_at ?? ""))}</span></div><p>{String(entry.entry_text ?? "")}</p></article>)}</div> : <div className="thera-empty">No journal entries yet. Open the journal to write your first reflection.</div>}
+        {recentJournalEntries.length ? <div className="thera-stack">{recentJournalEntries.map((entry) => <article key={entry.id} className="thera-work-card"><div className="thera-work-card-top"><strong>{String(entry.mood ?? "Reflection").replaceAll("_", " ")}</strong><span className="thera-muted">{dateTime(String(entry.created_at ?? ""))}</span></div><p>{String(entry.entry_text ?? "")}</p><span className={`pj-privacy ${getJournalDisplayState(entry).tone}`}>{getJournalDisplayState(entry).label}</span></article>)}</div> : <div className="thera-empty">No journal entries yet. Open the journal to write your first reflection.</div>}
       </section>
     </div>
       </main>

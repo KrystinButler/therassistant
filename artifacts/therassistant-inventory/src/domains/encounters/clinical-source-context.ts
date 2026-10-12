@@ -2,6 +2,18 @@ import type { PatientReviewCheckIn } from "../scheduling/patient-review-model";
 
 type Row = Record<string, unknown>;
 
+export function readSubmittedVisitQuestion(checkin: Row | null | undefined, keys: string[]) {
+  const responses = checkin?.responses as Row | undefined;
+  const preVisit = responses?.pre_visit as Row | undefined;
+  if (typeof preVisit?.submitted_at !== "string" || !preVisit.submitted_at.trim()) return "";
+  const questions = preVisit?.visit_questions as Row | undefined;
+  for (const key of keys) {
+    const value = questions?.[key];
+    if (typeof value === "string" && value.trim()) return value.trim();
+  }
+  return "";
+}
+
 export function isSharedJournalEntry(row: Row | null | undefined) {
   if (!row) return false;
   return (

@@ -21,6 +21,8 @@ import {
 import { Link } from "wouter";
 
 import { PatientPortalMobileNavigation, PatientPortalNavigation } from "./PatientPortalNavigation";
+import { getJournalDisplayState } from "./portal-progress";
+import "./patient-portal-redesign.css";
 import { addPortalJournalEntry, getPatientPortalData } from "./repository";
 import { PORTAL_HOME } from "./routes";
 import "./patient-journal.css";
@@ -91,7 +93,7 @@ export function PatientJournalPage() {
   const [mood, setMood] = useState("");
   const [goalId, setGoalId] = useState("");
   const [symptoms, setSymptoms] = useState<string[]>([]);
-  const [visibility, setVisibility] = useState<Visibility>("shared_with_provider");
+  const [visibility, setVisibility] = useState<Visibility>("private");
   const [showAll, setShowAll] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -136,7 +138,7 @@ export function PatientJournalPage() {
       setMood("");
       setGoalId("");
       setSymptoms([]);
-      setNotice(entryStatus === "draft" ? "Draft saved." : "Journal entry saved.");
+      setNotice(entryStatus === "draft" ? "Draft saved. It is not submitted to your provider." : visibility === "private" ? "Journal entry saved privately." : "Journal entry shared with your provider.");
       await load();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unable to save your journal entry.");
@@ -193,7 +195,7 @@ export function PatientJournalPage() {
           <section className="pj-card pj-entry-card">
             <div className="pj-card-heading">
               <div><PencilLine size={18} /><strong>New Journal Entry</strong></div>
-              <button type="button" className="pj-text-button" disabled={saving !== null} onClick={() => void saveEntry("draft")}>
+              <button type="button" className="pj-text-button" disabled={saving !== null || !entryText.trim()} onClick={() => void saveEntry("draft")}>
                 {saving === "draft" ? "Saving..." : "Save Draft"}
               </button>
             </div>
@@ -201,7 +203,7 @@ export function PatientJournalPage() {
             <label className="pj-label" htmlFor="journal-entry">What would you like to remember for your next session?</label>
             <textarea
               id="journal-entry"
-              className="pj-textarea"
+              className="pj-textarea" disabled={saving !== null}
               maxLength={1000}
               value={entryText}
               onChange={(event) => setEntryText(event.target.value)}
@@ -218,7 +220,7 @@ export function PatientJournalPage() {
                       type="button"
                       key={option.value}
                       className={`pj-mood mood-${index + 1}${mood === option.value ? " selected" : ""}`}
-                      aria-pressed={mood === option.value}
+                      disabled={saving !== null} aria-pressed={mood === option.value}
                       onClick={() => setMood(option.value)}
                     >
                       <span>{option.face}</span><small>{option.label}</small>
@@ -228,7 +230,7 @@ export function PatientJournalPage() {
               </div>
 
               <label className="pj-field"><span><Target size={14} /> Related goal <small>(optional)</small></span>
-                <select value={goalId} onChange={(event) => setGoalId(event.target.value)}>
+                <select disabled={saving !== null} value={goalId} onChange={(event) => setGoalId(event.target.value)}>
                   <option value="">Select a treatment goal</option>
                   {activeGoals.map((goal) => <option key={goal.id} value={goal.id}>{String(goal.goal_text ?? "Treatment goal")}</option>)}
                 </select>
@@ -236,22 +238,22 @@ export function PatientJournalPage() {
 
               <div className="pj-field"><span><Tag size={14} /> Symptoms <small>(optional)</small></span>
                 <div className="pj-symptom-picker">
-                  {symptomOptions.map((symptom) => <button type="button" key={symptom} className={symptoms.includes(symptom) ? "selected" : ""} onClick={() => toggleSymptom(symptom)}>{symptom}</button>)}
+                  {symptomOptions.map((symptom) => <button type="button" disabled={saving !== null} key={symptom} className={symptoms.includes(symptom) ? "selected" : ""} onClick={() => toggleSymptom(symptom)}>{symptom}</button>)}
                 </div>
               </div>
 
               <label className="pj-field"><span><Eye size={14} /> Share with provider</span>
-                <select value={visibility} onChange={(event) => setVisibility(event.target.value as Visibility)}>
-                  <option value="shared_with_provider">Share with my provider (recommended)</option>
+                <select disabled={saving !== null} value={visibility} onChange={(event) => setVisibility(event.target.value as Visibility)}>
+                  <option value="shared_with_provider">Share with my provider</option>
                   <option value="private">Save privately</option>
                 </select>
               </label>
             </div>
 
-            <div className="pj-info"><Info size={16} /><span>Your journal entries are reviewed by your provider before they become part of your clinical record.</span></div>
+            <div className="pj-info"><Info size={16} /><span>{visibility === "private" ? "This entry stays private. Choose Share with my provider if you want your care team to review it." : "Your provider can review a shared, submitted entry and decide what to include in your clinical note. Drafts are not submitted."}</span></div>
             <div className="pj-entry-actions">
               <button type="button" className="pj-primary-button" disabled={saving !== null || !entryText.trim()} onClick={() => void saveEntry("submitted")}>
-                <Save size={16} /> {saving === "submitted" ? "Saving..." : "Save Entry"}
+                <Save size={16} /> {saving === "submitted" ? "Saving..." : visibility === "private" ? "Save Privately" : "Share Entry with Provider"}
               </button>
             </div>
           </section>
@@ -262,11 +264,12 @@ export function PatientJournalPage() {
               <div className="pj-entry-list">
                 {recentEntries.map((entry) => {
                   const tags = tagsFrom(entry.tags);
-                  const shared = String(entry.visibility ?? "shared_with_provider") === "shared_with_provider";
+                  const sharing = getJournalDisplayState(entry);
+                  const shared = sharing.sharedWithProvider;
                   return <article key={entry.id} className="pj-entry-row">
                     <div className="pj-entry-date"><strong>{formatDate(entry.entry_date ?? entry.created_at, { month: "short", day: "numeric" })}</strong><small>{formatDate(entry.entry_date ?? entry.created_at, { year: "numeric" })}</small></div>
                     <div className="pj-entry-body"><strong>{entryTitle(entry.entry_text)}</strong><p>{String(entry.entry_text ?? "")}</p>{tags.length > 0 && <div className="pj-tags">{tags.map((tag) => <span key={tag}>{tag}</span>)}</div>}</div>
-                    <div className={`pj-privacy ${shared ? "shared" : "private"}`}>{shared ? <><Eye size={13} /> Shared with provider</> : <><LockKeyhole size={13} /> Saved privately</>}</div>
+                    <div className={`pj-privacy ${sharing.tone}`}>{shared ? <Eye size={13} /> : <LockKeyhole size={13} />}{sharing.label}</div>
                   </article>;
                 })}
               </div>
@@ -293,7 +296,7 @@ export function PatientJournalPage() {
 
           <section className="pj-side-card pj-prompts">
             <h2><HeartPulse size={17} /> Reflection Prompts</h2>
-            {prompts.map((prompt) => <button type="button" key={prompt} onClick={() => setEntryText((current) => current ? `${current}\n\n${prompt}\n` : `${prompt}\n`)}><span>{prompt}</span><ChevronRight size={14} /></button>)}
+            {prompts.map((prompt) => <button type="button" disabled={saving !== null} key={prompt} onClick={() => setEntryText((current) => current ? `${current}\n\n${prompt}\n` : `${prompt}\n`)}><span>{prompt}</span><ChevronRight size={14} /></button>)}
           </section>
 
           <section className="pj-emergency">
