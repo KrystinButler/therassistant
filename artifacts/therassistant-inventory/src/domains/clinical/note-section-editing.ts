@@ -1,12 +1,12 @@
 /** Section controls and the full editor share the persisted note_text value. */
 function sectionRange(note: string, heading: string) {
   const escaped = heading.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  const match = new RegExp(`^${escaped}:[ \t]*\\n`, "im").exec(note);
+  const match = new RegExp(`^${escaped}(?: \\(clinician-confirmed\\))?:[ \t]*(?:\\r?\\n)?`, "im").exec(note);
   if (!match) return null;
   const start = match.index + match[0].length;
   // Stop at template headings or attributed source blocks, preserving adjacent content.
   const headings = ["Subjective", "Objective", "Assessment", "Plan", "Mental Status Examination", "Session focus", "Interventions", "Patient response", "Progress toward goals", "Risk assessment", "Presenting concerns", "History", "Mental status", "Diagnostic assessment", "Risk / safety", "Recommendations", "Chief concern", "Psychosocial context", "Initial plan", "Presenting crisis", "Safety assessment", "Immediate interventions", "Response", "Disposition", "Safety plan", "Service need", "Care coordination", "Resources", "Follow-up", "Symptoms", "Adherence", "Side effects", "Medication plan", "Reason for visit", "Findings", "Intervention"];
-  const next = new RegExp(`^(?:(?:${headings.join("|")}):[ \t]*$|PATIENT-REPORTED[^\\n]*$|Patient-reported[^\\n]*$)`, "gim");
+  const next = new RegExp(`^(?:(?:${headings.join("|")})(?: \\(clinician-confirmed\\))?:[^\\n]*$|PATIENT-REPORTED[^\\n]*$|Patient-reported[^\\n]*$|\\[PATIENT JOURNAL IMPORT[^\\n]*$)`, "gim");
   next.lastIndex = start;
   const boundary = next.exec(note);
   return { headingStart: match.index, start, end: boundary?.index ?? note.length };

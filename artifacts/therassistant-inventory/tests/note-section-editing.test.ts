@@ -46,3 +46,23 @@ test("multiline MSE field labels remain part of the MSE section", () => {
   assert.equal(readNoteSection(edited, "Mental Status Examination"), body);
   assert.equal(readNoteSection(edited, "Plan"), "Follow up.");
 });
+
+test("editing or clearing SOAP preserves clinician-confirmed quick inserts", () => {
+  const mse = "Mental Status Examination (clinician-confirmed):\nAppearance / behavior: [observed]\nOrientation: [assessed]";
+  const risk = "Risk Assessment (clinician-confirmed):\nSuicidal ideation: [assess and document]";
+  const original = `Subjective:\nPatient report.\n\n${mse}\n\n${risk}\n\nPlan:\nFollow up.`;
+  for (const body of ["Updated report.", ""]) {
+    const updated = updateNoteSection(original, "Subjective", body);
+    assert.ok(updated.includes(mse));
+    assert.ok(updated.includes(risk));
+    assert.equal(readNoteSection(updated, "Plan"), "Follow up.");
+  }
+});
+
+test("inline adjacent headings remain separate and editable", () => {
+  const original = "Subjective:\nPatient report.\n\nObjective: Observed findings.\n\nAssessment: Clinical impression.";
+  const updated = updateNoteSection(original, "Subjective", "Updated report.");
+  assert.ok(updated.includes("Objective: Observed findings."));
+  assert.equal(readNoteSection(updated, "Objective"), "Observed findings.");
+  assert.equal(readNoteSection(updated, "Assessment"), "Clinical impression.");
+});
