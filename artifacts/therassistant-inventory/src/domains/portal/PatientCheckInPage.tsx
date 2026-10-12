@@ -16,6 +16,8 @@ import { Link, useRoute } from "wouter";
 import { PatientPortalMobileNavigation, PatientPortalNavigation } from "./PatientPortalNavigation";
 import { getPatientPortalData, savePreVisitCheckIn } from "./repository";
 import { PORTAL_HOME, portalCheckInPath } from "./routes";
+import { portalSectionMatchesSaved } from "./portal-progress";
+import "./patient-portal-redesign.css";
 import type { PreVisitCheckInUpdate } from "./workflow";
 import "./patient-journal.css";
 import "./patient-checkin.css";
@@ -117,6 +119,8 @@ export function PatientCheckInPage() {
   const [demographicsConfirmed, setDemographicsConfirmed] = useState(false);
   const [insuranceConfirmed, setInsuranceConfirmed] = useState(false);
   const [visitQuestions, setVisitQuestions] = useState<VisitQuestions>(emptyQuestions);
+  const [savedQuestions, setSavedQuestions] = useState<VisitQuestions>(emptyQuestions);
+  const [savedConsents, setSavedConsents] = useState<Consents>(emptyConsents);
   const [consents, setConsents] = useState<Consents>(emptyConsents);
   const [questionsSavedAt, setQuestionsSavedAt] = useState("");
   const [consentsSavedAt, setConsentsSavedAt] = useState("");
@@ -146,6 +150,8 @@ export function PatientCheckInPage() {
         setDemographicsConfirmed(demographicsDone);
         setInsuranceConfirmed(insuranceDone);
         setVisitQuestions(loadedQuestions);
+        setSavedQuestions(loadedQuestions);
+        setSavedConsents(loadedConsents);
         setConsents(loadedConsents);
         setQuestionsSavedAt(loadedQuestionsSavedAt);
         setConsentsSavedAt(loadedConsentsSavedAt);
@@ -185,6 +191,8 @@ export function PatientCheckInPage() {
     try {
       const saved = await savePreVisitCheckIn(appointmentId, update);
       const preVisit = recordOf(recordOf(saved.responses).pre_visit);
+      if (update.visit_questions) { const questions = readQuestions(preVisit.visit_questions); setVisitQuestions(questions); setSavedQuestions(questions); }
+      if (update.consents) { const values = readConsents(preVisit.consents); setConsents(values); setSavedConsents(values); }
       if (preVisit.visit_questions_saved_at) setQuestionsSavedAt(String(preVisit.visit_questions_saved_at));
       if (preVisit.consents_saved_at) setConsentsSavedAt(String(preVisit.consents_saved_at));
       if (preVisit.submitted_at) setSubmittedAt(String(preVisit.submitted_at));
@@ -228,8 +236,8 @@ export function PatientCheckInPage() {
   }
 
   async function submitCheckIn() {
-    if (!demographicsConfirmed || !insuranceConfirmed || !allConsentsAccepted) {
-      setError("Complete demographics, insurance, and all acknowledgments before submitting.");
+    if (!demographicsConfirmed || !insuranceConfirmed || !allConsentsAccepted || !visitQuestionsComplete || !consentsComplete) {
+      setError("Save your visit questions, confirm your information, and save all acknowledgments before submitting.");
       return;
     }
     if (await persist("submit", {
@@ -248,8 +256,10 @@ export function PatientCheckInPage() {
   if (!data || !appointment) return <div className="pj-loading pj-error">{error ?? "Pre-visit check-in is unavailable."}</div>;
 
   const patientDisplayName = patientName(data.patient);
-  const visitQuestionsComplete = Boolean(submittedAt || questionsSavedAt);
-  const consentsComplete = allConsentsAccepted && Boolean(submittedAt || consentsSavedAt);
+  const visitQuestionsComplete = portalSectionMatchesSaved(visitQuestions, savedQuestions, questionsSavedAt || submittedAt);
+  const consentsComplete = allConsentsAccepted && portalSectionMatchesSaved(consents, savedConsents, consentsSavedAt || submittedAt);
+  const readOnly = working !== null || Boolean(submittedAt);
+  const questionsDirty = Boolean(questionsSavedAt) && !visitQuestionsComplete;
   const stepStatuses = [
     demographicsConfirmed,
     insuranceConfirmed,
@@ -298,11 +308,12 @@ export function PatientCheckInPage() {
             <div className="pci-appointment-block"><MapPin size={20} /><div><strong>Appointment location</strong><span>{String(appointment.location_type ?? "Office").replaceAll("_", " ")}</span></div></div>
           </section>
 
+          <div className="portal-submit-state" role="status"><strong>{submittedAt ? "Submitted to your care team" : questionsDirty ? "Unsaved changes" : questionsSavedAt ? "Draft saved · not submitted" : "Prepare for your visit"}</strong><span>{submittedAt ? "You can review your submitted answers below." : "Save each step, then review and submit your answers for provider review."}</span></div>
           <div className="pci-progress" aria-label="Check-in progress">
             {["Demographics", "Insurance", "Visit Questions", "Consents", "Review & Submit"].map((label, index) => {
               const step = index + 1;
               const complete = stepStatuses[index];
-              return <button type="button" key={label} className={activeStep === step ? "active" : ""} onClick={() => setActiveStep(step)}>
+              return <button type="button" key={label} disabled={working !== null} className={activeStep === step ? "active" : ""} onClick={() => setActiveStep(step)}>
                 <span className={complete ? "complete" : activeStep === step ? "current" : ""}>{complete ? <Check size={14} /> : step}</span>
                 <small>{label}</small>
               </button>;
@@ -310,7 +321,7 @@ export function PatientCheckInPage() {
           </div>
 
           <section className={`pci-section ${activeStep === 1 ? "open" : ""}`}>
-            <button type="button" className="pci-section-header" onClick={() => setActiveStep(1)}>
+            <button type="button" className="pci-section-header" disabled={working !== null} onClick={() => setActiveStep(1)}>
               <span className={`pci-status-dot ${demographicsConfirmed ? "complete" : ""}`}>{demographicsConfirmed ? <Check size={14} /> : 1}</span>
               <strong>Demographics</strong><span className="pci-section-state">{demographicsConfirmed ? "Completed" : "Confirm information"}</span><ChevronDown size={16} />
             </button>
@@ -322,12 +333,12 @@ export function PatientCheckInPage() {
                 <Summary label="Email" value={String(data.patient.email ?? "—")} />
                 <Summary label="Address" value={[data.patient.address_line1, data.patient.address_line2, data.patient.city, data.patient.state, data.patient.postal_code].filter(Boolean).join(", ") || "—"} wide />
               </div>
-              <div className="pci-actions"><button type="button" className="pj-primary-button" disabled={working !== null} onClick={() => void confirmDemographics()}>{working === "demographics" ? "Saving..." : demographicsConfirmed ? "Confirmed" : "Confirm Demographics"}</button></div>
+              <div className="pci-actions"><button type="button" className="pj-primary-button" disabled={readOnly} onClick={() => void confirmDemographics()}>{working === "demographics" ? "Saving..." : demographicsConfirmed ? "Confirmed" : "Confirm Demographics"}</button></div>
             </div>}
           </section>
 
           <section className={`pci-section ${activeStep === 2 ? "open" : ""}`}>
-            <button type="button" className="pci-section-header" onClick={() => setActiveStep(2)}>
+            <button type="button" className="pci-section-header" disabled={working !== null} onClick={() => setActiveStep(2)}>
               <span className={`pci-status-dot ${insuranceConfirmed ? "complete" : ""}`}>{insuranceConfirmed ? <Check size={14} /> : 2}</span>
               <strong>Insurance</strong><span className="pci-section-state">{insuranceConfirmed ? "Completed" : "Confirm coverage"}</span><ChevronDown size={16} />
             </button>
@@ -338,55 +349,58 @@ export function PatientCheckInPage() {
                 <Summary label="Group number" value={String(policy.group_number ?? "—")} />
                 <Summary label="Status" value={String(policy.status ?? "—")} />
               </div> : <div className="pci-empty"><strong>No insurance is currently on file.</strong><br />If you are self-pay, confirm that below. If you expected insurance to appear, contact the practice before submitting check-in.</div>}
-              <div className="pci-actions"><button type="button" className="pj-primary-button" disabled={working !== null} onClick={() => void confirmInsurance()}>{working === "insurance" ? "Saving..." : insuranceConfirmed ? "Confirmed" : policy ? "Confirm Insurance" : "Confirm No Insurance on File"}</button></div>
+              <div className="pci-actions"><button type="button" className="pj-primary-button" disabled={readOnly} onClick={() => void confirmInsurance()}>{working === "insurance" ? "Saving..." : insuranceConfirmed ? "Confirmed" : policy ? "Confirm Insurance" : "Confirm No Insurance on File"}</button></div>
             </div>}
           </section>
 
           <section className={`pci-section ${activeStep === 3 ? "open" : ""}`}>
-            <button type="button" className="pci-section-header" onClick={() => setActiveStep(3)}>
+            <button type="button" className="pci-section-header" disabled={working !== null} onClick={() => setActiveStep(3)}>
               <span className={`pci-status-dot ${visitQuestionsComplete ? "complete" : hasVisitAnswers ? "current" : ""}`}>{visitQuestionsComplete ? <Check size={14} /> : 3}</span>
-              <strong>Visit Questions</strong><span className="pci-section-state">{visitQuestionsComplete ? "Completed" : hasVisitAnswers ? "In progress" : "Not started"}</span><ChevronDown size={16} />
+              <strong>Visit Questions</strong><span className="pci-section-state">{visitQuestionsComplete ? "Completed" : questionsDirty ? "Unsaved changes" : hasVisitAnswers ? "In progress" : "Not started"}</span><ChevronDown size={16} />
             </button>
             {activeStep === 3 && <div className="pci-section-body pci-questions">
-              <Question label="What would you like to focus on today?" value={visitQuestions.focus_today} onChange={(value) => setVisitQuestions((current) => ({ ...current, focus_today: value }))} />
-              <Question label="How have you been feeling since your last visit?" value={visitQuestions.feeling_since_last_visit} onChange={(value) => setVisitQuestions((current) => ({ ...current, feeling_since_last_visit: value }))} />
-              <Question label="Any important changes since your last appointment?" value={visitQuestions.important_changes} onChange={(value) => setVisitQuestions((current) => ({ ...current, important_changes: value }))} />
-              <div className="pci-question pci-prsds-block"><span><Heart size={17} /> Physical / somatic distress today (1-10)</span><div className="pci-prsds-rating" role="radiogroup" aria-label="Physical / somatic distress today, 1 to 10">{Array.from({ length: 10 }, (_, index) => index + 1).map((score) => <button type="button" role="radio" aria-checked={visitQuestions.somatic_distress_score === score} className={visitQuestions.somatic_distress_score === score ? "selected" : ""} key={score} onClick={() => setVisitQuestions((current) => ({ ...current, somatic_distress_score: score }))}>{score}</button>)}</div><div className="pci-prsds-endpoints"><span>Low physical symptom impact</span><span>High physical symptom impact</span></div><small>Patient-reported physical symptom impact only. This rating does not assign a diagnosis or medical severity level. Discuss new or concerning physical symptoms with your provider and appropriate medical clinician.</small></div>
-              <Question label="Are there any safety concerns you want your provider to know about today?" value={visitQuestions.safety_concerns} onChange={(value) => setVisitQuestions((current) => ({ ...current, safety_concerns: value }))} />
+              <Question disabled={readOnly} label="What would you like to focus on today?" value={visitQuestions.focus_today} onChange={(value) => setVisitQuestions((current) => ({ ...current, focus_today: value }))} />
+              <Question disabled={readOnly} label="How have you been feeling since your last visit?" value={visitQuestions.feeling_since_last_visit} onChange={(value) => setVisitQuestions((current) => ({ ...current, feeling_since_last_visit: value }))} />
+              <Question disabled={readOnly} label="Any important changes since your last appointment?" value={visitQuestions.important_changes} onChange={(value) => setVisitQuestions((current) => ({ ...current, important_changes: value }))} />
+              <div className="pci-question pci-prsds-block"><span><Heart size={17} /> Physical / somatic distress today (1-10)</span><div className="pci-prsds-rating" role="radiogroup" aria-label="Physical / somatic distress today, 1 to 10">{Array.from({ length: 10 }, (_, index) => index + 1).map((score) => <button type="button" disabled={readOnly} role="radio" aria-checked={visitQuestions.somatic_distress_score === score} className={visitQuestions.somatic_distress_score === score ? "selected" : ""} key={score} onClick={() => setVisitQuestions((current) => ({ ...current, somatic_distress_score: score }))}>{score}</button>)}</div><div className="pci-prsds-endpoints"><span>Low physical symptom impact</span><span>High physical symptom impact</span></div><small>Patient-reported physical symptom impact only. This rating does not assign a diagnosis or medical severity level. Discuss new or concerning physical symptoms with your provider and appropriate medical clinician.</small></div>
+              <Question disabled={readOnly} label="Are there any safety concerns you want your provider to know about today?" value={visitQuestions.safety_concerns} onChange={(value) => setVisitQuestions((current) => ({ ...current, safety_concerns: value }))} />
               <div className="pj-message" role="note">Portal responses are not monitored as an emergency service. If you are in immediate danger or need emergency help, call 911 or go to the nearest emergency department.</div>
-              <label className="pci-question"><span><ShieldCheck size={17} /> Which treatment goal feels most important right now?</span><select value={visitQuestions.treatment_goal} onChange={(event) => setVisitQuestions((current) => ({ ...current, treatment_goal: event.target.value }))}><option value="">Select a treatment goal</option>{data.treatmentGoals.map((goal) => <option key={goal.id} value={String(goal.goal_text ?? goal.id)}>{String(goal.goal_text ?? "Treatment goal")}</option>)}</select></label>
-              <Question label="Anything else you want your provider to know before the session?" value={visitQuestions.anything_else} onChange={(value) => setVisitQuestions((current) => ({ ...current, anything_else: value }))} />
-              <div className="pci-actions"><button type="button" className="pj-primary-button" disabled={working !== null} onClick={() => void saveVisitQuestions()}>{working === "questions" ? "Saving..." : "Save & Continue"}</button></div>
+              <label className="pci-question"><span><ShieldCheck size={17} /> Which treatment goal feels most important right now?</span><select disabled={readOnly} value={visitQuestions.treatment_goal} onChange={(event) => setVisitQuestions((current) => ({ ...current, treatment_goal: event.target.value }))}><option value="">Select a treatment goal</option>{data.treatmentGoals.map((goal) => <option key={goal.id} value={String(goal.goal_text ?? goal.id)}>{String(goal.goal_text ?? "Treatment goal")}</option>)}</select></label>
+              <Question disabled={readOnly} label="Anything else you want your provider to know before the session?" value={visitQuestions.anything_else} onChange={(value) => setVisitQuestions((current) => ({ ...current, anything_else: value }))} />
+              <div className="pci-actions"><button type="button" className="pj-primary-button" disabled={readOnly} onClick={() => void saveVisitQuestions()}>{working === "questions" ? "Saving..." : "Save & Continue"}</button></div>
             </div>}
           </section>
 
           <section className={`pci-section ${activeStep === 4 ? "open" : ""}`}>
-            <button type="button" className="pci-section-header" onClick={() => setActiveStep(4)}>
+            <button type="button" className="pci-section-header" disabled={working !== null} onClick={() => setActiveStep(4)}>
               <span className={`pci-status-dot ${consentsComplete ? "complete" : hasConsentProgress ? "current" : ""}`}>{consentsComplete ? <Check size={14} /> : 4}</span>
               <strong>Consents & Acknowledgments</strong><span className="pci-section-state">{consentsComplete ? "Completed" : hasConsentProgress ? "In progress" : "Not started"}</span><ChevronDown size={16} />
             </button>
             {activeStep === 4 && <div className="pci-section-body">
-              <Consent checked={consents.information_accurate} onChange={(checked) => setConsents((current) => ({ ...current, information_accurate: checked }))}>I confirm that my demographic and insurance information shown above is accurate to the best of my knowledge.</Consent>
-              <Consent checked={consents.privacy_acknowledged} onChange={(checked) => setConsents((current) => ({ ...current, privacy_acknowledged: checked }))}>I acknowledge the practice privacy and communication policies already available in my portal.</Consent>
-              <Consent checked={consents.care_acknowledged} onChange={(checked) => setConsents((current) => ({ ...current, care_acknowledged: checked }))}>I understand that this pre-visit check-in supports, but does not replace, discussion with my provider.</Consent>
-              <div className="pci-actions"><button type="button" className="pj-primary-button" disabled={working !== null} onClick={() => void saveConsents()}>{working === "consents" ? "Saving..." : "Save & Continue"}</button></div>
+              <Consent disabled={readOnly} checked={consents.information_accurate} onChange={(checked) => setConsents((current) => ({ ...current, information_accurate: checked }))}>I confirm that my demographic and insurance information shown above is accurate to the best of my knowledge.</Consent>
+              <Consent disabled={readOnly} checked={consents.privacy_acknowledged} onChange={(checked) => setConsents((current) => ({ ...current, privacy_acknowledged: checked }))}>I acknowledge the practice privacy and communication policies already available in my portal.</Consent>
+              <Consent disabled={readOnly} checked={consents.care_acknowledged} onChange={(checked) => setConsents((current) => ({ ...current, care_acknowledged: checked }))}>I understand that this pre-visit check-in supports, but does not replace, discussion with my provider.</Consent>
+              <div className="pci-actions"><button type="button" className="pj-primary-button" disabled={readOnly} onClick={() => void saveConsents()}>{working === "consents" ? "Saving..." : "Save & Continue"}</button></div>
             </div>}
           </section>
 
           <section className={`pci-section ${activeStep === 5 ? "open" : ""}`}>
-            <button type="button" className="pci-section-header" onClick={() => setActiveStep(5)}>
+            <button type="button" className="pci-section-header" disabled={working !== null} onClick={() => setActiveStep(5)}>
               <span className={`pci-status-dot ${submittedAt ? "complete" : ""}`}>{submittedAt ? <Check size={14} /> : 5}</span>
               <strong>Review & Submit</strong><span className="pci-section-state">{submittedAt ? `Submitted ${formatDate(submittedAt)}` : "Not started"}</span><ChevronDown size={16} />
             </button>
             {activeStep === 5 && <div className="pci-section-body">
               <div className="pci-review-banner"><FileCheck2 size={20} /><div><strong>{submittedAt ? "Your pre-visit check-in has been submitted." : "Review your check-in before submitting."}</strong><span>Your provider will be able to review these responses in the appointment context.</span></div></div>
+              <dl className="portal-answer-review">
+                {[["Visit focus", visitQuestions.focus_today], ["Since last visit", visitQuestions.feeling_since_last_visit], ["Important changes", visitQuestions.important_changes], ["Physical symptom impact", visitQuestions.somatic_distress_score == null ? "" : `${visitQuestions.somatic_distress_score} / 10`], ["Safety concerns", visitQuestions.safety_concerns], ["Treatment goal", visitQuestions.treatment_goal], ["Additional context", visitQuestions.anything_else]].map(([label,answer]) => <div key={label}><dt>{label}</dt><dd>{answer || "Not provided"}</dd></div>)}
+              </dl>
               <div className="pci-review-list">
                 <ReviewItem label="Demographics" complete={demographicsConfirmed} />
                 <ReviewItem label="Insurance" complete={insuranceConfirmed} />
                 <ReviewItem label="Visit Questions" complete={visitQuestionsComplete} />
                 <ReviewItem label="Consents & Acknowledgments" complete={consentsComplete} />
               </div>
-              <div className="pci-actions"><button type="button" className="pj-primary-button" disabled={working !== null || Boolean(submittedAt)} onClick={() => void submitCheckIn()}>{working === "submit" ? "Submitting..." : submittedAt ? "Submitted" : "Submit Pre-Visit Check-In"}</button></div>
+              <div className="pci-actions"><button type="button" className="pj-primary-button" disabled={readOnly || !demographicsConfirmed || !insuranceConfirmed || !visitQuestionsComplete || !consentsComplete} onClick={() => void submitCheckIn()}>{working === "submit" ? "Submitting..." : submittedAt ? "Submitted" : "Submit Pre-Visit Check-In"}</button></div>
             </div>}
           </section>
         </main>
@@ -400,12 +414,12 @@ function Summary({ label, value, wide = false }: { label: string; value: string;
   return <div className={wide ? "pci-summary wide" : "pci-summary"}><small>{label}</small><strong>{value}</strong></div>;
 }
 
-function Question({ label, value, onChange }: { label: string; value: string; onChange: (value: string) => void }) {
-  return <label className="pci-question"><span><MessageSquare size={17} /> {label}</span><textarea rows={2} value={value} onChange={(event) => onChange(event.target.value)} /></label>;
+function Question({ label, value, onChange, disabled }: { disabled?: boolean; label: string; value: string; onChange: (value: string) => void }) {
+  return <label className="pci-question"><span><MessageSquare size={17} /> {label}</span><textarea disabled={disabled} rows={2} value={value} onChange={(event) => onChange(event.target.value)} /></label>;
 }
 
-function Consent({ checked, onChange, children }: { checked: boolean; onChange: (checked: boolean) => void; children: string }) {
-  return <label className="pci-consent"><input type="checkbox" checked={checked} onChange={(event) => onChange(event.target.checked)} /><span>{children}</span></label>;
+function Consent({ checked, onChange, children, disabled }: { disabled?: boolean; checked: boolean; onChange: (checked: boolean) => void; children: string }) {
+  return <label className="pci-consent"><input type="checkbox" disabled={disabled} checked={checked} onChange={(event) => onChange(event.target.checked)} /><span>{children}</span></label>;
 }
 
 function ReviewItem({ label, complete }: { label: string; complete: boolean }) {

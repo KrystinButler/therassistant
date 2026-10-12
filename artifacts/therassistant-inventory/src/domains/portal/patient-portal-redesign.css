@@ -1,0 +1,74 @@
+/* Shared patient portal styling; every visible action uses an existing route or handler. */
+.pj-app .pj-topbar { height: 64px; box-shadow: none; padding: 0 24px; }
+.pj-app .pj-brand small, .pj-app .pj-care-message { display: none; }
+.pj-app .pj-user strong { font-size: 13px; }
+.pj-app .pj-layout { grid-template-columns: 208px minmax(0,1fr) 264px; min-height: calc(100vh - 64px); background: #f6f9f8; }
+.pj-app .ppn-home-layout, .pj-app .pci-layout { grid-template-columns: 208px minmax(0,1fr); }
+.pj-app .pj-sidebar { background: white; padding: 24px 14px; gap: 18px; }
+.pj-app .pj-mountains, .pj-app .pj-sidebar-quote, .pj-app .pj-hand-note, .pj-app .pj-progress-copy { display: none; }
+.pj-app .pj-nav { margin: 0; }
+.pj-app .pj-nav a, .pj-app .pj-nav .ppn-logout { min-height: 44px; font-size: 13px; border-radius: 8px; }
+.pj-app .pj-main, .pj-app .pci-main { padding: 24px; min-width: 0; }
+.pj-app .pj-title-row { margin-bottom: 20px; }
+.pj-app .pj-title-row h1 { font-size: clamp(24px,3vw,30px); line-height: 1.25; }
+.pj-app .pj-title-row p { max-width: 660px; line-height: 1.6; font-size: 14px; }
+.pj-app .thera-detail-grid { align-items: start; gap: 16px; }
+.pj-app .thera-card, .pj-app .pj-card, .pj-app .pci-section { border-radius: 12px; box-shadow: none; background: white; }
+.pj-app .thera-card { padding: 18px; }
+.pj-app .thera-metric-value { font-size: 22px; }
+.pj-app .thera-metric-card { padding: 14px; }
+.pj-app .thera-filter-row { flex-wrap: wrap; }
+.pj-app :is(.thera-action,.pj-primary-button) { min-height: 44px; font-size: 13px; }
+.pj-app :is(input,textarea,select):focus-visible { outline: 2px solid #277c79; outline-offset: 2px; }
+.pj-app :is(input,textarea,select):disabled { opacity: .8; cursor: default; }
+.pj-app .pj-textarea { min-height: 170px; font-size: 14px; line-height: 1.7; }
+.pj-app .pj-privacy.draft { background: #fff5df; color: #7d6020; }
+.pj-app .pj-entry-row { align-items: start; }
+.pj-app .pj-entry-actions { justify-content: flex-end; }
+.pj-app .pj-rightbar { background: transparent; }
+.pj-app .pci-title-row { align-items: center; }
+.pj-app .pci-appointment-card { margin-bottom: 16px; }
+.pj-app .pci-question textarea { min-height: 90px; font-size: 14px; }
+.pj-app .pci-section-header { min-height: 60px; }
+.pj-app .pci-progress { margin: 16px 0; }
+.pj-app .pci-section-header:disabled { cursor: wait; }
+.portal-next-visit { padding: 22px; background: white; border: 1px solid #d3e2df; border-left: 4px solid #2d7772; border-radius: 12px; margin-bottom: 16px; min-width: 0; }
+.portal-next-heading, .portal-visit-footer { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; }
+.portal-next-visit h2 { display: flex; align-items: center; gap: 10px; margin: 16px 0 8px; font-size: clamp(19px,2.5vw,24px); color: #173f4c; line-height: 1.4; }
+.portal-next-visit p { margin: 0 0 20px; color: #536b75; font-size: 14px; }
+.portal-status { display: inline-flex; align-items: center; gap: 6px; background: #f0f4f3; color: #49636b; padding: 6px 10px; font-size: 12px; font-weight: 600; border-radius: 30px; }
+.portal-status.complete { background: #e3f0e9; color: #27654f; }
+.portal-visit-footer { padding-top: 16px; border-top: 1px solid #e1ebe7; }
+.portal-visit-footer > div { display: grid; gap: 5px; }
+.portal-visit-footer strong { color: #2c4d56; font-size: 13px; }
+.portal-visit-footer small { color: #536b75; font-size: 12px; }
+.portal-next-visit .thera-action { min-height: 44px; padding: 11px 16px; display: inline-flex; align-items: center; gap: 8px; }
+.portal-shortcuts { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 10px; margin: 0 0 20px; }
+.portal-shortcuts a { display: grid; gap: 5px; padding: 14px; border: 1px solid #dce6e2; border-radius: 10px; text-decoration: none; background: white; color: #234b57; font-size: 14px; font-weight: 600; min-width: 0; }
+.portal-shortcuts a:hover { border-color: #4c9188; background: #f0f7f4; }
+.portal-shortcuts span { color: #647c83; font-size: 12px; font-weight: 400; line-height: 1.4; }
+.portal-submit-state { display: grid; gap: 5px; padding: 14px 16px; border-radius: 10px; border: 1px solid #d4e4df; background: #edf6f1; color: #234b47; }
+.portal-submit-state span { font-size: 13px; line-height: 1.5; }
+.portal-answer-review { display: grid; gap: 0; margin: 16px 0; border: 1px solid #dce6e2; border-radius: 10px; background: white; }
+.portal-answer-review > div { display: grid; grid-template-columns: 150px minmax(0,1fr); gap: 12px; padding: 12px; border-bottom: 1px solid #edf1ef; }
+.portal-answer-review > div:last-child { border-bottom: 0; }
+.portal-answer-review dt { font-weight: 600; color: #36575f; font-size: 13px; }
+.portal-answer-review dd { margin: 0; font-size: 14px; line-height: 1.6; white-space: pre-wrap; overflow-wrap: anywhere; }
+@media (max-width: 1100px) {
+  .pj-app .pj-layout { grid-template-columns: 180px minmax(0,1fr); }
+  .pj-app .pj-rightbar { grid-column: 2; display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); }
+  .portal-shortcuts { grid-template-columns: repeat(2,minmax(0,1fr)); }
+}
+@media (max-width: 760px) {
+  .pj-app .pj-layout { display: block; }
+  .pj-app .pj-main, .pj-app .pci-main { padding: 16px 12px 24px; }
+  .pj-app .pj-sidebar { display: none; }
+  .pj-app .pj-topbar { padding: 0 14px; }
+  .pj-app .pj-user { display: none; }
+  .portal-next-visit { padding: 16px; }
+  .portal-visit-footer { align-items: stretch; flex-direction: column; }
+  .portal-visit-footer .thera-action { justify-content: center; }
+  .portal-answer-review > div { grid-template-columns: 1fr; gap: 4px; }
+  .pj-app .pj-rightbar { grid-template-columns: 1fr; }
+  .pj-app .ppn-mobile a, .pj-app .ppn-mobile .ppn-logout.mobile { min-height: 48px; }
+}

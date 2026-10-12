@@ -1,12 +1,12 @@
 import { useState } from "react";
-import { BookOpenText, CalendarDays, CreditCard, Heart, Home, LogOut, MessageSquare, UserRound } from "lucide-react";
+import { BookOpenText, CalendarDays, CreditCard, FileText, Heart, Home, LogOut, MessageSquare, UserRound } from "lucide-react";
 import { useLocation } from "wouter";
 
 import { useAuth } from "../../auth/auth-context";
 import { PORTAL_HOME, PORTAL_JOURNAL, PORTAL_LOGIN } from "./routes";
 import "./patient-portal-nav.css";
 
-export type PatientPortalNavKey = "home" | "appointments" | "journal" | "checkin" | "messages" | "billing" | "profile";
+export type PatientPortalNavKey = "home" | "appointments" | "journal" | "checkin" | "messages" | "billing" | "profile" | "documents";
 
 type Props = {
   active?: PatientPortalNavKey;
@@ -18,6 +18,7 @@ const homeAnchors = {
   messages: `${PORTAL_HOME}#messages`,
   billing: `${PORTAL_HOME}#billing`,
   profile: `${PORTAL_HOME}#profile`,
+  documents: `${PORTAL_HOME}#documents`,
 };
 
 function PatientPortalLogoutButton({ mobile = false }: { mobile?: boolean }) {
@@ -58,6 +59,7 @@ export function PatientPortalNavigation({ active, checkInHref }: Props) {
     { key: "checkin" as const, href: checkInHref ?? homeAnchors.appointments, label: "Check-In", icon: Heart },
     { key: "messages" as const, href: homeAnchors.messages, label: "Messages", icon: MessageSquare },
     { key: "billing" as const, href: homeAnchors.billing, label: "Billing", icon: CreditCard },
+    { key: "documents" as const, href: homeAnchors.documents, label: "Documents", icon: FileText },
     { key: "profile" as const, href: homeAnchors.profile, label: "Profile", icon: UserRound },
   ];
 

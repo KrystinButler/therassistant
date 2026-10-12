@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { readNoteSection, updateNoteSection } from "./note-section-editing";
+import { readSubmittedVisitQuestion as question } from "../encounters/clinical-source-context";
 import { phqImportNarrative, gadImportNarrative, cssrsImportNarrative } from "./clinical-note-imports";
 import { ClinicalTelemetryChart } from "./ClinicalTelemetryChart";
 import { evaluateCrossSystemEngine } from "./cross-system-engine";
@@ -49,11 +50,6 @@ function value(row: Row | null | undefined, keys: string[], fallback = "—") {
     if (found !== undefined && found !== null && String(found).trim()) return String(found).trim();
   }
   return fallback;
-}
-
-function question(checkin: Row | null, keys: string[]) {
-  const q = checkin?.responses?.pre_visit?.visit_questions ?? {};
-  return value(q, keys, "");
 }
 
 function latestTwo(rows: Row[], instrument: string) {
