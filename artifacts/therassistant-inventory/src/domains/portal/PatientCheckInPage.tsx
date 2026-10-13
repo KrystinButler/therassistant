@@ -1,5 +1,5 @@
 import { PortalScreeners } from "./PortalScreeners";
-import { emptyScreeners, readScreeners, screenersComplete, type ScreenerAnswers } from "./portal-screeners";
+import { emptyScreeners, readScreeners, screenerTotal, screenersComplete, type ScreenerAnswers } from "./portal-screeners";
 import { safeTelehealthUrl } from "../scheduling/telehealth-link";
 import { TelehealthVisit } from "../scheduling/TelehealthVisit";
 import { useEffect, useMemo, useState } from "react";
@@ -410,6 +410,7 @@ export function PatientCheckInPage() {
                 <ReviewItem label="Visit Questions" complete={visitQuestionsComplete} />
                 <ReviewItem label="Consents & Acknowledgments" complete={consentsComplete} />
               </div>
+              <p>Screeners: {visitQuestions.screeners.declined ? "Deferred for discussion with your provider" : `PHQ-9 ${screenerTotal(visitQuestions.screeners.phq9,9) ?? "incomplete"}; GAD-7 ${screenerTotal(visitQuestions.screeners.gad7,7) ?? "incomplete"}; C-SSRS responses saved for clinician review.`}</p>
               <div className="pci-actions"><button type="button" className="pj-primary-button" disabled={readOnly || !demographicsConfirmed || !insuranceConfirmed || !visitQuestionsComplete || !consentsComplete} onClick={() => void submitCheckIn()}>{working === "submit" ? "Submitting..." : submittedAt ? "Submitted" : "Submit Pre-Visit Check-In"}</button></div>
             </div>}
           </section>

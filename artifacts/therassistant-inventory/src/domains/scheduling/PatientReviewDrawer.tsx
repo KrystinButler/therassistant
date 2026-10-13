@@ -123,6 +123,7 @@ export function PatientReviewDrawer({ appointment, open, onOpenChange, onEditApp
       priorPlan,
       safety: patientUpdate.safetyConcern,
       safetyText: patientUpdate.safetyText,
+      hasSubmittedSafetyScreener: patientUpdate.hasSubmittedSafetyScreener,
       hasSubmittedPreVisit: patientUpdate.hasSubmittedPreVisit,
     };
   }, [chart, appointment]);
@@ -225,7 +226,7 @@ export function PatientReviewDrawer({ appointment, open, onOpenChange, onEditApp
             </ReviewSection>
 
             <ReviewSection icon={<ShieldCheck size={15} />} title="Safety Review">
-              <div className={`patient-review-highlight ${review.safety === true ? "warning" : review.safety === false ? "positive" : "neutral"}`}><CheckCircle2 size={18} /><div><strong>{review.safetyText ? "Patient safety response · clinician review required" : review.safety === true ? "Safety concern documented" : review.safety === false ? "No safety concerns" : "Safety review not submitted"}</strong><p>{review.safetyText ? review.safetyText : review.safety === true ? "Review the documented risk information before the session." : review.safety === false ? "No risk factors reported in the latest check-in." : "Review available chart information before the session."}</p></div></div>
+              <div className={`patient-review-highlight ${review.safety === true ? "warning" : review.safety === false ? "positive" : "neutral"}`}><CheckCircle2 size={18} /><div><strong>{review.hasSubmittedSafetyScreener ? "C-SSRS submitted · clinician review required" : review.safetyText ? "Patient safety response · clinician review required" : review.safety === true ? "Safety concern documented" : review.safety === false ? "No safety concerns" : "Safety review not submitted"}</strong><p>{review.safetyText ? review.safetyText : review.hasSubmittedSafetyScreener ? "Review the questionnaire answers in the clinical note workspace. No clinician risk classification is assigned." : review.safety === true ? "Review the documented risk information before the session." : review.safety === false ? "No risk factors reported in the latest check-in." : "Review available chart information before the session."}</p></div></div>
             </ReviewSection>
 
             <ReviewSection icon={<CheckCircle2 size={15} />} title="Visit Readiness">

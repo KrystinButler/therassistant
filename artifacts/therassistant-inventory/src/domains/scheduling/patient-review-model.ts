@@ -48,6 +48,7 @@ export type PatientReviewCheckIn = {
   safetyText: string;
   safetyConcern: boolean | null;
   hasSubmittedPreVisit: boolean;
+  hasSubmittedSafetyScreener: boolean;
 };
 
 export function buildPatientReviewCheckIn(checkin: AnyRow | null | undefined): PatientReviewCheckIn {
@@ -82,5 +83,6 @@ export function buildPatientReviewCheckIn(checkin: AnyRow | null | undefined): P
     safetyText,
     safetyConcern: safetyText ? null : legacySafetyConcern(checkin),
     hasSubmittedPreVisit,
+    hasSubmittedSafetyScreener: hasSubmittedPreVisit && recordOf(questions.screeners).declined !== true && Array.isArray(recordOf(questions.screeners).cssrs) && [0,1,5].every(index => typeof (recordOf(questions.screeners).cssrs as unknown[])[index] === "boolean"),
   };
 }
