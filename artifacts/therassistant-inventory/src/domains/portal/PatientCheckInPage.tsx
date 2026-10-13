@@ -1,3 +1,6 @@
+import { PortalScreeners } from "./PortalScreeners";
+import { emptyScreeners, readScreeners, screenersComplete, type ScreenerAnswers } from "./portal-screeners";
+import { safeTelehealthUrl } from "../scheduling/telehealth-link";
 import { TelehealthVisit } from "../scheduling/TelehealthVisit";
 import { useEffect, useMemo, useState } from "react";
 import {
@@ -26,6 +29,7 @@ import "../clinical/cross-system-testability.css";
 type PortalData = Awaited<ReturnType<typeof getPatientPortalData>>;
 
 type VisitQuestions = {
+  screeners: ScreenerAnswers;
   focus_today: string;
   feeling_since_last_visit: string;
   important_changes: string;
@@ -42,6 +46,7 @@ type Consents = {
 };
 
 const emptyQuestions: VisitQuestions = {
+  screeners: emptyScreeners(),
   focus_today: "",
   feeling_since_last_visit: "",
   important_changes: "",
@@ -88,6 +93,7 @@ function readQuestions(value: unknown): VisitQuestions {
   const row = recordOf(value);
   const rawSomaticScore = Number(row.somatic_distress_score);
   return {
+    screeners: readScreeners(row.screeners),
     focus_today: String(row.focus_today ?? ""),
     feeling_since_last_visit: String(row.feeling_since_last_visit ?? ""),
     important_changes: String(row.important_changes ?? ""),
@@ -236,6 +242,7 @@ export function PatientCheckInPage() {
   }
 
   async function submitCheckIn() {
+    if (!screenersComplete(visitQuestions.screeners)) { setError("Complete the screeners or choose to discuss them with your provider before submitting."); setActiveStep(3); return; }
     if (!demographicsConfirmed || !insuranceConfirmed || !allConsentsAccepted || !visitQuestionsComplete || !consentsComplete) {
       setError("Save your visit questions, confirm your information, and save all acknowledgments before submitting.");
       return;
@@ -249,6 +256,8 @@ export function PatientCheckInPage() {
     })) {
       setActiveStep(5);
       setNotice("Pre-visit check-in submitted.");
+      const videoUrl = appointment?.location_type === "telehealth" ? safeTelehealthUrl(appointment.telehealth_url) : null;
+      if (videoUrl) window.location.assign(videoUrl);
     }
   }
 
@@ -367,6 +376,7 @@ export function PatientCheckInPage() {
               <div className="pj-message" role="note">Portal responses are not monitored as an emergency service. If you are in immediate danger or need emergency help, call 911 or go to the nearest emergency department.</div>
               <label className="pci-question"><span><ShieldCheck size={17} /> Which treatment goal feels most important right now?</span><select disabled={readOnly} value={visitQuestions.treatment_goal} onChange={(event) => setVisitQuestions((current) => ({ ...current, treatment_goal: event.target.value }))}><option value="">Select a treatment goal</option>{data.treatmentGoals.map((goal) => <option key={goal.id} value={String(goal.goal_text ?? goal.id)}>{String(goal.goal_text ?? "Treatment goal")}</option>)}</select></label>
               <Question disabled={readOnly} label="Anything else you want your provider to know before the session?" value={visitQuestions.anything_else} onChange={(value) => setVisitQuestions((current) => ({ ...current, anything_else: value }))} />
+              <PortalScreeners disabled={readOnly} value={visitQuestions.screeners} onChange={screeners=>setVisitQuestions(current=>({...current,screeners}))} />
               <div className="pci-actions"><button type="button" className="pj-primary-button" disabled={readOnly} onClick={() => void saveVisitQuestions()}>{working === "questions" ? "Saving..." : "Save & Continue"}</button></div>
             </div>}
           </section>

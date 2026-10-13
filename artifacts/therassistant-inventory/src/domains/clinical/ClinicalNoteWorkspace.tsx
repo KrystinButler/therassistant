@@ -54,7 +54,7 @@ function value(row: Row | null | undefined, keys: string[], fallback = "—") {
 
 function latestTwo(rows: Row[], instrument: string) {
   return rows.filter((row) => String(row.instrument) === instrument)
-    .sort((a, b) => String(b.assessed_on ?? b.created_at ?? "").localeCompare(String(a.assessed_on ?? a.created_at ?? "")))
+    .sort((a, b) => Number(Boolean(b.screening_context_current)) - Number(Boolean(a.screening_context_current)) || String(b.assessed_on ?? b.created_at ?? "").localeCompare(String(a.assessed_on ?? a.created_at ?? "")))
     .slice(0, 2);
 }
 

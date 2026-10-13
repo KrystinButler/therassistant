@@ -1,3 +1,4 @@
+import { screeningContext } from "../clinical/clinical-note-imports";
 import { resolveClinicalServiceDate } from "../clinical/service-date";
 import {
   getCurrentTenantId,
@@ -300,9 +301,10 @@ export async function getEncounterDetail(encounterId: string) {
   const tenantId = await getCurrentTenantId();
   const tenant = first(await referenceSelect<DataRow>("tenants", { id: `eq.${tenantId}`, select: "id,timezone", limit: "1" }));
   if (!tenant?.timezone) throw new Error("Organization timezone is required to date the encounter.");
+  const serviceDate = resolveClinicalServiceDate(first(notes), encounter, first(appointmentRows), String(tenant.timezone));
   return {
     encounter,
-    serviceDate: resolveClinicalServiceDate(first(notes), encounter, first(appointmentRows), String(tenant.timezone)),
+    serviceDate,
     client: first(clientRows),
     provider: first(providerRows),
     appointment: first(appointmentRows),
@@ -321,8 +323,8 @@ export async function getEncounterDetail(encounterId: string) {
     checkins,
     journalEntries,
     documents,
-    outcomeMeasures,
-    safetyScreenings,
+    outcomeMeasures: screeningContext(outcomeMeasures, String(encounter.appointment_id ?? ""), serviceDate, String(encounter.started_at ?? "")),
+    safetyScreenings: screeningContext(safetyScreenings, String(encounter.appointment_id ?? ""), serviceDate, String(encounter.started_at ?? "")),
   };
 }
 
