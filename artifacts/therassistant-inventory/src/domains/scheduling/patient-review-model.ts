@@ -1,3 +1,9 @@
+import {
+  readScreeners,
+  summarizeScreeners,
+  type ScreenerSummary,
+} from "../portal/portal-screeners";
+
 type AnyRow = Record<string, unknown>;
 
 function recordOf(value: unknown): AnyRow {
@@ -35,6 +41,17 @@ function legacySafetyConcern(row?: AnyRow | null) {
   return null;
 }
 
+function submittedScreeners(questions: AnyRow, hasSubmittedPreVisit: boolean): ScreenerSummary | null {
+  if (!hasSubmittedPreVisit) return null;
+  const raw = recordOf(questions.screeners);
+  const hasPayload =
+    raw.declined === true ||
+    Array.isArray(raw.phq9) ||
+    Array.isArray(raw.gad7) ||
+    Array.isArray(raw.cssrs);
+  return hasPayload ? summarizeScreeners(readScreeners(raw)) : null;
+}
+
 export function appointmentCheckIn<T extends AnyRow>(rows: T[], appointmentId: string): T | null {
   return rows.find(row => String(row.appointment_id ?? "") === appointmentId) ?? null;
 }
@@ -49,6 +66,7 @@ export type PatientReviewCheckIn = {
   safetyConcern: boolean | null;
   hasSubmittedPreVisit: boolean;
   hasSubmittedSafetyScreener: boolean;
+  screeners: ScreenerSummary | null;
 };
 
 export function buildPatientReviewCheckIn(checkin: AnyRow | null | undefined): PatientReviewCheckIn {
@@ -73,6 +91,7 @@ export function buildPatientReviewCheckIn(checkin: AnyRow | null | undefined): P
   const treatmentGoal = text(questions, ["treatment_goal"]);
   const additionalContext = text(questions, ["anything_else"]);
   const safetyText = text(questions, ["safety_concerns"]);
+  const screeners = submittedScreeners(questions, hasSubmittedPreVisit);
 
   return {
     focus,
@@ -83,6 +102,7 @@ export function buildPatientReviewCheckIn(checkin: AnyRow | null | undefined): P
     safetyText,
     safetyConcern: safetyText ? null : legacySafetyConcern(checkin),
     hasSubmittedPreVisit,
-    hasSubmittedSafetyScreener: hasSubmittedPreVisit && recordOf(questions.screeners).declined !== true && Array.isArray(recordOf(questions.screeners).cssrs) && [0,1,5].every(index => typeof (recordOf(questions.screeners).cssrs as unknown[])[index] === "boolean"),
+    hasSubmittedSafetyScreener: screeners?.cssrsSubmitted ?? false,
+    screeners,
   };
 }
