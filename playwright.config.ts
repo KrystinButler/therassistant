@@ -41,6 +41,7 @@ export default defineConfig({
         /provider-insured-clinical-flow\.spec\.ts/,
         /billing-insured-flow\.spec\.ts/,
         /patient-role\.spec\.ts/,
+        /portal-telehealth-handoff\.spec\.ts/,
       ],
       dependencies: ["staff-setup"],
       use: {
@@ -70,6 +71,11 @@ export default defineConfig({
         ...devices["Desktop Chrome"],
         storageState: staffStorageState,
       },
+    },
+    {
+      name: "workflow-ui",
+      testMatch: /portal-telehealth-handoff\.spec\.ts/,
+      use: { ...devices["Desktop Chrome"] },
     },
     {
       name: "patient-setup",

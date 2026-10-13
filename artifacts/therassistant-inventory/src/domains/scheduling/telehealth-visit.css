@@ -1,0 +1,68 @@
+.telehealth-visit-card {
+  border: 1px solid var(--border, #d9dee7);
+  border-radius: 10px;
+  background: var(--surface, #fff);
+  padding: 12px 14px;
+  display: grid;
+  gap: 10px;
+}
+
+.telehealth-visit-card.waiting {
+  background: color-mix(in srgb, var(--surface, #fff) 94%, #eef2f6);
+}
+
+.telehealth-visit-card.unavailable {
+  border-color: color-mix(in srgb, var(--border, #d9dee7) 55%, #b85a47);
+}
+
+.telehealth-visit-heading {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+}
+
+.telehealth-visit-heading > div {
+  display: grid;
+  gap: 2px;
+}
+
+.telehealth-visit-heading strong {
+  font-size: 0.9rem;
+}
+
+.telehealth-visit-heading span,
+.telehealth-visit-message {
+  color: var(--muted-foreground, #667085);
+  font-size: 0.76rem;
+  line-height: 1.4;
+}
+
+.telehealth-visit-message {
+  margin: 0;
+}
+
+.telehealth-visit-frame {
+  width: 100%;
+  height: min(68vh, 620px);
+  min-height: 420px;
+  overflow: hidden;
+  border-radius: 10px;
+  background: #111;
+}
+
+@media (max-width: 720px) {
+  .telehealth-visit-heading {
+    grid-template-columns: auto 1fr;
+  }
+
+  .telehealth-visit-heading .thera-action {
+    grid-column: 1 / -1;
+    width: 100%;
+  }
+
+  .telehealth-visit-frame {
+    min-height: 500px;
+    height: 70vh;
+  }
+}

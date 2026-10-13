@@ -1,6 +1,5 @@
 import { PortalScreeners } from "./PortalScreeners";
 import { emptyScreeners, readScreeners, screenerTotal, screenersComplete, type ScreenerAnswers } from "./portal-screeners";
-import { safeTelehealthUrl } from "../scheduling/telehealth-link";
 import { TelehealthVisit } from "../scheduling/TelehealthVisit";
 import { useEffect, useMemo, useState } from "react";
 import {
@@ -131,6 +130,7 @@ export function PatientCheckInPage() {
   const [questionsSavedAt, setQuestionsSavedAt] = useState("");
   const [consentsSavedAt, setConsentsSavedAt] = useState("");
   const [submittedAt, setSubmittedAt] = useState("");
+  const [startTelehealthAfterSubmit, setStartTelehealthAfterSubmit] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -255,9 +255,8 @@ export function PatientCheckInPage() {
       submitted: true,
     })) {
       setActiveStep(5);
-      setNotice("Pre-visit check-in submitted.");
-      const videoUrl = appointment?.location_type === "telehealth" ? safeTelehealthUrl(appointment.telehealth_url) : null;
-      if (videoUrl) window.location.assign(videoUrl);
+      setNotice(appointment?.location_type === "telehealth" ? "Pre-visit check-in submitted. Starting your secure video visit…" : "Pre-visit check-in submitted.");
+      if (appointment?.location_type === "telehealth") setStartTelehealthAfterSubmit(true);
     }
   }
 
@@ -310,7 +309,7 @@ export function PatientCheckInPage() {
           {error && <div className="pj-message error">{error}</div>}
           {notice && <div className="pj-message success"><CheckCircle2 size={16} /> {notice}</div>}
 
-          <TelehealthVisit appointment={appointment} />
+          <TelehealthVisit appointment={appointment} enabled={Boolean(submittedAt)} autoStart={startTelehealthAfterSubmit} />
           <section className="pci-appointment-card">
             <div className="pci-appointment-block"><CalendarDays size={22} /><div><strong>{formatDate(appointment.starts_at)}</strong><span>{formatTime(appointment.starts_at)} – {formatTime(appointment.ends_at)}</span></div></div>
             <div className="pci-appointment-block"><Heart size={20} /><div><strong>{String(appointment.service_type ?? "Individual Therapy")}</strong><span>{String(appointment.location_type ?? "Office").replaceAll("_", " ")}</span></div></div>

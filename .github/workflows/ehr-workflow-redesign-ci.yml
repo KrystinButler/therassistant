@@ -44,6 +44,16 @@ jobs:
           status=${PIPESTATUS[0]}
           exit "$status"
 
+      - name: Install Chromium for workflow UI test
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Portal telehealth handoff test
+        shell: bash
+        run: |
+          set +e
+          pnpm exec playwright test e2e/portal-telehealth-handoff.spec.ts --project=workflow-ui --workers=1 2>&1 | tee portal-telehealth-e2e.log
+          status=${PIPESTATUS[0]}
+          exit "$status"
       - name: Upload workflow verification output
         if: always()
         uses: actions/upload-artifact@v4
@@ -52,3 +62,4 @@ jobs:
           path: |
             workflow-test.log
             workspace-typecheck.log
+            portal-telehealth-e2e.log

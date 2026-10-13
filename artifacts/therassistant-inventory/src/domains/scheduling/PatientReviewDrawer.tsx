@@ -9,6 +9,7 @@ import {
   Flag,
   ShieldCheck,
   Target,
+  Video,
 } from "lucide-react";
 
 import { StatusBadge } from "../../components/status-badge";
@@ -19,6 +20,7 @@ import { startEncounter } from "../encounters/repository";
 import { getPatientChart } from "../patients/repository";
 import type { PatientChart } from "../patients/types";
 import { appointmentCheckIn, buildPatientReviewCheckIn } from "./patient-review-model";
+import { TelehealthVisit } from "./TelehealthVisit";
 import type { ScheduleAppointment } from "./repository";
 import "./patient-review-drawer.css";
 
@@ -238,6 +240,10 @@ export function PatientReviewDrawer({ appointment, open, onOpenChange, onEditApp
             <ReviewSection icon={<CheckCircle2 size={15} />} title="Visit Readiness">
               <div className={`patient-review-highlight ${checkInReady && !payerAttention.length ? "positive" : "warning"}`}><CheckCircle2 size={18} /><div><strong>{readinessTitle}</strong><p>{readinessText}</p></div></div>
             </ReviewSection>
+
+            {appointment.locationType === "telehealth" ? <ReviewSection icon={<Video size={15} />} title="Video Visit" wide>
+              <TelehealthVisit appointment={{ id: appointment.id, location_type: "telehealth" }} editable />
+            </ReviewSection> : null}
           </div> : null}
         </div>
 
