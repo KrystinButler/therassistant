@@ -28,4 +28,16 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Workflow regression tests
-        run: pnpm test:workflow
+        shell: bash
+        run: |
+          set +e
+          pnpm test:workflow 2>&1 | tee workflow-test.log
+          status=${PIPESTATUS[0]}
+          exit "$status"
+
+      - name: Upload workflow regression output
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: workflow-test-output
+          path: workflow-test.log
