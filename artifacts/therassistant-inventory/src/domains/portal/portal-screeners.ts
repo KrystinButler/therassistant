@@ -12,6 +12,9 @@ export type ScreenerSummary = {
   gad7Total: number | null;
   cssrsSubmitted: boolean;
   cssrsPositiveItems: number[];
+  phq9Responses: Array<number | null>;
+  gad7Responses: Array<number | null>;
+  cssrsResponses: Array<boolean | null>;
 };
 
 export const emptyScreeners = (): ScreenerAnswers => ({
@@ -74,6 +77,9 @@ export function summarizeScreeners(value: ScreenerAnswers): ScreenerSummary {
       gad7Total: null,
       cssrsSubmitted: false,
       cssrsPositiveItems: [],
+      phq9Responses: Array(9).fill(null),
+      gad7Responses: Array(7).fill(null),
+      cssrsResponses: Array(7).fill(null),
     };
   }
 
@@ -84,6 +90,9 @@ export function summarizeScreeners(value: ScreenerAnswers): ScreenerSummary {
     gad7Total: screenerTotal(value.gad7, 7),
     cssrsSubmitted: cssrsComplete(value.cssrs),
     cssrsPositiveItems: value.cssrs.flatMap((answer, index) => answer === true ? [index] : []),
+    phq9Responses: [...value.phq9],
+    gad7Responses: [...value.gad7],
+    cssrsResponses: [...value.cssrs],
   };
 }
 
