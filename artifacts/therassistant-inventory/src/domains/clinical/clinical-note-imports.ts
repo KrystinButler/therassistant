@@ -1,7 +1,7 @@
 type Row = Record<string, unknown>;
 
 function sortedByDate(rows: Row[]) {
-  return [...rows].sort((a, b) => String(b.assessed_on ?? b.created_at ?? "").localeCompare(String(a.assessed_on ?? a.created_at ?? "")));
+  return [...rows].sort((a, b) => Number(Boolean(b.screening_context_current)) - Number(Boolean(a.screening_context_current)) || String(b.assessed_on ?? b.created_at ?? "").localeCompare(String(a.assessed_on ?? a.created_at ?? "")));
 }
 
 function latestTwo(rows: Row[], instrument: string) {
@@ -21,7 +21,7 @@ export function phqImportNarrative(outcomeMeasures: Row[]) {
   const score = Number(current.score);
   const priorScore = prior ? Number(prior.score) : undefined;
   const movement = trend(score, priorScore);
-  return `IMPORT 3: Depression has ${movement.status} since last visit, scoring ${score} today, ${movement.direction}.`;
+  return `IMPORT 3: Depression has ${movement.status} since last visit, scoring ${score} on ${String(current.assessed_on ?? "date not recorded")}, ${movement.direction}.`;
 }
 
 export function gadImportNarrative(outcomeMeasures: Row[]) {
@@ -30,14 +30,23 @@ export function gadImportNarrative(outcomeMeasures: Row[]) {
   const score = Number(current.score);
   const priorScore = prior ? Number(prior.score) : undefined;
   const movement = trend(score, priorScore);
-  return `IMPORT 4: Anxiety has ${movement.status} since last visit, scoring ${score} today, ${movement.direction}.`;
+  return `IMPORT 4: Anxiety has ${movement.status} since last visit, scoring ${score} on ${String(current.assessed_on ?? "date not recorded")}, ${movement.direction}.`;
 }
 
 export function cssrsImportNarrative(safetyScreenings: Row[]) {
   const current = sortedByDate(safetyScreenings.filter((row) => String(row.instrument ?? "") === "C-SSRS"))[0];
   if (!current) return "";
+  if (current.source === "patient_reported" && !current.risk_level) {
+    return `IMPORT 5: Patient completed C-SSRS Recent self-report on ${String(current.assessed_on ?? "date not recorded")}. Clinician safety review is required; no clinician risk classification or completed intervention is recorded. ${String(current.narrative ?? "")}`;
+  }
   const score = String(current.score_text ?? "not recorded");
   const risk = String(current.risk_level ?? "not recorded").replaceAll("_", " ");
   const narrative = String(current.narrative ?? "").trim();
   return `IMPORT 5: Client scored ${score} on C-SSRS, indicating ${risk} risk.${narrative ? ` ${narrative}` : ""}`;
+}
+
+export function screeningContext(rows: Row[], appointmentId: string, serviceDate: string, startedAt: string): Row[] {
+  return rows.filter(row => String(row.source_reference_id ?? "") === appointmentId && Boolean(appointmentId)
+    || String(row.assessed_on ?? "") <= serviceDate && String(row.created_at ?? "") <= startedAt)
+    .map(row => ({...row,screening_context_current:Boolean(appointmentId) && row.source_reference_id===appointmentId}));
 }
