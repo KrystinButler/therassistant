@@ -35,7 +35,10 @@ h3,.thera-card h3{font-size:14px}
 .cw-app{background:#f7f5ef;grid-template-columns:236px minmax(0,1fr);grid-template-rows:67px minmax(calc(100vh - 67px),auto)}
 .cw-global-header{height:67px;grid-template-columns:236px minmax(220px,1fr) auto}
 .cw-sidebar{top:67px;height:calc(100vh - 67px);background:#1e3b4a}
-.cw-nav-link{min-height:43px;gap:13px;font-size:12px;padding:0 16px}
+.cw-navigation{padding:0 5px 10px}
+.cw-nav-link{min-height:38px;gap:11px;font-size:12px;padding:0 14px}
+.cw-nav-divider{margin:10px 14px 11px}
+.cw-nav-heading{padding:0 14px 5px}
 .cw-nav-link svg{width:17px;height:17px}
 .cw-nav-link.active{background:#a4b6a6;color:#17303f}
 .cw-nav-link.active svg{color:#17303f}
@@ -47,7 +50,7 @@ h3,.thera-card h3{font-size:14px}
 .cw-search-submit{display:grid;place-items:center;border:0;background:transparent;color:#375a42;padding:3px;cursor:pointer}
 .cw-avatar{background:#1e3b4a;width:35px;height:35px;font-size:12px}
 .cw-profile-copy strong{font-size:11px}.cw-profile-copy small{font-size:10px}
-.cw-content{padding:20px 23px 46px}
+.cw-content{padding:16px 18px 36px}
 .cw-dashboard{gap:13px}
 .cw-dashboard-heading{position:relative;isolation:isolate;overflow:hidden;padding:7px 4px 14px;border-bottom:1px solid #e2e9dd}
 .cw-dashboard-heading::before{content:"";position:absolute;z-index:-1;pointer-events:none;width:280px;height:132px;right:-15px;top:-25px;background:url("/brand/background-pattern.webp") center/contain no-repeat;opacity:.18}
@@ -112,6 +115,7 @@ h3,.thera-card h3{font-size:14px}
 .cw-header-actions{gap:1px;padding:0}
 .cw-alert-link,.cw-profile-trigger{min-width:38px;min-height:42px}
 .cw-sidebar{top:58px;height:calc(100dvh - 58px)}.cw-backdrop{inset:58px 0 0}
+.cw-nav-link{min-height:44px}
 .cw-content{padding:13px 11px 30px}
 .cw-dashboard-heading{gap:5px;padding:4px 3px 12px}
 .cw-dashboard-heading h1{font-size:20px}
