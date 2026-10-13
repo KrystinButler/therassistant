@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link, useRoute } from "wouter";
 
+import { PatientBanner } from "../../components/patient-banner";
 import { StatusBadge } from "../../components/status-badge";
 import { dateTime, money, shortDate } from "../../lib/format";
 import { getClientChartRelationships } from "../clients/repository";
@@ -64,17 +65,19 @@ export function PatientChartPage() {
   const nextUpcoming = chart.appointments
     .filter((row) => new Date(String(row.starts_at ?? "")) >= new Date() && !["cancelled","no_show","completed"].includes(String(row.appointment_status ?? "")))
     .sort((a,b) => String(a.starts_at).localeCompare(String(b.starts_at)))[0];
+  const latestEligibility = chart.eligibilityHistory[0];
 
   return <>
     <div className="thera-breadcrumb"><Link className="thera-link" href="/clients">Patients</Link><span>/</span><span>{name}</span></div>
-    <div className="thera-page-header split"><div><div className="thera-eyebrow">PATIENT CHART</div><h1>{name}</h1><p>{String(patient.email ?? "No email")} · {String(patient.phone ?? "No phone")} · DOB {shortDate(String(patient.date_of_birth ?? ""))}</p></div><div className="thera-header-badges"><StatusBadge value={String(patient.client_status ?? "active")} /><StatusBadge value={String(patient.registration_status ?? "not_started")} /></div></div>
-
-    <div className="thera-metric-grid" style={{ marginBottom: 16 }}>
-      <Metric label="Primary Payer" value={chart.summary.primaryPayerName} />
-      <Metric label="Next Visit" value={nextUpcoming ? shortDate(String(nextUpcoming.starts_at ?? "")) : "None"} />
-      <Metric label="Open Balance" value={money(chart.openBalanceCents)} />
-      <Metric label="Open Work" value={linkedWork.filter((row) => ["open","in_progress","pending","snoozed","reopened"].includes(String(row.workqueue_status ?? ""))).length} />
-    </div>
+    <PatientBanner
+      contextLabel="PATIENT CHART"
+      patient={patient}
+      payerName={chart.summary.primaryPayerName}
+      eligibilityStatus={String(latestEligibility?.eligibility_status ?? latestEligibility?.coverage_status ?? "unknown")}
+      openBalanceCents={chart.openBalanceCents}
+      nextVisit={nextUpcoming ? String(nextUpcoming.starts_at ?? "") : null}
+      actions={<button className="thera-action secondary" type="button" onClick={() => setTab("demographics")}>Edit Patient</button>}
+    />
 
     <div className="thera-tabs" role="group" aria-label="Patient chart sections" style={{ marginBottom: 16, flexWrap: "wrap" }}>{tabs.map(([key, label]) => <button key={key} type="button" aria-pressed={tab === key} className={tab === key ? "thera-tab active" : "thera-tab"} onClick={() => setTab(key)}>{label}</button>)}</div>
 
