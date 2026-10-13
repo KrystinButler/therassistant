@@ -35,9 +35,20 @@ jobs:
           status=${PIPESTATUS[0]}
           exit "$status"
 
-      - name: Upload workflow regression output
+      - name: Typecheck EHR application
+        if: always()
+        shell: bash
+        run: |
+          set +e
+          pnpm --filter @workspace/therassistant-inventory run typecheck 2>&1 | tee ehr-typecheck.log
+          status=${PIPESTATUS[0]}
+          exit "$status"
+
+      - name: Upload workflow verification output
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: workflow-test-output
-          path: workflow-test.log
+          name: workflow-verification-output
+          path: |
+            workflow-test.log
+            ehr-typecheck.log
