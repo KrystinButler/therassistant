@@ -41,16 +41,20 @@ test("summarizeScreeners exposes submitted questionnaire state without a clinici
   }).summarizeScreeners;
 
   assert.equal(typeof summarizeScreeners, "function", "summarizeScreeners must be implemented");
-  const summary = summarizeScreeners!({
+  const answers: screeners.ScreenerAnswers = {
     phq9: Array(9).fill(1),
     gad7: Array(7).fill(2),
     cssrs: [false, true, true, false, false, false, null],
-  });
+  };
+  const summary = summarizeScreeners!(answers);
 
   assert.equal(summary.phq9Total, 9);
   assert.equal(summary.gad7Total, 14);
   assert.equal(summary.cssrsSubmitted, true);
   assert.deepEqual(summary.cssrsPositiveItems, [1, 2]);
+  assert.deepEqual(summary.phq9Responses, answers.phq9);
+  assert.deepEqual(summary.gad7Responses, answers.gad7);
+  assert.deepEqual(summary.cssrsResponses, answers.cssrs);
   assert.equal("riskLevel" in summary, false);
   assert.equal("diagnosis" in summary, false);
 });
