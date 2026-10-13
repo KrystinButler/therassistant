@@ -1,0 +1,154 @@
+.previsit-screeners-panel {
+  border: 1px solid var(--border, #d9dee7);
+  border-radius: 10px;
+  background: var(--surface, #fff);
+  padding: 14px;
+  display: grid;
+  gap: 10px;
+}
+
+.previsit-screeners-panel.compact {
+  padding: 12px;
+}
+
+.previsit-screeners-panel.declined {
+  background: color-mix(in srgb, var(--surface, #fff) 92%, #f6f0df);
+}
+
+.previsit-screeners-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.previsit-screeners-heading > div {
+  display: grid;
+  gap: 3px;
+}
+
+.previsit-screeners-heading strong {
+  font-size: 0.95rem;
+}
+
+.previsit-screeners-state {
+  border: 1px solid var(--border, #d9dee7);
+  border-radius: 999px;
+  padding: 4px 8px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.previsit-screeners-state.complete {
+  background: color-mix(in srgb, var(--surface, #fff) 90%, #dff2e4);
+}
+
+.previsit-screeners-state.incomplete {
+  background: color-mix(in srgb, var(--surface, #fff) 88%, #f8e2dc);
+}
+
+.previsit-screeners-disclaimer,
+.previsit-screeners-panel > p {
+  margin: 0;
+  font-size: 0.78rem;
+  line-height: 1.45;
+  color: var(--muted-foreground, #667085);
+}
+
+.previsit-screeners-metrics {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.previsit-screener-metric {
+  min-width: 0;
+  border: 1px solid var(--border, #d9dee7);
+  border-radius: 8px;
+  padding: 9px 10px;
+  display: grid;
+  gap: 2px;
+}
+
+.previsit-screener-metric span,
+.previsit-screener-metric small {
+  font-size: 0.68rem;
+  color: var(--muted-foreground, #667085);
+}
+
+.previsit-screener-metric strong {
+  font-size: 1rem;
+}
+
+.previsit-screener-metric.attention {
+  border-color: color-mix(in srgb, var(--border, #d9dee7) 55%, #c77835);
+  background: color-mix(in srgb, var(--surface, #fff) 94%, #fff0df);
+}
+
+.previsit-screeners-details {
+  border-top: 1px solid var(--border, #d9dee7);
+  padding-top: 8px;
+}
+
+.previsit-screeners-details summary {
+  cursor: pointer;
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.previsit-screeners-response-groups {
+  display: grid;
+  gap: 14px;
+  margin-top: 10px;
+}
+
+.previsit-screener-response-group {
+  display: grid;
+  gap: 7px;
+}
+
+.previsit-screener-response-list {
+  display: grid;
+  gap: 5px;
+}
+
+.previsit-screener-response {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: start;
+  padding: 6px 0;
+  border-bottom: 1px solid color-mix(in srgb, var(--border, #d9dee7) 65%, transparent);
+  font-size: 0.74rem;
+  line-height: 1.35;
+}
+
+.previsit-screener-response b {
+  max-width: 165px;
+  text-align: right;
+  font-weight: 700;
+}
+
+.previsit-screeners-empty {
+  border: 1px dashed var(--border, #d9dee7);
+  border-radius: 8px;
+  padding: 10px;
+  color: var(--muted-foreground, #667085);
+  font-size: 0.78rem;
+}
+
+@media (max-width: 720px) {
+  .previsit-screeners-metrics {
+    grid-template-columns: 1fr;
+  }
+
+  .previsit-screener-response {
+    grid-template-columns: 1fr;
+  }
+
+  .previsit-screener-response b {
+    max-width: none;
+    text-align: left;
+  }
+}
