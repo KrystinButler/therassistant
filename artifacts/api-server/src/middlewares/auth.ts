@@ -3,6 +3,10 @@ import type { RequestHandler } from "express";
 import { db } from "@workspace/db";
 import { sql } from "drizzle-orm";
 
+export type UserAuthContext = {
+  userId: string;
+};
+
 export type TenantAuthContext = {
   userId: string;
   tenantId: string;
@@ -12,6 +16,7 @@ export type TenantAuthContext = {
 declare global {
   namespace Express {
     interface Request {
+      userAuth?: UserAuthContext;
       tenantAuth?: TenantAuthContext;
     }
   }
@@ -77,6 +82,40 @@ async function verifySupabaseUser(accessToken: string) {
   return payload.id;
 }
 
+export const requireAuthenticatedUser: RequestHandler = async (
+  req,
+  res,
+  next,
+) => {
+  try {
+    const accessToken = readBearerToken(
+      req.get("Authorization") ?? undefined,
+    );
+
+    if (!accessToken) {
+      res.status(401).json({ error: "Authentication required" });
+      return;
+    }
+
+    const userId = await verifySupabaseUser(accessToken);
+    if (!userId) {
+      res.status(401).json({ error: "Invalid or expired session" });
+      return;
+    }
+
+    req.userAuth = { userId };
+    next();
+  } catch (error) {
+    next(error);
+  }
+};
+
+export function getUserAuthContext(req: Express.Request): UserAuthContext {
+  if (!req.userAuth) {
+    throw new Error("Authenticated user context is missing.");
+  }
+  return req.userAuth;
+}
 export const requireAuthenticatedTenant: RequestHandler = async (
   req,
   res,

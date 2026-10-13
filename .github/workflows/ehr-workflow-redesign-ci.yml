@@ -35,12 +35,12 @@ jobs:
           status=${PIPESTATUS[0]}
           exit "$status"
 
-      - name: Typecheck EHR application
+      - name: Typecheck workspace
         if: always()
         shell: bash
         run: |
           set +e
-          pnpm --filter @workspace/therassistant-inventory run typecheck 2>&1 | tee ehr-typecheck.log
+          pnpm run typecheck 2>&1 | tee workspace-typecheck.log
           status=${PIPESTATUS[0]}
           exit "$status"
 
@@ -51,4 +51,4 @@ jobs:
           name: workflow-verification-output
           path: |
             workflow-test.log
-            ehr-typecheck.log
+            workspace-typecheck.log

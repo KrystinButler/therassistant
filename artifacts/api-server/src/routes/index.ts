@@ -19,6 +19,7 @@ import demoControlRouter from "./demo-control";
 import restoredRouter from "./restored";
 import credentialingModuleRouter from "../modules/credentialing/router";
 import payersRouter from "./payers";
+import telehealthRouter from "./telehealth";
 
 const router: IRouter = Router();
 
@@ -37,6 +38,7 @@ router.use(chargesRouter);
 router.use(demoControlRouter);
 router.use(credentialingModuleRouter);
 router.use(payersRouter);
+router.use(telehealthRouter);
 router.use(restoredRouter);
 
 export default router;

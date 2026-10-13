@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  createDailyMeetingToken,
   createTelehealthRoomName,
   requireDailyHipaaConfiguration,
   shouldReuseTelehealthRoom,
@@ -58,4 +59,63 @@ test("Daily configuration is rejected unless HIPAA mode, API key, and domain are
     apiKey: "secret",
     domain: "therassistant.daily.co",
   });
+});
+
+test("Daily meeting tokens are room-scoped, short-lived, and contain no patient/provider names", async () => {
+  let requestBody: Record<string, any> | null = null;
+  const fetchImpl = async (_url: string | URL | Request, init?: RequestInit) => {
+    requestBody = JSON.parse(String(init?.body ?? "{}"));
+    return new Response(JSON.stringify({ token: "daily-token" }), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
+  };
+
+  const token = await createDailyMeetingToken({
+    roomName: "thera-room-1",
+    expiresAt: new Date("2026-10-12T19:30:00.000Z"),
+    isOwner: false,
+    env: {
+      DAILY_API_KEY: "secret",
+      DAILY_DOMAIN: "therassistant.daily.co",
+      DAILY_HIPAA_ENABLED: "true",
+    },
+    fetchImpl: fetchImpl as typeof fetch,
+  });
+
+  assert.equal(token, "daily-token");
+  assert.equal(requestBody?.properties.room_name, "thera-room-1");
+  assert.equal(requestBody?.properties.exp, 1791833400);
+  assert.equal(requestBody?.properties.is_owner, false);
+  assert.equal(requestBody?.properties.eject_at_token_exp, true);
+  assert.equal(requestBody?.properties.enable_prejoin_ui, true);
+  assert.equal(requestBody?.properties.enable_recording_ui, false);
+  assert.equal("user_name" in requestBody?.properties, false);
+  assert.equal("user_id" in requestBody?.properties, false);
+});
+
+test("provider meeting token is owner-scoped without changing the room", async () => {
+  let requestBody: Record<string, any> | null = null;
+  const fetchImpl = async (_url: string | URL | Request, init?: RequestInit) => {
+    requestBody = JSON.parse(String(init?.body ?? "{}"));
+    return new Response(JSON.stringify({ token: "owner-token" }), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
+  };
+
+  await createDailyMeetingToken({
+    roomName: "thera-room-1",
+    expiresAt: new Date("2026-10-12T19:30:00.000Z"),
+    isOwner: true,
+    env: {
+      DAILY_API_KEY: "secret",
+      DAILY_DOMAIN: "therassistant.daily.co",
+      DAILY_HIPAA_ENABLED: "true",
+    },
+    fetchImpl: fetchImpl as typeof fetch,
+  });
+
+  assert.equal(requestBody?.properties.room_name, "thera-room-1");
+  assert.equal(requestBody?.properties.is_owner, true);
 });
