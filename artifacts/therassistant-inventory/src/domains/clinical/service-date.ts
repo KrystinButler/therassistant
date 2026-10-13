@@ -8,3 +8,14 @@ export function clinicalServiceDate(startedAt: string, timeZone: string): string
   const value = (type: string) => parts.find((part) => part.type === type)?.value;
   return `${value("year")}-${value("month")}-${value("day")}`;
 }
+
+export function resolveClinicalServiceDate(
+  note: Record<string, any> | null | undefined,
+  encounter: Record<string, any>,
+  appointment: Record<string, any> | null | undefined,
+  timeZone: string,
+): string {
+  const saved = String(note?.service_date ?? "");
+  if (/^\d{4}-\d{2}-\d{2}$/.test(saved)) return saved;
+  return clinicalServiceDate(String(appointment?.starts_at ?? encounter.started_at ?? ""), timeZone);
+}

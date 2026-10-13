@@ -1,4 +1,6 @@
+import { resolveClinicalServiceDate } from "../clinical/service-date";
 import {
+  getCurrentTenantId,
   tenantInsert,
   tenantSelect,
   tenantUpdate,
@@ -295,8 +297,12 @@ export async function getEncounterDetail(encounterId: string) {
       })
     : [];
 
+  const tenantId = await getCurrentTenantId();
+  const tenant = first(await referenceSelect<DataRow>("tenants", { id: `eq.${tenantId}`, select: "id,timezone", limit: "1" }));
+  if (!tenant?.timezone) throw new Error("Organization timezone is required to date the encounter.");
   return {
     encounter,
+    serviceDate: resolveClinicalServiceDate(first(notes), encounter, first(appointmentRows), String(tenant.timezone)),
     client: first(clientRows),
     provider: first(providerRows),
     appointment: first(appointmentRows),

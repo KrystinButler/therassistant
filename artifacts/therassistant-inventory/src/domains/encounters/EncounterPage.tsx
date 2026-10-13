@@ -506,7 +506,7 @@ export function EncounterPage() {
   if (!data) return <div className="thera-state error">Encounter not found.</div>;
 
   const encounter = data.encounter;
-  const serviceDate = String(encounter.started_at ?? "").slice(0, 10);
+  const serviceDate = data.serviceDate;
   const billedLineIds = new Set(data.chargeLines.filter((charge) => !["blocked", "ready_for_claim", "voided"].includes(String(charge.charge_status))).map((charge) => String(charge.service_line_id)));
   const removableLineIds = new Set(data.serviceLines.filter((line) => !data.chargeLines.some((charge) =>
     String(charge.service_line_id) === String(line.id) && !["blocked", "ready_for_claim", "voided"].includes(String(charge.charge_status)))).map((line) => String(line.id)));

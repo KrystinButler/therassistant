@@ -7,6 +7,7 @@ const hook = registerHooks({
   resolve(specifier, context, nextResolve) {
     if (context.parentURL?.endsWith('/domains/billing/repository.ts') && specifier === '../../lib/tenant-data-client') {
       return { url: 'data:text/javascript,' + encodeURIComponent(`
+        export const getCurrentTenantId = async () => "tenant-1";
         export const tenantSelect = (...args) => globalThis.billingHandoff.select(...args);
         export const referenceSelect = tenantSelect;
         export const tenantInsert = (...args) => globalThis.billingHandoff.insert(...args);
@@ -22,6 +23,7 @@ hook.deregister();
 
 function fixture() {
   const rows: Record<string, Array<Record<string, any>>> = {
+    tenants: [{id: "tenant-1", timezone: "America/Denver"}],
     encounters: [{ id: 'enc-1', client_id: 'patient-1', provider_id: 'provider-1', payer_id: 'payer-1', billing_status: 'not_ready', started_at: '2026-10-04T15:00:00Z' }],
     clients: [{ id: 'patient-1', first_name: 'Synthetic', last_name: 'Patient', metadata: {} }],
     providers: [{ id: 'provider-1', first_name: 'Synthetic', last_name: 'Provider' }],

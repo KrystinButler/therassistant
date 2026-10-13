@@ -12,7 +12,7 @@ import { createChargeFromEncounter } from "../billing/repository";
 import { matchingServiceLineExists, validateServiceLineValues, type ServiceLineValues } from "../encounters/service-line-validation";
 import { saveStructuredClinicalData } from "./fast-charting-repository";
 import type { StructuredSelections } from "./fast-charting";
-import { clinicalServiceDate } from "./service-date";
+import { resolveClinicalServiceDate } from "./service-date";
 import { signNoteWorkflow, type ClinicalSigningRepository } from "./workflow";
 import { appendScopeDisclaimer, evaluateCrossSystemEngine, type DiagnosisSuggestion } from "./cross-system-engine";
 
@@ -105,9 +105,9 @@ export async function saveClinicalNote(
       id: `eq.${tenantId}`, select: "id,timezone", limit: "1",
     });
     if (!tenant?.timezone) throw new Error("Organization timezone is required to date the clinical note.");
-    const serviceDate = clinicalServiceDate(
-      String(state.encounter.started_at ?? new Date().toISOString()), String(tenant.timezone),
-    );
+    const appointment = state.encounter.appointment_id
+      ? first(await tenantSelect<DataRow>("appointments", { id: `eq.${state.encounter.appointment_id}`, limit: "1" })) : null;
+    const serviceDate = resolveClinicalServiceDate(null, state.encounter, appointment, String(tenant.timezone));
     saved = await tenantInsert<DataRow>("clinical_notes", {
       encounter_id: encounterId,
       client_id: state.encounter.client_id,
