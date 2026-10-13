@@ -44,6 +44,20 @@ export function buildPreVisitNoteInsert(review: PatientReviewCheckIn) {
   if (review.treatmentGoal) lines.push(`Patient-stated treatment goal: ${review.treatmentGoal}`);
   if (review.additionalContext) lines.push(`Additional context: ${review.additionalContext}`);
 
+  if (review.screeners?.declined) {
+    lines.push("Screeners: Patient chose to discuss screening with the provider.");
+  } else if (review.screeners) {
+    if (review.screeners.phq9Total !== null) {
+      lines.push(`PHQ-9 patient-reported total: ${review.screeners.phq9Total}`);
+    }
+    if (review.screeners.gad7Total !== null) {
+      lines.push(`GAD-7 patient-reported total: ${review.screeners.gad7Total}`);
+    }
+    if (review.screeners.cssrsSubmitted) {
+      lines.push("C-SSRS patient-reported questionnaire: submitted; clinician review required.");
+    }
+  }
+
   return lines.length > 1 ? lines.join("\n") : "";
 }
 
