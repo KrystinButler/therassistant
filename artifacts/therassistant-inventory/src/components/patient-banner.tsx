@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { Link } from "wouter";
 
+import "./patient-banner.css";
 import { StatusBadge } from "./status-badge";
 import { buildPatientBannerModel, type PatientBannerInput } from "./patient-banner-model";
 
