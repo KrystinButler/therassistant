@@ -2,7 +2,7 @@ import {
   readScreeners,
   summarizeScreeners,
   type ScreenerSummary,
-} from "../portal/portal-screeners";
+} from "../portal/portal-screeners.ts";
 
 type AnyRow = Record<string, unknown>;
 
