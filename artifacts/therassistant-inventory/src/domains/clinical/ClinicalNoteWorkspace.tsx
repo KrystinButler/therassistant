@@ -3,7 +3,9 @@ import { readNoteSection, updateNoteSection } from "./note-section-editing";
 import { readSubmittedVisitQuestion as question } from "../encounters/clinical-source-context";
 import { phqImportNarrative, gadImportNarrative, cssrsImportNarrative } from "./clinical-note-imports";
 import { ClinicalTelemetryChart } from "./ClinicalTelemetryChart";
+import { PreVisitScreenersPanel } from "./PreVisitScreenersPanel";
 import { evaluateCrossSystemEngine } from "./cross-system-engine";
+import type { ScreenerSummary } from "../portal/portal-screeners";
 import "./cross-system-testability.css";
 
 type Row = Record<string, any>;
@@ -16,6 +18,7 @@ type PreVisit = {
   additionalContext: string;
   safetyText: string;
   hasSubmittedPreVisit: boolean;
+  screeners: ScreenerSummary | null;
 };
 
 type Props = {
@@ -159,6 +162,8 @@ export function ClinicalNoteWorkspace(props: Props) {
         <div className="clinical-signal-card clinical-signal-risk"><span>C-SSRS</span><strong>{cssrsDisplay}</strong><small>{signalDate(cssrsCurrent) || "No date"}</small><em>{cssrsCurrent ? "Latest recorded safety screening" : "No result"}</em></div>
       </div>
     </section>
+
+    <PreVisitScreenersPanel screeners={props.preVisit.screeners} compact />
 
     <section className={`cross-system-monitor ${crossSystemEvaluation.matchedRules.length ? "active" : "idle"}`} aria-label="Cross-System Monitoring">
       <div className="cross-system-monitor-heading">
