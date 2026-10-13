@@ -1,4 +1,6 @@
+import { resolveClinicalServiceDate } from "../clinical/service-date";
 import {
+  getCurrentTenantId,
   tenantInsert,
   tenantSelect,
   tenantUpdate,
@@ -106,7 +108,10 @@ async function getBillingContext(encounterId: string): Promise<BillingReadinessI
     ? await tenantSelect<DataRow>("payer_resources", {
         payer_id: `eq.${String(encounter.payer_id)}`, resource_type: "eq.billing_rule",
       }) : [];
-  const serviceDate = String(first(notes)?.service_date ?? encounter.started_at ?? "").slice(0,10);
+  const tenantId = await getCurrentTenantId();
+  const tenant = first(await referenceSelect<DataRow>("tenants", { id: `eq.${tenantId}`, select: "id,timezone", limit: "1" }));
+  if (!tenant?.timezone) throw new Error("Organization timezone is required for billing service dates.");
+  const serviceDate = resolveClinicalServiceDate(first(notes), encounter, first(appointmentRows), String(tenant.timezone));
   return {
     encounter,
     billingType,
@@ -268,7 +273,7 @@ export async function createChargeFromEncounter(encounterId: string) {
 }
 
 export async function getBillingQueueData() {
-  const [encounters, clients, providers, charges, payers, readinessChecks, handoffs] = await Promise.all([
+  const [encounters, clients, providers, charges, payers, readinessChecks, handoffs, notes, appointments] = await Promise.all([
     tenantSelect<DataRow>("encounters", { order: "updated_at.desc" }),
     tenantSelect<DataRow>("clients"),
     tenantSelect<DataRow>("providers"),
@@ -280,8 +285,13 @@ export async function getBillingQueueData() {
       title: "eq.Clinical billing handoff",
       workqueue_status: "in.(open,in_progress,pending,snoozed,reopened)",
     }),
+    tenantSelect<DataRow>("clinical_notes", { order: "created_at.desc" }),
+    tenantSelect<DataRow>("appointments"),
   ]);
 
+  const tenantId = await getCurrentTenantId();
+  const tenant = first(await referenceSelect<DataRow>("tenants", { id: `eq.${tenantId}`, select: "id,timezone", limit: "1" }));
+  if (!tenant?.timezone) throw new Error("Organization timezone is required for billing service dates.");
   const clientsById = new Map(clients.map((row) => [row.id, row]));
   const providersById = new Map(providers.map((row) => [row.id, row]));
   const payersById = new Map(payers.map((row) => [row.id, row]));
@@ -303,6 +313,7 @@ export async function getBillingQueueData() {
           : responsibleEntity || "Private Pay";
     return {
       ...encounter,
+      serviceDate: resolveClinicalServiceDate(notes.find(note => note.encounter_id === encounter.id), encounter, appointments.find(appointment => appointment.id === encounter.appointment_id), String(tenant.timezone)),
       billingType,
       fundingSourceType: funding.sourceType,
       fundingSourceSubtype: funding.sourceSubtype,

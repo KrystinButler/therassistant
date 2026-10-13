@@ -17,7 +17,7 @@ import { shortDate } from "../../lib/format";
 import { startEncounter } from "../encounters/repository";
 import { getPatientChart } from "../patients/repository";
 import type { PatientChart, PatientChartRow } from "../patients/types";
-import { buildPatientReviewCheckIn } from "./patient-review-model";
+import { appointmentCheckIn, buildPatientReviewCheckIn } from "./patient-review-model";
 import type { ScheduleAppointment } from "./repository";
 import "./patient-review-drawer.css";
 
@@ -93,7 +93,7 @@ export function PatientReviewDrawer({ appointment, open, onOpenChange, onEditApp
 
   const review = useMemo(() => {
     if (!chart || !appointment) return null;
-    const checkin = chart.checkins.find((row) => String(row.appointment_id ?? "") === appointment.id) ?? chart.checkins[0] ?? null;
+    const checkin = appointmentCheckIn(chart.checkins, appointment.id);
     const patientUpdate = buildPatientReviewCheckIn(checkin);
     const journal = chart.journalEntries.find((row) =>
       String(row.visibility ?? "") === "shared_with_provider" &&
@@ -160,19 +160,15 @@ export function PatientReviewDrawer({ appointment, open, onOpenChange, onEditApp
   const age = dob ? ageOn(dob) : null;
   const pronouns = text(patient, ["pronouns", "preferred_pronouns"]);
   const payerAttention = appointment.readiness.checks.filter((check) => check.status !== "pass");
-  const checkInReady = appointment.checkInStatus === "Ready";
-  const readinessTitle =
-    appointment.checkInStatus === "Balance Issues" ? "Balance issue flagged before visit" :
-    appointment.checkInStatus === "In Progress" ? "Patient check-in is still in progress" :
-    appointment.checkInStatus === "Not Checked In" ? "Patient has not completed check-in" :
-    payerAttention.length ? "Patient-side preparation complete · administrative follow-up remains" :
-    "Ready for session";
-  const readinessText =
-    appointment.checkInStatus === "Balance Issues" ? "The account is flagged for a balance issue. This remains visible for follow-up but does not prevent the provider from opening the encounter and documenting care." :
-    appointment.checkInStatus === "In Progress" ? "The patient has started pre-visit steps but has not completed them. Available submitted information can still be reviewed in this drawer." :
-    appointment.checkInStatus === "Not Checked In" ? "No completed pre-visit check-in is available yet. The provider may still open the encounter when clinically appropriate." :
-    payerAttention.length ? `${payerAttention.length} administrative item${payerAttention.length === 1 ? "" : "s"} need follow-up. THERASSISTANT keeps those items outside the clinical workflow.` :
-    "Required patient-side preparation is complete. The provider can move directly into documentation.";
+  const checkInReady = Boolean(review?.hasSubmittedPreVisit);
+  const arrived = Boolean(review?.checkin?.arrived_at || review?.checkin?.checked_in_at);
+  const readinessTitle = checkInReady
+    ? "Pre-visit preparation submitted · arrival tracked separately"
+    : arrived ? "Arrival recorded · pre-visit answers not submitted"
+    : "Pre-visit answers not submitted";
+  const readinessText = checkInReady
+    ? "Submitted answers are available for provider review. Arrival and administrative billing checks remain separate."
+    : "No submitted answers are available for this appointment. The provider can document care; arrival and billing follow-up are tracked separately.";
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -229,7 +225,7 @@ export function PatientReviewDrawer({ appointment, open, onOpenChange, onEditApp
             </ReviewSection>
 
             <ReviewSection icon={<ShieldCheck size={15} />} title="Safety Review">
-              <div className={`patient-review-highlight ${review.safety === true ? "warning" : review.safety === false ? "positive" : "neutral"}`}><CheckCircle2 size={18} /><div><strong>{review.safety === true ? "Safety concern documented" : review.safety === false ? "No safety concerns" : "Safety review not submitted"}</strong><p>{review.safetyText ? review.safetyText : review.safety === true ? "Review the documented risk information before the session." : review.safety === false ? "No risk factors reported in the latest check-in." : "Review available chart information before the session."}</p></div></div>
+              <div className={`patient-review-highlight ${review.safety === true ? "warning" : review.safety === false ? "positive" : "neutral"}`}><CheckCircle2 size={18} /><div><strong>{review.safetyText ? "Patient safety response · clinician review required" : review.safety === true ? "Safety concern documented" : review.safety === false ? "No safety concerns" : "Safety review not submitted"}</strong><p>{review.safetyText ? review.safetyText : review.safety === true ? "Review the documented risk information before the session." : review.safety === false ? "No risk factors reported in the latest check-in." : "Review available chart information before the session."}</p></div></div>
             </ReviewSection>
 
             <ReviewSection icon={<CheckCircle2 size={15} />} title="Visit Readiness">

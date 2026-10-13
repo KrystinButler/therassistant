@@ -440,7 +440,7 @@ export function BillingQueuePage() {
       </div>
 
       <div className="thera-tabs" style={{ marginBottom: 16 }}>
-        <Tab active={tab === "ready"} onClick={() => setTab("ready")} label={`Ready for Billing (${groups.ready.length})`} />
+        <Tab active={tab === "ready"} onClick={() => setTab("ready")} label={`Awaiting Billing (${groups.ready.length})`} />
         <Tab active={tab === "blocked"} onClick={() => setTab("blocked")} label={`Validation Hold (${groups.blocked.length})`} />
         <Tab active={tab === "program"} onClick={() => setTab("program")} label={`Program Billing (${groups.programCharges.length})`} />
         <Tab active={tab === "private-pay"} onClick={() => setTab("private-pay")} label={`Private Pay (${groups.privatePayCharges.length})`} />
@@ -587,7 +587,7 @@ function EncounterTable({
   return (
     <section className="thera-card">
       {enableBatch && <div className="thera-card-header split">
-        <div><h2>Ready encounters</h2><p>Select eligible encounters to create charges in one operation. Held or already-charged visits cannot be selected.</p></div>
+        <div><h2>Encounters awaiting billing</h2><p>Only audited, ready encounters can be selected. Finish documentation or run the audit to identify remaining requirements.</p></div>
         <button type="button" className="thera-action" disabled={!selectedEligible.length || Boolean(savingId)} onClick={() => onBatchCharge?.(selectedEligible)}>
           {savingId === "batch-charges" ? "Creating charges..." : `Create selected charges (${selectedEligible.length})`}
         </button>
@@ -608,13 +608,13 @@ function EncounterTable({
                   if (event.target.checked) next.add(row.id); else next.delete(row.id);
                   return next;
                 })} /></td>}
-                <td>{shortDate(String(row.started_at ?? ""))}</td>
+                <td>{shortDate(String(row.serviceDate ?? ""))}</td>
                 <td>{row.clientName}</td>
                 <td>{row.providerName}</td>
                 <td>{row.payerName}</td>
                 <td><StatusBadge value={String(row.encounter_status)} /></td>
                 <td><StatusBadge value={String(row.billing_status)} /></td>
-                <td>{row.blockingChecks.length ? <><StatusBadge value="blocked" /><div className="thera-table-subtext">{row.blockingChecks.map((check, index) => { const link = billingCorrectionLink(check, row.id, String(row.client_id ?? "")); return <div key={String(check.id ?? index)} style={{ marginTop: 4 }}>{String(check.message)} {link && <Link className="thera-link" href={link.href}>{link.label} →</Link>}</div>; })}</div></> : "—"}</td>
+                <td>{row.blockingChecks.length ? <><StatusBadge value="blocked" /><div className="thera-table-subtext">{row.blockingChecks.map((check, index) => { const link = billingCorrectionLink(check, row.id, String(row.client_id ?? "")); return <div key={String(check.id ?? index)} style={{ marginTop: 4 }}>{String(check.message)} {link && <Link className="thera-link" href={link.href}>{link.label} →</Link>}</div>; })}</div></> : row.billing_status === "not_ready" ? "Complete and sign the note, then run the billing audit." : row.billing_status !== "ready" ? "Run the billing audit to review requirements." : "—"}</td>
                 <td>{row.advisoryChecks.length ? <><StatusBadge value="needs_review" /><div className="thera-table-subtext">{row.advisoryChecks.map((check) => String(check.message)).join(" · ")}</div></> : "—"}</td>
                 <td><div className="thera-filter-row"><Link className="thera-action secondary" href={`/encounters/${row.id}`}>Open Encounter</Link>{onEditFunding && <button type="button" className="thera-action secondary" disabled={Boolean(savingId)} onClick={() => onEditFunding(row.id)}>Billing Responsibility</button>}<button type="button" className="thera-action secondary" disabled={Boolean(savingId)} onClick={() => onAudit(row.id)}>Run Audit</button>{canCharge && <button type="button" className="thera-action" disabled={Boolean(savingId)} onClick={() => onCharge(row.id)}>Create Charge</button>}</div></td>
               </tr>;

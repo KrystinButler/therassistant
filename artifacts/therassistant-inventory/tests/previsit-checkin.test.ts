@@ -83,7 +83,7 @@ test("provider patient review prioritizes submitted pre-visit visit questions", 
   assert.equal(result.treatmentGoal, "Use coping skills before difficult meetings");
   assert.equal(result.additionalContext, "Please ask about medication side effects");
   assert.equal(result.safetyText, "No safety concerns");
-  assert.equal(result.safetyConcern, false);
+  assert.equal(result.safetyConcern, null);
   assert.equal(result.hasSubmittedPreVisit, true);
 });
 
@@ -120,7 +120,7 @@ test("provider patient review maps submitted safety responses", async () => {
       },
     },
   });
-  assert.equal(concern.safetyConcern, true);
+  assert.equal(concern.safetyConcern, null);
 
   const noConcern = buildPatientReviewCheckIn({
     responses: {
@@ -130,7 +130,7 @@ test("provider patient review maps submitted safety responses", async () => {
       },
     },
   });
-  assert.equal(noConcern.safetyConcern, false);
+  assert.equal(noConcern.safetyConcern, null);
 });
 
 

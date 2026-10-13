@@ -35,11 +35,8 @@ function legacySafetyConcern(row?: AnyRow | null) {
   return null;
 }
 
-function safetyConcernFromText(value: string) {
-  const normalized = value.trim().toLowerCase().replace(/[.!]+$/g, "");
-  if (!normalized) return null;
-  if (["no", "none", "no concerns", "no safety concerns", "n/a", "na", "safe"].includes(normalized)) return false;
-  return true;
+export function appointmentCheckIn<T extends AnyRow>(rows: T[], appointmentId: string): T | null {
+  return rows.find(row => String(row.appointment_id ?? "") === appointmentId) ?? null;
 }
 
 export type PatientReviewCheckIn = {
@@ -83,7 +80,7 @@ export function buildPatientReviewCheckIn(checkin: AnyRow | null | undefined): P
     treatmentGoal,
     additionalContext,
     safetyText,
-    safetyConcern: safetyText ? safetyConcernFromText(safetyText) : legacySafetyConcern(checkin),
+    safetyConcern: safetyText ? null : legacySafetyConcern(checkin),
     hasSubmittedPreVisit,
   };
 }
