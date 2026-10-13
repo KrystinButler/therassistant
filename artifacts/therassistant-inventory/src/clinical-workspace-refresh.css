@@ -130,7 +130,7 @@ body { background-image: none; }
 .cw-sidebar-bottom { border-top: 1px solid rgba(241, 247, 245, .17); padding: 8px 6px 12px; }
 .cw-sidebar-org { margin: 7px 20px 0; color: #b9cbc5; font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .cw-main { grid-area: main; min-width: 0; background: #faf9f6; }
-.cw-content { width: 100%; max-width: 1550px; margin: 0 auto; padding: 28px 28px 60px; }
+.cw-content { width: 100%; max-width: none; margin: 0; padding: 16px 18px 36px; }
 .cw-mobile-context { display: none; }
 
 /* Home dashboard */
