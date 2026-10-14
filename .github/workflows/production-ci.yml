@@ -131,23 +131,40 @@ jobs:
           sed -i 's/drop table public\.coding_guidance_sheet_rows;/drop table if exists public.coding_guidance_sheet_rows;/' \
             supabase/migrations/20260929235306_remove_obsolete_ehr_authorization_mailroom_staging.sql
 
-          # Production history contained legacy claim_submissions columns named
-          # "Encounter" and client that were created outside the migration chain.
-          # Clean CI has no legacy rows to backfill, so neutralize only that historical
-          # backfill in the disposable checkout without rewriting migration history.
+          # Production history contained claim-submission lineage sources that were
+          # created outside the reproducible chain. Clean CI has no historical
+          # claim_submissions rows to backfill, so neutralize only those data backfills
+          # in the disposable checkout without rewriting migration history.
           python - <<'PY'
           from pathlib import Path
 
           path = Path("supabase/migrations/20261010022215_harden_audit_and_edi_submission_lineage.sql")
           sql = path.read_text()
-          old = '''update public.claim_submissions
+          replacements = [
+              (
+                  '''update public.claim_submissions
           set encounter_id=coalesce(encounter_id,"Encounter"), client_id=coalesce(client_id,client)
-          where (encounter_id is null and "Encounter" is not null) or (client_id is null and client is not null);'''
-          replacement = '''-- Isolated clean replay has no historical claim_submissions rows to backfill.
-          select 1;'''
-          if old not in sql:
-              raise SystemExit("Expected legacy claim_submissions backfill block was not found")
-          path.write_text(sql.replace(old, replacement, 1))
+          where (encounter_id is null and "Encounter" is not null) or (client_id is null and client is not null);''',
+                  '''-- Isolated clean replay has no historical claim_submissions rows to backfill.
+          select 1;''',
+              ),
+              (
+                  '''update public.claim_submissions cs
+          set practice_entity_id=coalesce(cs.practice_entity_id,pc.practice_entity_id),
+              provider_location_id=coalesce(cs.provider_location_id,pc.provider_location_id),
+              insurance_policy_id=coalesce(cs.insurance_policy_id,pc.insurance_policy_id),
+              encounter_id=coalesce(cs.encounter_id,pc.source_encounter_id),
+              client_id=coalesce(cs.client_id,pc.client_id)
+          from public.professional_claims pc where pc.id=cs.claim_id;''',
+                  '''-- Isolated clean replay has no historical claim_submissions rows to enrich.
+          select 1;''',
+              ),
+          ]
+          for old, replacement in replacements:
+              if old not in sql:
+                  raise SystemExit("Expected historical claim_submissions backfill block was not found")
+              sql = sql.replace(old, replacement, 1)
+          path.write_text(sql)
           PY
 
           pnpm dlx supabase@2.117.0 start
