@@ -89,15 +89,31 @@ begin
   if exists(select 1 from public.workqueue_items where source_object_id=v_encounter and title='Clinical billing handoff' and workqueue_status <> 'completed') then
     raise exception 'Signing retry reopened completed billing work';
   end if;
-  -- Administrative membership does not authorize signing.
+  -- Administrative membership does not authorize signing. The self-link helper can
+  -- reject this account either at the identity check or the clinician-role check;
+  -- both are intentional authorization denials and neither may write a signature.
   insert into public.clinical_notes(id,tenant_id,encounter_id,client_id,provider_id,note_type,note_text,service_date)
   values(v_unsigned_note,v_tenant,v_encounter,v_client,v_provider,'assessment','Unsigned synthetic note',current_date-1);
   perform set_config('request.jwt.claim.sub',current_setting('test.clinical_staff_user'),true);
   begin
-    perform public.sign_encounter_note(v_encounter,v_note,v_provider,'Unauthorized signature');
-  exception when insufficient_privilege then v_denied := true;
+    perform public.sign_encounter_note(v_encounter,v_unsigned_note,v_provider,'Unauthorized signature');
+  exception
+    when insufficient_privilege then
+      v_denied := true;
+    when raise_exception then
+      if sqlerrm not in (
+        'The clinician login email must match the provider email before accounts can be linked',
+        'Your account must have the Clinician role before it can be linked to a provider'
+      ) then
+        raise;
+      end if;
+      v_denied := true;
   end;
-  if not v_denied then raise exception 'Non-clinician signed a clinical note'; end if;
+  if not v_denied
+    or exists(select 1 from public.clinical_note_signatures where clinical_note_id=v_unsigned_note)
+    or not exists(select 1 from public.clinical_notes where id=v_unsigned_note and note_status='draft' and locked_at is null) then
+    raise exception 'Non-clinician signed a clinical note';
+  end if;
   v_denied := false;
   begin
     insert into public.clinical_note_signatures(tenant_id,clinical_note_id,signer_id,provider_id,signature_text)
@@ -107,14 +123,21 @@ begin
   if not v_denied or not exists(select 1 from public.clinical_notes where id=v_unsigned_note and note_status='draft') then
     raise exception 'Direct signature write bypassed clinician authorization';
   end if;
+  -- A matching clinician may recover their own inactive provider link through the
+  -- hardened self-link helper. Retrying a signed note must reactivate that link
+  -- without replacing the durable signature or reopening completed billing work.
   perform set_config('request.jwt.claim.sub',current_setting('test.clinical_provider_user'),true);
   update public.provider_user_links set status='inactive' where provider_id=v_provider and user_id=auth.uid();
-  v_denied := false;
-  begin
-    perform public.sign_encounter_note(v_encounter,v_note,v_provider,'Inactive provider link');
-  exception when insufficient_privilege then v_denied := true;
-  end;
-  if not v_denied then raise exception 'Inactive provider link authorized signing'; end if;
+  v_result := public.sign_encounter_note(v_encounter,v_note,v_provider,'Inactive provider link retry');
+  if not exists(
+      select 1 from public.provider_user_links
+      where tenant_id=v_tenant and provider_id=v_provider and user_id=auth.uid() and status='active'
+    )
+    or (v_result->>'signed_at')::timestamptz is distinct from v_first_signed_at
+    or (select count(*) from public.clinical_note_signatures where clinical_note_id=v_note) <> 1
+    or exists(select 1 from public.workqueue_items where source_object_id=v_encounter and title='Clinical billing handoff' and workqueue_status <> 'completed') then
+    raise exception 'Provider self-link recovery changed signed clinical state';
+  end if;
 end;
 $test$;
 rollback;
