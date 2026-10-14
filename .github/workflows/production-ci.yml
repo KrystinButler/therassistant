@@ -131,40 +131,111 @@ jobs:
           sed -i 's/drop table public\.coding_guidance_sheet_rows;/drop table if exists public.coding_guidance_sheet_rows;/' \
             supabase/migrations/20260929235306_remove_obsolete_ehr_authorization_mailroom_staging.sql
 
-          # Production history contained claim-submission lineage sources that were
-          # created outside the reproducible chain. Clean CI has no historical
-          # claim_submissions rows to backfill, so neutralize only those data backfills
-          # in the disposable checkout without rewriting migration history.
+          # Production history contained legacy columns and historical rows that were
+          # created outside the reproducible migration chain. Clean CI has none of
+          # those rows, so neutralize only the legacy data backfills in the disposable
+          # checkout while preserving all schema, constraint, RPC, policy, and index work.
           python - <<'PY'
           from pathlib import Path
 
-          path = Path("supabase/migrations/20261010022215_harden_audit_and_edi_submission_lineage.sql")
-          sql = path.read_text()
-          replacements = [
-              (
-                  '''update public.claim_submissions
+          def replace_exact(path_name, replacements, label):
+              path = Path(path_name)
+              sql = path.read_text()
+              for old, replacement in replacements:
+                  if old not in sql:
+                      raise SystemExit(f"Expected {label} compatibility block was not found")
+                  sql = sql.replace(old, replacement, 1)
+              path.write_text(sql)
+
+          replace_exact(
+              "supabase/migrations/20261010022215_harden_audit_and_edi_submission_lineage.sql",
+              [
+                  (
+                      '''update public.claim_submissions
           set encounter_id=coalesce(encounter_id,"Encounter"), client_id=coalesce(client_id,client)
           where (encounter_id is null and "Encounter" is not null) or (client_id is null and client is not null);''',
-                  '''-- Isolated clean replay has no historical claim_submissions rows to backfill.
+                      '''-- Isolated clean replay has no historical claim_submissions rows to backfill.
           select 1;''',
-              ),
-              (
-                  '''update public.claim_submissions cs
+                  ),
+                  (
+                      '''update public.claim_submissions cs
           set practice_entity_id=coalesce(cs.practice_entity_id,pc.practice_entity_id),
               provider_location_id=coalesce(cs.provider_location_id,pc.provider_location_id),
               insurance_policy_id=coalesce(cs.insurance_policy_id,pc.insurance_policy_id),
               encounter_id=coalesce(cs.encounter_id,pc.source_encounter_id),
               client_id=coalesce(cs.client_id,pc.client_id)
           from public.professional_claims pc where pc.id=cs.claim_id;''',
-                  '''-- Isolated clean replay has no historical claim_submissions rows to enrich.
+                      '''-- Isolated clean replay has no historical claim_submissions rows to enrich.
           select 1;''',
-              ),
-          ]
-          for old, replacement in replacements:
-              if old not in sql:
-                  raise SystemExit("Expected historical claim_submissions backfill block was not found")
-              sql = sql.replace(old, replacement, 1)
-          path.write_text(sql)
+                  ),
+              ],
+              "claim_submissions legacy backfill",
+          )
+
+          replace_exact(
+              "supabase/migrations/20261010022301_normalize_operational_fk_names_and_secure_edi.sql",
+              [
+                  (
+                      '''update public.encounters
+          set provider_location_id=coalesce(provider_location_id,location), tenant_user_id=coalesce(tenant_user_id,"User_id")
+          where (provider_location_id is null and location is not null) or (tenant_user_id is null and "User_id" is not null);''',
+                      '''-- Isolated clean replay has no historical encounter rows to normalize.
+          select 1;''',
+                  ),
+                  (
+                      '''update public.clinical_note_signatures
+          set encounter_id=coalesce(encounter_id,"Encounter_Id"), tenant_user_id=coalesce(tenant_user_id,"User_id")
+          where (encounter_id is null and "Encounter_Id" is not null) or (tenant_user_id is null and "User_id" is not null);''',
+                      '''-- Isolated clean replay has no historical clinical note signatures to normalize.
+          select 1;''',
+                  ),
+                  (
+                      '''update public.client_diagnoses
+          set encounter_id=coalesce(encounter_id,"Encounter_Id"), treatment_plan_id=coalesce(treatment_plan_id,plan)
+          where (encounter_id is null and "Encounter_Id" is not null) or (treatment_plan_id is null and plan is not null);''',
+                      '''-- Isolated clean replay has no historical client diagnoses to normalize.
+          select 1;''',
+                  ),
+                  (
+                      '''update public.eligibility_benefits set insurance_policy_id=coalesce(insurance_policy_id,"Insurance")
+          where insurance_policy_id is null and "Insurance" is not null;''',
+                      '''-- Isolated clean replay has no historical eligibility benefits to normalize.
+          select 1;''',
+                  ),
+                  (
+                      '''update public.denials set encounter_id=coalesce(encounter_id,"Encounter_Id")
+          where encounter_id is null and "Encounter_Id" is not null;''',
+                      '''-- Isolated clean replay has no historical denials to normalize.
+          select 1;''',
+                  ),
+                  (
+                      '''update public.encounter_diagnoses ed set client_id=coalesce(ed.client_id,ed."Patient",e.client_id)
+          from public.encounters e where e.id=ed.encounter_id and ed.client_id is null;''',
+                      '''-- Isolated clean replay has no historical encounter diagnoses to normalize.
+          select 1;''',
+                  ),
+                  (
+                      '''update public.credentialing_application_events set provider_id=coalesce(provider_id,"Provder_Id")
+          where provider_id is null and "Provder_Id" is not null;''',
+                      '''-- Isolated clean replay has no historical credentialing events to normalize.
+          select 1;''',
+                  ),
+                  (
+                      '''update public.claim_status_history
+          set appointment_id=coalesce(appointment_id,appointment), encounter_id=coalesce(encounter_id,"Encounter"), client_id=coalesce(client_id,"Client")
+          where (appointment_id is null and appointment is not null) or (encounter_id is null and "Encounter" is not null) or (client_id is null and "Client" is not null);''',
+                      '''-- Isolated clean replay has no historical claim status rows to normalize.
+          select 1;''',
+                  ),
+                  (
+                      '''update public.claim_diagnoses set appointment_id=coalesce(appointment_id,"Appointment")
+          where appointment_id is null and "Appointment" is not null;''',
+                      '''-- Isolated clean replay has no historical claim diagnoses to normalize.
+          select 1;''',
+                  ),
+              ],
+              "operational legacy backfill",
+          )
           PY
 
           pnpm dlx supabase@2.117.0 start
