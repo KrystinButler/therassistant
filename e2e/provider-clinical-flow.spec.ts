@@ -23,7 +23,8 @@ test("provider completes a synthetic visit from schedule through signed note and
     "Synthetic psychotherapy progress note. Client participated in supportive psychotherapy and collaborative problem solving. No acute safety concerns were reported. Continue current treatment plan and reassess at next visit.",
   );
 
-  // Signing requires persisted diagnosis and procedure coding for the visit.
+  // Coding is downstream billing work rather than a prerequisite for clinical signature,
+  // but this end-to-end flow persists it so the signed visit can continue into charge handoff.
   const recordedDiagnoses = page.locator("#encounter-diagnoses .thera-table tbody tr");
   if ((await recordedDiagnoses.count()) === 0) {
     await page.getByPlaceholder("Search ICD-10-CM code or diagnosis").fill("F41.1");
@@ -40,6 +41,11 @@ test("provider completes a synthetic visit from schedule through signed note and
     // Confirm the service was actually saved instead of relying on obsolete toast text.
     await expect(recordedServices).toHaveCount(1, { timeout: 15_000 });
   }
+
+  // Save Note and Sign & Lock are intentionally separate actions. Persist the
+  // clinical draft after billing edits before attempting the immutable signature.
+  await page.getByRole("button", { name: "Save Note" }).click();
+  await expect(page.getByText("Clinical note saved as a draft.", { exact: true })).toBeVisible({ timeout: 15_000 });
 
   await page.getByPlaceholder("Provider signature").fill("Jamie Parker, LCSW");
   const signButton = page.getByRole("button", { name: "Sign & Lock Note" });
