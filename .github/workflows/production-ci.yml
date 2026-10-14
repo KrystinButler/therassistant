@@ -131,6 +131,25 @@ jobs:
           sed -i 's/drop table public\.coding_guidance_sheet_rows;/drop table if exists public.coding_guidance_sheet_rows;/' \
             supabase/migrations/20260929235306_remove_obsolete_ehr_authorization_mailroom_staging.sql
 
+          # Production history contained legacy claim_submissions columns named
+          # "Encounter" and client that were created outside the migration chain.
+          # Clean CI has no legacy rows to backfill, so neutralize only that historical
+          # backfill in the disposable checkout without rewriting migration history.
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path("supabase/migrations/20261010022215_harden_audit_and_edi_submission_lineage.sql")
+          sql = path.read_text()
+          old = '''update public.claim_submissions
+          set encounter_id=coalesce(encounter_id,"Encounter"), client_id=coalesce(client_id,client)
+          where (encounter_id is null and "Encounter" is not null) or (client_id is null and client is not null);'''
+          replacement = '''-- Isolated clean replay has no historical claim_submissions rows to backfill.
+          select 1;'''
+          if old not in sql:
+              raise SystemExit("Expected legacy claim_submissions backfill block was not found")
+          path.write_text(sql.replace(old, replacement, 1))
+          PY
+
           pnpm dlx supabase@2.117.0 start
           pnpm dlx supabase@2.117.0 status -o env > /tmp/supabase.env
           set -a
