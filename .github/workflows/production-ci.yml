@@ -172,70 +172,28 @@ jobs:
               "claim_submissions legacy backfill",
           )
 
-          replace_exact(
-              "supabase/migrations/20261010022301_normalize_operational_fk_names_and_secure_edi.sql",
-              [
-                  (
-                      '''update public.encounters
-          set provider_location_id=coalesce(provider_location_id,location), tenant_user_id=coalesce(tenant_user_id,"User_id")
-          where (provider_location_id is null and location is not null) or (tenant_user_id is null and "User_id" is not null);''',
-                      '''-- Isolated clean replay has no historical encounter rows to normalize.
-          select 1;''',
-                  ),
-                  (
-                      '''update public.clinical_note_signatures
-          set encounter_id=coalesce(encounter_id,"Encounter_Id"), tenant_user_id=coalesce(tenant_user_id,"User_id")
-          where (encounter_id is null and "Encounter_Id" is not null) or (tenant_user_id is null and "User_id" is not null);''',
-                      '''-- Isolated clean replay has no historical clinical note signatures to normalize.
-          select 1;''',
-                  ),
-                  (
-                      '''update public.client_diagnoses
-          set encounter_id=coalesce(encounter_id,"Encounter_Id"), treatment_plan_id=coalesce(treatment_plan_id,plan)
-          where (encounter_id is null and "Encounter_Id" is not null) or (treatment_plan_id is null and plan is not null);''',
-                      '''-- Isolated clean replay has no historical client diagnoses to normalize.
-          select 1;''',
-                  ),
-                  (
-                      '''update public.eligibility_benefits set insurance_policy_id=coalesce(insurance_policy_id,"Insurance")
-          where insurance_policy_id is null and "Insurance" is not null;''',
-                      '''-- Isolated clean replay has no historical eligibility benefits to normalize.
-          select 1;''',
-                  ),
-                  (
-                      '''update public.denials set encounter_id=coalesce(encounter_id,"Encounter_Id")
-          where encounter_id is null and "Encounter_Id" is not null;''',
-                      '''-- Isolated clean replay has no historical denials to normalize.
-          select 1;''',
-                  ),
-                  (
-                      '''update public.encounter_diagnoses ed set client_id=coalesce(ed.client_id,ed."Patient",e.client_id)
-          from public.encounters e where e.id=ed.encounter_id and ed.client_id is null;''',
-                      '''-- Isolated clean replay has no historical encounter diagnoses to normalize.
-          select 1;''',
-                  ),
-                  (
-                      '''update public.credentialing_application_events set provider_id=coalesce(provider_id,"Provder_Id")
-          where provider_id is null and "Provder_Id" is not null;''',
-                      '''-- Isolated clean replay has no historical credentialing events to normalize.
-          select 1;''',
-                  ),
-                  (
-                      '''update public.claim_status_history
-          set appointment_id=coalesce(appointment_id,appointment), encounter_id=coalesce(encounter_id,"Encounter"), client_id=coalesce(client_id,"Client")
-          where (appointment_id is null and appointment is not null) or (encounter_id is null and "Encounter" is not null) or (client_id is null and "Client" is not null);''',
-                      '''-- Isolated clean replay has no historical claim status rows to normalize.
-          select 1;''',
-                  ),
-                  (
-                      '''update public.claim_diagnoses set appointment_id=coalesce(appointment_id,"Appointment")
-          where appointment_id is null and "Appointment" is not null;''',
-                      '''-- Isolated clean replay has no historical claim diagnoses to normalize.
-          select 1;''',
-                  ),
-              ],
-              "operational legacy backfill",
-          )
+          operational_path = Path("supabase/migrations/20261010022301_normalize_operational_fk_names_and_secure_edi.sql")
+          operational_sql = operational_path.read_text()
+          operational_updates = [
+              'update public.encounters set provider_location_id=coalesce(provider_location_id,location), tenant_user_id=coalesce(tenant_user_id,"User_id");',
+              'update public.clinical_note_signatures set encounter_id=coalesce(encounter_id,"Encounter_Id"), tenant_user_id=coalesce(tenant_user_id,"User_id");',
+              'update public.client_diagnoses set encounter_id=coalesce(encounter_id,"Encounter_Id"), treatment_plan_id=coalesce(treatment_plan_id,plan);',
+              'update public.eligibility_benefits set insurance_policy_id=coalesce(insurance_policy_id,"Insurance");',
+              'update public.denials set encounter_id=coalesce(encounter_id,"Encounter_Id");',
+              'update public.encounter_diagnoses ed set client_id=coalesce(ed.client_id,ed."Patient",e.client_id) from public.encounters e where e.id=ed.encounter_id and ed.client_id is null;',
+              'update public.credentialing_application_events set provider_id=coalesce(provider_id,"Provder_Id");',
+              'update public.claim_status_history set appointment_id=coalesce(appointment_id,appointment), encounter_id=coalesce(encounter_id,"Encounter"), client_id=coalesce(client_id,"Client");',
+              'update public.claim_diagnoses set appointment_id=coalesce(appointment_id,"Appointment");',
+          ]
+          for statement in operational_updates:
+              if operational_sql.count(statement) != 1:
+                  raise SystemExit(f"Expected exactly one operational legacy backfill statement: {statement}")
+              operational_sql = operational_sql.replace(
+                  statement,
+                  '-- Isolated clean replay has no historical row to normalize.\nselect 1;',
+                  1,
+              )
+          operational_path.write_text(operational_sql)
           PY
 
           pnpm dlx supabase@2.117.0 start
