@@ -19,7 +19,8 @@ test("provider completes the synthetic insured visit for billing", async ({ page
     "Synthetic insured psychotherapy progress note. Client participated in psychotherapy and collaborative problem solving. No acute safety concerns were reported. Continue the current plan of care.",
   );
 
-  // Signed documentation no longer includes a separate billing-readiness summary.
+  // Coding is downstream billing work rather than a prerequisite for clinical signature,
+  // but this insured flow persists it so the visit can continue into charge generation.
   const recordedDiagnoses = page.locator("#encounter-diagnoses tbody tr");
   if ((await recordedDiagnoses.count()) === 0) {
     await page.getByPlaceholder("Search ICD-10-CM code or diagnosis").fill("F41.1");
@@ -37,6 +38,11 @@ test("provider completes the synthetic insured visit for billing", async ({ page
     // The actual service line must persist after billing-readiness reevaluation.
     await expect(recordedServices).toHaveCount(1, { timeout: 15_000 });
   }
+
+  // Save Note and Sign & Lock are intentionally separate actions. Persist the
+  // clinical draft after billing edits before attempting the immutable signature.
+  await page.getByRole("button", { name: "Save Note" }).click();
+  await expect(page.getByText("Clinical note saved as a draft.", { exact: true })).toBeVisible({ timeout: 15_000 });
 
   await page.getByPlaceholder("Provider signature").fill("Jamie Parker, LCSW");
   const signButton = page.getByRole("button", { name: "Sign & Lock Note" });
