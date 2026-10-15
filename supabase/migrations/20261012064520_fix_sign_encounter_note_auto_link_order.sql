@@ -145,6 +145,7 @@ begin
     )
     returning signed_at into v_signed_at;
 
+    -- Explicit as well as trigger-backed: no browser PATCH can be lost.
     update public.clinical_notes
     set note_status='signed',
         locked_at=coalesce(locked_at,v_signed_at),
