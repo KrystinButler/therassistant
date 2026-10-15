@@ -147,6 +147,38 @@ jobs:
                   sql = sql.replace(old, replacement, 1)
               path.write_text(sql)
 
+          def skip_historical_backfills(path_name, marker, label):
+              path = Path(path_name)
+              sql = path.read_text()
+              if sql.count(marker) != 1:
+                  raise SystemExit(f"Expected exactly one {label} backfill marker")
+              prefix, _ = sql.split(marker, 1)
+              path.write_text(
+                  prefix
+                  + marker
+                  + "\n-- Isolated clean replay has no historical rows to backfill.\nselect 1;\n"
+              )
+
+          # These three migrations are exact recoveries from the live production
+          # migration ledger. Their schema work must replay unchanged, but their
+          # trailing data backfills reference legacy columns/state that existed in
+          # production at that point in history and do not exist in a clean database.
+          skip_historical_backfills(
+              "supabase/migrations/20261010021609_strengthen_ehr_revenue_lineage.sql",
+              "-- Backfill lineage where it is already unambiguous from existing encounter data.",
+              "recovered EHR revenue lineage",
+          )
+          skip_historical_backfills(
+              "supabase/migrations/20261010021637_strengthen_x12_snapshot_lineage.sql",
+              "-- Backfill payment allocation lineage from claims.",
+              "recovered X12 snapshot lineage",
+          )
+          skip_historical_backfills(
+              "supabase/migrations/20261010021915_strengthen_edi_837_835_lineage.sql",
+              "-- Backfill claim snapshot context from encounter/location where unambiguous",
+              "recovered EDI lineage",
+          )
+
           replace_exact(
               "supabase/migrations/20261010022215_harden_audit_and_edi_submission_lineage.sql",
               [
