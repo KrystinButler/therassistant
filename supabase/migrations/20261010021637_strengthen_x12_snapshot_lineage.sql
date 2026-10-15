@@ -1,106 +1,91 @@
--- Make claim-level 837 lineage explicit to a specific active insurance policy.
-alter table public.professional_claims
-  add column if not exists insurance_policy_id uuid;
-do $$ begin
-  if not exists (select 1 from pg_constraint where conname='professional_claims_insurance_policy_id_fkey') then
-    alter table public.professional_claims
-      add constraint professional_claims_insurance_policy_id_fkey
-      foreign key (insurance_policy_id) references public.client_insurance_policies(id) on delete set null;
-  end if;
-end $$;
-create index if not exists idx_professional_claims_insurance_policy_id on public.professional_claims(insurance_policy_id);
-
--- Snapshot the exact provider/location/policy/claim control context used at submission time.
-alter table public.claim_submissions
+alter table public.client_balance_summaries
   add column if not exists encounter_id uuid,
-  add column if not exists client_id uuid,
-  add column if not exists practice_entity_id uuid,
-  add column if not exists provider_location_id uuid,
-  add column if not exists insurance_policy_id uuid,
-  add column if not exists patient_control_number text,
-  add column if not exists payer_control_number text,
-  add column if not exists edi_interchange_control_number text,
-  add column if not exists edi_group_control_number text,
-  add column if not exists edi_transaction_control_number text,
-  add column if not exists x12_version text,
-  add column if not exists transaction_set_type text,
-  add column if not exists x12_snapshot jsonb;
+  add column if not exists professional_claim_id uuid,
+  add column if not exists insurance_policy_id uuid;
 
-do $$ begin
-  if not exists (select 1 from pg_constraint where conname='claim_submissions_encounter_id_fkey') then
-    alter table public.claim_submissions add constraint claim_submissions_encounter_id_fkey
-      foreign key (encounter_id) references public.encounters(id) on delete set null;
+alter table public.payment_allocations
+  add column if not exists encounter_id uuid,
+  add column if not exists charge_id uuid,
+  add column if not exists insurance_policy_id uuid;
+
+alter table public.adjustments
+  add column if not exists encounter_id uuid,
+  add column if not exists charge_id uuid,
+  add column if not exists insurance_policy_id uuid;
+
+do $$
+begin
+  if not exists (select 1 from pg_constraint where conname='client_balance_summaries_encounter_id_fkey') then
+    alter table public.client_balance_summaries add constraint client_balance_summaries_encounter_id_fkey foreign key (encounter_id) references public.encounters(id);
   end if;
-  if not exists (select 1 from pg_constraint where conname='claim_submissions_client_id_fkey') then
-    alter table public.claim_submissions add constraint claim_submissions_client_id_fkey
-      foreign key (client_id) references public.clients(id) on delete set null;
+  if not exists (select 1 from pg_constraint where conname='client_balance_summaries_professional_claim_id_fkey') then
+    alter table public.client_balance_summaries add constraint client_balance_summaries_professional_claim_id_fkey foreign key (professional_claim_id) references public.professional_claims(id);
   end if;
-  if not exists (select 1 from pg_constraint where conname='claim_submissions_practice_entity_id_fkey') then
-    alter table public.claim_submissions add constraint claim_submissions_practice_entity_id_fkey
-      foreign key (practice_entity_id) references public.practice_entities(id) on delete set null;
+  if not exists (select 1 from pg_constraint where conname='client_balance_summaries_insurance_policy_id_fkey') then
+    alter table public.client_balance_summaries add constraint client_balance_summaries_insurance_policy_id_fkey foreign key (insurance_policy_id) references public.client_insurance_policies(id);
   end if;
-  if not exists (select 1 from pg_constraint where conname='claim_submissions_provider_location_id_fkey') then
-    alter table public.claim_submissions add constraint claim_submissions_provider_location_id_fkey
-      foreign key (provider_location_id) references public.provider_locations(id) on delete set null;
+
+  if not exists (select 1 from pg_constraint where conname='payment_allocations_encounter_id_fkey') then
+    alter table public.payment_allocations add constraint payment_allocations_encounter_id_fkey foreign key (encounter_id) references public.encounters(id);
   end if;
-  if not exists (select 1 from pg_constraint where conname='claim_submissions_insurance_policy_id_fkey') then
-    alter table public.claim_submissions add constraint claim_submissions_insurance_policy_id_fkey
-      foreign key (insurance_policy_id) references public.client_insurance_policies(id) on delete set null;
+  if not exists (select 1 from pg_constraint where conname='payment_allocations_charge_id_fkey') then
+    alter table public.payment_allocations add constraint payment_allocations_charge_id_fkey foreign key (charge_id) references public.charge_capture_items(id);
+  end if;
+  if not exists (select 1 from pg_constraint where conname='payment_allocations_insurance_policy_id_fkey') then
+    alter table public.payment_allocations add constraint payment_allocations_insurance_policy_id_fkey foreign key (insurance_policy_id) references public.client_insurance_policies(id);
+  end if;
+
+  if not exists (select 1 from pg_constraint where conname='adjustments_encounter_id_fkey') then
+    alter table public.adjustments add constraint adjustments_encounter_id_fkey foreign key (encounter_id) references public.encounters(id);
+  end if;
+  if not exists (select 1 from pg_constraint where conname='adjustments_charge_id_fkey') then
+    alter table public.adjustments add constraint adjustments_charge_id_fkey foreign key (charge_id) references public.charge_capture_items(id);
+  end if;
+  if not exists (select 1 from pg_constraint where conname='adjustments_insurance_policy_id_fkey') then
+    alter table public.adjustments add constraint adjustments_insurance_policy_id_fkey foreign key (insurance_policy_id) references public.client_insurance_policies(id);
   end if;
 end $$;
 
-create index if not exists idx_claim_submissions_encounter_id on public.claim_submissions(encounter_id);
-create index if not exists idx_claim_submissions_client_id on public.claim_submissions(client_id);
-create index if not exists idx_claim_submissions_practice_entity_id on public.claim_submissions(practice_entity_id);
-create index if not exists idx_claim_submissions_provider_location_id on public.claim_submissions(provider_location_id);
-create index if not exists idx_claim_submissions_insurance_policy_id on public.claim_submissions(insurance_policy_id);
-create index if not exists idx_claim_submissions_patient_control_number on public.claim_submissions(patient_control_number);
-create index if not exists idx_claim_submissions_payer_control_number on public.claim_submissions(payer_control_number);
+create index if not exists idx_client_balance_summaries_encounter_id on public.client_balance_summaries(encounter_id);
+create index if not exists idx_client_balance_summaries_professional_claim_id on public.client_balance_summaries(professional_claim_id);
+create index if not exists idx_client_balance_summaries_insurance_policy_id on public.client_balance_summaries(insurance_policy_id);
+create index if not exists idx_payment_allocations_encounter_id on public.payment_allocations(encounter_id);
+create index if not exists idx_payment_allocations_charge_id on public.payment_allocations(charge_id);
+create index if not exists idx_payment_allocations_insurance_policy_id on public.payment_allocations(insurance_policy_id);
+create index if not exists idx_adjustments_encounter_id on public.adjustments(encounter_id);
+create index if not exists idx_adjustments_charge_id on public.adjustments(charge_id);
+create index if not exists idx_adjustments_insurance_policy_id on public.adjustments(insurance_policy_id);
 
--- Seed submission snapshot/context from the linked professional claim.
-update public.claim_submissions cs
-   set encounter_id = pc.source_encounter_id,
-       client_id = pc.client_id,
-       insurance_policy_id = pc.insurance_policy_id,
-       patient_control_number = pc.patient_control_number,
-       payer_control_number = coalesce(cs.payer_control_number, pc.payer_control_number),
-       x12_version = coalesce(cs.x12_version, '005010X222A1'),
-       transaction_set_type = coalesce(cs.transaction_set_type, '837P'),
-       x12_snapshot = coalesce(cs.x12_snapshot, jsonb_build_object(
-         'claim_id', pc.id,
-         'patient_control_number', pc.patient_control_number,
-         'payer_id', pc.payer_id,
-         'billing_provider_name', pc.billing_provider_name,
-         'billing_provider_npi', pc.billing_provider_npi,
-         'rendering_provider_name', pc.rendering_provider_name,
-         'rendering_provider_npi', pc.rendering_provider_npi,
-         'service_facility_name', pc.service_facility_name,
-         'service_facility_npi', pc.service_facility_npi,
-         'total_charge_cents', pc.total_charge_cents
-       ))
-  from public.professional_claims pc
- where cs.claim_id = pc.id
-   and (
-     cs.encounter_id is null
-     or cs.client_id is null
-     or cs.insurance_policy_id is null
-     or cs.patient_control_number is null
-     or cs.x12_version is null
-     or cs.transaction_set_type is null
-     or cs.x12_snapshot is null
-   );
+-- Backfill payment allocation lineage from claims.
+update public.payment_allocations pa
+set encounter_id = pc.source_encounter_id,
+    charge_id = pc.charge_id,
+    insurance_policy_id = pc.insurance_policy_id
+from public.professional_claims pc
+where pa.claim_id = pc.id
+  and (pa.encounter_id is null or pa.charge_id is null or pa.insurance_policy_id is null);
 
--- Backfill provider/practice context through encounter -> provider location -> practice location.
-update public.claim_submissions cs
-   set provider_location_id = e.location
-  from public.encounters e
- where cs.encounter_id = e.id
-   and cs.provider_location_id is null
-   and e.location is not null;
+-- Backfill adjustment lineage from claims.
+update public.adjustments a
+set encounter_id = pc.source_encounter_id,
+    charge_id = pc.charge_id,
+    insurance_policy_id = pc.insurance_policy_id
+from public.professional_claims pc
+where a.claim_id = pc.id
+  and (a.encounter_id is null or a.charge_id is null or a.insurance_policy_id is null);
 
-update public.claim_submissions cs
-   set practice_entity_id = pl.practice_entity_id
-  from public.provider_locations vpl
-  join public.practice_locations pl on pl.id = vpl.practice_location_id
- where cs.provider_location_id = vpl.id
-   and cs.practice_entity_id is null;
+-- Backfill the new canonical summary links from existing legacy links where possible.
+update public.client_balance_summaries cbs
+set encounter_id = c.encounter_id,
+    insurance_policy_id = c.insurance_policy_id
+from public.charge_capture_items c
+where cbs.charge = c.id
+  and (cbs.encounter_id is null or cbs.insurance_policy_id is null);
+
+update public.client_balance_summaries cbs
+set professional_claim_id = pc.id,
+    encounter_id = coalesce(cbs.encounter_id, pc.source_encounter_id),
+    insurance_policy_id = coalesce(cbs.insurance_policy_id, pc.insurance_policy_id)
+from public.professional_claims pc
+where cbs.charge = pc.charge_id
+  and (cbs.professional_claim_id is null or cbs.encounter_id is null or cbs.insurance_policy_id is null);
