@@ -50,13 +50,14 @@ async function clinicalState(encounterId: string) {
 
 const signingRepository: ClinicalSigningRepository = {
   getClinicalState: clinicalState,
-  async signNoteAtomically(encounterId, noteId, providerId, signatureText) {
+  async signNoteAtomically(encounterId, noteId, providerId, signatureText, expectedNoteText) {
     await tenantRpc<{ linked: boolean; provider_id: string; provider_name: string }>("link_current_user_to_provider", {
       p_provider_id: providerId,
     });
-    return tenantRpc<{ note_id: string; signed_at: string }>("sign_encounter_note", {
+    return tenantRpc<{ note_id: string; signed_at: string }>(expectedNoteText === undefined ? "sign_encounter_note" : "sign_encounter_note_revision", {
       p_encounter_id: encounterId, p_note_id: noteId,
       p_provider_id: providerId, p_signature_text: signatureText,
+      ...(expectedNoteText === undefined ? {} : { p_expected_note_text: expectedNoteText }),
     });
   },
   async runBillingReadiness(encounterId) {
@@ -221,8 +222,9 @@ export async function signEncounterNote(
   signerId: string,
   signatureText: string,
   expectedNoteId?: string,
+  expectedNoteText?: string,
 ) {
-  return signNoteWorkflow(signingRepository, encounterId, signerId, signatureText, expectedNoteId);
+  return signNoteWorkflow(signingRepository, encounterId, signerId, signatureText, expectedNoteId, expectedNoteText);
 }
 
 

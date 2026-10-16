@@ -33,8 +33,8 @@ test("clinical encounter uses the intended integrated live-session note layout",
   assert.match(encounter, /TODAY&apos;S FOCUS/);
   assert.match(encounter, /<ClinicalNoteWorkspace/);
   assert.match(encounter, /<TelehealthVisit/);
-  assert.match(encounter, /Save Note/);
-  assert.match(encounter, /Sign & Lock Note/);
+  assert.match(encounter, /Save Draft/);
+  assert.match(encounter, /Save & Sign/);
 });
 
 test("new clinical safety and outcome surfaces remain part of the integrated workspace", () => {

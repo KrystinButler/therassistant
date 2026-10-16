@@ -112,3 +112,46 @@
   .encounter-editor-footer { flex-wrap: wrap; gap: 8px; }
   .clinical-note-workspace .clinical-objective-grid { grid-template-columns: 1fr; }
 }
+
+/* Documentation owns the width; video maintenance never creates a third column. */
+.encounter-console > .encounter-note-card,
+.encounter-console > .encounter-note-card:has(.encounter-live-session) {
+  --encounter-note-column: 1;
+  --encounter-context-column: 2;
+  grid-template-columns: minmax(0, 1fr) 288px !important;
+}
+.encounter-live-session { grid-column: 1 / -1; position: static; }
+.encounter-live-session > section { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+.encounter-patient-context > summary { cursor: pointer; font-weight: 600; padding: 12px; }
+.encounter-note-card:has(> .encounter-patient-context:not([open])) { grid-template-columns: minmax(0, 1fr) !important; }
+.encounter-patient-context:not([open]) { grid-column: 1 / -1; grid-row: 2; }
+.encounter-editor-toolbar, .encounter-section-tools, .encounter-section-buttons { flex-wrap: wrap !important; overflow: visible !important; min-width: 0; }
+.encounter-section-buttons { display: flex; gap: 6px; }
+.encounter-editor-surface .encounter-note-editor { min-height: 560px; scroll-margin-top: 100px; }
+.encounter-editor-surface > .encounter-editor-footer { position: static; }
+.encounter-editor-surface > .encounter-inline-signature { position: sticky; bottom: 0; z-index: 6; background: white; box-shadow: 0 -3px 15px #173f4c12; }
+.encounter-saved-preview { order: 5; padding: 14px; background: white; }
+.encounter-note-card details > summary:focus-visible, .encounter-note-card button:focus-visible { outline: 2px solid #257d79; outline-offset: 3px; }
+@media (min-width: 1440px) {
+  .encounter-console > .encounter-note-card, .encounter-console > .encounter-note-card:has(.encounter-live-session) { grid-template-columns: minmax(0, 1fr) 320px !important; }
+}
+@media (max-width: 1250px) {
+  .encounter-console > .encounter-note-card, .encounter-console > .encounter-note-card:has(.encounter-live-session) { display: flex !important; flex-direction: column; }
+  .encounter-documentation-column, .encounter-patient-context { width: 100%; }
+  .encounter-patient-context { order: 4; }
+}
+@media (max-width: 760px) {
+  .encounter-editor-surface > .encounter-inline-signature { position: static; }
+}
+@media (min-width: 1100px) {
+  .cw-app:has(.encounter-console) { grid-template-columns: 64px minmax(0, 1fr) !important; }
+  .cw-app:has(.encounter-console) .cw-sidebar { width: 64px; overflow-x: hidden; }
+  .cw-app:has(.encounter-console) .cw-sidebar .cw-nav-link { justify-content: center; padding: 0; }
+  .cw-app:has(.encounter-console) .cw-sidebar :is(.cw-nav-heading,.cw-sidebar-org) { display: none; }
+  .cw-app:has(.encounter-console) .cw-sidebar .cw-nav-link span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+  .cw-app:has(.encounter-console) .cw-sidebar:focus-within,
+  .cw-app:has(.encounter-console) .cw-sidebar:hover { width: 240px; z-index: 30; }
+  .cw-app:has(.encounter-console) .cw-sidebar:is(:hover,:focus-within) .cw-nav-link { justify-content: flex-start; padding: 0 16px; }
+  .cw-app:has(.encounter-console) .cw-sidebar:is(:hover,:focus-within) .cw-nav-link span { position: static; width: auto; height: auto; clip-path: none; }
+  .cw-app:has(.encounter-console) .cw-content { padding: 24px; }
+}

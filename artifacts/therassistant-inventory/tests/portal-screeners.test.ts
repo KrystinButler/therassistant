@@ -2,5 +2,9 @@ import test from 'node:test';import assert from 'node:assert/strict';
 import {emptyScreeners,readScreeners,screenerTotal,screenersComplete} from '../src/domains/portal/portal-screeners';
 import {cssrsImportNarrative} from '../src/domains/clinical/clinical-note-imports';
 test('blank questionnaires are not scored as zero',()=>{assert.equal(screenerTotal(emptyScreeners().phq9,9),null);assert.equal(screenersComplete(emptyScreeners()),false);assert.equal(readScreeners({phq9:[4]}).phq9[0],null);});
-test('complete validated scores and branched safety answers',()=>{const v={phq9:Array(9).fill(3),gad7:Array(7).fill(2),cssrs:[false,false,null,null,null,false,null]};assert.equal(screenerTotal(v.phq9,9),27);assert.equal(screenerTotal(v.gad7,7),14);assert.equal(screenersComplete(v),true);v.cssrs[1]=true;assert.equal(screenersComplete(v),false);assert.equal(screenersComplete({...emptyScreeners(),declined:true}),true);});
+test('complete validated PHQ-9 and GAD-7 scores',()=>{const v={phq9:Array(9).fill(3),gad7:Array(7).fill(2),cssrs:[false,false,null,null,null,false,null]};assert.equal(screenerTotal(v.phq9,9),27);assert.equal(screenerTotal(v.gad7,7),14);assert.equal(screenersComplete(v),true);v.cssrs[1]=true;assert.equal(screenersComplete(v),true);assert.equal(screenersComplete({...emptyScreeners(),declined:true}),true);});
 test('patient safety import never fabricates risk classification or performed interventions',()=>{const text=cssrsImportNarrative([{instrument:'C-SSRS',source:'patient_reported',risk_level:null,assessed_on:'2026-10-12',narrative:'Answers: no, no, skipped, skipped, skipped, no, skipped'}]);assert.match(text,/Clinician safety review is required/);assert.doesNotMatch(text,/low risk|moderate risk|protective factors|counseling was provided/);});
+test('PHQ-9 and GAD-7 completion does not require a patient suicide questionnaire',()=>{
+ const v={...emptyScreeners(),phq9:Array(9).fill(0),gad7:Array(7).fill(0)};
+ assert.equal(screenersComplete(v),true);
+});

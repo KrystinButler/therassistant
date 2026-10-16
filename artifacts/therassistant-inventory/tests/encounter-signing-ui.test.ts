@@ -12,15 +12,15 @@ const clinicalRepositorySource = readFileSync(
   "utf8",
 );
 
-test("Save Note and Sign & Lock are separate actions", () => {
+test("Save & Sign persists current text before signing", () => {
   const signStart = source.indexOf("async function sign()");
   const signEnd = source.indexOf("if (loading && !data)", signStart);
   const signHandler = source.slice(signStart, signEnd);
 
   assert.ok(signStart >= 0 && signEnd > signStart);
-  assert.doesNotMatch(signHandler, /saveClinicalNote\(/, "Sign & Lock must not save the editable note.");
-  assert.match(signHandler, /noteHasUnsavedText/, "Unsaved note edits must be saved explicitly before signing.");
-  assert.match(signHandler, /Save the note before signing/);
+  assert.match(signHandler, /saveThenSign/);
+  assert.match(signHandler, /saveClinicalNote\(/);
+  assert.match(signHandler, /saved.id, String\(saved.note_text/);
   assert.match(signHandler, /signEncounterNote\(/);
   assert.doesNotMatch(signHandler, /data\.diagnoses/);
   assert.doesNotMatch(signHandler, /data\.serviceLines/);
