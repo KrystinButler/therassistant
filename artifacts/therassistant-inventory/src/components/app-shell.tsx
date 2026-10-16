@@ -1,3 +1,5 @@
+import { installWorkspaceNavigationGuard } from "../navigation/workspace-guard";
+import { workspacePattern } from "../navigation/workspace-state";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Link, useLocation } from "wouter";
 import { ClientSearchContext } from "../navigation/client-search-context";
@@ -16,29 +18,26 @@ type NavItem = { label: string; href: string; icon: LucideIcon; paths?: string[]
 type NavGroup = { label?: string; items: NavItem[] };
 
 const navigation: NavGroup[] = [
-  {
-    items: [
-      { label: "Dashboard", href: "/", icon: LayoutDashboard },
-      { label: "Appointments", href: "/schedule", icon: CalendarDays, paths: ["/encounters"] },
-      { label: "Clients", href: "/clients", icon: UsersRound },
-      { label: "Clinical Notes", href: "/clinical", icon: FileText, paths: ["/clinical/golden-thread"] },
-      { label: "Charge Capture", href: "/billing/charges", icon: ClipboardList, paths: ["/billing", "/charges"] },
-      { label: "Claims", href: "/claims", icon: BriefcaseBusiness, paths: ["/rejections", "/denials", "/ar-denials"] },
-      { label: "Payments", href: "/payments", icon: CreditCard },
-      { label: "Reports", href: "/reports", icon: ChartNoAxesCombined },
-    ],
-  },
-  {
-    label: "PRACTICE",
-    items: [
-      { label: "Providers", href: "/providers", icon: UserRoundCog },
-      { label: "Credentialing Module", href: "/credentialing", icon: ClipboardList },
-      { label: "Messaging", href: "/messaging", icon: BookOpenText },
-      { label: "Patient Portal Module", href: "/portal-module", icon: ExternalLink },
-      { label: "Practice Setup", href: "/organization-setup", icon: Settings },
-      { label: "Work Center", href: "/work-center", icon: BriefcaseBusiness },
-    ],
-  },
+  { label: "CLINICAL", items: [
+    { label: "Today", href: "/", icon: LayoutDashboard },
+    { label: "Appointments", href: "/schedule", icon: CalendarDays, paths: ["/encounters"] },
+    { label: "Patients", href: "/clients", icon: UsersRound },
+    { label: "Documentation", href: "/clinical", icon: FileText, paths: ["/clinical/golden-thread"] },
+    { label: "Messages", href: "/messaging", icon: BookOpenText },
+  ] },
+  { label: "REVENUE CYCLE", items: [
+    { label: "Charge Capture", href: "/billing/charges", icon: ClipboardList, paths: ["/billing", "/charges"] },
+    { label: "Claims & Follow-Up", href: "/claims", icon: BriefcaseBusiness, paths: ["/rejections", "/denials", "/ar-denials"] },
+    { label: "Payments", href: "/payments", icon: CreditCard },
+    { label: "Reports", href: "/reports", icon: ChartNoAxesCombined },
+    { label: "Work Center", href: "/work-center", icon: BriefcaseBusiness },
+  ] },
+  { label: "PRACTICE", items: [
+    { label: "Providers", href: "/providers", icon: UserRoundCog },
+    { label: "Credentialing Module", href: "/credentialing", icon: ClipboardList },
+    { label: "Patient Portal Module", href: "/portal-module", icon: ExternalLink },
+    { label: "Practice Setup", href: "/organization-setup", icon: Settings },
+  ] },
 ];
 
 function matches(path: string, href: string) {
@@ -46,6 +45,7 @@ function matches(path: string, href: string) {
 }
 
 export function AppShell({ children }: Props) {
+  useEffect(() => installWorkspaceNavigationGuard(window), []);
   const [location, navigate] = useLocation();
   const { user, signOut } = useAuth();
   const { tenantName, roles } = useTenant();
@@ -119,7 +119,7 @@ export function AppShell({ children }: Props) {
 
   return (
     <ClientSearchContext.Provider value={submittedClientSearch}>
-    <div className="thera-app cw-app">
+    <div className={`thera-app cw-app workspace-shell-${workspacePattern(location)}`}>
       <a className="cw-skip-link" href="#main-content">Skip to main content</a>
       <header className="cw-global-header">
         <div className="cw-global-brand-area">

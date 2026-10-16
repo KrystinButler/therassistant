@@ -1,3 +1,5 @@
+import { workspaceQuery } from "../../navigation/workspace-state";
+import { useWorkspaceChoice } from "../../navigation/use-workspace-choice";
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "wouter";
 import { StatusBadge } from "../../components/status-badge";
@@ -39,19 +41,18 @@ const toCents = (value: string) => Math.round(Number(value || 0) * 100);
 export function PaymentsPage() {
   const [data, setData] = useState<Data | null>(null);
   const [exceptionData, setExceptionData] = useState<ExceptionData | null>(null);
-  const [tab, setTab] = useState<Tab>(() => {
-    const requested = new URLSearchParams(window.location.search).get("tab");
-    return ["insurance", "patient", "era", "unapplied", "adjustments", "underpayments", "recovery"].includes(requested ?? "")
-      ? requested as Tab
-      : "insurance";
-  });
+  const [tab, setTab] = useWorkspaceChoice<Tab>("tab", "insurance", ["insurance", "patient", "era", "unapplied", "adjustments", "underpayments", "recovery"]);
   const [loading, setLoading] = useState(true);
   const [savingId, setSavingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [posting, setPosting] = useState(false);
   const [manualPaymentRequestKey, setManualPaymentRequestKey] = useState("");
-  const [paymentDetail, setPaymentDetail] = useState<PaymentRow | null>(null);
+  const [paymentDetail, updatePaymentDetail] = useState<PaymentRow | null>(null);
+  function setPaymentDetail(row: PaymentRow | null) {
+    updatePaymentDetail(row);
+    window.history.replaceState(window.history.state, "", window.location.pathname + workspaceQuery(window.location.search, "payment", row?.id ?? "") + window.location.hash);
+  }
   const [allocating, setAllocating] = useState<PaymentRow | null>(null);
   const [reversing, setReversing] = useState<PaymentRow | null>(null);
   const [varianceWork, setVarianceWork] = useState<VarianceWorkspaceRow | null>(null);
@@ -278,7 +279,7 @@ export function PaymentsPage() {
     }
   }
 
-  return <>
+  return <div className="queue-review-layout queue-payments"><div className="queue-review-main">
     <div className="thera-page-header split" style={{ alignItems: "center", marginBottom: 14 }}>
       <div>
         <div className="thera-eyebrow">REVENUE CYCLE · PAYMENT POSTING</div>
@@ -328,6 +329,7 @@ export function PaymentsPage() {
     {!loading && exceptionData && tab === "underpayments" && <UnderpaymentsTable rows={exceptionData.variances} onOpen={setVarianceWork} />}
     {!loading && exceptionData && tab === "recovery" && <RecoveryTable rows={exceptionData.recovery} onOpen={setRecoveryWork} />}
 
+    </div>
     {data && <PostPaymentDrawer open={posting} onOpenChange={(open) => { setPosting(open); if (!open) setManualPaymentRequestKey(""); }} data={data} saving={savingId === "new-payment"} onSave={saveManual} />}
     {data && <PaymentDetailDrawer
       open={Boolean(paymentDetail)}
@@ -358,7 +360,7 @@ export function PaymentsPage() {
       saving={savingId === "payment-exception"}
       onRoute={(row) => void runExceptionAction("Recovery follow-up created.", () => routeRecoveryToWork(row), () => setRecoveryWork(null))}
     />
-  </>;
+  </div>;
 }
 
 function WorkflowButton({ active, label, count, onClick }: { active: boolean; label: string; count: number; onClick: () => void }) {

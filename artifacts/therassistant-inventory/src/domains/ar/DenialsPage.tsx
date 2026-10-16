@@ -1,3 +1,4 @@
+import { useWorkspaceChoice } from "../../navigation/use-workspace-choice";
 import { useEffect, useMemo, useState } from "react";
 import { resolveAppealDeepLink } from "./appeal-deep-link";
 import { StatusBadge } from "../../components/status-badge";
@@ -52,8 +53,8 @@ function tabLabel(tab: TabKey) {
 
 export function DenialsPage() {
   const [data, setData] = useState<Data | null>(null);
-  const [payerId, setPayerId] = useState("");
-  const [tab, setTab] = useState<TabKey>("corrected_claims");
+  const [payerId, setPayerId] = useWorkspaceChoice<string>("payer", "");
+  const [tab, setTab] = useWorkspaceChoice<TabKey>("tab", "corrected_claims");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -150,6 +151,10 @@ export function DenialsPage() {
     row?.focus({ preventScroll: true });
   }, [loading, tab, selectedAppealId, appealRows]);
 
+  useEffect(() => {
+    if (!loading && payerOptions.length && !payerOptions.some(payer => payer.id === payerId)) setPayerId(payerOptions[0].id);
+  }, [loading, payerOptions, payerId]);
+
   const denialWorkIndex = denialWork ? tabRows.findIndex((row) => row.id === denialWork.id) : -1;
 
   useEffect(() => {
@@ -179,7 +184,7 @@ export function DenialsPage() {
   }
 
   return (
-    <>
+    <div className="queue-review-layout queue-denials"><div className="queue-review-main">
       <div className="thera-page-header">
         <div className="thera-eyebrow">GET PAID · CARC/RARC FOLLOW-UP</div>
         <h1>Denials, Appeals & A/R</h1>
@@ -223,6 +228,7 @@ export function DenialsPage() {
         </div>
       )}
 
+      </div>
       <DenialWorkDrawer
         open={Boolean(denialWork)}
         onOpenChange={(open) => { if (!open) setDenialWork(null); }}
@@ -253,7 +259,7 @@ export function DenialsPage() {
         saving={saving}
         onSave={(row, outcome) => act("Appeal outcome recorded.", () => recordAppealOutcome(row.id, outcome), () => setAppealOutcome(null))}
       />
-    </>
+    </div>
   );
 }
 

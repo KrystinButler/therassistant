@@ -12,13 +12,11 @@ type BaseData = Awaited<ReturnType<typeof getClaim360Data>>;
 type RelationshipData = Awaited<ReturnType<typeof getClaim360RelationshipsData>>;
 type Data = Omit<BaseData, "submissions" | "workItems"> & Pick<RelationshipData, "submissions" | "workItems">;
 
-type Tab = "overview" | "lines" | "history" | "responses" | "denials" | "work";
 
 export function Claim360Page() {
   const [, params] = useRoute<{ id: string }>("/claims/:id");
   const claimId = params?.id ?? "";
   const [data, setData] = useState<Data | null>(null);
-  const [tab, setTab] = useState<Tab>("overview");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [previewing, setPreviewing] = useState(false);
@@ -96,27 +94,20 @@ export function Claim360Page() {
 
       {previewError && <div className="thera-state error" style={{ marginBottom: 12 }}>{previewError}</div>}
 
-      <div className="thera-tabs" style={{ marginBottom: 16 }}>
-        <TabButton active={tab === "overview"} onClick={() => setTab("overview")} label="Overview" />
-        <TabButton active={tab === "lines"} onClick={() => setTab("lines")} label={`Lines & Diagnoses (${data.lines.length})`} />
-        <TabButton active={tab === "history"} onClick={() => setTab("history")} label={`Status History (${data.history.length})`} />
-        <TabButton active={tab === "responses"} onClick={() => setTab("responses")} label={`Submissions / Responses (${data.submissions.length + data.responses.length})`} />
-        <TabButton active={tab === "denials"} onClick={() => setTab("denials")} label={`Denials / Appeals (${data.denials.length + data.appeals.length})`} />
-        <TabButton active={tab === "work"} onClick={() => setTab("work")} label={`Work (${data.workItems.length})`} />
+      <nav className="workspace-section-links" aria-label="Claim record sections">
+        <a href="#claim-services">Services &amp; diagnoses</a><a href="#claim-responses">Submissions &amp; responses</a><a href="#claim-denials">Denials &amp; appeals</a><a href="#claim-work">Follow-up</a><a href="#claim-history">History</a>
+      </nav>
+      <div className="claim-record-workspace">
+        <div><Overview data={data} /><section id="claim-services"><Lines data={data} /></section></div>
+        <aside aria-label="Claim activity"><section id="claim-responses"><h2>Submissions &amp; responses</h2><Responses data={data} /></section>
+          <details id="claim-denials" open={data.denials.length > 0 || data.appeals.length > 0}><summary>Denials &amp; appeals ({data.denials.length + data.appeals.length})</summary><Denials data={data} /></details>
+          <section id="claim-work"><h2>Follow-up work</h2><Work rows={data.workItems} /></section>
+          <details id="claim-history"><summary>Status history ({data.history.length})</summary><History rows={data.history} /></details>
+        </aside>
       </div>
 
-      {tab === "overview" && <Overview data={data} />}
-      {tab === "lines" && <Lines data={data} />}
-      {tab === "history" && <History rows={data.history} />}
-      {tab === "responses" && <Responses data={data} />}
-      {tab === "denials" && <Denials data={data} />}
-      {tab === "work" && <Work rows={data.workItems} />}
     </>
   );
-}
-
-function TabButton({ active, label, onClick }: { active: boolean; label: string; onClick: () => void }) {
-  return <button type="button" className={active ? "thera-tab active" : "thera-tab"} onClick={onClick}>{label}</button>;
 }
 
 function Overview({ data }: { data: Data }) {
@@ -147,7 +138,7 @@ function Overview({ data }: { data: Data }) {
 
     <section className="thera-card thera-span-2">
       <h2>Operational Ownership</h2>
-      <p>Claim 360 is a reference and history view. Active work is completed in the owning revenue-cycle queue.</p>
+      <p>Open the owning work queue with this claim selected.</p><div className="thera-filter-row"><Link className="thera-action secondary" href={`/claims?claim=${claim.id}`}>Work Claim</Link></div>
     </section>
   </div>;
 }

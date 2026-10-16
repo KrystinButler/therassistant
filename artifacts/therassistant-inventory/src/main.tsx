@@ -8,6 +8,7 @@ import './index.css';
 import './therassistant-reference-theme.css';
 import './clinical-workspace-refresh.css';
 import './brand-system.css';
+import './workflow-layouts.css';
 
 createRoot(document.getElementById('root')!, {
   // Keeps caught errors off reportError(), which would raise the dev overlay.

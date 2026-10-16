@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
+import { startEncounter } from "../domains/encounters/repository";
+import { safeTelehealthUrl } from "../domains/scheduling/telehealth-link";
 import {
   ArrowRight, Bell, CalendarDays, CheckCircle2, CircleDollarSign, ClipboardCheck,
   FileText, Inbox, RefreshCcw, UsersRound,
@@ -50,6 +52,8 @@ function safeRoute(value: unknown) {
 }
 
 export function DashboardPage() {
+  const [, navigate] = useLocation();
+  const [openingNoteId, setOpeningNoteId] = useState<string | null>(null);
   const { user } = useAuth();
   const [data, setData] = useState<DashboardState | null>(null);
   const [loading, setLoading] = useState(true);
@@ -79,6 +83,18 @@ export function DashboardPage() {
   }
 
   useEffect(() => { void load(); }, []);
+
+  async function openAppointmentNote(appointment: ScheduleAppointment) {
+    const note = data?.notes.find(row => row.appointment_id === appointment.id && row.encounter_id);
+    if (note) { navigate(`/encounters/${note.encounter_id}#encounter-progress-note-editor`); return; }
+    setOpeningNoteId(appointment.id); setError(null);
+    try {
+      const result = await startEncounter(appointment.id);
+      if (!result.ok) throw new Error(result.message);
+      navigate(`/encounters/${result.value.id}#encounter-progress-note-editor`);
+    } catch (error) { setError(error instanceof Error ? error.message : "Unable to open note."); }
+    finally { setOpeningNoteId(null); }
+  }
 
   const view = useMemo(() => {
     if (!data) return null;
@@ -210,8 +226,8 @@ export function DashboardPage() {
                           </Link>
                         </td>
                         <td>{appointment.serviceType || "Appointment"}</td>
-                        <td><StatusBadge value={appointment.checkInStatus === "Ready" ? "Ready" : appointment.appointmentStatus || "Scheduled"} /></td>
-                        <td><Link href={"/schedule/" + appointment.id} aria-label={"Open appointment for " + appointment.clientName} className="cw-chevron-link"><ArrowRight size={17} /></Link></td>
+                        <td><StatusBadge value={appointment.checkInStatus === "Ready" ? "submitted" : appointment.appointmentStatus || "Scheduled"} domain="checkin" /></td>
+                        <td><div className="thera-filter-row"><button type="button" className="thera-action" disabled={openingNoteId === appointment.id || ["cancelled", "no_show", "rescheduled"].includes(appointment.appointmentStatus)} onClick={() => void openAppointmentNote(appointment)}>{openingNoteId === appointment.id ? "Opening…" : "Open Note"}</button><Link href={"/schedule/" + appointment.id} aria-label={"Open appointment for " + appointment.clientName} className="thera-action secondary">Review</Link>{safeTelehealthUrl(appointment.telehealthUrl) && <a href={safeTelehealthUrl(appointment.telehealthUrl)!} className="thera-action secondary" target="_blank" rel="noopener noreferrer">Join Video</a>}</div></td>
                       </tr>
                     ))}
                   </tbody>
