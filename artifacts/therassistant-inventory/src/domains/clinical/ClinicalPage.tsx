@@ -2,7 +2,8 @@ import { useEffect, useMemo, useState } from "react";
 import { Link, useLocation } from "wouter";
 import "./clinical-page.css";
 
-import { unsignedRows } from "./workspace-actions";
+import { encountersByAppointment, unsignedRows } from "./workspace-actions";
+import { useWorkspaceChoice } from "../../navigation/use-workspace-choice";
 import { StatusBadge } from "../../components/status-badge";
 import { dateTime } from "../../lib/format";
 import { tenantSelect, type Row } from "../../lib/tenant-data-client";
@@ -63,7 +64,7 @@ export function ClinicalPage() {
   const [notes, setNotes] = useState<ClinicalNote[]>([]);
   const [clients, setClients] = useState<DataRow[]>([]);
   const [providers, setProviders] = useState<DataRow[]>([]);
-  const [tab, setTab] = useState<QueueTab>("unsigned");
+  const [tab, setTab] = useWorkspaceChoice<QueueTab>("tab", "unsigned", ["unsigned", "needs_note", "in_progress", "signed", "all"]);
   const [startingId, setStartingId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -107,11 +108,7 @@ export function ClinicalPage() {
   const clientsById = useMemo(() => new Map(clients.map((row) => [row.id, row])), [clients]);
   const providersById = useMemo(() => new Map(providers.map((row) => [row.id, row])), [providers]);
   const encounterByAppointment = useMemo(
-    () => new Map(
-      encounters
-        .filter((row) => row.appointment_id)
-        .map((row) => [String(row.appointment_id), row]),
-    ),
+    () => encountersByAppointment(encounters),
     [encounters],
   );
   const latestNoteByEncounter = useMemo(() => {
@@ -271,7 +268,7 @@ export function ClinicalPage() {
 
       <div className="thera-metric-grid" style={{ marginBottom: 16 }}>
         <Metric label="Needs Note" value={counts.needsNote} />
-        <Metric label="Session in progress" value={counts.inProgress} />
+        <Metric label="Notes in progress" value={counts.inProgress} />
         <Metric label="Signed" value={counts.signed} />
       </div>
 
@@ -284,7 +281,7 @@ export function ClinicalPage() {
       <div className="thera-tabs" style={{ marginBottom: 16 }}>
         <Tab active={tab === "unsigned"} label={`Unsigned work (${unsignedRows(rows).length})`} onClick={() => setTab("unsigned")} />
         <Tab active={tab === "needs_note"} label={`Needs Note (${counts.needsNote})`} onClick={() => setTab("needs_note")} />
-        <Tab active={tab === "in_progress"} label={`Session in progress (${counts.inProgress})`} onClick={() => setTab("in_progress")} />
+        <Tab active={tab === "in_progress"} label={`Notes in progress (${counts.inProgress})`} onClick={() => setTab("in_progress")} />
         <Tab active={tab === "signed"} label={`Signed (${counts.signed})`} onClick={() => setTab("signed")} />
         <Tab active={tab === "all"} label="All" onClick={() => setTab("all")} />
       </div>
@@ -293,7 +290,10 @@ export function ClinicalPage() {
         {loading ? (
           <div className="thera-state">Loading clinical work...</div>
         ) : visible.length === 0 ? (
-          <div className="thera-empty">No clinical records in this queue.</div>
+          <div className="thera-empty">
+            <p>{tab === "unsigned" ? "No unsigned documentation remains in this worklist." : "No clinical records in this queue."}</p>
+            {rows.length > 0 && tab !== "all" && <button type="button" className="thera-action secondary" onClick={() => setTab("all")}>View all clinical records</button>}
+          </div>
         ) : (
           <div className="thera-table-wrap">
             <table className="thera-table">
