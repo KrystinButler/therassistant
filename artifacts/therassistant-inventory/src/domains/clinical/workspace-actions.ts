@@ -10,3 +10,14 @@ export async function saveThenSign<T, R>(save: () => Promise<T>, sign: (saved:T)
   const saved = await save();
   return sign(saved);
 }
+
+/** Input is ordered by updated_at descending by the clinical queue query. */
+export function encountersByAppointment<T extends { appointment_id?: string | null; encounter_status?: string | null }>(rows: readonly T[]): Map<string, T> {
+  const index = new Map<string, T>();
+  for (const encounter of rows) {
+    if (encounter.appointment_id && encounter.encounter_status !== "voided" && !index.has(encounter.appointment_id)) {
+      index.set(encounter.appointment_id, encounter);
+    }
+  }
+  return index;
+}
