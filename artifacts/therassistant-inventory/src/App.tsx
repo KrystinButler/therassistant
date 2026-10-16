@@ -212,6 +212,10 @@ function ApplicationRoutes() {
       && ["/", "/login"].includes(location) && rootPortalDestination === null) {
     return <div className="thera-state">Checking account access...</div>;
   }
+  if (!patientRoute && !loading && session && !session.flowType
+      && location === "/login" && rootPortalDestination === "none") {
+    return <Redirect to="/" />;
+  }
   return patientRoute ? <PatientPortalRoutes /> : <StaffGate />;
 }
 
