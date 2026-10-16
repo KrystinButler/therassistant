@@ -1,3 +1,4 @@
+import { readNoteSection, updateNoteSection } from "../clinical/note-section-editing";
 import type { PatientReviewCheckIn } from "../scheduling/patient-review-model";
 
 type Row = Record<string, unknown>;
@@ -44,6 +45,21 @@ export function buildPreVisitNoteInsert(review: PatientReviewCheckIn) {
   if (review.treatmentGoal) lines.push(`Patient-stated treatment goal: ${review.treatmentGoal}`);
   if (review.additionalContext) lines.push(`Additional context: ${review.additionalContext}`);
 
+  if (review.planReview) lines.push(`Treatment plan review: ${review.planReview}`);
+  for (const goal of review.goalUpdates ?? []) {
+    lines.push(`Goal: ${goal.goalText || goal.goalId}`, `Patient-reported progress: ${goal.progress || "Not provided"}`, `Barriers: ${goal.barriers || "Not provided"}`);
+  }
+  if (review.hasScreeners) {
+    lines.push("Screening measures (patient-reported; clinician review pending):");
+    if (review.screenersDeclined) lines.push("Screeners deferred for discussion with provider.");
+    else {
+      lines.push(`PHQ-9: ${review.phq9Total == null ? "Incomplete — no total calculated" : `${review.phq9Total} / 27`}`);
+      lines.push(`GAD-7: ${review.gad7Total == null ? "Incomplete — no total calculated" : `${review.gad7Total} / 21`}`);
+      lines.push(`PHQ-9 item 9: ${review.phq9Item9 ?? "Not provided"}`);
+      if ((review.phq9Item9 ?? 0) > 0) lines.push("Safety screening response requires clinician assessment; no risk classification is implied.");
+    }
+  }
+  if (review.submittedAt) lines.push(`Submitted: ${review.submittedAt}`);
   return lines.length > 1 ? lines.join("\n") : "";
 }
 
@@ -118,4 +134,20 @@ export function withClinicalSourceImport(
     ...context,
     source_imports: exists ? current : [...current, provenance],
   };
+}
+
+/** Fill the same persisted sections used by the SOAP controls, preserving clinician text. */
+export function hydratePortalSoapNote(note: string, review: PatientReviewCheckIn) {
+  const block = buildPreVisitNoteInsert(review);
+  if (!block) return note;
+  const lines = block.split("\n").slice(1);
+  const index = lines.findIndex(line => line.startsWith("Screening measures ("));
+  const subjective = ["Portal intake (patient-reported):", ...(index < 0 ? lines : lines.slice(0, index))].join("\n");
+  let next = note;
+  if (!next.includes(subjective)) next = updateNoteSection(next, "Subjective", appendClinicalSource(readNoteSection(next, "Subjective"), subjective));
+  if (index >= 0) {
+    const objective = ["Portal screening measures (patient-reported):", ...lines.slice(index + 1)].join("\n");
+    if (!next.includes(objective)) next = updateNoteSection(next, "Objective", appendClinicalSource(readNoteSection(next, "Objective"), objective));
+  }
+  return next;
 }

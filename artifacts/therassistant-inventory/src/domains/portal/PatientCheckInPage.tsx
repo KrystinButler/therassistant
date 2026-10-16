@@ -2,7 +2,7 @@ import { PortalScreeners } from "./PortalScreeners";
 import { emptyScreeners, readScreeners, screenerTotal, screenersComplete, type ScreenerAnswers } from "./portal-screeners";
 import { safeTelehealthUrl } from "../scheduling/telehealth-link";
 import { TelehealthVisit } from "../scheduling/TelehealthVisit";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   CalendarDays,
   Check,
@@ -35,6 +35,9 @@ type VisitQuestions = {
   important_changes: string;
   safety_concerns: string;
   treatment_goal: string;
+  treatment_goal_id: string;
+  treatment_plan_review: {status:string;plan_id:string|null;plan_updated_at:string|null};
+  goal_updates: Array<{goal_id:string;goal_text:string;progress:string;barriers:string}>;
   somatic_distress_score: number | null;
   anything_else: string;
 };
@@ -52,6 +55,9 @@ const emptyQuestions: VisitQuestions = {
   important_changes: "",
   safety_concerns: "",
   treatment_goal: "",
+  treatment_goal_id: "",
+  treatment_plan_review: {status:"not_reviewed",plan_id:null,plan_updated_at:null},
+  goal_updates: [],
   somatic_distress_score: null,
   anything_else: "",
 };
@@ -99,6 +105,9 @@ function readQuestions(value: unknown): VisitQuestions {
     important_changes: String(row.important_changes ?? ""),
     safety_concerns: String(row.safety_concerns ?? ""),
     treatment_goal: String(row.treatment_goal ?? ""),
+    treatment_goal_id: String(row.treatment_goal_id ?? ""),
+    treatment_plan_review: {status:String(recordOf(row.treatment_plan_review).status ?? "not_reviewed"),plan_id:recordOf(row.treatment_plan_review).plan_id as string ?? null,plan_updated_at:recordOf(row.treatment_plan_review).plan_updated_at as string ?? null},
+    goal_updates: Array.isArray(row.goal_updates) ? row.goal_updates.map(value => {const g=recordOf(value);return {goal_id:String(g.goal_id??""),goal_text:String(g.goal_text??""),progress:String(g.progress??""),barriers:String(g.barriers??"")};}) : [],
     somatic_distress_score: Number.isInteger(rawSomaticScore) && rawSomaticScore >= 1 && rawSomaticScore <= 10 ? rawSomaticScore : null,
     anything_else: String(row.anything_else ?? ""),
   };
@@ -131,6 +140,8 @@ export function PatientCheckInPage() {
   const [questionsSavedAt, setQuestionsSavedAt] = useState("");
   const [consentsSavedAt, setConsentsSavedAt] = useState("");
   const [submittedAt, setSubmittedAt] = useState("");
+  const saveInFlight = useRef(false);
+  const [savedVersion, setSavedVersion] = useState<string|null>(null);
 
   useEffect(() => {
     let active = true;
@@ -162,6 +173,7 @@ export function PatientCheckInPage() {
         setQuestionsSavedAt(loadedQuestionsSavedAt);
         setConsentsSavedAt(loadedConsentsSavedAt);
         setSubmittedAt(submitted);
+        setSavedVersion(typeof preVisit.updated_at === "string" ? preVisit.updated_at : null);
         setActiveStep(
           submitted ? 5
             : !demographicsDone ? 1
@@ -183,6 +195,8 @@ export function PatientCheckInPage() {
 
   const appointment = data?.upcomingAppointments.find((row) => row.id === appointmentId) ?? null;
   const policy = data?.insurancePolicies.find((row) => String(row.status ?? "") === "active") ?? data?.insurancePolicies[0] ?? null;
+  const activePlan = data?.treatmentPlans.find(plan => plan.status === "active") ?? null;
+  const activeGoals = data?.treatmentGoals.filter(goal => goal.treatment_plan_id === activePlan?.id) ?? [];
   const allConsentsAccepted = Object.values(consents).every(Boolean);
   const hasConsentProgress = Object.values(consents).some(Boolean);
   const hasVisitAnswers = useMemo(
@@ -191,25 +205,36 @@ export function PatientCheckInPage() {
   );
 
   async function persist(label: string, update: PreVisitCheckInUpdate) {
+    if (saveInFlight.current) return null;
+    saveInFlight.current = true;
     setWorking(label);
     setError(null);
     setNotice(null);
     try {
-      const saved = await savePreVisitCheckIn(appointmentId, update);
+      const saved = await savePreVisitCheckIn(appointmentId, {...update, expected_updated_at: savedVersion});
       const preVisit = recordOf(recordOf(saved.responses).pre_visit);
-      if (update.visit_questions) { const questions = readQuestions(preVisit.visit_questions); setVisitQuestions(questions); setSavedQuestions(questions); }
+      if (update.visit_questions) { const questions = readQuestions(preVisit.visit_questions); if (label !== "autosave") setVisitQuestions(questions); setSavedQuestions(questions); }
       if (update.consents) { const values = readConsents(preVisit.consents); setConsents(values); setSavedConsents(values); }
       if (preVisit.visit_questions_saved_at) setQuestionsSavedAt(String(preVisit.visit_questions_saved_at));
       if (preVisit.consents_saved_at) setConsentsSavedAt(String(preVisit.consents_saved_at));
       if (preVisit.submitted_at) setSubmittedAt(String(preVisit.submitted_at));
+      setSavedVersion(typeof preVisit.updated_at === "string" ? preVisit.updated_at : null);
+      if (update.submitted && !preVisit.submitted_at) throw new Error("Submission was not confirmed. Please retry.");
       return preVisit;
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unable to save pre-visit check-in.");
       return null;
     } finally {
+      saveInFlight.current = false;
       setWorking(null);
     }
   }
+
+  useEffect(() => {
+    if (loading || !data || working || submittedAt || error || JSON.stringify(visitQuestions) === JSON.stringify(savedQuestions)) return;
+    const timer = window.setTimeout(() => { void persist("autosave", {visit_questions:visitQuestions}); }, 1200);
+    return () => window.clearTimeout(timer);
+  }, [loading, data, working, submittedAt, error, visitQuestions, savedQuestions, savedVersion]);
 
   async function confirmDemographics() {
     if (await persist("demographics", { demographics_confirmed: true })) {
@@ -248,7 +273,7 @@ export function PatientCheckInPage() {
       return;
     }
     if (await persist("submit", {
-      visit_questions: visitQuestions,
+      visit_questions: {...visitQuestions, treatment_plan_review: activePlan ? visitQuestions.treatment_plan_review : {status:"not_on_file",plan_id:null,plan_updated_at:null}},
       consents,
       demographics_confirmed: true,
       insurance_confirmed: true,
@@ -310,7 +335,7 @@ export function PatientCheckInPage() {
           {error && <div className="pj-message error">{error}</div>}
           {notice && <div className="pj-message success"><CheckCircle2 size={16} /> {notice}</div>}
 
-          <TelehealthVisit appointment={appointment} />
+          {submittedAt && <section className="pci-review-banner" role="status"><div><strong>Your check-in is saved.</strong><p>Continue to your provider’s waiting room. Enter your name on doxy.me and wait for your provider to start the call.</p><TelehealthVisit appointment={appointment} /></div></section>}
           <section className="pci-appointment-card">
             <div className="pci-appointment-block"><CalendarDays size={22} /><div><strong>{formatDate(appointment.starts_at)}</strong><span>{formatTime(appointment.starts_at)} – {formatTime(appointment.ends_at)}</span></div></div>
             <div className="pci-appointment-block"><Heart size={20} /><div><strong>{String(appointment.service_type ?? "Individual Therapy")}</strong><span>{String(appointment.location_type ?? "Office").replaceAll("_", " ")}</span></div></div>
@@ -368,15 +393,19 @@ export function PatientCheckInPage() {
               <strong>Visit Questions</strong><span className="pci-section-state">{visitQuestionsComplete ? "Completed" : questionsDirty ? "Unsaved changes" : hasVisitAnswers ? "In progress" : "Not started"}</span><ChevronDown size={16} />
             </button>
             {activeStep === 3 && <div className="pci-section-body pci-questions">
+              <PortalScreeners disabled={readOnly} value={visitQuestions.screeners} onChange={screeners=>setVisitQuestions(current=>({...current,screeners}))} />
               <Question disabled={readOnly} label="What would you like to focus on today?" value={visitQuestions.focus_today} onChange={(value) => setVisitQuestions((current) => ({ ...current, focus_today: value }))} />
               <Question disabled={readOnly} label="How have you been feeling since your last visit?" value={visitQuestions.feeling_since_last_visit} onChange={(value) => setVisitQuestions((current) => ({ ...current, feeling_since_last_visit: value }))} />
               <Question disabled={readOnly} label="Any important changes since your last appointment?" value={visitQuestions.important_changes} onChange={(value) => setVisitQuestions((current) => ({ ...current, important_changes: value }))} />
               <div className="pci-question pci-prsds-block"><span><Heart size={17} /> Physical / somatic distress today (1-10)</span><div className="pci-prsds-rating" role="radiogroup" aria-label="Physical / somatic distress today, 1 to 10">{Array.from({ length: 10 }, (_, index) => index + 1).map((score) => <button type="button" disabled={readOnly} role="radio" aria-checked={visitQuestions.somatic_distress_score === score} className={visitQuestions.somatic_distress_score === score ? "selected" : ""} key={score} onClick={() => setVisitQuestions((current) => ({ ...current, somatic_distress_score: score }))}>{score}</button>)}</div><div className="pci-prsds-endpoints"><span>Low physical symptom impact</span><span>High physical symptom impact</span></div><small>Patient-reported physical symptom impact only. This rating does not assign a diagnosis or medical severity level. Discuss new or concerning physical symptoms with your provider and appropriate medical clinician.</small></div>
               <Question disabled={readOnly} label="Are there any safety concerns you want your provider to know about today?" value={visitQuestions.safety_concerns} onChange={(value) => setVisitQuestions((current) => ({ ...current, safety_concerns: value }))} />
               <div className="pj-message" role="note">Portal responses are not monitored as an emergency service. If you are in immediate danger or need emergency help, call 911 or go to the nearest emergency department.</div>
-              <label className="pci-question"><span><ShieldCheck size={17} /> Which treatment goal feels most important right now?</span><select disabled={readOnly} value={visitQuestions.treatment_goal} onChange={(event) => setVisitQuestions((current) => ({ ...current, treatment_goal: event.target.value }))}><option value="">Select a treatment goal</option>{data.treatmentGoals.map((goal) => <option key={goal.id} value={String(goal.goal_text ?? goal.id)}>{String(goal.goal_text ?? "Treatment goal")}</option>)}</select></label>
+              <label className="pci-question"><span><ShieldCheck size={17} /> Which treatment goal feels most important right now?</span><select disabled={readOnly} value={visitQuestions.treatment_goal_id} onChange={(event) => {const goal=activeGoals.find(goal=>goal.id===event.target.value);setVisitQuestions((current) => ({ ...current, treatment_goal_id:event.target.value,treatment_goal:String(goal?.goal_text??"") }));}}><option value="">Select a treatment goal</option>{activeGoals.map((goal) => <option key={goal.id} value={String(goal.id)}>{String(goal.goal_text ?? "Treatment goal")}</option>)}</select></label>
+              <section aria-label="Treatment plan review and goal progress"><h3>Your treatment plan and goals</h3>
+              {activePlan ? <><p>Active plan · effective {String(activePlan.effective_date ?? "Not recorded")}</p><p style={{whiteSpace:"pre-wrap"}}>{String(activePlan.plan_text ?? "Review your current goals below.")}</p>
+              <label><input type="checkbox" disabled={readOnly} checked={visitQuestions.treatment_plan_review.status === "reviewed"} onChange={event=>setVisitQuestions(current=>({...current,treatment_plan_review:{status:event.target.checked?"reviewed":"not_reviewed",plan_id:String(activePlan.id),plan_updated_at:String(activePlan.updated_at??"")}}))} /> I reviewed my current treatment plan and goals.</label>
+              {activeGoals.map(goal=>{const update=visitQuestions.goal_updates.find(value=>value.goal_id===goal.id);const change=(key:"progress"|"barriers",value:string)=>setVisitQuestions(current=>{const existing=current.goal_updates.find(g=>g.goal_id===goal.id)??{goal_id:String(goal.id),goal_text:String(goal.goal_text??""),progress:"",barriers:""};return {...current,treatment_plan_review:{...current.treatment_plan_review,plan_id:String(activePlan.id),plan_updated_at:String(activePlan.updated_at??"")},goal_updates:[...current.goal_updates.filter(g=>g.goal_id!==goal.id),{...existing,[key]:value}]};});return <div key={String(goal.id)}><strong>{String(goal.goal_text??"Goal")}</strong><Question disabled={readOnly} label="What progress have you made?" value={update?.progress??""} onChange={value=>change("progress",value)} /><Question disabled={readOnly} label="What has made this goal difficult?" value={update?.barriers??""} onChange={value=>change("barriers",value)} /></div>;})}</> : <p>No active treatment plan is on file. You can continue check-in and discuss goals with your provider.</p>}</section>
               <Question disabled={readOnly} label="Anything else you want your provider to know before the session?" value={visitQuestions.anything_else} onChange={(value) => setVisitQuestions((current) => ({ ...current, anything_else: value }))} />
-              <PortalScreeners disabled={readOnly} value={visitQuestions.screeners} onChange={screeners=>setVisitQuestions(current=>({...current,screeners}))} />
               <div className="pci-actions"><button type="button" className="pj-primary-button" disabled={readOnly} onClick={() => void saveVisitQuestions()}>{working === "questions" ? "Saving..." : "Save & Continue"}</button></div>
             </div>}
           </section>

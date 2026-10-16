@@ -46,6 +46,7 @@ type PatientPortalAggregate = {
   journalEntries: PortalRow[];
   balance: PortalRow | null;
   treatmentGoals: DataRow[];
+  treatmentPlans: DataRow[];
 };
 
 export function recordCheckIn(
@@ -230,6 +231,7 @@ export async function getPatientPortalData() {
     openBalanceCents: Number(billing.open_balance_cents ?? portalData.openBalanceCents),
     patientPayments: billing.payments ?? [],
     treatmentGoals: payload.treatmentGoals,
+    treatmentPlans: payload.treatmentPlans ?? [],
     provider,
   };
 }

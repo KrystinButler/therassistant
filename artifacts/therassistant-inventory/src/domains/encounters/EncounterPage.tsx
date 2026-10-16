@@ -46,6 +46,7 @@ import {
   buildClinicalSourceProvenance,
   buildJournalNoteInsert,
   buildPreVisitNoteInsert,
+  hydratePortalSoapNote,
   latestSharedJournalEntry,
   withClinicalSourceImport,
 } from "./clinical-source-context";
@@ -134,6 +135,34 @@ export function EncounterPage() {
   const [codingReviewDismissedKey, setCodingReviewDismissedKey] = useState("");
   const [rejectionJustification, setRejectionJustification] = useState("");
 
+  useEffect(() => {
+    if (!data || data.notes.some(note => ["signed", "locked"].includes(String(note.note_status)))) return;
+    let active = true;
+    let refreshing = false;
+    const refreshIntake = async () => {
+      if (refreshing || document.visibilityState === "hidden") return;
+      refreshing = true;
+      try {
+        const fresh = await getEncounterDetail(encounterId);
+        if (active) setData(current => current ? {...current, checkins:fresh.checkins, outcomeMeasures:fresh.outcomeMeasures, safetyScreenings:fresh.safetyScreenings} : current);
+      } catch { /* Keep local chart edits; the next focus or interval retries source refresh. */ }
+      finally { refreshing = false; }
+    };
+    const timer = window.setInterval(() => void refreshIntake(), 30000);
+    window.addEventListener("focus", refreshIntake);
+    return () => { active = false; window.clearInterval(timer); window.removeEventListener("focus", refreshIntake); };
+  }, [encounterId, Boolean(data), data?.notes.some(note => ["signed", "locked"].includes(String(note.note_status)))]);
+
+  useEffect(() => {
+    if (!data || data.notes.some(note => ["signed", "locked"].includes(String(note.note_status)))) return;
+    const source = data.encounter.appointment_id ? data.checkins.find(row => String(row.appointment_id ?? "") === String(data.encounter.appointment_id)) : null;
+    const review = buildPatientReviewCheckIn(source);
+    if (!review.hasSubmittedPreVisit) return;
+    if (Array.isArray(carryForwardContext.source_imports) && carryForwardContext.source_imports.some((item: any) => item?.source_type === "pre_visit_checkin" && item?.source_id === source?.id)) return;
+    setNoteText(current => hydratePortalSoapNote(current, review));
+    setCarryForwardContext(current => withClinicalSourceImport(current, buildClinicalSourceProvenance("pre_visit_checkin", source)));
+  }, [data?.checkins, data?.encounter.appointment_id, carryForwardContext.source_imports]);
+
   async function load() {
     if (!encounterId) return;
     setLoading(true);
@@ -146,6 +175,13 @@ export function EncounterPage() {
         getFastChartingContext(String(result.encounter.client_id ?? ""), encounterId, note?.id ? String(note.id) : undefined),
         getPsychotherapyNote(encounterId).catch(() => null),
       ]);
+      const sourceCheckin = result.encounter.appointment_id ? result.checkins.find(row => String(row.appointment_id ?? "") === String(result.encounter.appointment_id)) : null;
+      const portalBlock = sanitizeImportedText(buildPreVisitNoteInsert(buildPatientReviewCheckIn(sourceCheckin)));
+      const existingContext = fastCharting.current?.carryForwardContext ?? {};
+      const alreadyImported = Array.isArray(existingContext.source_imports) && existingContext.source_imports.some((item: any) => item?.source_type === "pre_visit_checkin" && item?.source_id === sourceCheckin?.id);
+      const canImport = !result.notes.some(row => ["signed", "locked"].includes(String(row.note_status))) && portalBlock && !alreadyImported;
+      const hydratedNoteText = canImport ? hydratePortalSoapNote(String(note?.note_text ?? ""), buildPatientReviewCheckIn(sourceCheckin)) : String(note?.note_text ?? "");
+      const hydratedContext = canImport ? withClinicalSourceImport(existingContext, buildClinicalSourceProvenance("pre_visit_checkin", sourceCheckin)) : existingContext;
       setPrivateNoteText(String(privateNote?.note_text ?? ""));
       setSmartPhrases(fastCharting.phrases);
       const initialSelections = fastCharting.current?.selections ?? emptyStructuredSelections();
@@ -157,9 +193,9 @@ export function EncounterPage() {
         carryForwardContext: fastCharting.current?.carryForwardContext ?? {},
       }));
       setStructuredSelections(initialSelections);
-      setCarryForwardContext(fastCharting.current?.carryForwardContext ?? {});
+      setCarryForwardContext(hydratedContext);
       setPriorStructuredContext(fastCharting.prior);
-      setNoteText(String(note?.note_text ?? ""));
+      setNoteText(hydratedNoteText);
       setNoteType(String(note?.note_type ?? noteTypeForService(String(result.appointment?.service_type ?? result.encounter.service_type ?? ""))));
       setGoalAddressed(String(note?.goal_addressed ?? ""));
       const clientMetadata =

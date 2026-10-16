@@ -5,7 +5,7 @@ function sortedByDate(rows: Row[]) {
 }
 
 function latestTwo(rows: Row[], instrument: string) {
-  return sortedByDate(rows.filter((row) => String(row.instrument ?? "") === instrument)).slice(0, 2);
+  return sortedByDate(rows.filter((row) => String(row.instrument ?? "") === instrument && row.score !== null && row.score !== undefined && row.score !== "" && Number.isFinite(Number(row.score)))).slice(0, 2);
 }
 
 function trend(current: number, prior?: number) {
@@ -47,6 +47,7 @@ export function cssrsImportNarrative(safetyScreenings: Row[]) {
 
 export function screeningContext(rows: Row[], appointmentId: string, serviceDate: string, startedAt: string): Row[] {
   return rows.filter(row => String(row.source_reference_id ?? "") === appointmentId && Boolean(appointmentId)
-    || String(row.assessed_on ?? "") <= serviceDate && String(row.created_at ?? "") <= startedAt)
+    || String(row.assessed_on ?? "") < serviceDate && String(row.created_at ?? "") <= startedAt
+    || !row.source_reference_id && String(row.assessed_on ?? "") === serviceDate && String(row.created_at ?? "") <= startedAt)
     .map(row => ({...row,screening_context_current:Boolean(appointmentId) && row.source_reference_id===appointmentId}));
 }

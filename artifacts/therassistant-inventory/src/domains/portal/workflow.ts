@@ -135,6 +135,7 @@ function recordOf(value: unknown): Record<string, unknown> {
 }
 
 export type PreVisitCheckInUpdate = {
+  expected_updated_at?: string | null;
   demographics_confirmed?: boolean;
   insurance_confirmed?: boolean;
   visit_questions?: Record<string, unknown>;

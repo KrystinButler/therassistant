@@ -1,3 +1,4 @@
+import { readScreeners, screenerTotal } from "../portal/portal-screeners";
 type AnyRow = Record<string, unknown>;
 
 function recordOf(value: unknown): AnyRow {
@@ -47,6 +48,14 @@ export type PatientReviewCheckIn = {
   additionalContext: string;
   safetyText: string;
   safetyConcern: boolean | null;
+  phq9Total?: number | null;
+  gad7Total?: number | null;
+  phq9Item9?: number | null;
+  screenersDeclined?: boolean;
+  hasScreeners?: boolean;
+  planReview?: string;
+  goalUpdates?: Array<{goalId:string;goalText:string;progress:string;barriers:string}>;
+  submittedAt?: string;
   hasSubmittedPreVisit: boolean;
   hasSubmittedSafetyScreener: boolean;
 };
@@ -74,7 +83,19 @@ export function buildPatientReviewCheckIn(checkin: AnyRow | null | undefined): P
   const additionalContext = text(questions, ["anything_else"]);
   const safetyText = text(questions, ["safety_concerns"]);
 
+  const screeners = readScreeners(questions.screeners);
   return {
+    phq9Total: screenerTotal(screeners.phq9, 9),
+    gad7Total: screenerTotal(screeners.gad7, 7),
+    phq9Item9: screeners.phq9[8],
+    screenersDeclined: screeners.declined,
+    hasScreeners: Boolean(questions.screeners),
+    planReview: text(recordOf(questions.treatment_plan_review), ["status"]),
+    submittedAt: hasSubmittedPreVisit ? String(preVisit.submitted_at) : "",
+    goalUpdates: Array.isArray(questions.goal_updates) ? questions.goal_updates.map(value => {
+      const goal = recordOf(value);
+      return {goalId:text(goal,["goal_id"]),goalText:text(goal,["goal_text"]),progress:text(goal,["progress"]),barriers:text(goal,["barriers"])};
+    }) : [],
     focus,
     mood,
     changes: changes.length ? changes : legacyChanges,
