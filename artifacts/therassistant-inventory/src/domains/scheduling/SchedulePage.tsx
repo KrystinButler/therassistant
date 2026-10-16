@@ -1,3 +1,7 @@
+import { Link, useLocation } from "wouter";
+import { startEncounter } from "../encounters/repository";
+import { safeTelehealthUrl } from "./telehealth-link";
+import { useWorkspaceChoice } from "../../navigation/use-workspace-choice";
 import { useEffect, useMemo, useState } from "react";
 import { CalendarDays, ChevronRight } from "lucide-react";
 
@@ -122,12 +126,14 @@ function compactDate(startsAt: string) {
 }
 
 export function SchedulePage() {
+  const [, navigate] = useLocation();
+  const [openingNoteId, setOpeningNoteId] = useState<string | null>(null);
   const { user } = useAuth();
   const { roles } = useTenant();
   const [data, setData] = useState<ScheduleData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [view, setView] = useState<ViewMode>("day");
+  const [view, setView] = useWorkspaceChoice<ViewMode>("view", "day", ["day", "week", "month"]);
   const [anchor, setAnchor] = useState(() => new Date());
   const [providerFilter, setProviderFilter] = useState("");
   const [form, setForm] = useState<FormState | null>(null);
@@ -256,7 +262,16 @@ export function SchedulePage() {
     finally { setSaving(false); }
   }
 
-  return <>
+  async function openNote(appointment: ScheduleAppointment) {
+    setOpeningNoteId(appointment.id); setError(null);
+    try {
+      const result = await startEncounter(appointment.id);
+      if (!result.ok) throw new Error(result.message);
+      navigate(`/encounters/${result.value.id}#encounter-progress-note-editor`);
+    } catch (error) { setError(error instanceof Error ? error.message : "Unable to open note."); }
+    finally { setOpeningNoteId(null); }
+  }
+  return <div className="queue-review-layout queue-schedule"><div className="queue-review-main">
     <div className="schedule-header">
       <div>
         <div className="thera-eyebrow">PREPARE · PROVIDER SCHEDULE</div>
@@ -299,16 +314,8 @@ export function SchedulePage() {
         return <tr
           key={appointment.id}
           className={`schedule-row${rowState}`}
-          role="button"
-          tabIndex={0}
           aria-label={`Review ${appointment.clientName} appointment at ${appointmentTime(appointment.startsAt)}`}
-          onClick={() => openReview(appointment)}
-          onKeyDown={(event) => {
-            if (event.key === "Enter" || event.key === " ") {
-              event.preventDefault();
-              openReview(appointment);
-            }
-          }}
+
         >
           <td className="schedule-time">
             {view !== "day" && <span className="schedule-date-mini">{compactDate(appointment.startsAt)}</span>}
@@ -320,12 +327,13 @@ export function SchedulePage() {
           <td><span className={`schedule-status ${statusTone}`}><StatusBadge value={appointment.checkInStatus} /></span></td>
           <td><div className="schedule-insight">{appointment.preVisitInsights.length > 0 ? appointment.preVisitInsights.map((insight) => <span className={`schedule-insight-pill ${insight.tone}`} key={insight.label}><strong>{insight.label}</strong>{insight.value}</span>) : <span className="schedule-insight-empty">No pre-visit signal yet</span>}</div></td>
           <td><div className={`schedule-focus ${focusAction.toLowerCase().replace(" ", "-")}`}><span>{focusAction}</span><strong>{appointment.sessionFocus ?? "No focus submitted"}</strong></div></td>
-          <td className="schedule-chevron"><ChevronRight size={17} /></td>
+          <td><div className="thera-filter-row"><button type="button" className="thera-action" disabled={openingNoteId === appointment.id || ["cancelled", "no_show", "rescheduled"].includes(appointment.appointmentStatus)} onClick={() => void openNote(appointment)}>{openingNoteId === appointment.id ? "Opening…" : "Open Note"}</button><button type="button" className="thera-action secondary" aria-label={`Review ${appointment.clientName} appointment`} onClick={() => openReview(appointment)}>Review</button>{safeTelehealthUrl(appointment.telehealthUrl) && <a className="thera-action secondary" target="_blank" rel="noopener noreferrer" href={safeTelehealthUrl(appointment.telehealthUrl)!}>Join Video</a>}</div></td>
         </tr>;
       })}</tbody></table></div>}
     </section>}
 
-    <PatientReviewDrawer appointment={selectedAppointment} open={Boolean(selectedAppointment)} onOpenChange={(open) => { if (!open) closeReview(); }} onEditAppointment={selectedAppointment ? () => openEdit(selectedAppointment) : undefined} />
+    </div>
+    <PatientReviewDrawer key={selectedAppointment?.id ?? "none"} appointment={selectedAppointment} open={Boolean(selectedAppointment)} onOpenChange={(open) => { if (!open) closeReview(); }} onEditAppointment={selectedAppointment ? () => openEdit(selectedAppointment) : undefined} />
 
     {form && data && <WorkDrawer open={Boolean(form)} onOpenChange={(open) => { if (!open) closeEditDrawer(); }} dirty={dirty} title={editingId ? "Edit Appointment" : "New Appointment"} subtitle={editingId ? `${data.appointments.find((row) => row.id === editingId)?.clientName ?? "Patient"} · ${data.appointments.find((row) => row.id === editingId)?.providerName ?? "Provider"}` : "Schedule by patient and provider name"} footer={<div className="thera-filter-row" style={{ justifyContent: "space-between" }}><button type="button" className="thera-action secondary" onClick={() => { if (!dirty || window.confirm("Discard unsaved appointment changes?")) closeEditDrawer(); }}>Cancel</button><button type="button" className="thera-action" disabled={saving || !form.clientId || !form.providerId || !form.date || !form.time} onClick={() => void saveAppointment()}>{saving ? "Saving..." : editingId ? "Save Appointment" : "Schedule Appointment"}</button></div>}>
       <div className="schedule-appointment-form">
@@ -380,5 +388,5 @@ export function SchedulePage() {
         <div className="schedule-appointment-note"><strong>Clinical documentation stays independent.</strong><span>Scheduling creates the appointment only. Notes, charges and payer rules remain separate.</span></div>
       </div>
     </WorkDrawer>}
-  </>;
+  </div>;
 }

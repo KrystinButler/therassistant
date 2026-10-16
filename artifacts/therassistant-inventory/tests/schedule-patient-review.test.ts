@@ -23,7 +23,8 @@ test("schedule is the PREPARE pre-session workflow", () => {
   assert.match(schedule, /signedInProvider/);
   assert.match(schedule, /__unlinked_clinician__/);
   assert.match(schedule, /setInterval/);
-  assert.match(schedule, /onKeyDown/);
+  assert.match(schedule, /type="button"/);
+  assert.match(schedule, /aria-label=\{`Review/);
   assert.doesNotMatch(app, /<PreSessionPage/);
 });
 

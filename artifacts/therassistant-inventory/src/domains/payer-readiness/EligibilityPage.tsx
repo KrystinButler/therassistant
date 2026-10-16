@@ -1,3 +1,5 @@
+import { formDate } from "../clinical/workspace-actions";
+import { canLeaveWorkspace } from "../../navigation/workspace-state";
 import { useEffect, useMemo, useState } from "react";
 import { Link, useLocation } from "wouter";
 
@@ -49,7 +51,7 @@ const sourceOptions: Array<[ManualEligibilityInput["source"], string]> = [
 
 function blankManualForm(): ManualForm {
   return {
-    serviceDate: new Date().toISOString().slice(0, 10),
+    serviceDate: formDate(),
     status: "active",
     source: "payer_portal",
     reference: "",
@@ -99,6 +101,8 @@ export function EligibilityPage() {
   const [attentionOnly, setAttentionOnly] = useState(false);
   const [activeRow, setActiveRow] = useState<EligibilityRow | null>(null);
   const [manualForm, setManualForm] = useState<ManualForm>(blankManualForm());
+  const [manualBaseline, setManualBaseline] = useState<ManualForm>(blankManualForm());
+  const dirty = JSON.stringify(manualForm) !== JSON.stringify(manualBaseline);
   const [savingManual, setSavingManual] = useState(false);
 
   async function load() {
@@ -132,10 +136,12 @@ export function EligibilityPage() {
     setError(null);
     setMessage(null);
     setActiveRow(row);
-    setManualForm(blankManualForm());
+    const next = blankManualForm();
+    setManualForm(next); setManualBaseline(next);
   }
 
-  function closeManual() {
+  function closeManual(force = false) {
+    if (!force && !canLeaveWorkspace(dirty, () => window.confirm("Discard unsaved eligibility verification?"))) return;
     setActiveRow(null);
     setManualForm(blankManualForm());
   }
@@ -172,7 +178,7 @@ export function EligibilityPage() {
             : manualForm.authorizationRequired === "yes",
         notes: manualForm.notes,
       });
-      closeManual();
+      closeManual(true);
       setMessage("Manual eligibility verification saved.");
       await load();
     } catch (err) {
@@ -183,7 +189,7 @@ export function EligibilityPage() {
   }
 
   return (
-    <>
+    <div className="queue-review-layout queue-eligibility"><div className="queue-review-main">
       <div className="thera-page-header split">
         <div>
           <div className="thera-eyebrow">PAYER READINESS</div>
@@ -252,10 +258,11 @@ export function EligibilityPage() {
         </section>
       )}
 
+      </div>
       {activeRow && (
-        <WorkDrawer
+        <WorkDrawer docked dirty={dirty}
           open={Boolean(activeRow)}
-          onOpenChange={(open) => { if (!open) closeManual(); }}
+          onOpenChange={(open) => { if (!open) closeManual(true); }}
           title="Manual Eligibility Verification"
           subtitle={`${activeRow.patientName} · ${activeRow.payerName}`}
           badges={<StatusBadge value={manualForm.status} />}
@@ -268,7 +275,7 @@ export function EligibilityPage() {
           openFullRecordLabel="Open Patient 360"
           footer={
             <div className="thera-filter-row" style={{ justifyContent: "space-between", width: "100%" }}>
-              <button type="button" className="thera-action secondary" onClick={closeManual}>Cancel</button>
+              <button type="button" className="thera-action secondary" onClick={() => closeManual()}>Cancel</button>
               <button type="button" className="thera-action" disabled={savingManual || !manualForm.serviceDate} onClick={() => void saveManual()}>
                 {savingManual ? "Saving..." : "Save Verification"}
               </button>
@@ -347,7 +354,7 @@ export function EligibilityPage() {
           </div>
         </WorkDrawer>
       )}
-    </>
+    </div>
   );
 }
 

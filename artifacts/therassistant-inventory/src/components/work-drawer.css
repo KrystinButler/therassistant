@@ -79,3 +79,25 @@
     flex-wrap: wrap;
   }
 }
+
+.queue-review-layout { min-width: 0; }
+.queue-review-main { min-width: 0; }
+.workspace-review-panel {
+  display: grid; grid-template-rows: auto minmax(0, 1fr) auto;
+  position: sticky; top: 88px; height: calc(100dvh - 110px);
+  min-width: 0; border: 1px solid var(--thera-border); border-radius: 12px;
+  background: var(--thera-paper, white); overflow: hidden;
+}
+.workspace-review-panel:focus { outline: 2px solid var(--thera-sage-dark); outline-offset: 2px; }
+.workspace-review-panel .thera-work-drawer-header { padding: 16px; }
+.workspace-review-panel .thera-work-drawer-header h2 { font-size: 19px; margin: 0; }
+.workspace-review-panel .thera-work-drawer-header p { font-size: 12px; margin: 6px 0; }
+.workspace-review-panel .thera-work-drawer-body { padding: 16px; }
+.workspace-review-panel .thera-work-drawer-footer { padding: 12px 16px; }
+.workspace-review-panel .thera-work-drawer-toolbar-actions { flex-wrap: wrap; }
+.workspace-review-panel .thera-form-grid, .workspace-review-panel .thera-detail-grid { grid-template-columns: 1fr; }
+.workspace-review-panel details { border-top: 1px solid var(--thera-border); padding: 12px 0; }
+.workspace-review-panel summary { cursor: pointer; font-weight: 600; padding: 8px 0; }
+@media(min-width:1360px) {
+  .queue-review-layout:has(> .workspace-review-panel) { display: grid; grid-template-columns: minmax(0, 1fr) minmax(440px, .9fr); gap: 20px; align-items: start; }
+}

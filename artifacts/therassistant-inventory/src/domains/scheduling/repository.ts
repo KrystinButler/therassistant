@@ -37,6 +37,7 @@ export type ScheduleAppointment = {
   locationType: string;
   serviceType: string;
   cptCode: string;
+  telehealthUrl?: string | null;
   registrationStatus: string;
   eligibilityStatus: string | null;
   providerEnrollmentStatus: string | null;
@@ -313,6 +314,7 @@ export async function getScheduleData(): Promise<ScheduleData> {
       checkInStatus: patientPresentation.checkInStatus,
       preVisitInsights: patientPresentation.preVisitInsights,
       sessionFocus: patientPresentation.sessionFocus,
+      telehealthUrl: appointment.telehealth_url ? String(appointment.telehealth_url) : null,
       readiness,
     };
   });

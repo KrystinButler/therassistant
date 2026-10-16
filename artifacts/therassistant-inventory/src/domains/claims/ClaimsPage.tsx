@@ -1,3 +1,4 @@
+import { useWorkspaceChoice } from "../../navigation/use-workspace-choice";
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "wouter";
 
@@ -37,9 +38,9 @@ function asDrawerClaim(row: ClaimsQueueRow): ClaimWorkRecord {
 
 export function ClaimsPage() {
   const [rows, setRows] = useState<ClaimsQueueRow[]>([]);
-  const [payerId, setPayerId] = useState("");
-  const [tab, setTab] = useState<ClaimsTab>("no_response");
-  const [activeClaimId, setActiveClaimId] = useState<string | null>(null);
+  const [payerId, setPayerId] = useWorkspaceChoice<string>("payer", "");
+  const [tab, setTab] = useWorkspaceChoice<ClaimsTab>("tab", "no_response", CLAIM_TABS.map(([key]) => key));
+  const [activeClaimId, setActiveClaimId] = useWorkspaceChoice<string | null>("claim", null);
   const [loading, setLoading] = useState(true);
   const [savingId, setSavingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -117,6 +118,14 @@ export function ClaimsPage() {
     return map;
   }, [payerRows]);
 
+  useEffect(() => {
+    if (loading || !payerRows.length || new URLSearchParams(window.location.search).has("tab")) return;
+    if (!(rowsByTab.get(tab)?.length)) {
+      const next = CLAIM_TABS.find(([key]) => Boolean(rowsByTab.get(key)?.length));
+      if (next) setTab(next[0]);
+    }
+  }, [loading, payerRows, rowsByTab, tab]);
+
   const visible = rowsByTab.get(tab) ?? [];
   const activeIndex = visible.findIndex((claim) => claim.id === activeClaimId);
   const activeClaim = activeIndex >= 0 ? visible[activeIndex] : null;
@@ -162,7 +171,7 @@ export function ClaimsPage() {
   }
 
   return (
-    <>
+    <div className="queue-review-layout queue-claims"><div className="queue-review-main">
       <div className="thera-page-header">
         <div>
           <div className="thera-eyebrow">GET PAID · PAYER FOLLOW-UP</div>
@@ -213,6 +222,7 @@ export function ClaimsPage() {
         </div>
       )}
 
+      </div>
       <ClaimWorkDrawer
         claim={activeClaim ? asDrawerClaim(activeClaim) : null}
         open={Boolean(activeClaim)}
@@ -229,6 +239,6 @@ export function ClaimsPage() {
         previousDisabled={activeIndex <= 0}
         nextDisabled={activeIndex < 0 || activeIndex >= visible.length - 1}
       />
-    </>
+    </div>
   );
 }

@@ -1,0 +1,71 @@
+/* Shared task layouts keep context visible without changing record ownership. */
+.workspace-section-links { display: flex; flex-wrap: wrap; gap: 8px 18px; padding: 12px 0; margin-bottom: 12px; }
+.workspace-section-links a { color: var(--thera-navy); font-weight: 600; font-size: 13px; }
+.claim-record-workspace { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(360px, .85fr); gap: 20px; align-items: start; }
+.claim-record-workspace > * { min-width: 0; }
+.claim-record-workspace .thera-detail-grid { grid-template-columns: 1fr; gap: 12px; }
+.claim-record-workspace > aside { border-left: 1px solid var(--thera-border); padding-left: 20px; }
+.claim-record-workspace :is(section,details) { scroll-margin-top: 150px; }
+.claim-record-workspace details { background: white; border: 1px solid var(--thera-border); border-radius: 10px; margin-bottom: 14px; padding: 14px; }
+.claim-record-workspace summary { cursor: pointer; font-weight: 600; }
+.patient-record-workspace { display: grid; grid-template-columns: 190px minmax(0, 1fr); gap: 20px; align-items: start; }
+.patient-record-context { position: sticky; top: 170px; background: white; border: 1px solid var(--thera-border); border-radius: 12px; padding: 12px; }
+.patient-record-context nav { display: flex; flex-direction: column; gap: 3px; }
+.patient-record-context nav button { text-align: left; min-height: 40px; border-radius: 7px; }
+.patient-record-summary { border-top: 1px solid var(--thera-border); padding-top: 14px; margin-top: 12px; font-size: 12px; color: var(--thera-muted); }
+.patient-record-summary p { margin: 8px 0; }
+.patient-record-content { min-width: 0; }
+.patient-record-content [hidden] { display: none !important; }
+.workspace-patient-identity { position: sticky; top: 67px; z-index: 12; background: var(--thera-cream); padding: 12px 0; border-bottom: 1px solid var(--thera-border); }
+.workspace-patient-identity p { overflow-wrap: anywhere; }
+.cw-content .thera-table thead th { position: sticky; top: 0; background: #f2f5f3; z-index: 1; }
+.cw-content :is(button,a,input,select,textarea,summary):focus-visible { outline: 2px solid var(--thera-sage-dark); outline-offset: 3px; }
+.cw-content .thera-tabs { flex-wrap: wrap; }
+@media(min-width:1360px) {
+ .cw-app:has(.queue-review-layout > .workspace-review-panel) { grid-template-columns: 190px minmax(0,1fr); }
+ .cw-app:has(.queue-review-layout > .workspace-review-panel) .cw-sidebar { width: 190px; }
+ .cw-app:has(.queue-review-layout > .workspace-review-panel) .cw-content { padding: 20px; }
+ .queue-review-layout:has(.workspace-review-panel) .thera-metric-grid { grid-template-columns: repeat(2,minmax(0,1fr)); }
+}
+@media(max-width:1100px) { .claim-record-workspace { grid-template-columns: 1fr; } .claim-record-workspace > aside { border-left: 0; padding-left: 0; } }
+@media(max-width:800px) {
+ .patient-record-workspace { grid-template-columns: 1fr; }
+ .patient-record-context { position: static; }
+ .patient-record-context nav { flex-direction: row; flex-wrap: wrap; }
+ .patient-record-summary { display: none; }
+ .workspace-patient-identity { position: static; }
+}
+.workspace-shell-configuration .thera-page-header,
+.workspace-shell-queue .thera-page-header {
+  border-bottom: 1px solid var(--thera-border); padding-bottom: 16px; margin-bottom: 20px;
+}
+.workspace-shell-configuration .thera-form-grid { gap: 16px 20px; }
+.workspace-shell-configuration .thera-card { border-radius: 12px; }
+.workspace-shell-configuration .thera-card-header { align-items: flex-start; flex-wrap: wrap; gap: 12px; }
+.workspace-shell-configuration .thera-card > .thera-filter-row { flex-wrap: wrap; }
+.workspace-shell-queue .thera-filter-row { flex-wrap: wrap; }
+.workspace-shell-queue .thera-tabs { gap: 6px; }
+.workspace-shell-queue .thera-tabs button { min-height: 40px; }
+.workspace-shell-record .thera-table-wrap { max-width: 100%; }
+.patient-record-content .thera-detail-grid .thera-card { margin-bottom: 0; }
+.workspace-review-panel .patient-review-scroll { overflow: visible; height: auto; }
+.workspace-review-panel .patient-review-sections { grid-template-columns: 1fr; }
+
+.encounter-patient-context .encounter-context-rail { width: 100% !important; margin: 12px 0 0 !important; display: block !important; border: 1px solid var(--thera-border); border-radius: 10px; }
+.encounter-patient-context .encounter-context-content { max-height: none; overflow: visible; }
+.encounter-patient-context .encounter-context-tabs { flex-direction: row !important; flex-wrap: wrap; }
+.encounter-patient-context .encounter-context-tab { flex: 1; min-height: 40px; }
+.encounter-patient-context .encounter-context-tab span { display: none; }
+.encounter-patient-context .encounter-context-tab small { display: block !important; }
+.encounter-patient-context .encounter-plan-heading-actions { flex-wrap: wrap; }
+
+.encounter-patient-context .thera-form-grid { grid-template-columns: 1fr; }
+@media(min-width:1360px) {
+ .queue-review-layout:has(> .workspace-review-panel) .thera-table :is(th,td):first-child { position: sticky; left: 0; background: white; z-index: 2; }
+ .queue-review-layout:has(> .workspace-review-panel) .thera-table th:first-child { background: #f2f5f3; z-index: 3; }
+ .queue-claims:has(> .workspace-review-panel) .thera-table :is(th,td):is(:nth-child(4),:nth-child(5),:nth-child(6),:nth-child(7)) { display: none; }
+ .queue-payments:has(> .workspace-review-panel) .thera-table :is(th,td):is(:nth-child(4),:nth-child(5),:nth-child(6),:nth-child(8)) { display: none; }
+ .queue-denials:has(> .workspace-review-panel) .thera-table :is(th,td):nth-child(3) { display: none; }
+ .queue-schedule:has(> .workspace-review-panel) .schedule-table { min-width: 0; }
+ .queue-schedule:has(> .workspace-review-panel) .schedule-table :is(th,td):is(:nth-child(4),:nth-child(5)) { display: none; }
+}

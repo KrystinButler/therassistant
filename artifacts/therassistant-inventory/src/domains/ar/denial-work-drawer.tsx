@@ -100,21 +100,21 @@ export function DenialWorkDrawer({
 
   const footer = (
     <div className="thera-filter-row" style={{ justifyContent: "space-between" }}>
-      <button type="button" className="thera-action secondary" onClick={() => onOpenChange(false)}>Close</button>
+      <button type="button" className="thera-action secondary" onClick={() => { if (!dirty || window.confirm("Discard unsaved follow-up changes?")) onOpenChange(false); }}>Close</button>
       <div className="thera-filter-row">
-        {row.claim_id ? <button type="button" className="thera-action secondary" disabled={saving} onClick={() => onCorrectClaim(row)}>Correct Claim</button> : null}
+        {row.claim_id ? <button type="button" className="thera-action secondary" disabled={saving} onClick={() => { if (!dirty || window.confirm("Discard unsaved follow-up changes before opening the claim?")) onCorrectClaim(row); }}>Correct Claim</button> : null}
         {row.policy === "auto_writeoff"
           ? <button type="button" className="thera-action" disabled={saving || row.denial_status === "resolved_writeoff"} onClick={() => onWriteOff(row)}>Write Off</button>
           : <>
             <button type="button" className="thera-action secondary" disabled={saving} onClick={() => onStartWork(row)}>Start Follow-Up</button>
-            <button type="button" className="thera-action" disabled={saving || Boolean(row.activeAppealId)} onClick={() => onCreateAppeal(row)}>{row.activeAppealId ? "Appeal Active" : "Generate Appeal"}</button>
+            <button type="button" className="thera-action" disabled={saving || Boolean(row.activeAppealId)} onClick={() => { if (!dirty || window.confirm("Discard unsaved follow-up changes before creating an appeal?")) onCreateAppeal(row); }}>{row.activeAppealId ? "Appeal Active" : "Generate Appeal"}</button>
           </>}
       </div>
     </div>
   );
 
   return (
-    <WorkDrawer
+    <WorkDrawer docked
       open={open}
       onOpenChange={onOpenChange}
       dirty={dirty}

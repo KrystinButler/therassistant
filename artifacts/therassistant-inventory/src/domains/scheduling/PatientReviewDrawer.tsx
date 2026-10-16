@@ -12,7 +12,7 @@ import {
 } from "lucide-react";
 
 import { StatusBadge } from "../../components/status-badge";
-import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "../../components/ui/sheet";
+import { WorkDrawer } from "../../components/work-drawer";
 import { shortDate } from "../../lib/format";
 import { startEncounter } from "../encounters/repository";
 import { getPatientChart } from "../patients/repository";
@@ -172,14 +172,8 @@ export function PatientReviewDrawer({ appointment, open, onOpenChange, onEditApp
     : "No submitted answers are available for this appointment. The provider can document care; arrival and billing follow-up are tracked separately.";
 
   return (
-    <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="right" className="patient-review-drawer">
+    <WorkDrawer docked open={open} onOpenChange={onOpenChange} title={appointment.clientName} subtitle="Patient Review · pre-session" footer={<div className="patient-review-footer"><button type="button" className="patient-review-secondary" onClick={() => navigate(`/clients/${appointment.clientId}`)}><BookOpenText size={16} /> Open Chart</button><button type="button" className="patient-review-primary" disabled={starting} onClick={() => void startNote()}><FileText size={16} /> {starting ? "Starting..." : existingEncounter ? "Resume Note" : "Start Note"}</button></div>}>
         <div className="patient-review-scroll">
-          <SheetHeader className="patient-review-heading">
-            <SheetTitle>Patient Review</SheetTitle>
-            <SheetDescription>Focused pre-session review. Sensitive detail stays inside the drawer.</SheetDescription>
-          </SheetHeader>
-
           <section className="patient-review-person-card">
             <div className="patient-review-avatar">{initials(patient)}</div>
             <div className="patient-review-person-main">
@@ -208,7 +202,7 @@ export function PatientReviewDrawer({ appointment, open, onOpenChange, onEditApp
               {review.additionalContext ? <Definition label="Additional Context" value={review.additionalContext} /> : null}
             </ReviewSection>
 
-            <ReviewSection icon={<BookOpenText size={15} />} title="Journal Review" action={<button type="button" onClick={() => navigate(`/clients/${appointment.clientId}`)}>View All</button>}>
+            <ReviewSection icon={<BookOpenText size={15} />} title="Journal Review" action={<button type="button" onClick={() => navigate(`/clients/${appointment.clientId}?tab=engagement`)}>View All</button>}>
               {review.journal ? <><div className="patient-review-inline-meta"><span>{rowDate(review.journal)}</span><span className="patient-review-shared"><CircleDot size={11} /> Shared by Patient</span></div><p className="patient-review-quote">“{text(review.journal, ["entry_text"], "Journal entry available.")}”</p></> : <p className="patient-review-muted">No journal entry shared for review.</p>}
             </ReviewSection>
 
@@ -216,7 +210,7 @@ export function PatientReviewDrawer({ appointment, open, onOpenChange, onEditApp
               <div className="patient-review-highlight positive"><Target size={18} /><div><strong>WORK ON</strong><p>{review.focus}</p></div></div>
             </ReviewSection>
 
-            <ReviewSection icon={<Flag size={15} />} title="Active Goal" action={<button type="button" onClick={() => navigate(`/clients/${appointment.clientId}`)}>View Goals</button>}>
+            <ReviewSection icon={<Flag size={15} />} title="Active Goal" action={<button type="button" onClick={() => navigate(`/clients/${appointment.clientId}?tab=treatment`)}>View Goals</button>}>
               <p className="patient-review-goal">{review.goalText}</p>
               <div className="patient-review-inline-meta"><span>{review.targetDate ? `Target date: ${shortDate(review.targetDate)}` : "No target date"}</span><span className="patient-review-shared"><CircleDot size={11} /> {review.goalStatus}</span></div>
             </ReviewSection>
@@ -235,12 +229,7 @@ export function PatientReviewDrawer({ appointment, open, onOpenChange, onEditApp
           </div> : null}
         </div>
 
-        <footer className="patient-review-footer">
-          <button type="button" className="patient-review-secondary" onClick={() => navigate(`/clients/${appointment.clientId}`)}><BookOpenText size={16} /> Open Chart</button>
-          <button type="button" className="patient-review-primary" disabled={starting} onClick={() => void startNote()}><FileText size={16} /> {starting ? "Starting..." : existingEncounter ? "Resume Note" : "Start Note"}</button>
-        </footer>
-      </SheetContent>
-    </Sheet>
+    </WorkDrawer>
   );
 }
 

@@ -1,3 +1,4 @@
+import { useWorkspaceChoice } from "../../navigation/use-workspace-choice";
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "wouter";
 
@@ -31,12 +32,7 @@ type ChargesTab = "ready" | "blocked" | "program" | "private-pay" | "unbatched" 
 
 export function BillingQueuePage() {
   const [data, setData] = useState<ChargesData | null>(null);
-  const [tab, setTab] = useState<ChargesTab>(() => {
-    const requested = new URLSearchParams(window.location.search).get("tab");
-    return ["ready", "blocked", "program", "private-pay", "unbatched", "batches", "submitted"].includes(requested ?? "")
-      ? requested as ChargesTab
-      : "ready";
-  });
+  const [tab, setTab] = useWorkspaceChoice<ChargesTab>("tab", "ready", ["ready", "blocked", "program", "private-pay", "unbatched", "batches", "submitted"]);
   const [loading, setLoading] = useState(true);
   const [savingId, setSavingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
