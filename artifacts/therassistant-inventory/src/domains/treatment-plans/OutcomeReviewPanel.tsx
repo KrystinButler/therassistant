@@ -1,3 +1,4 @@
+import { formDate } from "../clinical/workspace-actions";
 import { useEffect, useMemo, useState } from "react";
 
 import type { PatientChart } from "../patients/types";
@@ -45,7 +46,7 @@ function readinessMessage(readiness: ReviewSignatureReadiness | null) {
   return "This review is not ready for signature.";
 }
 
-export function OutcomeReviewPanel({ chart }: { chart: PatientChart }) {
+export function OutcomeReviewPanel({ chart, serviceDate, timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone }: { chart: PatientChart; serviceDate?: string; timeZone?: string }) {
   const patientId = chart.patient.id;
   const [data, setData] = useState<Data | null>(null);
   const [loading, setLoading] = useState(true);
@@ -54,10 +55,10 @@ export function OutcomeReviewPanel({ chart }: { chart: PatientChart }) {
   const [message, setMessage] = useState<string | null>(null);
   const [instrument, setInstrument] = useState<Instrument>("PHQ-9");
   const [score, setScore] = useState("");
-  const [assessedOn, setAssessedOn] = useState(new Date().toISOString().slice(0, 10));
+  const [assessedOn, setAssessedOn] = useState(() => formDate(serviceDate, timeZone));
   const [source, setSource] = useState<"clinician_entered" | "patient_reported">("clinician_entered");
   const [planId, setPlanId] = useState("");
-  const [reviewDate, setReviewDate] = useState(new Date().toISOString().slice(0, 10));
+  const [reviewDate, setReviewDate] = useState(() => formDate(serviceDate, timeZone));
   const [draftId, setDraftId] = useState("");
   const [draftText, setDraftText] = useState("");
   const [readiness, setReadiness] = useState<ReviewSignatureReadiness | null>(null);

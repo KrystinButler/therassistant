@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Link, useLocation } from "wouter";
 import "./clinical-page.css";
 
+import { unsignedRows } from "./workspace-actions";
 import { StatusBadge } from "../../components/status-badge";
 import { dateTime } from "../../lib/format";
 import { tenantSelect, type Row } from "../../lib/tenant-data-client";
@@ -34,7 +35,7 @@ type ClinicalNote = DataRow & {
   note_status?: string | null;
 };
 
-type QueueTab = "needs_note" | "in_progress" | "signed" | "all";
+type QueueTab = "unsigned" | "needs_note" | "in_progress" | "signed" | "all";
 
 function personName(row?: DataRow | null) {
   if (!row) return "—";
@@ -62,7 +63,7 @@ export function ClinicalPage() {
   const [notes, setNotes] = useState<ClinicalNote[]>([]);
   const [clients, setClients] = useState<DataRow[]>([]);
   const [providers, setProviders] = useState<DataRow[]>([]);
-  const [tab, setTab] = useState<QueueTab>("needs_note");
+  const [tab, setTab] = useState<QueueTab>("unsigned");
   const [startingId, setStartingId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -166,7 +167,7 @@ export function ClinicalPage() {
     signed: rows.filter((row) => row.signed).length,
   }), [rows]);
 
-  const visible = rows.filter((row) => {
+  const visible = tab === "unsigned" ? unsignedRows(rows) : rows.filter((row) => {
     if (tab === "needs_note") return !row.encounter;
     if (tab === "in_progress") return row.inProgress;
     if (tab === "signed") return row.signed;
@@ -270,7 +271,7 @@ export function ClinicalPage() {
 
       <div className="thera-metric-grid" style={{ marginBottom: 16 }}>
         <Metric label="Needs Note" value={counts.needsNote} />
-        <Metric label="In Progress" value={counts.inProgress} />
+        <Metric label="Session in progress" value={counts.inProgress} />
         <Metric label="Signed" value={counts.signed} />
       </div>
 
@@ -281,8 +282,9 @@ export function ClinicalPage() {
       {error && <div className="thera-state error" style={{ marginBottom: 12 }}>{error}</div>}
 
       <div className="thera-tabs" style={{ marginBottom: 16 }}>
+        <Tab active={tab === "unsigned"} label={`Unsigned work (${unsignedRows(rows).length})`} onClick={() => setTab("unsigned")} />
         <Tab active={tab === "needs_note"} label={`Needs Note (${counts.needsNote})`} onClick={() => setTab("needs_note")} />
-        <Tab active={tab === "in_progress"} label={`In Progress (${counts.inProgress})`} onClick={() => setTab("in_progress")} />
+        <Tab active={tab === "in_progress"} label={`Session in progress (${counts.inProgress})`} onClick={() => setTab("in_progress")} />
         <Tab active={tab === "signed"} label={`Signed (${counts.signed})`} onClick={() => setTab("signed")} />
         <Tab active={tab === "all"} label="All" onClick={() => setTab("all")} />
       </div>
@@ -319,9 +321,9 @@ export function ClinicalPage() {
                       <td>{personName(provider)}</td>
                       <td>{String(appointment.service_type ?? "Appointment")}</td>
                       <td>{String(appointment.cpt_code ?? "—")}</td>
-                      <td><StatusBadge value={String(encounter?.encounter_status ?? "not_started")} /></td>
-                      <td><StatusBadge value={String(note?.note_status ?? "missing")} /></td>
-                      <td><StatusBadge value={String(encounter?.billing_status ?? "not_ready")} /></td>
+                      <td><StatusBadge value={String(encounter?.encounter_status ?? "not_started")} domain="session" /></td>
+                      <td><StatusBadge value={String(note?.note_status ?? "missing")} domain="note" /></td>
+                      <td><StatusBadge value={String(encounter?.billing_status ?? "not_ready")} domain="billing" /></td>
                       <td>
                         <button
                           type="button"

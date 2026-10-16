@@ -107,6 +107,7 @@ export function AppShell({ children }: Props) {
       <Link
         key={item.href}
         href={item.href}
+        title={item.label}
         className={active ? "cw-nav-link active" : "cw-nav-link"}
         aria-current={active ? "page" : undefined}
         onClick={() => setMobileOpen(false)}

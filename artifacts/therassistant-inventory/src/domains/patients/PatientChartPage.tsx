@@ -10,6 +10,7 @@ import { InsurancePanel } from "../insurance/InsurancePanel";
 import { JournalPanel } from "../journal/JournalPanel";
 import { PortalAccessPanel } from "../portal/PortalAccessPanel";
 import { StaffPortalMessagesPanel } from "../portal/StaffPortalMessagesPanel";
+import { OutcomeReviewPanel } from "../treatment-plans/OutcomeReviewPanel";
 import { TreatmentPlanPanel } from "../treatment-plans/TreatmentPlanPanel";
 import { DemographicsPanel } from "./DemographicsPanel";
 import { getPatientChart } from "./repository";
@@ -37,6 +38,7 @@ export function PatientChartPage() {
   const [tab, setTab] = useState<Tab>(
     tabs.some(([key]) => key === requestedTab) ? requestedTab as Tab : "overview",
   );
+  const [careTab, setCareTab] = useState(new URLSearchParams(window.location.search).get("care") || "notes");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -80,11 +82,13 @@ export function PatientChartPage() {
 
     {tab === "overview" && <Overview chart={chart} relationships={relationships} setTab={setTab} />}
     {tab === "care" && <>
-      <Appointments chart={chart} />
-      <Encounters rows={relationships?.encounters ?? chart.encounters} />
-      <TreatmentPlanPanel chart={chart} onChanged={load} />
-      <ClinicalNotes chart={chart} />
-      <Diagnoses chart={chart} />
+      <nav className="thera-tabs" aria-label="Care sections" style={{ flexWrap: "wrap", marginBottom: 16 }}>
+        {[["notes", "Notes"], ["treatment", "Treatment Plan"], ["outcomes", "Outcomes"], ["diagnoses", "Diagnoses"]].map(([key, label]) => <button type="button" key={key} aria-pressed={careTab === key} className={careTab === key ? "thera-tab active" : "thera-tab"} onClick={() => { setCareTab(key); window.history.replaceState(null, "", `?tab=care&care=${key}`); }}>{label}</button>)}
+      </nav>
+      {careTab === "notes" && <><ClinicalNotes chart={chart} /><details><summary>Visit history</summary><Appointments chart={chart} /><Encounters rows={relationships?.encounters ?? chart.encounters} /></details></>}
+      {careTab === "treatment" && <TreatmentPlanPanel chart={chart} onChanged={load} />}
+      {careTab === "outcomes" && <OutcomeReviewPanel chart={chart} />}
+      {careTab === "diagnoses" && <Diagnoses chart={chart} />}
     </>}
     {tab === "coverage" && <InsurancePanel chart={chart} onChanged={load} />}
     {tab === "revenue" && <>
@@ -117,7 +121,7 @@ function Overview({ chart, relationships, setTab }: { chart: PatientChart; relat
 
 function Appointments({ chart }: { chart: PatientChart }) { return <Table title="Appointments" rows={chart.appointments} columns={[["Date / Time","starts_at","datetime"],["Provider","providerName"],["Service","service_type"],["Location","location_type"],["Status","appointment_status","status"]]} action={(row) => <Link className="thera-action secondary" href={`/schedule/${row.id}`}>Pre-Session</Link>} />; }
 function Encounters({ rows }: { rows: Array<Record<string, unknown> & { id: string }> }) { return <Table title="Encounters" rows={rows} columns={[["Started","started_at","datetime"],["Provider","providerName"],["Payer","payerName"],["Clinical","encounter_status","status"],["Billing","billing_status","status"],["Charges","chargeCount"],["Claims","claimCount"]]} action={(row) => <Link className="thera-action secondary" href={`/encounters/${row.id}`}>Open Encounter</Link>} />; }
-function ClinicalNotes({ chart }: { chart: PatientChart }) { return <Table title="Clinical Notes" rows={chart.clinicalNotes} columns={[["Service Date","service_date","date"],["Provider","providerName"],["Type","note_type"],["Status","note_status","status"],["Signed","signed_at","datetime"]]} />; }
+function ClinicalNotes({ chart }: { chart: PatientChart }) { return <Table title="Clinical Notes" rows={[...chart.clinicalNotes].sort((a, b) => Number(["signed", "locked", "amended"].includes(String(a.note_status))) - Number(["signed", "locked", "amended"].includes(String(b.note_status))))} columns={[["Service Date","service_date","date"],["Provider","providerName"],["Type","note_type"],["Status","note_status","status"],["Signed","signed_at","datetime"]]} action={(row) => row.encounter_id ? <Link className="thera-action secondary" href={`/encounters/${row.encounter_id}`}>Open Note</Link> : null} />; }
 function Diagnoses({ chart }: { chart: PatientChart }) { return <Table title="Patient Diagnoses" rows={chart.diagnoses} columns={[["Code","diagnosis_code"],["Description","description"],["Status","diagnosis_status","status"],["Onset","onset_date","date"],["Resolved","resolved_date","date"]]} />; }
 function Charges({ chart }: { chart: PatientChart }) {
   function correct(row: Record<string, unknown> & { id: string }) {

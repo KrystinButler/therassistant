@@ -7,7 +7,7 @@ export type ClinicalSigningRepository = {
     diagnoses: Array<Record<string, any>>;
     serviceLines: Array<Record<string, any>>;
   }>;
-  signNoteAtomically(encounterId: string, noteId: string, providerId: string, signatureText: string): Promise<{
+  signNoteAtomically(encounterId: string, noteId: string, providerId: string, signatureText: string, expectedNoteText?: string): Promise<{
     note_id: string; signed_at: string;
   }>;
   runBillingReadiness(encounterId: string): Promise<unknown>;
@@ -19,6 +19,7 @@ export async function signNoteWorkflow(
   providerId: string,
   signatureText: string,
   expectedNoteId?: string,
+  expectedNoteText?: string,
 ): Promise<WorkflowResult<{ noteId: string; signedAt: string; billingPending: boolean }>> {
   if (!providerId || !signatureText.trim()) {
     return blocked(
@@ -38,6 +39,10 @@ export async function signNoteWorkflow(
     return failure("note_changed", "The encounter note changed before signing. Reload and review the current note.");
   }
 
+  if (expectedNoteText !== undefined && String(state.note.note_text ?? "") !== expectedNoteText) {
+    return failure("note_changed", "The saved note changed before signing. Review the current version before retrying.");
+  }
+
   const encounterProviderId = String(state.encounter.provider_id ?? "");
   if (encounterProviderId && encounterProviderId !== providerId) {
     return blocked(
@@ -54,7 +59,7 @@ export async function signNoteWorkflow(
   let signed: { note_id: string; signed_at: string };
 
   try {
-    signed = await repo.signNoteAtomically(encounterId, String(state.note.id), providerId, signatureText.trim());
+    signed = await repo.signNoteAtomically(encounterId, String(state.note.id), providerId, signatureText.trim(), expectedNoteText);
   } catch (error) {
     return failure(
       "note_sign_failed",

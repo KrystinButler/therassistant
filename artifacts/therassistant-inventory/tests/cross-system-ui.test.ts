@@ -43,7 +43,7 @@ test("clinical workspace renders the 90-day three-series telemetry chart", () =>
 
 test("clinician workspace exposes a visible clinical signals strip and cross-system review controls", () => {
   const workspace = read("../src/domains/clinical/ClinicalNoteWorkspace.tsx");
-  assert.match(workspace, /Clinical Signals/i);
+  assert.match(workspace, /Screening & trends/i);
   assert.match(workspace, /Cross-System Monitoring/i);
   assert.match(workspace, /Review Recommendation/i);
   assert.match(workspace, /Safety trigger detected/i);

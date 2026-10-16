@@ -9,13 +9,14 @@ const repository = () => readFileSync(fileURLToPath(new URL("../src/domains/enco
 
 test("clinical note workspace matches the integrated note design", () => {
   const source = workspace();
-  for (const label of ["Presenting Problem", "Session Focus", "Standardized Screenings", "Subjective", "Objective", "Assessment", "Plan", "Psychotherapy Note", "Coding Review", "CPT / HCPCS", "ICD-10"]) {
+  for (const label of ["Selected Session Goal", "Screening & trends", "Screening details", "Psychotherapy Note", "Coding Review", "CPT / HCPCS", "ICD-10"]) {
     assert.match(source, new RegExp(label, "i"));
   }
   assert.match(source, /PHQ-9/);
   assert.match(source, /GAD-7/);
   assert.match(source, /C-SSRS/);
-  assert.match(source, /IMPORT 5/);
+  assert.doesNotMatch(source, /IMPORT [345]/);
+  assert.doesNotMatch(source, /<NoteSection/);
   assert.doesNotMatch(source, /Risk[\s\S]{0,240}IMPORT 4/i);
   assert.match(source, /private/i);
   assert.match(source, /collaps/i);

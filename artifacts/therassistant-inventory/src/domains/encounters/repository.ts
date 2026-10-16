@@ -305,6 +305,7 @@ export async function getEncounterDetail(encounterId: string) {
   return {
     encounter,
     serviceDate,
+    timeZone: String(tenant.timezone),
     client: first(clientRows),
     provider: first(providerRows),
     appointment: first(appointmentRows),
