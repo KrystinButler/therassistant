@@ -34,11 +34,16 @@ begin
   values(v_failed_encounter,v_tenant,v_client,v_provider);
   insert into public.clinical_notes(id,tenant_id,encounter_id,client_id,provider_id,note_type,note_text,service_date)
   values(v_failed_note,v_tenant,v_failed_encounter,v_client,v_provider,'assessment','Synthetic rollback test',current_date-1);
+  -- Clinical signing is independent of billing-code readiness. An uncoded note
+  -- must reach the intentionally failing handoff write, not a billing gate.
   begin
     perform public.sign_encounter_note(v_failed_encounter,v_failed_note,v_provider,'Uncoded synthetic signature');
-    raise exception 'Uncoded visit was signed';
-  exception when invalid_parameter_value then null;
+  exception when raise_exception then
+    if sqlerrm <> 'Synthetic handoff storage failure' then raise; end if;
+    v_denied := true;
   end;
+  if not v_denied then raise exception 'Uncoded signature bypassed the atomic handoff'; end if;
+  v_denied := false;
   insert into public.encounter_diagnoses(tenant_id,encounter_id,diagnosis_code,sequence_number,is_primary,present_on_claim)
   values(v_tenant,v_failed_encounter,'F41.1',1,true,true);
   insert into public.encounter_service_lines(tenant_id,encounter_id,cpt_hcpcs_code,units,charge_amount_cents,place_of_service_code)
