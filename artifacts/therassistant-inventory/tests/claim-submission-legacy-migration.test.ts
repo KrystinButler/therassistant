@@ -15,6 +15,9 @@ test("optional legacy claim columns are checked before backfilling on a fresh da
   assert.match(migration, /column_name\s*=\s*'Encounter'/);
   assert.match(migration, /column_name\s*=\s*'client'/);
   assert.doesNotMatch(migration, /set encounter_id=coalesce\(encounter_id,"Encounter"\)/);
+  for (const optionalClaimField of ["practice_entity_id", "provider_location_id", "insurance_policy_id", "source_encounter_id"]) {
+    assert.ok(migration.includes(`to_jsonb(pc)->>'${optionalClaimField}'`), `Missing null-safe claim source for ${optionalClaimField}`);
+  }
   assert.match(migration, /from public\.professional_claims pc where pc\.id=cs\.claim_id/);
 });
 

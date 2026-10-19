@@ -68,10 +68,10 @@ do $$ begin
 end $$;
 
 update public.claim_submissions cs
-set practice_entity_id=coalesce(cs.practice_entity_id,pc.practice_entity_id),
-    provider_location_id=coalesce(cs.provider_location_id,pc.provider_location_id),
-    insurance_policy_id=coalesce(cs.insurance_policy_id,pc.insurance_policy_id),
-    encounter_id=coalesce(cs.encounter_id,pc.source_encounter_id),
+set practice_entity_id=coalesce(cs.practice_entity_id,(to_jsonb(pc)->>'practice_entity_id')::uuid),
+    provider_location_id=coalesce(cs.provider_location_id,(to_jsonb(pc)->>'provider_location_id')::uuid),
+    insurance_policy_id=coalesce(cs.insurance_policy_id,(to_jsonb(pc)->>'insurance_policy_id')::uuid),
+    encounter_id=coalesce(cs.encounter_id,(to_jsonb(pc)->>'source_encounter_id')::uuid),
     client_id=coalesce(cs.client_id,pc.client_id)
 from public.professional_claims pc where pc.id=cs.claim_id;
 
