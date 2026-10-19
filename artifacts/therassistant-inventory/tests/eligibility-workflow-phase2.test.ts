@@ -8,6 +8,8 @@ import {
 
 test("synthetic demo eligibility is never treated as verified coverage", () => {
   assert.equal(isVerifiedEligibilitySource("synthetic_demo_270_271"), false);
+  assert.equal(isVerifiedEligibilitySource("availity_demo_270_271"), false);
+  assert.equal(isVerifiedEligibilitySource("availity_mock_coverages"), false);
   assert.equal(isVerifiedEligibilitySource("manual_payer_portal"), true);
   assert.equal(isVerifiedEligibilitySource("manual_payer_phone"), true);
   assert.equal(isVerifiedEligibilitySource("clearinghouse_271"), true);

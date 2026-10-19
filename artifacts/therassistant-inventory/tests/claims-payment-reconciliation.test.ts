@@ -19,6 +19,10 @@ const reportsPage = readFileSync(
   join(here, "../src/pages/ReportsPage.tsx"),
   "utf8",
 );
+const postedPaymentSummary = readFileSync(
+  join(here, "../src/domains/payments/posted-payment-summary.ts"),
+  "utf8",
+);
 
 test("configured credentialing CARCs all route to automatic write-off", () => {
   for (const carc of ["147","170","171","172","206","207","208","242","243","279"]) {
@@ -62,8 +66,8 @@ test("archived 837P retrieval verifies stored bytes before any regeneration", ()
 test("management reports exclude unreconciled claims and reversed payments from operational totals", () => {
   assert.match(reportsPage, /missingBalanceClaims/);
   assert.match(reportsPage, /reconciledClaims/);
-  assert.match(reportsPage, /\["posted", "partially_applied"\]/);
-  assert.match(reportsPage, /\["reversed", "voided"\]/);
+  assert.match(reportsPage, /summarizePostedPayments/);
+  assert.match(postedPaymentSummary, /\["posted", "partially_applied"\]/);
   assert.match(reportsPage, /Excluded from A\/R denominator/);
   assert.match(reportsPage, /91\+ days from DOS/);
 });

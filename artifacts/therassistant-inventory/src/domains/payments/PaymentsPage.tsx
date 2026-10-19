@@ -16,6 +16,7 @@ import {
   type VarianceWorkspaceRow,
 } from "../ar/repository";
 import { resolvePostingWorkContext } from "./posting-work-context";
+import { summarizePostedPayments } from "./posted-payment-summary";
 import { allocateExistingPayment } from "./payment-allocation";
 import {
   AllocatePaymentDrawer,
@@ -125,8 +126,8 @@ export function PaymentsPage() {
         ? unappliedPayments
         : [];
   const paymentDetailIndex = paymentDetail ? paymentQueue.findIndex((row) => row.id === paymentDetail.id) : -1;
-  const postedTotalCents = useMemo(
-    () => (data?.payments ?? []).reduce((sum, payment) => sum + Number(payment.amount_cents ?? 0), 0),
+  const postedSummary = useMemo(
+    () => summarizePostedPayments(data?.payments ?? []),
     [data],
   );
   const unappliedTotalCents = useMemo(
@@ -290,7 +291,7 @@ export function PaymentsPage() {
     </div>
 
     {!loading && data && <div className="thera-metric-grid four" style={{ marginBottom: 14 }}>
-      <div className="thera-metric-card"><div className="thera-metric-label">Posted Payments</div><div className="thera-metric-value">{money(postedTotalCents)}</div><div className="thera-muted">{data.payments.length} payment{data.payments.length === 1 ? "" : "s"}</div></div>
+      <div className="thera-metric-card"><div className="thera-metric-label">Posted Payments</div><div className="thera-metric-value">{money(postedSummary.totalCents)}</div><div className="thera-muted">{postedSummary.count} posted payment{postedSummary.count === 1 ? "" : "s"}</div></div>
       <div className="thera-metric-card"><div className="thera-metric-label">Unapplied</div><div className="thera-metric-value">{money(unappliedTotalCents)}</div><div className="thera-muted">{unappliedPayments.length} item{unappliedPayments.length === 1 ? "" : "s"} to allocate</div></div>
       <div className="thera-metric-card"><div className="thera-metric-label">Underpayments</div><div className="thera-metric-value">{money(underpaymentTotalCents)}</div><div className="thera-muted">{exceptionData?.variances.length ?? 0} variance{(exceptionData?.variances.length ?? 0) === 1 ? "" : "s"}</div></div>
       <div className="thera-metric-card"><div className="thera-metric-label">Recoupments / Refunds</div><div className="thera-metric-value">{money(recoveryTotalCents)}</div><div className="thera-muted">{exceptionData?.recovery.length ?? 0} open item{(exceptionData?.recovery.length ?? 0) === 1 ? "" : "s"}</div></div>
