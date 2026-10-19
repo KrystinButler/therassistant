@@ -30,6 +30,14 @@ export function summarizePaymentBalance(status: unknown, amountCents: number, al
   };
 }
 
+/** Financial receipts exclude reversals and voids, which remain visible in history. */
+export function totalPostedPayments(payments: ReadonlyArray<Record<string, unknown>>) {
+  return payments.reduce((total, payment) =>
+    ["reversed", "voided"].includes(String(payment.payment_status ?? ""))
+      ? total
+      : total + Number(payment.amount_cents ?? 0), 0);
+}
+
 export function capAllocationToOpenBalance(requestedCents: number, openBalanceCents: number) {
   if (!Number.isFinite(requestedCents) || requestedCents < 0) throw new Error("Requested allocation cannot be negative.");
   if (!Number.isFinite(openBalanceCents) || openBalanceCents < 0) throw new Error("Claim open balance cannot be negative.");

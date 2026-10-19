@@ -16,6 +16,7 @@ import {
   type VarianceWorkspaceRow,
 } from "../ar/repository";
 import { resolvePostingWorkContext } from "./posting-work-context";
+import { totalPostedPayments } from "./operations";
 import { allocateExistingPayment } from "./payment-allocation";
 import {
   AllocatePaymentDrawer,
@@ -125,10 +126,7 @@ export function PaymentsPage() {
         ? unappliedPayments
         : [];
   const paymentDetailIndex = paymentDetail ? paymentQueue.findIndex((row) => row.id === paymentDetail.id) : -1;
-  const postedTotalCents = useMemo(
-    () => (data?.payments ?? []).reduce((sum, payment) => sum + Number(payment.amount_cents ?? 0), 0),
-    [data],
-  );
+  const postedTotalCents = useMemo(() => totalPostedPayments(data?.payments ?? []), [data]);
   const unappliedTotalCents = useMemo(
     () => unappliedPayments.reduce((sum, payment) => sum + Number(payment.unappliedCents ?? 0), 0),
     [unappliedPayments],

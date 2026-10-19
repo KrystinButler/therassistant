@@ -29,6 +29,22 @@ export type BillingHubSummary = {
   recovery: BillingHubMetric;
 };
 
+/** Route each summary directly to its owning queue, including the active subtab. */
+export function billingMetricHref(metric: keyof BillingHubSummary): string {
+  const routes: Record<keyof BillingHubSummary, string> = {
+    readyCharges: "/billing/charges?tab=unbatched",
+    claimsNeedAction: "/claims",
+    unappliedPayments: "/payments?tab=unapplied",
+    insuranceAr: "/claims",
+    patientAr: "/payments?tab=patient",
+    denials: "/denials",
+    appeals: "/denials?tab=appeals",
+    underpayments: "/payments?tab=underpayments",
+    recovery: "/payments?tab=recovery",
+  };
+  return routes[metric];
+}
+
 function sum(rows: MoneyRow[], field: string) {
   return rows.reduce((total, row) => total + Number(row[field] ?? 0), 0);
 }
