@@ -108,6 +108,9 @@ begin
   begin
     perform public.sign_encounter_note(v_encounter,v_note,v_provider,'Unauthorized signature');
   exception when insufficient_privilege then v_denied := true;
+  when raise_exception then
+    if sqlerrm <> 'The clinician login email must match the provider email before accounts can be linked' then raise; end if;
+    v_denied := true;
   end;
   if not v_denied then raise exception 'Non-clinician signed a clinical note'; end if;
   v_denied := false;
