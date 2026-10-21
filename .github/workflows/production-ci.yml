@@ -131,6 +131,103 @@ jobs:
           sed -i 's/drop table public\.coding_guidance_sheet_rows;/drop table if exists public.coding_guidance_sheet_rows;/' \
             supabase/migrations/20260929235306_remove_obsolete_ehr_authorization_mailroom_staging.sql
 
+          # Production history contained legacy columns and historical rows that were
+          # created outside the reproducible migration chain. Clean CI has none of
+          # those rows, so neutralize only the legacy data backfills in the disposable
+          # checkout while preserving all schema, constraint, RPC, policy, and index work.
+          python - <<'PY'
+          from pathlib import Path
+
+          def replace_exact(path_name, replacements, label):
+              path = Path(path_name)
+              sql = path.read_text()
+              for old, replacement in replacements:
+                  if old not in sql:
+                      raise SystemExit(f"Expected {label} compatibility block was not found")
+                  sql = sql.replace(old, replacement, 1)
+              path.write_text(sql)
+
+          def skip_historical_backfills(path_name, marker, label):
+              path = Path(path_name)
+              sql = path.read_text()
+              if sql.count(marker) != 1:
+                  raise SystemExit(f"Expected exactly one {label} backfill marker")
+              prefix, _ = sql.split(marker, 1)
+              path.write_text(
+                  prefix
+                  + marker
+                  + "\n-- Isolated clean replay has no historical rows to backfill.\nselect 1;\n"
+              )
+
+          # These three migrations are exact recoveries from the live production
+          # migration ledger. Their schema work must replay unchanged, but their
+          # trailing data backfills reference legacy columns/state that existed in
+          # production at that point in history and do not exist in a clean database.
+          skip_historical_backfills(
+              "supabase/migrations/20261010021609_strengthen_ehr_revenue_lineage.sql",
+              "-- Backfill lineage where it is already unambiguous from existing encounter data.",
+              "recovered EHR revenue lineage",
+          )
+          skip_historical_backfills(
+              "supabase/migrations/20261010021637_strengthen_x12_snapshot_lineage.sql",
+              "-- Backfill payment allocation lineage from claims.",
+              "recovered X12 snapshot lineage",
+          )
+          skip_historical_backfills(
+              "supabase/migrations/20261010021915_strengthen_edi_837_835_lineage.sql",
+              "-- Backfill claim snapshot context from encounter/location where unambiguous",
+              "recovered EDI lineage",
+          )
+
+          replace_exact(
+              "supabase/migrations/20261010022215_harden_audit_and_edi_submission_lineage.sql",
+              [
+                  (
+                      '''update public.claim_submissions
+          set encounter_id=coalesce(encounter_id,"Encounter"), client_id=coalesce(client_id,client)
+          where (encounter_id is null and "Encounter" is not null) or (client_id is null and client is not null);''',
+                      '''-- Isolated clean replay has no historical claim_submissions rows to backfill.
+          select 1;''',
+                  ),
+                  (
+                      '''update public.claim_submissions cs
+          set practice_entity_id=coalesce(cs.practice_entity_id,pc.practice_entity_id),
+              provider_location_id=coalesce(cs.provider_location_id,pc.provider_location_id),
+              insurance_policy_id=coalesce(cs.insurance_policy_id,pc.insurance_policy_id),
+              encounter_id=coalesce(cs.encounter_id,pc.source_encounter_id),
+              client_id=coalesce(cs.client_id,pc.client_id)
+          from public.professional_claims pc where pc.id=cs.claim_id;''',
+                      '''-- Isolated clean replay has no historical claim_submissions rows to enrich.
+          select 1;''',
+                  ),
+              ],
+              "claim_submissions legacy backfill",
+          )
+
+          operational_path = Path("supabase/migrations/20261010022301_normalize_operational_fk_names_and_secure_edi.sql")
+          operational_sql = operational_path.read_text()
+          operational_updates = [
+              'update public.encounters set provider_location_id=coalesce(provider_location_id,location), tenant_user_id=coalesce(tenant_user_id,"User_id");',
+              'update public.clinical_note_signatures set encounter_id=coalesce(encounter_id,"Encounter_Id"), tenant_user_id=coalesce(tenant_user_id,"User_id");',
+              'update public.client_diagnoses set encounter_id=coalesce(encounter_id,"Encounter_Id"), treatment_plan_id=coalesce(treatment_plan_id,plan);',
+              'update public.eligibility_benefits set insurance_policy_id=coalesce(insurance_policy_id,"Insurance");',
+              'update public.denials set encounter_id=coalesce(encounter_id,"Encounter_Id");',
+              'update public.encounter_diagnoses ed set client_id=coalesce(ed.client_id,ed."Patient",e.client_id) from public.encounters e where e.id=ed.encounter_id and ed.client_id is null;',
+              'update public.credentialing_application_events set provider_id=coalesce(provider_id,"Provder_Id");',
+              'update public.claim_status_history set appointment_id=coalesce(appointment_id,appointment), encounter_id=coalesce(encounter_id,"Encounter"), client_id=coalesce(client_id,"Client");',
+              'update public.claim_diagnoses set appointment_id=coalesce(appointment_id,"Appointment");',
+          ]
+          for statement in operational_updates:
+              if operational_sql.count(statement) != 1:
+                  raise SystemExit(f"Expected exactly one operational legacy backfill statement: {statement}")
+              operational_sql = operational_sql.replace(
+                  statement,
+                  '-- Isolated clean replay has no historical row to normalize.\nselect 1;',
+                  1,
+              )
+          operational_path.write_text(operational_sql)
+          PY
+
           pnpm dlx supabase@2.117.0 start
           pnpm dlx supabase@2.117.0 status -o env > /tmp/supabase.env
           set -a
