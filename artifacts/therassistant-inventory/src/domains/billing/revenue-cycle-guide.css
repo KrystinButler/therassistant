@@ -1,0 +1,18 @@
+.revenue-cycle-guide { margin-bottom: 18px; }
+.revenue-cycle-guide summary { cursor: pointer; font-weight: 700; color: var(--thera-navy); }
+.revenue-cycle-guide-stages { display: flex; flex-wrap: wrap; gap: 8px; margin: 14px 0; }
+.revenue-cycle-guide-stages button {
+  border: 1px solid var(--thera-border); border-radius: 8px; padding: 9px 12px;
+  background: var(--thera-paper); color: var(--thera-navy); font: inherit;
+  font-size: 13px; cursor: pointer; min-height: 44px;
+}
+.revenue-cycle-guide-stages button[aria-pressed="true"] {
+  background: var(--thera-navy); color: white; border-color: var(--thera-navy); font-weight: 700;
+}
+.revenue-cycle-guide button:focus-visible, .revenue-cycle-guide summary:focus-visible {
+  outline: 3px solid var(--thera-navy); outline-offset: 3px;
+}
+.revenue-cycle-guide-detail { border-top: 1px solid var(--thera-border); padding-top: 10px; }
+.revenue-cycle-guide .revenue-cycle-guide-detail p { font-size: 14px; line-height: 1.6; }
+.revenue-cycle-guide-detail strong { color: var(--thera-navy); }
+.revenue-cycle-guide .revenue-cycle-guide-note { margin-bottom: 0; }
