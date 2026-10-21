@@ -9,6 +9,7 @@ import { isRecoveryAdjustment } from "../ar/variance";
 import { summarizePaymentBalance } from "../payments/operations";
 import { partitionAdjudicatedBalance } from "../payments/workflow";
 import { buildBillingHubSummary, isActiveArClaimStatus } from "./hub";
+import { RevenueCycleGuide } from "./RevenueCycleGuide";
 
 type DataRow = Row & { id: string };
 type OpenClaimRow = DataRow & { openBalanceCents: number };
@@ -145,6 +146,8 @@ export function BillingHubPage() {
         </div>
         <Link className="thera-action" href="/billing/charges">Open Charges</Link>
       </div>
+
+      <RevenueCycleGuide />
 
       {loading && <div className="thera-state">Loading billing work...</div>}
       {error && <div className="thera-state error">{error}</div>}
