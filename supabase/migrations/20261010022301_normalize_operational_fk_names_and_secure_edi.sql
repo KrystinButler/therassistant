@@ -5,24 +5,26 @@ create policy "tenant_edi_connections tenant select" on public.tenant_edi_connec
 create policy "tenant_edi_connections tenant insert" on public.tenant_edi_connections for insert to authenticated with check (private.has_tenant_admin_access(tenant_id));
 create policy "tenant_edi_connections tenant update" on public.tenant_edi_connections for update to authenticated using (private.has_tenant_admin_access(tenant_id)) with check (private.has_tenant_admin_access(tenant_id));
 
+-- JSON access preserves optional legacy import fields without making clean
+-- installs depend on columns that were never part of the foundation schema.
 alter table public.encounters add column if not exists provider_location_id uuid, add column if not exists tenant_user_id uuid;
-update public.encounters set provider_location_id=coalesce(provider_location_id,location), tenant_user_id=coalesce(tenant_user_id,"User_id");
+update public.encounters set provider_location_id=coalesce(provider_location_id,(to_jsonb(encounters)->>'location')::uuid), tenant_user_id=coalesce(tenant_user_id,(to_jsonb(encounters)->>'User_id')::uuid);
 alter table public.clinical_note_signatures add column if not exists encounter_id uuid, add column if not exists tenant_user_id uuid;
-update public.clinical_note_signatures set encounter_id=coalesce(encounter_id,"Encounter_Id"), tenant_user_id=coalesce(tenant_user_id,"User_id");
+update public.clinical_note_signatures set encounter_id=coalesce(encounter_id,(to_jsonb(clinical_note_signatures)->>'Encounter_Id')::uuid), tenant_user_id=coalesce(tenant_user_id,(to_jsonb(clinical_note_signatures)->>'User_id')::uuid);
 alter table public.client_diagnoses add column if not exists encounter_id uuid, add column if not exists treatment_plan_id uuid;
-update public.client_diagnoses set encounter_id=coalesce(encounter_id,"Encounter_Id"), treatment_plan_id=coalesce(treatment_plan_id,plan);
+update public.client_diagnoses set encounter_id=coalesce(encounter_id,(to_jsonb(client_diagnoses)->>'Encounter_Id')::uuid), treatment_plan_id=coalesce(treatment_plan_id,(to_jsonb(client_diagnoses)->>'plan')::uuid);
 alter table public.eligibility_benefits add column if not exists insurance_policy_id uuid;
-update public.eligibility_benefits set insurance_policy_id=coalesce(insurance_policy_id,"Insurance");
+update public.eligibility_benefits set insurance_policy_id=coalesce(insurance_policy_id,(to_jsonb(eligibility_benefits)->>'Insurance')::uuid);
 alter table public.denials add column if not exists encounter_id uuid;
-update public.denials set encounter_id=coalesce(encounter_id,"Encounter_Id");
+update public.denials set encounter_id=coalesce(encounter_id,(to_jsonb(denials)->>'Encounter_Id')::uuid);
 alter table public.encounter_diagnoses add column if not exists client_id uuid;
-update public.encounter_diagnoses ed set client_id=coalesce(ed.client_id,ed."Patient",e.client_id) from public.encounters e where e.id=ed.encounter_id and ed.client_id is null;
+update public.encounter_diagnoses ed set client_id=coalesce(ed.client_id,(to_jsonb(ed)->>'Patient')::uuid,e.client_id) from public.encounters e where e.id=ed.encounter_id and ed.client_id is null;
 alter table public.credentialing_application_events add column if not exists provider_id uuid;
-update public.credentialing_application_events set provider_id=coalesce(provider_id,"Provder_Id");
+update public.credentialing_application_events set provider_id=coalesce(provider_id,(to_jsonb(credentialing_application_events)->>'Provder_Id')::uuid);
 alter table public.claim_status_history add column if not exists appointment_id uuid, add column if not exists encounter_id uuid, add column if not exists client_id uuid;
-update public.claim_status_history set appointment_id=coalesce(appointment_id,appointment), encounter_id=coalesce(encounter_id,"Encounter"), client_id=coalesce(client_id,"Client");
+update public.claim_status_history set appointment_id=coalesce(appointment_id,(to_jsonb(claim_status_history)->>'appointment')::uuid), encounter_id=coalesce(encounter_id,(to_jsonb(claim_status_history)->>'Encounter')::uuid), client_id=coalesce(client_id,(to_jsonb(claim_status_history)->>'Client')::uuid);
 alter table public.claim_diagnoses add column if not exists appointment_id uuid;
-update public.claim_diagnoses set appointment_id=coalesce(appointment_id,"Appointment");
+update public.claim_diagnoses set appointment_id=coalesce(appointment_id,(to_jsonb(claim_diagnoses)->>'Appointment')::uuid);
 
 do $$ begin
   if not exists(select 1 from pg_constraint where conname='encounters_provider_location_id_fkey') then alter table public.encounters add constraint encounters_provider_location_id_fkey foreign key(provider_location_id) references public.provider_locations(id) on delete set null; end if;

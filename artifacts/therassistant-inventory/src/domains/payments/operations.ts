@@ -30,6 +30,14 @@ export function summarizePaymentBalance(status: unknown, amountCents: number, al
   };
 }
 
+/** Only settled or unallocated receipts count; pending, refunded and voided rows remain in history. */
+export function totalPostedPayments(payments: ReadonlyArray<Record<string, unknown>>) {
+  return payments.reduce((total, payment) =>
+    ["posted", "partially_applied", "unapplied"].includes(String(payment.payment_status ?? ""))
+      ? total + Number(payment.amount_cents ?? 0)
+      : total, 0);
+}
+
 export function capAllocationToOpenBalance(requestedCents: number, openBalanceCents: number) {
   if (!Number.isFinite(requestedCents) || requestedCents < 0) throw new Error("Requested allocation cannot be negative.");
   if (!Number.isFinite(openBalanceCents) || openBalanceCents < 0) throw new Error("Claim open balance cannot be negative.");

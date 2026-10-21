@@ -1,7 +1,16 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { buildBillingHubSummary } from "../src/domains/billing/hub";
+import { buildBillingHubSummary, billingMetricHref } from "../src/domains/billing/hub";
+
+test("billing summary routes to the queue that owns each work item", () => {
+  assert.equal(billingMetricHref("readyCharges"), "/billing/charges?tab=unbatched");
+  assert.equal(billingMetricHref("unappliedPayments"), "/payments?tab=unapplied");
+  assert.equal(billingMetricHref("patientAr"), "/payments?tab=patient");
+  assert.equal(billingMetricHref("appeals"), "/denials?tab=appeals");
+  assert.equal(billingMetricHref("underpayments"), "/payments?tab=underpayments");
+  assert.equal(billingMetricHref("recovery"), "/payments?tab=recovery");
+});
 
 test("billing hub summarizes actionable financial work by canonical owner", () => {
   const summary = buildBillingHubSummary({

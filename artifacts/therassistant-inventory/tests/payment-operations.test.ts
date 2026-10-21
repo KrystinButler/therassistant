@@ -5,12 +5,25 @@ import {
   buildAllocationPlan,
   buildPaymentReversal,
   calculateUnapplied,
+  totalPostedPayments,
   validatePaymentDraft,
 } from "../src/domains/payments/operations";
 
 test("unapplied balance equals payment less allocations", () => {
   assert.equal(calculateUnapplied(10000, [6000, 2500]), 1500);
   assert.equal(calculateUnapplied(10000, [10000]), 0);
+});
+
+test("posted payments include only posted, partially applied, and unapplied receipts", () => {
+  assert.equal(totalPostedPayments([
+    { amount_cents: 10000, payment_status: "posted" },
+    { amount_cents: 5000, payment_status: "partially_applied" },
+    { amount_cents: 3000, payment_status: "unapplied" },
+    { amount_cents: 7000, payment_status: "reversed" },
+    { amount_cents: 2500, payment_status: "voided" },
+    { amount_cents: 1500, payment_status: "pending" },
+    { amount_cents: 4000, payment_status: "refunded" },
+  ]), 18000);
 });
 
 test("allocation plan blocks over-allocation and derives payment status", () => {

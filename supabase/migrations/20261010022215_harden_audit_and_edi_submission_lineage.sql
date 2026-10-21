@@ -41,9 +41,23 @@ alter table public.claim_submissions
   add column if not exists receiver_identifier text,
   add column if not exists x12_snapshot jsonb not null default '{}'::jsonb;
 
-update public.claim_submissions
-set encounter_id=coalesce(encounter_id,"Encounter"), client_id=coalesce(client_id,client)
-where (encounter_id is null and "Encounter" is not null) or (client_id is null and client is not null);
+-- These legacy import columns are not part of a clean schema replay. Preserve
+-- their data when present without referencing missing columns on new installs.
+do $$
+begin
+  if exists (
+    select 1 from information_schema.columns
+    where table_schema='public' and table_name='claim_submissions' and column_name='Encounter'
+  ) then
+    execute 'update public.claim_submissions set encounter_id="Encounter" where encounter_id is null and "Encounter" is not null';
+  end if;
+  if exists (
+    select 1 from information_schema.columns
+    where table_schema='public' and table_name='claim_submissions' and column_name='client'
+  ) then
+    execute 'update public.claim_submissions set client_id=client where client_id is null and client is not null';
+  end if;
+end $$;
 
 do $$ begin
   if not exists(select 1 from pg_constraint where conname='claim_submissions_encounter_id_fkey') then alter table public.claim_submissions add constraint claim_submissions_encounter_id_fkey foreign key(encounter_id) references public.encounters(id) on delete set null; end if;
@@ -54,10 +68,10 @@ do $$ begin
 end $$;
 
 update public.claim_submissions cs
-set practice_entity_id=coalesce(cs.practice_entity_id,pc.practice_entity_id),
-    provider_location_id=coalesce(cs.provider_location_id,pc.provider_location_id),
-    insurance_policy_id=coalesce(cs.insurance_policy_id,pc.insurance_policy_id),
-    encounter_id=coalesce(cs.encounter_id,pc.source_encounter_id),
+set practice_entity_id=coalesce(cs.practice_entity_id,(to_jsonb(pc)->>'practice_entity_id')::uuid),
+    provider_location_id=coalesce(cs.provider_location_id,(to_jsonb(pc)->>'provider_location_id')::uuid),
+    insurance_policy_id=coalesce(cs.insurance_policy_id,(to_jsonb(pc)->>'insurance_policy_id')::uuid),
+    encounter_id=coalesce(cs.encounter_id,(to_jsonb(pc)->>'source_encounter_id')::uuid),
     client_id=coalesce(cs.client_id,pc.client_id)
 from public.professional_claims pc where pc.id=cs.claim_id;
 
