@@ -122,14 +122,63 @@ begin
   if not v_denied or not exists(select 1 from public.clinical_notes where id=v_unsigned_note and note_status='draft') then
     raise exception 'Direct signature write bypassed clinician authorization';
   end if;
+  -- Practice admin disables a clinician link; all clinician bypasses fail.
+  perform set_config('request.jwt.claim.sub',current_setting('test.clinical_staff_user'),true);
+  perform public.admin_set_provider_link_status(v_provider,'inactive');
+  if not exists(select 1 from public.provider_user_links
+      where provider_id=v_provider and status='inactive') then
+    raise exception 'Admin could not disable clinician link';
+  end if;
+
   perform set_config('request.jwt.claim.sub',current_setting('test.clinical_provider_user'),true);
-  update public.provider_user_links set status='inactive' where provider_id=v_provider and user_id=auth.uid();
   v_denied := false;
   begin
     perform public.sign_encounter_note(v_encounter,v_note,v_provider,'Inactive provider link');
   exception when insufficient_privilege then v_denied := true;
   end;
   if not v_denied then raise exception 'Inactive provider link authorized signing'; end if;
+
+  v_denied := false;
+  begin
+    perform public.link_current_user_to_provider(v_provider);
+  exception when insufficient_privilege then v_denied := true;
+  end;
+  if not v_denied then raise exception 'Self-link reactivated a revoked link'; end if;
+
+  v_denied := false;
+  begin
+    update public.provider_user_links set status='active'
+    where provider_id=v_provider and user_id=auth.uid();
+  exception when insufficient_privilege then v_denied := true;
+  end;
+  if not v_denied then raise exception 'Direct clinician UPDATE reactivated a revoked link'; end if;
+
+  v_denied := false;
+  begin
+    delete from public.provider_user_links
+    where provider_id=v_provider and user_id=auth.uid();
+  exception when insufficient_privilege then v_denied := true;
+  end;
+  if not v_denied then raise exception 'Clinician deleted a revoked link'; end if;
+
+  v_denied := false;
+  begin
+    perform public.admin_set_provider_link_status(v_provider,'active');
+  exception when insufficient_privilege then v_denied := true;
+  end;
+  if not v_denied then raise exception 'Clinician invoked admin reactivation'; end if;
+
+  perform set_config('request.jwt.claim.sub',current_setting('test.clinical_staff_user'),true);
+  perform public.admin_set_provider_link_status(v_provider,'active');
+  if not exists(select 1 from public.provider_user_links
+      where provider_id=v_provider and status='active') then
+    raise exception 'Admin reactivation failed';
+  end if;
+  perform set_config('request.jwt.claim.sub',current_setting('test.clinical_provider_user'),true);
+  v_result := public.sign_encounter_note(v_encounter,v_note,v_provider,'Authorized signing retry');
+  if (v_result->>'signed_at')::timestamptz is distinct from v_first_signed_at then
+    raise exception 'Reactivation did not restore authorized signing';
+  end if;
 end;
 $test$;
 rollback;
