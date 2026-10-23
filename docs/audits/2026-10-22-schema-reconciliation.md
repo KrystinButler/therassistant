@@ -19,27 +19,10 @@ Recovered 41 absent production migration files, consolidated 13 alternate local 
 - Every literal application RPC reference exists in production. Live catalog queries confirmed missing objects before repair and restored objects afterward.
 - Post-repair security advisor raised no new schema findings. Existing disabled leaked-password protection remains outside this schema repair.
 
-## Remaining differences requiring workflow review
+## Follow-up reconciliation
 
-Production retains 24 optional legacy compatibility columns that the clean migration chain does not create. These were preserved; removing them requires checking data and external consumers. Three payer catalog progress columns differ in the embedded comparison because the scheduler migration was intentionally omitted from that replay.
+Migration 20261023052546 was applied live after workflow review. It aligns 18 optional references with the canonical source schema, allowing unresolved ERA imports, appointment-free charges and drafts that are validated before submission. Existing FK and RLS checks remain in force. A synthetic isolated SQL fixture reproduces the old ERA NOT NULL failure and passes after repair, while confirming invalid non-null references are rejected. No synthetic rows were written to production.
 
-Production also enforces NOT NULL on these 18 columns where replay allows NULL. Existing constraints were preserved pending workflow-specific review; zero total schema drift is not claimed:
+The 24 existing nullable legacy UUID aliases and their foreign keys are now represented in the migration chain without removing or copying existing values. This makes the compatibility schema reproducible while keeping canonical application columns authoritative.
 
-- `appointments.provider_id`
-- `charge_capture_items.appointment_id`
-- `charge_capture_items.clinical_note_id`
-- `charge_capture_items.provider_id`
-- `claim_submissions.batch_id`
-- `denials.claim_id`
-- `denials.client_id`
-- `denials.payer_id`
-- `document_history.actor_id`
-- `encounter_service_lines.place_of_service_code`
-- `encounters.provider_id`
-- `era_claims.claim_id`
-- `era_claims.client_id`
-- `era_files.payer_id`
-- `professional_claims.billing_provider_id`
-- `professional_claims.charge_id`
-- `professional_claims.payer_id`
-- `professional_claims.rendering_provider_id`
+The source baseline now contains all 232 applied production versions. Publication was corrected to explicitly delete obsolete renamed paths; the initial remote tree retained nine aliases and CI correctly rejected them. Fresh comparison of public column names, types, nullability and defaults shows zero differences after accounting for the scheduler-owned catalog progress fields in the embedded replay. This does not imply that a complete schema-only dump, permissions, extensions and runtime behavior have all been proven equivalent; full Supabase CI remains the final replay gate.

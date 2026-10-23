@@ -925,6 +925,10 @@
     {
       "version": "20261023051120",
       "name": "restore_missing_production_schema_objects"
+    },
+    {
+      "version": "20261023052546",
+      "name": "reconcile_optional_workflow_links_and_legacy_schema"
     }
   ]
 }
