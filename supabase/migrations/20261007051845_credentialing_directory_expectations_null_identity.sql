@@ -1,0 +1,4 @@
+-- Recovered from production migration history; already applied.
+ALTER TABLE public.credentialing_directory_expectations DROP CONSTRAINT IF EXISTS credentialing_directory_expec_tenant_id_provider_id_payer_i_key;
+ALTER TABLE public.credentialing_directory_expectations DROP CONSTRAINT IF EXISTS credentialing_directory_expectations_identity_uniq;
+ALTER TABLE public.credentialing_directory_expectations ADD CONSTRAINT credentialing_directory_expectations_identity_uniq UNIQUE NULLS NOT DISTINCT (tenant_id, provider_id, payer_id, source_key);

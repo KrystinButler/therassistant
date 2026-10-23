@@ -23,7 +23,7 @@ test("telemetry builds a rolling 90-day PHQ-9 GAD-7 and PRSDS series", () => {
 
 test("patient check-in captures PRSDS and the migration syncs submitted scores into outcome telemetry", () => {
   const portal = read("../src/domains/portal/PatientCheckInPage.tsx");
-  const migration = read("../../../supabase/migrations/20261010203000_cross_system_clinical_engine.sql");
+  const migration = ["20261010201535_cross_system_clinical_engine_core.sql", "20261010201546_cross_system_prsds_sync.sql", "20261010201558_cross_system_coding_decisions.sql", "20261010201637_cross_system_coding_rpc_security.sql"].map(name => read(`../../../supabase/migrations/${name}`)).join("\n");
   assert.match(portal, /somatic_distress_score/);
   assert.match(portal, /Physical \/ somatic distress/i);
   assert.match(migration, /sync_previsit_prsds/i);
