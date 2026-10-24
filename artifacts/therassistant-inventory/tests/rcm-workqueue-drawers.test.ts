@@ -9,6 +9,7 @@ function source(path: string) {
 const claimsPage = source("../src/domains/claims/ClaimsPage.tsx");
 const claimDrawer = source("../src/domains/claims/claim-work-drawer.tsx");
 const claimsQueueRepository = source("../src/domains/claims/claims-queue-repository.ts");
+const claimQueueProjection = source("../src/domains/claims/claim-queue-projection.ts");
 const rejectionsPage = source("../src/domains/claims/RejectionsPage.tsx");
 const rejectionDrawer = source("../src/domains/claims/rejection-work-drawer.tsx");
 const denialsPage = source("../src/domains/ar/DenialsPage.tsx");
@@ -47,7 +48,8 @@ test("Rejections use field-level clearinghouse correction before resubmission", 
   assert.match(rejectionDrawer, /createBatch/);
   assert.doesNotMatch(rejectionDrawer, /submitBatch/);
   assert.match(rejectionDrawer, /ready in a new 837P batch for resubmission/i);
-  assert.match(claimsQueueRepository, /responseIsCurrent/);
+  assert.match(claimsQueueRepository, /projectClaimQueueRows/);
+  assert.match(claimQueueProjection, /responseIsCurrent/);
 });
 
 test("Denials drawer supports correction and structured follow-up", () => {
