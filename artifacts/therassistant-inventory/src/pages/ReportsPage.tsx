@@ -2,6 +2,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import { Link } from "wouter";
 import { money } from "../lib/format";
 import { tenantSelect } from "../lib/tenant-data-client";
+import { summarizePostedPayments } from "../domains/payments/posted-payment-summary";
 
 type Row = Record<string, any>;
 type LoadState<T> = { data: T | null; loading: boolean; error: string | null };
@@ -84,14 +85,7 @@ export function ReportsPage() {
   const openWork = (data?.work ?? []).filter((item) =>
     !["completed", "cancelled"].includes(String(item.workqueue_status ?? "")),
   ).length;
-  const postedPaymentRows = (data?.payments ?? []).filter((payment) =>
-    ["posted", "partially_applied"].includes(String(payment.payment_status ?? ""))
-    && Boolean(payment.posted_at),
-  );
-  const postedPayments = postedPaymentRows.reduce(
-    (sum, payment) => sum + Number(payment.amount_cents ?? 0),
-    0,
-  );
+  const postedPayments = summarizePostedPayments(data?.payments ?? []).totalCents;
   const reversedPayments = (data?.payments ?? []).filter(
     (payment) => ["reversed", "voided"].includes(String(payment.payment_status ?? "")),
   ).length;

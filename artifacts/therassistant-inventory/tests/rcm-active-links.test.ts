@@ -31,11 +31,8 @@ test("approved dashboard routes to the canonical clinical and revenue-cycle scre
 
 test("Billing Hub routes every financial metric to a canonical owner", () => {
   for (const route of retiredRoutes) assert.doesNotMatch(billingHubSource, new RegExp(route.replaceAll("/", "\\/")));
-  assert.match(billingHubSource, /Insurance A\/R[\s\S]{0,100}href="\/claims"/);
-  assert.match(billingHubSource, /Patient A\/R[\s\S]{0,100}href="\/payments"/);
-  assert.match(billingHubSource, /Active Denials[\s\S]{0,100}href="\/denials"/);
-  assert.match(billingHubSource, /Active Appeals[\s\S]{0,100}href="\/denials"/);
-  assert.match(billingHubSource, /Underpayments[\s\S]{0,100}href="\/payments"/);
-  assert.match(billingHubSource, /Refunds \/ Recoupments[\s\S]{0,100}href="\/payments"/);
+  for (const metric of ["insuranceAr", "patientAr", "denials", "appeals", "underpayments", "recovery"]) {
+    assert.ok(billingHubSource.includes(`billingMetricHref("${metric}")`), metric);
+  }
   assert.doesNotMatch(billingHubSource, /837P Submission|A\/R & Denials/);
 });

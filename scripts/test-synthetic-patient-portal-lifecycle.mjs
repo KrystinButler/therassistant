@@ -142,6 +142,9 @@ const checkin = await rpc(patient.token, "portal_save_previsit_checkin", {
     visit_questions: {
       focus_today: "Synthetic lifecycle verification",
       feeling_since_last_visit: "stable",
+      // The patient explicitly defers screening to the provider; do not
+      // submit incomplete PHQ-9/GAD-7 answers as if they were completed.
+      screeners: { declined: true },
     },
     consents: {
       information_accurate: true,

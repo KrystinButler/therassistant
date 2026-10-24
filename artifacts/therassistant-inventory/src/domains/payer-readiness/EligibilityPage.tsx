@@ -12,6 +12,7 @@ import {
   type ManualEligibilityStatus,
 } from "../eligibility/repository";
 import { getEligibilityQueueData } from "./repository";
+import { isVerifiedEligibilitySource } from "../eligibility/workflow";
 
 type EligibilityRow = Awaited<ReturnType<typeof getEligibilityQueueData>>[number];
 
@@ -85,7 +86,7 @@ function percent(value: string) {
 
 function sourceLabel(value: string | null) {
   if (!value) return "Not checked";
-  if (value === "synthetic_demo_270_271") return "Legacy demo · not verified";
+  if (!isVerifiedEligibilitySource(value)) return "Demo response · not verified";
   if (value.startsWith("manual_")) {
     return `Manual · ${value.replace("manual_", "").replaceAll("_", " ")}`;
   }
