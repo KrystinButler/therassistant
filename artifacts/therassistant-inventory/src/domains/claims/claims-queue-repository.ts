@@ -1,55 +1,26 @@
 import { tenantInsert, tenantSelect, tenantUpdate, type Row } from "../../lib/tenant-data-client";
-import { getClaimsWorkspaceData, getClaimWorkData, type ClaimsWorkspaceRow } from "./workspace-repository";
+import { getClaimsWorkspaceData } from "./workspace-repository";
+import { projectClaimQueueRows, type ProjectedClaimQueueRow } from "./claim-queue-projection";
 
 type DataRow = Row & { id: string };
-
-export type ClaimsQueueRow = ClaimsWorkspaceRow & {
-  submittedAt: string | null;
-  hasPayerResponse: boolean;
-  deferred: boolean;
-  hasActiveDenial: boolean;
-};
-
-const resolvedDenialStatuses = new Set(["resolved", "resolved_writeoff", "closed", "overturned", "withdrawn"]);
+export type ClaimsQueueRow = ProjectedClaimQueueRow;
 
 export async function getClaimsQueueData(): Promise<ClaimsQueueRow[]> {
-  const data = await getClaimsWorkspaceData();
-  return Promise.all(data.claims.map(async (claim) => {
-    const work = await getClaimWorkData(claim.id);
-    const activeDenial = (work?.denials ?? []).some(
-      (row) => !resolvedDenialStatuses.has(String(row.denial_status ?? "").toLowerCase()),
-    );
-    const deferred = (work?.workItems ?? []).some(
-      (row) =>
-        row.workqueue_type === "claim_followup" &&
-        ["pending", "snoozed"].includes(String(row.workqueue_status ?? "")),
-    );
-    const submittedHistory = (work?.history ?? []).find((row) =>
-      ["submitted", "accepted"].includes(String(row.new_status ?? "")),
-    );
-    const submittedAt =
-      claim.submitted_at
-        ? String(claim.submitted_at)
-        : submittedHistory?.created_at
-          ? String(submittedHistory.created_at)
-          : null;
-    const latestResponse = work?.responses[0];
-    const responseAt = latestResponse?.created_at ? String(latestResponse.created_at) : null;
-    const responseIsCurrent = Boolean(latestResponse) && (
-      !submittedAt
-      || !responseAt
-      || new Date(responseAt).getTime() >= new Date(submittedAt).getTime()
-    );
-
-    return {
-      ...claim,
-      clearinghouseStatus: responseIsCurrent ? String(latestResponse?.response_status ?? "—") : "—",
-      submittedAt,
-      hasPayerResponse: latestResponse ? responseIsCurrent : Boolean(claim.payer_claim_number),
-      deferred,
-      hasActiveDenial: activeDenial,
-    };
-  }));
+  // All reads remain tenant-scoped. A single history request replaces one per claim.
+  const [data, history] = await Promise.all([
+    getClaimsWorkspaceData(),
+    tenantSelect<DataRow>("claim_status_history", {
+      new_status: "in.(submitted,accepted)",
+      order: "created_at.desc",
+    }),
+  ]);
+  return projectClaimQueueRows({
+    claims: data.claims,
+    responses: data.responses,
+    denials: data.denials,
+    workItems: data.workItems,
+    history,
+  });
 }
 
 async function activeFollowUp(claimId: string) {
