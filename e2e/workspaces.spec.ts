@@ -36,7 +36,7 @@ test("provider root opens the connected workflow home", async ({ page }) => {
   await expect(page.getByLabel("Practice summary")).toBeVisible();
 
   const nav = page.getByRole("navigation", { name: "Primary navigation" });
-  for (const label of ["Dashboard", "Appointments", "Clients", "Clinical Notes", "Charge Capture", "Claims", "Payments"]) {
+  for (const label of ["Today", "Appointments", "Patients", "Documentation", "Charge Capture", "Claims & Follow-Up", "Payments"]) {
     await expect(nav.getByRole("link", { name: label, exact: true })).toBeVisible();
   }
 });
@@ -48,7 +48,7 @@ test("Direct navigation exposes the revenue-cycle workspaces", async ({ page }) 
   const nav = page.getByRole("navigation", { name: "Primary navigation" });
   for (const [label, href] of [
     ["Charge Capture", "/billing/charges"],
-    ["Claims", "/claims"],
+    ["Claims & Follow-Up", "/claims"],
     ["Payments", "/payments"],
   ] as const) {
     await expect(nav.getByRole("link", { name: label, exact: true })).toHaveAttribute("href", href);
