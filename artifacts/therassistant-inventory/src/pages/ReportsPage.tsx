@@ -3,6 +3,7 @@ import { Link } from "wouter";
 import { money } from "../lib/format";
 import { tenantSelect } from "../lib/tenant-data-client";
 import { summarizePostedPayments } from "../domains/payments/posted-payment-summary";
+import { isPayerReceivable } from "../domains/rcm/receivables";
 
 type Row = Record<string, any>;
 type LoadState<T> = { data: T | null; loading: boolean; error: string | null };
@@ -34,7 +35,7 @@ function State({ loading, error }: { loading: boolean; error: string | null }) {
 
 export function ReportsPage() {
   const state = useLoad(async () => {
-    const [clients, providers, claims, balances, payments, denials, work] = await Promise.all([
+    const [clients, providers, claims, balances, payments, denials, work, submissions, submissionHistory] = await Promise.all([
       tenantSelect("clients"),
       tenantSelect("providers"),
       tenantSelect("professional_claims"),
@@ -42,8 +43,10 @@ export function ReportsPage() {
       tenantSelect("payments"),
       tenantSelect("denials"),
       tenantSelect("workqueue_items"),
+      tenantSelect("claim_submissions"),
+      tenantSelect("claim_status_history", { new_status: "in.(submitted,accepted)" }),
     ]);
-    return { clients, providers, claims, balances, payments, denials, work };
+    return { clients, providers, claims, balances, payments, denials, work, submissions, submissionHistory };
   });
 
   const data = state.data;
@@ -59,10 +62,18 @@ export function ReportsPage() {
   const reconciledClaims = financialClaims.filter(
     (claim) => balanceByClaim.has(String(claim.id)),
   );
-  const openClaims = reconciledClaims.filter((claim) => {
-    const balance = balanceByClaim.get(String(claim.id));
-    return Number(balance?.open_balance_cents ?? 0) > 0;
-  });
+  const submittedClaimIds = new Set([
+    ...(data?.submissions ?? []).map((row) => String(row.claim_id ?? "")),
+    ...(data?.submissionHistory ?? []).map((row) => String(row.claim_id ?? "")),
+  ]);
+  const outstandingClaims = reconciledClaims.filter((claim) =>
+    Number(balanceByClaim.get(String(claim.id))?.open_balance_cents ?? 0) > 0,
+  );
+  const openClaims = outstandingClaims.filter((claim) => isPayerReceivable(claim, submittedClaimIds));
+  const unsubmittedClaims = outstandingClaims.filter((claim) => !isPayerReceivable(claim, submittedClaimIds));
+  const unsubmittedBalance = unsubmittedClaims.reduce((sum, claim) =>
+    sum + Number(balanceByClaim.get(String(claim.id))?.open_balance_cents ?? 0), 0,
+  );
   const openAr = openClaims.reduce((sum, claim) => {
     const balance = balanceByClaim.get(String(claim.id));
     return sum + Number(balance?.open_balance_cents ?? 0);
@@ -125,9 +136,15 @@ export function ReportsPage() {
               <div className="thera-metric-value">{data.providers.filter((row) => row.provider_status === "active").length}</div>
             </div>
             <div className="thera-metric-card">
-              <div className="thera-metric-label">Open A/R</div>
+              <div className="thera-metric-label">Payer A/R</div>
               <div className="thera-metric-value">{money(openAr)}</div>
-              <div className="thera-table-subtext">Reconciled claim balances only</div>
+              <div className="thera-table-subtext">Reconciled balances with submission evidence</div>
+            </div>
+            <div className="thera-metric-card">
+              <div className="thera-metric-label">Unsubmitted Claim Balance</div>
+              <div className="thera-metric-value">{money(unsubmittedBalance)}</div>
+              <div className="thera-table-subtext">{unsubmittedClaims.length} claim(s) not yet evidenced as transmitted. Excluded from payer A/R.</div>
+              <div className="thera-table-subtext"><Link className="thera-link" href="/billing/charges?tab=unbatched">Validate claims</Link> · <Link className="thera-link" href="/billing/charges?tab=batches">837P batches</Link></div>
             </div>
             <div className="thera-metric-card">
               <div className="thera-metric-label">A/R Over 90</div>
@@ -167,7 +184,7 @@ export function ReportsPage() {
             <div className="thera-card-header">
               <div>
                 <h2>Management Follow-Up</h2>
-                <p>A/R aging uses service date. The over-90 denominator is current reconciled open A/R; payment totals use posting status, not receipt/download activity.</p>
+                <p>Payer A/R aging uses service date and excludes claim balances without transmission evidence. The over-90 denominator is reconciled payer A/R; payment totals use posting status, not receipt/download activity.</p>
               </div>
             </div>
             <div className="thera-story-grid">
@@ -178,7 +195,7 @@ export function ReportsPage() {
               </div>
               <div className="thera-story">
                 <strong>Revenue recovery</strong>
-                <p>{money(arOver90)} of {money(openAr)} reconciled open A/R is 91+ days from service.</p>
+                <p>{money(arOver90)} of {money(openAr)} reconciled payer A/R is 91+ days from service.</p>
                 <Link className="thera-link" href="/claims">Open A/R follow-up</Link>
               </div>
               <div className="thera-story">
