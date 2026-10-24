@@ -5,8 +5,8 @@ const APPOINTMENT_ID = "50000000-0000-4000-8000-000000000001";
 test("provider completes a synthetic visit from schedule through signed note and charge handoff", async ({ page }) => {
   await page.goto(`/schedule?appointment=${APPOINTMENT_ID}`);
 
-  await expect(page.locator(".workspace-review-panel").getByRole("heading", { name: "Jordan Ellis", exact: true })).toBeVisible({ timeout: 15_000 });
-  await expect(page.locator(".workspace-review-panel").getByText("Patient Review · pre-session")).toBeVisible();
+  await expect(page.getByRole("dialog", { name: "Jordan Ellis" }).getByRole("heading", { name: "Jordan Ellis", exact: true })).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByRole("dialog", { name: "Jordan Ellis" }).getByText("Patient Review · pre-session")).toBeVisible();
 
   await page.getByRole("button", { name: /Start Note|Resume Note/ }).click();
   await expect.poll(() => new URL(page.url()).pathname).toMatch(/^\/encounters\/[0-9a-f-]+$/i);
