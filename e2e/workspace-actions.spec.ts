@@ -57,7 +57,7 @@ test("Claims supports an empty production queue or opens Claim 360 when work exi
 
   const workClaims = page.getByRole("button", { name: "Work Claim" });
   if ((await workClaims.count()) === 0) {
-    await expect(page.getByText("No outstanding payer claims.", { exact: true })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "No claims awaiting payer follow-up", exact: true })).toBeVisible();
     return;
   }
 
