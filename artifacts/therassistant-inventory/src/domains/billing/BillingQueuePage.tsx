@@ -265,10 +265,15 @@ export function BillingQueuePage() {
   }
 
   async function runRecordExternalSubmission(batchId: string) {
-    const externalReference = window.prompt(
-      "Enter the clearinghouse confirmation, file receipt, or other external submission reference.",
-    )?.trim();
-    if (!externalReference) return;
+    const enteredReference = window.prompt(
+      "Only after this 837P was transmitted outside the EHR: enter the clearinghouse confirmation, transmission receipt, or external submission reference. Leave blank to cancel.",
+    );
+    if (enteredReference === null) return;
+    const externalReference = enteredReference.trim();
+    if (!externalReference) {
+      setError("No submission recorded. A real clearinghouse confirmation or external transmission receipt is required; archiving or downloading an 837P is not submission.");
+      return;
+    }
 
     const confirmed = window.confirm(
       "Confirm that this 837P batch was actually transmitted outside THERASSISTANT. This will mark the batch and its claims as submitted.",
@@ -772,7 +777,12 @@ function BatchCards({
   const claimsById = new Map(claims.map((claim) => [claim.id, claim]));
   if (!rows.length) return <section className="thera-card"><div className="thera-empty">No payer batches are ready.</div></section>;
 
-  return <div className="thera-stack">{rows.map((batch) => <section className="thera-card" key={batch.id}>
+  return <div className="thera-stack">
+    <section className="thera-card">
+      <div className="thera-card-header"><div><h2>Ready for external transmission</h2><p>{rows.length} payer batch(es) are ready. These are not payer submissions yet.</p></div></div>
+      <p>For each batch: verify the 837P configuration, archive and download the file, transmit it through the payer or clearinghouse, and keep the actual transmission receipt. Only then select <strong>Record External Submission</strong>. Claims will move to payer follow-up after submission is recorded.</p>
+    </section>
+    {rows.map((batch) => <section className="thera-card" key={batch.id}>
     <div className="thera-card-header split"><div><h2>{String(batch.batch_name || "Payer Batch")}</h2><p>{batch.claimIds.length} claim(s) · {money(Number(batch.total_charge_cents ?? 0))}{batch.edi_archived_at ? ` · 837P archived ${dateTime(String(batch.edi_archived_at))}` : " · 837P not archived"}</p></div><div className="thera-filter-row"><Link className="thera-action secondary" href="/administration/practices">837P Configuration</Link><button type="button" className="thera-action secondary" disabled={savingId === `download-${batch.id}`} onClick={() => onDownload(batch.id)}>{batch.edi_archived_at ? "Download Archived 837P" : "Archive & Download 837P"}</button>{batch.batch_status === "ready" && <button type="button" className="thera-action" title={batch.edi_archived_at ? "Record a confirmed external transmission." : "Archive and verify the 837P before submission."} disabled={savingId === batch.id || !batch.edi_archived_at} onClick={() => onRecordSubmission(batch.id)}>Record External Submission</button>}</div></div>
     <div className="thera-table-wrap"><table className="thera-table"><thead><tr><th>Claim</th><th>Patient</th><th>Payer</th><th>Charge</th><th>CMS-1500</th></tr></thead><tbody>{batch.claimIds.map((claimId: string) => { const claim = claimsById.get(claimId); return <tr key={claimId}><td>{claim ? <Link className="thera-table-link" href={`/claims/${claim.id}`}>{String(claim.patient_control_number || "Open")}</Link> : claimId}</td><td>{claim?.clientName ?? "—"}</td><td>{claim?.payerName ?? "—"}</td><td>{money(Number(claim?.total_charge_cents ?? 0))}</td><td><button type="button" className="thera-action secondary" disabled={!claim || savingId === `print-${claimId}`} onClick={() => claim && onPrint(batch.id, claim.id)}>Print CMS-1500</button></td></tr>; })}</tbody></table></div>
   </section>)}</div>;
