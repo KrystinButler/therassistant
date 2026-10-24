@@ -29,7 +29,7 @@ test("RCM workspaces are accessible through direct navigation links", async ({ p
 
   for (const [label, href] of [
     ["Charge Capture", "/billing/charges"],
-    ["Claims", "/claims"],
+    ["Claims & Follow-Up", "/claims"],
     ["Payments", "/payments"],
   ] as const) {
     await expect(nav.getByRole("link", { name: label, exact: true })).toHaveAttribute("href", href);
