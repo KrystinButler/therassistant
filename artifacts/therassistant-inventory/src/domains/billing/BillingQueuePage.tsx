@@ -41,6 +41,18 @@ export function BillingQueuePage() {
   const [fundingEncounterId, setFundingEncounterId] = useState<string | null>(() => new URLSearchParams(window.location.search).get("encounter"));
   const [focusEncounterId] = useState<string | null>(() => new URLSearchParams(window.location.search).get("focus"));
 
+  // Funding edits belong to encounter billing readiness, not to every billing tab.
+  function changeTab(next: ChargesTab) {
+    if (next === tab) return;
+    if (fundingEncounterId && !window.confirm("Leave Billing Responsibility? Unsaved edits will be discarded.")) return;
+    setFundingEncounterId(null);
+    setTab(next);
+  }
+
+  useEffect(() => {
+    if (!["ready", "blocked"].includes(tab)) setFundingEncounterId(null);
+  }, [tab]);
+
   async function load() {
     setLoading(true);
     setError(null);
@@ -441,19 +453,19 @@ export function BillingQueuePage() {
       </div>
 
       <div className="thera-tabs" style={{ marginBottom: 16 }}>
-        <Tab active={tab === "ready"} onClick={() => setTab("ready")} label={`Awaiting Billing (${groups.ready.length})`} />
-        <Tab active={tab === "blocked"} onClick={() => setTab("blocked")} label={`Validation Hold (${groups.blocked.length})`} />
-        <Tab active={tab === "program"} onClick={() => setTab("program")} label={`Program Billing (${groups.programCharges.length})`} />
-        <Tab active={tab === "private-pay"} onClick={() => setTab("private-pay")} label={`Private Pay (${groups.privatePayCharges.length})`} />
-        <Tab active={tab === "unbatched"} onClick={() => setTab("unbatched")} label={`Insurance Claims (${groups.readyCharges.length + groups.preBatchClaims.length})`} title="Create insurance claims, run Claim Scrub, and prepare payer batches—nothing is transmitted here." />
-        <Tab active={tab === "batches"} onClick={() => setTab("batches")} label={`837P Batches (${groups.openBatches.length})`} />
-        <Tab active={tab === "submitted"} onClick={() => setTab("submitted")} label={`Submitted / Responses (${groups.submittedBatches.length})`} />
+        <Tab active={tab === "ready"} onClick={() => changeTab("ready")} label={`Awaiting Billing (${groups.ready.length})`} />
+        <Tab active={tab === "blocked"} onClick={() => changeTab("blocked")} label={`Validation Hold (${groups.blocked.length})`} />
+        <Tab active={tab === "program"} onClick={() => changeTab("program")} label={`Program Billing (${groups.programCharges.length})`} />
+        <Tab active={tab === "private-pay"} onClick={() => changeTab("private-pay")} label={`Private Pay (${groups.privatePayCharges.length})`} />
+        <Tab active={tab === "unbatched"} onClick={() => changeTab("unbatched")} label={`Insurance Claims (${groups.readyCharges.length + groups.preBatchClaims.length})`} title="Create insurance claims, run Claim Scrub, and prepare payer batches—nothing is transmitted here." />
+        <Tab active={tab === "batches"} onClick={() => changeTab("batches")} label={`837P Batches (${groups.openBatches.length})`} />
+        <Tab active={tab === "submitted"} onClick={() => changeTab("submitted")} label={`Submitted / Responses (${groups.submittedBatches.length})`} />
       </div>
 
       {error && <div className="thera-state error" style={{ marginBottom: 12 }}>{error}{correctionLinks.length > 0 && <BillingCorrectionActions links={correctionLinks} />}</div>}
       {message && <div className="thera-alert" style={{ marginBottom: 12 }}>{message}{!error && correctionLinks.length > 0 && <BillingCorrectionActions links={correctionLinks} />}</div>}
       {loading && <div className="thera-state">Loading Charges...</div>}
-      {!loading && data && fundingEncounterId && (() => { const target = data.billing.encounters.find((row) => row.id === fundingEncounterId); return target ? <BillingResponsibilityPanel key={target.id} encounter={target}
+      {!loading && data && ["ready", "blocked"].includes(tab) && fundingEncounterId && (() => { const target = data.billing.encounters.find((row) => row.id === fundingEncounterId); return target ? <BillingResponsibilityPanel key={target.id} encounter={target}
         onCancel={() => setFundingEncounterId(null)}
         onSave={async (values: BillingFundingInput) => { await updateEncounterFundingForBilling(target.id, values); await load(); setMessage("Billing responsibility updated. Existing charges and signed notes were not modified."); setFundingEncounterId(null); }} />
         : <div className="thera-state error">The requested encounter was not found in this practice.</div>; })()}
