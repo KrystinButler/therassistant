@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import {
   getCurrentTenantId,
   tenantRpc,
+  tenantSelect,
 } from "../lib/tenant-data-client";
 
 type AdminUser = {
@@ -15,6 +16,9 @@ type AdminUser = {
   email?: string | null;
   roles: string[];
 };
+
+type ProviderLink = { id: string; tenant_id: string; user_id: string; provider_id: string; status: string };
+type ProviderRecord = { id: string; first_name?: string | null; last_name?: string | null; provider_status?: string | null };
 
 const ROLE_OPTIONS = [
   "practice_admin",
@@ -37,9 +41,12 @@ function userName(user: AdminUser) {
 export function UserRolesPage() {
   const [tenantId, setTenantId] = useState("");
   const [users, setUsers] = useState<AdminUser[]>([]);
+  const [providerLinks, setProviderLinks] = useState<ProviderLink[]>([]);
+  const [providers, setProviders] = useState<ProviderRecord[]>([]);
   const [draftRoles, setDraftRoles] = useState<Record<string, string[]>>({});
   const [loading, setLoading] = useState(true);
   const [workingUserId, setWorkingUserId] = useState<string | null>(null);
+  const [workingLinkId, setWorkingLinkId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
 
@@ -48,12 +55,16 @@ export function UserRolesPage() {
     setError(null);
     try {
       const currentTenantId = await getCurrentTenantId();
-      const payload = await tenantRpc<AdminUser[]>("list_tenant_users_admin", {
-        p_tenant_id: currentTenantId,
-      });
+      const [payload, links, providerRecords] = await Promise.all([
+        tenantRpc<AdminUser[]>("list_tenant_users_admin", { p_tenant_id: currentTenantId }),
+        tenantSelect<ProviderLink>("provider_user_links", { select: "id,tenant_id,user_id,provider_id,status" }),
+        tenantSelect<ProviderRecord>("providers", { select: "id,first_name,last_name,provider_status" }),
+      ]);
       if (!Array.isArray(payload)) throw new Error("Unable to load tenant users.");
       setTenantId(currentTenantId);
       setUsers(payload);
+      setProviderLinks(links);
+      setProviders(providerRecords);
       setDraftRoles(Object.fromEntries(payload.map((user) => [user.user_id, [...(user.roles ?? [])]])));
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unable to load users and roles.");
@@ -116,6 +127,27 @@ export function UserRolesPage() {
       setError(err instanceof Error ? err.message : "Unable to update user status.");
     } finally {
       setWorkingUserId(null);
+    }
+  }
+
+  async function updateProviderLink(link: ProviderLink) {
+    const nextStatus = link.status === "active" ? "inactive" : "active";
+    setWorkingLinkId(link.id);
+    setError(null);
+    setNotice(null);
+    try {
+      await tenantRpc("admin_set_provider_link_status", {
+        p_provider_id: link.provider_id,
+        p_status: nextStatus,
+      });
+      setNotice(nextStatus === "active"
+        ? "Clinician signing access reactivated by practice administrator."
+        : "Clinician signing access disabled.");
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to change clinician signing access.");
+    } finally {
+      setWorkingLinkId(null);
     }
   }
 
@@ -185,6 +217,49 @@ export function UserRolesPage() {
               ))}
               {users.length === 0 && (
                 <tr><td colSpan={4}><div className="thera-empty">No tenant users found.</div></td></tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section className="thera-card" style={{ marginTop: 16 }}>
+        <div className="thera-card-header">
+          <div>
+            <h2>Clinician Signing Access</h2>
+            <p>Only a practice administrator can disable or reactivate a clinician-to-provider link. Disabling it blocks note signing without removing prior signed records.</p>
+          </div>
+        </div>
+        <div className="thera-table-wrap">
+          <table className="thera-table">
+            <thead>
+              <tr><th>Provider</th><th>Linked Clinician</th><th>Signing Access</th><th>Administrator Action</th></tr>
+            </thead>
+            <tbody>
+              {providerLinks.map((link) => {
+                const provider = providers.find((record) => record.id === link.provider_id);
+                const user = users.find((record) => record.user_id === link.user_id);
+                const providerName = [provider?.first_name, provider?.last_name].filter(Boolean).join(" ") || link.provider_id;
+                return (
+                  <tr key={link.id}>
+                    <td><strong>{providerName}</strong></td>
+                    <td>{user ? userName(user) : link.user_id}</td>
+                    <td>{link.status === "active" ? "Active" : "Inactive — signing blocked"}</td>
+                    <td>
+                      <button
+                        type="button"
+                        className="thera-action"
+                        disabled={workingLinkId !== null || (link.status !== "active" && provider?.provider_status !== "active")}
+                        onClick={() => void updateProviderLink(link)}
+                      >
+                        {workingLinkId === link.id ? "Saving..." : link.status === "active" ? "Disable Signing" : "Reactivate Signing"}
+                      </button>
+                    </td>
+                  </tr>
+                );
+              })}
+              {providerLinks.length === 0 && (
+                <tr><td colSpan={4}><div className="thera-empty">No clinician-to-provider links found for this practice.</div></td></tr>
               )}
             </tbody>
           </table>

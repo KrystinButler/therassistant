@@ -1,10 +1,10 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { existsSync, readFileSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { maxScore, validateScore } from "../src/domains/treatment-plans/outcome-review-model.ts";
 
-const migrationPath = fileURLToPath(new URL("../../../supabase/migrations/20261010203000_cross_system_clinical_engine.sql", import.meta.url));
+const migrationPaths = ["20261010201535_cross_system_clinical_engine_core.sql", "20261010201546_cross_system_prsds_sync.sql", "20261010201558_cross_system_coding_decisions.sql", "20261010201637_cross_system_coding_rpc_security.sql"].map(name => fileURLToPath(new URL(`../../../supabase/migrations/${name}`, import.meta.url)));
 
 test("PRSDS is a 1-10 patient-reported metric", () => {
   assert.equal(maxScore("PRSDS"), 10);
@@ -15,8 +15,7 @@ test("PRSDS is a 1-10 patient-reported metric", () => {
 });
 
 test("cross-system migration extends outcome measures and creates auditable coding decisions", () => {
-  assert.equal(existsSync(migrationPath), true);
-  const sql = readFileSync(migrationPath, "utf8");
+  const sql = migrationPaths.map(path => readFileSync(path, "utf8")).join("\n");
   assert.match(sql, /instrument\s+in\s*\([^)]*'PRSDS'/i);
   assert.match(sql, /instrument='PRSDS'\s+and\s+score\s+between\s+1\s+and\s+10/i);
   assert.match(sql, /create table if not exists public\.clinical_cross_mapping_config/i);

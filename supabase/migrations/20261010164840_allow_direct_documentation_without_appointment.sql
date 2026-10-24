@@ -1,3 +1,4 @@
+-- Recovered from production migration history; already applied.
 alter table public.encounters
   alter column appointment_id drop not null;
 

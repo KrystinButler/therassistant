@@ -42,6 +42,9 @@ jobs:
       - name: Credentialing contract tests
         run: pnpm test:credentialing
 
+      - name: Production migration history integrity
+        run: node --test scripts/test-migration-history.mjs
+
       - name: Clinical API verifier safety
         run: node --test scripts/test-api-clinical-verifier-safety.mjs
 
@@ -178,7 +181,7 @@ jobs:
         shell: bash
         run: |
           # Fixtures run only inside the isolated CI database and roll back.
-          for fixture in scripts/sql-tests/claim-handoff-*.sql scripts/sql-tests/clinical-handoff-*.sql; do
+          for fixture in scripts/sql-tests/claim-handoff-*.sql scripts/sql-tests/clinical-handoff-*.sql scripts/sql-tests/optional-workflow-links.sql; do
             docker exec -i supabase_db_therassistant-e2e psql -U postgres -d postgres -v ON_ERROR_STOP=1 < "$fixture"
           done
 

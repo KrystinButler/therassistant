@@ -64,3 +64,18 @@ test("eligibility queue ignores legacy synthetic demo results", () => {
   assert.equal(jordan?.responseSource, "manual_payer_portal");
   assert.equal(jordan?.needsAttention, true);
 });
+
+test("Availity demo responses cannot replace verified patient eligibility", () => {
+  const rows = buildEligibilityQueue({
+    clients,
+    payers,
+    policies,
+    eligibility: [
+      { id: "real", client_id: "c1", insurance_policy_id: "pol1", eligibility_status: "inactive", response_source: "manual_payer_portal", service_date: "2026-10-18", created_at: "2026-10-18T12:00:00Z" },
+      { id: "mock", client_id: "c1", insurance_policy_id: "pol1", eligibility_status: "active", response_source: "availity_demo_270_271", service_date: "2026-10-19", created_at: "2026-10-19T12:00:00Z" },
+    ],
+  });
+  assert.equal(rows[0].status, "inactive");
+  assert.equal(rows[0].responseSource, "manual_payer_portal");
+  assert.equal(rows[0].needsAttention, true);
+});

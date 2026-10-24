@@ -1,3 +1,4 @@
+-- Recovered from production migration history; already applied.
 CREATE OR REPLACE FUNCTION public.sign_encounter_note(
   p_encounter_id uuid,
   p_note_id uuid,

@@ -1,0 +1,938 @@
+{
+  "project_ref": "lpjwfdvaxobewxcklenl",
+  "captured_at": "2026-10-24",
+  "migrations": [
+    {
+      "version": "20260818045846",
+      "name": "initial_therassistant_ehr_foundation"
+    },
+    {
+      "version": "20260818045946",
+      "name": "harden_initial_therassistant_schema"
+    },
+    {
+      "version": "20260818050009",
+      "name": "remove_public_rls_helper_rpc_surface"
+    },
+    {
+      "version": "20260818050033",
+      "name": "add_missing_foreign_key_indexes"
+    },
+    {
+      "version": "20260818050118",
+      "name": "add_remaining_foreign_key_indexes"
+    },
+    {
+      "version": "20260818063203",
+      "name": "fix_tenant_rls_policy_correlation"
+    },
+    {
+      "version": "20260818063323",
+      "name": "add_safe_tenant_bootstrap"
+    },
+    {
+      "version": "20260818063509",
+      "name": "add_charge_claim_workflow_functions"
+    },
+    {
+      "version": "20260818063620",
+      "name": "add_payment_ledger_posting_functions"
+    },
+    {
+      "version": "20260818063647",
+      "name": "make_balance_recalculation_invoker_safe"
+    },
+    {
+      "version": "20260818063718",
+      "name": "remove_duplicate_event_notification_policies"
+    },
+    {
+      "version": "20260818064326",
+      "name": "add_reference_setup_and_operational_views"
+    },
+    {
+      "version": "20260818064829",
+      "name": "add_patient_entry_workflow_functions"
+    },
+    {
+      "version": "20260818064946",
+      "name": "lock_down_public_function_execute_grants"
+    },
+    {
+      "version": "20260910001702",
+      "name": "add_app_context_and_tenant_document_storage"
+    },
+    {
+      "version": "20260910065201",
+      "name": "harden_tenant_rls_with_role_gates"
+    },
+    {
+      "version": "20260910065244",
+      "name": "move_rls_role_helpers_to_private_schema"
+    },
+    {
+      "version": "20260913044652",
+      "name": "add_demo_browser_policies"
+    },
+    {
+      "version": "20260913053649",
+      "name": "demo_direct_ui_read_policies"
+    },
+    {
+      "version": "20260913053754",
+      "name": "demo_direct_ui_authorizations_policy"
+    },
+    {
+      "version": "20260913054018",
+      "name": "demo_direct_ui_select_grants"
+    },
+    {
+      "version": "20260913075129",
+      "name": "add_demo_mailroom_workflow"
+    },
+    {
+      "version": "20260913081041",
+      "name": "enable_demo_contract_and_appeal_actions"
+    },
+    {
+      "version": "20260913093532",
+      "name": "phase1_workflow_spine"
+    },
+    {
+      "version": "20260913094327",
+      "name": "phase1_clinical_write_grants"
+    },
+    {
+      "version": "20260913094834",
+      "name": "phase1_workqueue_encounter_source"
+    },
+    {
+      "version": "20260913095755",
+      "name": "demo_claim_workflow_write"
+    },
+    {
+      "version": "20260913100546",
+      "name": "demo_payment_workflow_write"
+    },
+    {
+      "version": "20260913100850",
+      "name": "demo_workqueue_history_write"
+    },
+    {
+      "version": "20260913101740",
+      "name": "clinical_signature_provider_identity"
+    },
+    {
+      "version": "20260913105943",
+      "name": "phase1_restrict_anon_table_privileges"
+    },
+    {
+      "version": "20260913204946",
+      "name": "phase2_patient_write_policies"
+    },
+    {
+      "version": "20260913205151",
+      "name": "phase2_insurance_write_policies"
+    },
+    {
+      "version": "20260913205531",
+      "name": "phase2_authorization_write_policies"
+    },
+    {
+      "version": "20260913205650",
+      "name": "phase2_treatment_plan_write_policies"
+    },
+    {
+      "version": "20260913205901",
+      "name": "phase2_portal_write_policies"
+    },
+    {
+      "version": "20260913220412",
+      "name": "phase3_denial_deadline"
+    },
+    {
+      "version": "20260913220932",
+      "name": "phase3_payment_reversal_demo_permissions"
+    },
+    {
+      "version": "20260913222932",
+      "name": "phase3_revoke_anon_destructive_privileges"
+    },
+    {
+      "version": "20260913234217",
+      "name": "phase3_restrict_payment_allocation_columns"
+    },
+    {
+      "version": "20260914005021",
+      "name": "phase3_atomic_demo_payment_reversal"
+    },
+    {
+      "version": "20260914010342",
+      "name": "phase3_finalize_atomic_reversal_permissions"
+    },
+    {
+      "version": "20260914031048",
+      "name": "phase3_atomic_demo_manual_payment"
+    },
+    {
+      "version": "20260914031508",
+      "name": "phase3_atomic_demo_manual_payment_tenant_scope"
+    },
+    {
+      "version": "20260914083717",
+      "name": "phase3_manual_payment_responsibility_caps"
+    },
+    {
+      "version": "20260914083753",
+      "name": "phase3_preserve_partial_patient_responsibility"
+    },
+    {
+      "version": "20260914190536",
+      "name": "phase4_credentialing_revalidation"
+    },
+    {
+      "version": "20260915022210",
+      "name": "phase5_mailroom_correspondence"
+    },
+    {
+      "version": "20260915022405",
+      "name": "phase5_mailroom_transition_history_fix"
+    },
+    {
+      "version": "20260915022511",
+      "name": "phase5_mailroom_fk_indexes"
+    },
+    {
+      "version": "20260915040049",
+      "name": "phase5_mailroom_demo_seed"
+    },
+    {
+      "version": "20260916052440",
+      "name": "integrated_patient_portal"
+    },
+    {
+      "version": "20260917044135",
+      "name": "restore_private_rls_helper_surface"
+    },
+    {
+      "version": "20260917044218",
+      "name": "complete_fk_indexes_and_demo_policy_cleanup"
+    },
+    {
+      "version": "20260917044259",
+      "name": "prepare_private_demo_mailroom_assignees"
+    },
+    {
+      "version": "20260917044321",
+      "name": "harden_demo_mailroom_assignee_rpc"
+    },
+    {
+      "version": "20260917070221",
+      "name": "production_mailroom_tenant_rpcs"
+    },
+    {
+      "version": "20260917170929",
+      "name": "break_tenant_bootstrap_rls_recursion"
+    },
+    {
+      "version": "20260917171917",
+      "name": "production_credentialing_workflow_rpcs"
+    },
+    {
+      "version": "20260917172831",
+      "name": "disable_legacy_demo_tenant"
+    },
+    {
+      "version": "20260917203448",
+      "name": "credentialing_foundation_core"
+    },
+    {
+      "version": "20260917203512",
+      "name": "credentialing_foundation_views"
+    },
+    {
+      "version": "20260917203643",
+      "name": "credentialing_scope_rpc_compatibility"
+    },
+    {
+      "version": "20260917203749",
+      "name": "credentialing_fk_performance_indexes"
+    },
+    {
+      "version": "20260917204956",
+      "name": "normalize_credentialing_workflows"
+    },
+    {
+      "version": "20260917205039",
+      "name": "credentialing_application_tenant_index"
+    },
+    {
+      "version": "20260917205646",
+      "name": "patient_intake_transaction"
+    },
+    {
+      "version": "20260917210908",
+      "name": "credentialing_integrity_cleanup"
+    },
+    {
+      "version": "20260917233629",
+      "name": "secure_patient_portal_auth"
+    },
+    {
+      "version": "20260917233945",
+      "name": "secure_patient_portal_auth_hardening"
+    },
+    {
+      "version": "20260917234105",
+      "name": "secure_patient_portal_definer_isolation"
+    },
+    {
+      "version": "20260917235006",
+      "name": "secure_patient_portal_journal_read_policy"
+    },
+    {
+      "version": "20260918034548",
+      "name": "credentialing_network_verification_rpc"
+    },
+    {
+      "version": "20260918035820",
+      "name": "credentialing_roster_management_rpcs"
+    },
+    {
+      "version": "20260918035858",
+      "name": "credentialing_roster_management_rpcs"
+    },
+    {
+      "version": "20260918040244",
+      "name": "credentialing_roster_rpc_normalization"
+    },
+    {
+      "version": "20260918040319",
+      "name": "normalize_credentialing_roster_rpcs"
+    },
+    {
+      "version": "20260918040734",
+      "name": "credentialing_roster_actionable_status_alignment"
+    },
+    {
+      "version": "20260918042709",
+      "name": "credentialing_end_to_end_workflow_rpcs"
+    },
+    {
+      "version": "20260918042710",
+      "name": "credentialing_operational_automation"
+    },
+    {
+      "version": "20260918043043",
+      "name": "credentialing_operational_automation_hardening"
+    },
+    {
+      "version": "20260918044103",
+      "name": "credentialing_requirement_templates"
+    },
+    {
+      "version": "20260918051908",
+      "name": "secure_patient_portal_writes"
+    },
+    {
+      "version": "20260918052921",
+      "name": "secure_patient_portal_write_hardening"
+    },
+    {
+      "version": "20260918054005",
+      "name": "secure_patient_portal_invite_context_hardening"
+    },
+    {
+      "version": "20260918062214",
+      "name": "secure_patient_portal_read_hardening"
+    },
+    {
+      "version": "20260920032120",
+      "name": "align_clinical_signing_with_nonblocking_billing"
+    },
+    {
+      "version": "20260920032414",
+      "name": "add_charge_service_line_traceability"
+    },
+    {
+      "version": "20260920043242",
+      "name": "self_pay_patient_responsibility_workflow"
+    },
+    {
+      "version": "20260920060009",
+      "name": "claims_837p_external_submission_foundation"
+    },
+    {
+      "version": "20260920061123",
+      "name": "structured_patient_subscriber_addresses"
+    },
+    {
+      "version": "20260920122438",
+      "name": "production_payment_posting"
+    },
+    {
+      "version": "20260920190643",
+      "name": "tenant_scoped_manual_payment_rpcs"
+    },
+    {
+      "version": "20260920192102",
+      "name": "era_production_ledger_posting"
+    },
+    {
+      "version": "20260920200523",
+      "name": "payment_reversal_ledger_integrity"
+    },
+    {
+      "version": "20260921051435",
+      "name": "add_payment_desk"
+    },
+    {
+      "version": "20260921051530",
+      "name": "payment_desk_first_login_security"
+    },
+    {
+      "version": "20260921051543",
+      "name": "payment_desk_idempotency"
+    },
+    {
+      "version": "20260921072216",
+      "name": "add_therassistant_crm"
+    },
+    {
+      "version": "20260921074947",
+      "name": "crm_generated_account_numbers"
+    },
+    {
+      "version": "20260921075057",
+      "name": "crm_square_environment_tracking"
+    },
+    {
+      "version": "20260921075428",
+      "name": "seed_initial_crm_account"
+    },
+    {
+      "version": "20260921080627",
+      "name": "crm_atomic_plan_lifecycle"
+    },
+    {
+      "version": "20260921080845",
+      "name": "crm_atomic_payment_allocation"
+    },
+    {
+      "version": "20260921190645",
+      "name": "remove_crm_from_ehr"
+    },
+    {
+      "version": "20260921215709",
+      "name": "add_authenticated_encounter_rls_policies"
+    },
+    {
+      "version": "20260921234800",
+      "name": "wire_backend_revenue_cycle_claims"
+    },
+    {
+      "version": "20260921234928",
+      "name": "wire_backend_revenue_cycle_acknowledgements"
+    },
+    {
+      "version": "20260921235112",
+      "name": "fix_backend_claim_batch_uuid_payer_selection"
+    },
+    {
+      "version": "20260921235243",
+      "name": "harden_backend_claim_validation_state"
+    },
+    {
+      "version": "20260921235318",
+      "name": "lock_down_backend_revenue_cycle_rpcs"
+    },
+    {
+      "version": "20260922033218",
+      "name": "add_payer_intelligence_resources"
+    },
+    {
+      "version": "20260922033246",
+      "name": "index_payer_resources_payer_fk"
+    },
+    {
+      "version": "20260922191919",
+      "name": "add_national_coding_reference_libraries"
+    },
+    {
+      "version": "20260922192016",
+      "name": "enable_http_for_reference_sync"
+    },
+    {
+      "version": "20260922192036",
+      "name": "enable_pg_net_for_reference_sync"
+    },
+    {
+      "version": "20260922200930",
+      "name": "harden_reference_library_read_access"
+    },
+    {
+      "version": "20260922201107",
+      "name": "lock_reference_status_view_read_only"
+    },
+    {
+      "version": "20260922203000",
+      "name": "enforce_patient_creation_prerequisites"
+    },
+    {
+      "version": "20260922204500",
+      "name": "fast_charting_foundation"
+    },
+    {
+      "version": "20260923003000",
+      "name": "outcome_measures_and_review_drafts"
+    },
+    {
+      "version": "20260923033000",
+      "name": "clinician_review_signatures_and_conflict_cleanup"
+    },
+    {
+      "version": "20260923034500",
+      "name": "remove_conflicting_workflows"
+    },
+    {
+      "version": "20260923043000",
+      "name": "immutable_837p_archive"
+    },
+    {
+      "version": "20260923090756",
+      "name": "complete_patient_engagement_connected_operations"
+    },
+    {
+      "version": "20260923090825",
+      "name": "index_connected_operations_foreign_keys"
+    },
+    {
+      "version": "20260923090853",
+      "name": "payer_credentialing_pilot_operations"
+    },
+    {
+      "version": "20260923090926",
+      "name": "claims_payment_reconciliation_integrity"
+    },
+    {
+      "version": "20260923091327",
+      "name": "secure_tenant_user_administration"
+    },
+    {
+      "version": "20260923091421",
+      "name": "payer_resources_plan_fk_index"
+    },
+    {
+      "version": "20260923092228",
+      "name": "index_adjustments_denial_id"
+    },
+    {
+      "version": "20260923092444",
+      "name": "denial_writeoff_retry_balance"
+    },
+    {
+      "version": "20260923092614",
+      "name": "fix_import_rollback_enforcement"
+    },
+    {
+      "version": "20260923093122",
+      "name": "harden_manual_payment_idempotency_request"
+    },
+    {
+      "version": "20260923194822",
+      "name": "restore_canonical_claim_validation"
+    },
+    {
+      "version": "20260924002552",
+      "name": "specialty_program_templates"
+    },
+    {
+      "version": "20260924002615",
+      "name": "index_specialty_program_template_foreign_keys"
+    },
+    {
+      "version": "20260924003314",
+      "name": "encounter_funding_source_billing_path"
+    },
+    {
+      "version": "20260924013500",
+      "name": "backfill_legacy_charge_funding_paths"
+    },
+    {
+      "version": "20260924041129",
+      "name": "add_structured_payer_billing_rules"
+    },
+    {
+      "version": "20260924041538",
+      "name": "fix_active_charge_appointment_uniqueness"
+    },
+    {
+      "version": "20260924201443",
+      "name": "staff_shared_journal_entry_review_rls"
+    },
+    {
+      "version": "20260924211622",
+      "name": "record_staff_transcribed_journal_provenance"
+    },
+    {
+      "version": "20260924232127",
+      "name": "ensure_private_storage_buckets"
+    },
+    {
+      "version": "20260924235738",
+      "name": "treatment_review_draft_created_at"
+    },
+    {
+      "version": "20260925000330",
+      "name": "atomic_rejection_corrections"
+    },
+    {
+      "version": "20260925053000",
+      "name": "patient_only_journal_authoring"
+    },
+    {
+      "version": "20260926005924",
+      "name": "void_unclaimed_service_lines"
+    },
+    {
+      "version": "20260928050000",
+      "name": "smart_backend_services_auth"
+    },
+    {
+      "version": "20260928100000",
+      "name": "immutable_caqh_audit"
+    },
+    {
+      "version": "20260928194013",
+      "name": "fhir_practitioner_role_import"
+    },
+    {
+      "version": "20260929063000",
+      "name": "patient_portal_document_access"
+    },
+    {
+      "version": "20260929064500",
+      "name": "patient_portal_change_requests"
+    },
+    {
+      "version": "20260929070000",
+      "name": "patient_portal_schedule_change"
+    },
+    {
+      "version": "20260929180000",
+      "name": "patient_portal_insurance_upload_and_billing"
+    },
+    {
+      "version": "20260929183000",
+      "name": "secure_patient_portal_messaging"
+    },
+    {
+      "version": "20260929184500",
+      "name": "patient_portal_testing_regression_fixes"
+    },
+    {
+      "version": "20260929212957",
+      "name": "consolidate_user_profile_and_admin_workflows"
+    },
+    {
+      "version": "20260929213038",
+      "name": "isolate_user_profile_email_guard"
+    },
+    {
+      "version": "20260929230103",
+      "name": "support_reference_fee_schedules_v2"
+    },
+    {
+      "version": "20260929230959",
+      "name": "add_sbhs_code_guidance_reference"
+    },
+    {
+      "version": "20260929232359",
+      "name": "wire_sbhs_reference_library"
+    },
+    {
+      "version": "20260929232435",
+      "name": "secure_reference_views"
+    },
+    {
+      "version": "20260929232452",
+      "name": "index_reference_fee_schedule_payer"
+    },
+    {
+      "version": "20260929232605",
+      "name": "add_coding_guidance_sheet_rows"
+    },
+    {
+      "version": "20260929233051",
+      "name": "add_reference_fee_rate_library"
+    },
+    {
+      "version": "20260929233448",
+      "name": "make_procedure_search_resilient_to_sbhs_subset"
+    },
+    {
+      "version": "20260929235306",
+      "name": "remove_obsolete_ehr_authorization_mailroom_staging"
+    },
+    {
+      "version": "20260930000053",
+      "name": "remove_unused_account_and_claim_notes"
+    },
+    {
+      "version": "20260930000304",
+      "name": "add_missing_fk_indexes_after_schema_cleanup"
+    },
+    {
+      "version": "20260930000623",
+      "name": "remove_orphaned_authorization_status_enum"
+    },
+    {
+      "version": "20260930000657",
+      "name": "remove_exact_duplicate_fk_indexes"
+    },
+    {
+      "version": "20260930002802",
+      "name": "repair_tenant_memberships_and_user_relationships"
+    },
+    {
+      "version": "20260930002855",
+      "name": "complete_credentialing_user_foreign_keys"
+    },
+    {
+      "version": "20260930003044",
+      "name": "normalize_claim_batch_actor_relationship"
+    },
+    {
+      "version": "20260930003246",
+      "name": "remove_prefix_redundant_fk_indexes"
+    },
+    {
+      "version": "20260930003446",
+      "name": "remove_obsolete_private_demo_payment_functions"
+    },
+    {
+      "version": "20260930201228",
+      "name": "complete_credentialing_verifier_relationships"
+    },
+    {
+      "version": "20261004040724",
+      "name": "harden_tenant_membership_self_update"
+    },
+    {
+      "version": "20261004040851",
+      "name": "restrict_audit_log_visibility_to_admins"
+    },
+    {
+      "version": "20261004214256",
+      "name": "preserve_claim_diagnoses_and_policy"
+    },
+    {
+      "version": "20261005012525",
+      "name": "synchronize_corrected_claim_policy"
+    },
+    {
+      "version": "20261005145910",
+      "name": "atomic_clinical_billing_handoff"
+    },
+    {
+      "version": "20261005193436",
+      "name": "repair_production_charge_payer_nullability"
+    },
+    {
+      "version": "20261006061554",
+      "name": "claim_scrub_nonblocking_operational_warnings"
+    },
+    {
+      "version": "20261006081325",
+      "name": "workqueue_era_claim_source"
+    },
+    {
+      "version": "20261006221754",
+      "name": "connect_fee_schedules_to_canonical_service_codes"
+    },
+    {
+      "version": "20261006232853",
+      "name": "credentialing_directory_monitor"
+    },
+    {
+      "version": "20261006233429",
+      "name": "sync_hcpcs_canonical_service_codes"
+    },
+    {
+      "version": "20261006233512",
+      "name": "tag_existing_hcpcs_canonical_parents"
+    },
+    {
+      "version": "20261007003122",
+      "name": "credentialing_plan_network_catalog"
+    },
+    {
+      "version": "20261007003215",
+      "name": "remove_noop_verification_history"
+    },
+    {
+      "version": "20261007005507",
+      "name": "credentialing_plan_network_catalog"
+    },
+    {
+      "version": "20261007005545",
+      "name": "credentialing_verification_engine"
+    },
+    {
+      "version": "20261007010554",
+      "name": "credentialing_verification_worker"
+    },
+    {
+      "version": "20261007035054",
+      "name": "credentialing_maintenance_scheduler"
+    },
+    {
+      "version": "20261007045325",
+      "name": "credentialing_catalog_sync_resume"
+    },
+    {
+      "version": "20261007051452",
+      "name": "credentialing_directory_monitor_supabase_chain"
+    },
+    {
+      "version": "20261007051648",
+      "name": "credentialing_directory_monitor_replay"
+    },
+    {
+      "version": "20261007051845",
+      "name": "credentialing_directory_expectations_null_identity"
+    },
+    {
+      "version": "20261007180114",
+      "name": "workflow_repairs"
+    },
+    {
+      "version": "20261009034919",
+      "name": "harden_provider_user_link_identity"
+    },
+    {
+      "version": "20261009044611",
+      "name": "auto_link_clinician_during_note_signing"
+    },
+    {
+      "version": "20261009220754",
+      "name": "tenant_office_ally_connections"
+    },
+    {
+      "version": "20261010021609",
+      "name": "strengthen_ehr_revenue_lineage"
+    },
+    {
+      "version": "20261010021637",
+      "name": "complete_financial_lineage_links"
+    },
+    {
+      "version": "20261010021915",
+      "name": "strengthen_edi_837_835_lineage"
+    },
+    {
+      "version": "20261010022215",
+      "name": "harden_audit_and_edi_submission_lineage"
+    },
+    {
+      "version": "20261010022301",
+      "name": "normalize_operational_fk_names_and_secure_edi"
+    },
+    {
+      "version": "20261010023344",
+      "name": "fix_batch_submission_contract_and_snapshot"
+    },
+    {
+      "version": "20261010033425",
+      "name": "restore_client_billing_readiness_status"
+    },
+    {
+      "version": "20261010041635",
+      "name": "restore_client_checkin_on_my_way"
+    },
+    {
+      "version": "20261010050334",
+      "name": "expose_patient_portal_service_date"
+    },
+    {
+      "version": "20261010085622",
+      "name": "allow_matching_practice_admin_clinician_self_link"
+    },
+    {
+      "version": "20261010164840",
+      "name": "allow_direct_documentation_without_appointment"
+    },
+    {
+      "version": "20261010171708",
+      "name": "keep_portal_arrival_open_through_service_date"
+    },
+    {
+      "version": "20261010195033",
+      "name": "clinical_safety_screenings_and_private_psychotherapy_notes"
+    },
+    {
+      "version": "20261010201535",
+      "name": "cross_system_clinical_engine_core"
+    },
+    {
+      "version": "20261010201546",
+      "name": "cross_system_prsds_sync"
+    },
+    {
+      "version": "20261010201558",
+      "name": "cross_system_coding_decisions"
+    },
+    {
+      "version": "20261010201637",
+      "name": "cross_system_coding_rpc_security"
+    },
+    {
+      "version": "20261012064520",
+      "name": "fix_sign_encounter_note_auto_link_order"
+    },
+    {
+      "version": "20261013024553",
+      "name": "restore_clinical_signing_independent_of_billing"
+    },
+    {
+      "version": "20261013031358",
+      "name": "connect_portal_screeners_and_provider_video"
+    },
+    {
+      "version": "20261013031659",
+      "name": "refresh_inherited_video_on_provider_change"
+    },
+    {
+      "version": "20261016012021",
+      "name": "intake_soap_handoff_integrity"
+    },
+    {
+      "version": "20261016044251",
+      "name": "clinical_note_revision_signature"
+    },
+    {
+      "version": "20261016044512",
+      "name": "clinician_led_safety_assessment"
+    },
+    {
+      "version": "20261019054620",
+      "name": "signed_note_document_link"
+    },
+    {
+      "version": "20261019054627",
+      "name": "accounting_period_historical_posting"
+    },
+    {
+      "version": "20261023051120",
+      "name": "restore_missing_production_schema_objects"
+    },
+    {
+      "version": "20261023052546",
+      "name": "reconcile_optional_workflow_links_and_legacy_schema"
+    },
+    {
+      "version": "20261024164047",
+      "name": "require_admin_provider_link_reactivation"
+    }
+  ]
+}

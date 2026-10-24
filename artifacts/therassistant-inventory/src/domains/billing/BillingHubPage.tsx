@@ -8,7 +8,7 @@ import { getArWorkspaceData } from "../ar/repository";
 import { isRecoveryAdjustment } from "../ar/variance";
 import { summarizePaymentBalance } from "../payments/operations";
 import { partitionAdjudicatedBalance } from "../payments/workflow";
-import { buildBillingHubSummary, isActiveArClaimStatus } from "./hub";
+import { buildBillingHubSummary, billingMetricHref, isActiveArClaimStatus } from "./hub";
 import { RevenueCycleGuide } from "./RevenueCycleGuide";
 
 type DataRow = Row & { id: string };
@@ -156,15 +156,15 @@ export function BillingHubPage() {
           <section className="thera-card">
             <div className="thera-card-header"><div><h2>Billing Routing</h2><p>Choose the workflow that owns the exception or financial state.</p></div></div>
             <div className="thera-metric-grid">
-              <Metric title="Charges Ready" metric={summary.readyCharges} href="/billing/charges" />
-              <Metric title="Claims Needing Action" metric={summary.claimsNeedAction} href="/claims" />
-              <Metric title="Unapplied Payments" metric={summary.unappliedPayments} href="/payments" />
-              <Metric title="Insurance A/R" metric={summary.insuranceAr} href="/claims" />
-              <Metric title="Patient A/R" metric={summary.patientAr} href="/payments" />
-              <Metric title="Active Denials" metric={summary.denials} href="/denials" />
-              <Metric title="Active Appeals" metric={summary.appeals} href="/denials" />
-              <Metric title="Underpayments" metric={summary.underpayments} href="/payments" />
-              <Metric title="Refunds / Recoupments" metric={summary.recovery} href="/payments" />
+              <Metric title="Charges Ready" metric={summary.readyCharges} href={billingMetricHref("readyCharges")} />
+              <Metric title="Claims Needing Action" metric={summary.claimsNeedAction} href={billingMetricHref("claimsNeedAction")} />
+              <Metric title="Unapplied Payments" metric={summary.unappliedPayments} href={billingMetricHref("unappliedPayments")} />
+              <Metric title="Insurance A/R" metric={summary.insuranceAr} href={billingMetricHref("insuranceAr")} />
+              <Metric title="Patient A/R" metric={summary.patientAr} href={billingMetricHref("patientAr")} />
+              <Metric title="Active Denials" metric={summary.denials} href={billingMetricHref("denials")} />
+              <Metric title="Active Appeals" metric={summary.appeals} href={billingMetricHref("appeals")} />
+              <Metric title="Underpayments" metric={summary.underpayments} href={billingMetricHref("underpayments")} />
+              <Metric title="Refunds / Recoupments" metric={summary.recovery} href={billingMetricHref("recovery")} />
             </div>
           </section>
 
@@ -176,6 +176,9 @@ export function BillingHubPage() {
               <Link className="thera-action secondary" href="/claims">Claims</Link>
               <Link className="thera-action secondary" href="/denials">Denials</Link>
               <Link className="thera-action secondary" href="/payments">Payments</Link>
+              <Link className="thera-action secondary" href="/payments?tab=era">835 / ERA Imports</Link>
+              <Link className="thera-action secondary" href="/billing/charges?tab=batches">837P Batches</Link>
+              <Link className="thera-action secondary" href="/operations/connected">Connected Operations</Link>
             </div>
           </section>
         </div>

@@ -1,3 +1,4 @@
+-- Recovered from production migration history; already applied.
 -- Dedicated safety-screening records. Keep C-SSRS separate from PHQ/GAD outcome measures.
 create table if not exists public.clinical_safety_screenings (
   id uuid primary key default gen_random_uuid(),

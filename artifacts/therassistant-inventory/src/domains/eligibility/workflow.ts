@@ -1,7 +1,9 @@
 export function isVerifiedEligibilitySource(source: unknown) {
-  const value = String(source ?? "").trim();
+  const value = String(source ?? "").trim().toLowerCase();
   if (!value) return true;
-  return value !== "synthetic_demo_270_271";
+  // Demo/mock transactions prove connectivity, not actual member coverage.
+  // Keep them out of readiness and scheduling even if they contain "active".
+  return !/(^|[_:-])(demo|synthetic|mock)([_:-]|$)/.test(value);
 }
 
 export function parseEligibilityBenefits(raw: unknown) {

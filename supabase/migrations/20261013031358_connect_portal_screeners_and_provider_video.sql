@@ -1,3 +1,4 @@
+-- Recovered from production migration history; already applied.
 alter table public.providers add column if not exists telehealth_url text;
 create or replace function private.default_appointment_video() returns trigger language plpgsql security invoker set search_path = '' as $$
 begin

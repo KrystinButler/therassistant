@@ -51,3 +51,6 @@ Thumbs.db
 # Replit
 .cache/
 .local/
+
+# Supabase CLI state
+supabase/.temp/

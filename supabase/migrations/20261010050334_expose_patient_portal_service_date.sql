@@ -1,3 +1,4 @@
+-- Recovered from production migration history; already applied.
 create or replace function public.get_my_patient_portal_data()
 returns jsonb
 language sql

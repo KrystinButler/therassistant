@@ -1,3 +1,4 @@
+-- Recovered from production migration history; already applied.
 CREATE OR REPLACE FUNCTION private.portal_save_previsit_checkin_impl(p_appointment_id uuid, p_update jsonb)
  RETURNS jsonb
  LANGUAGE plpgsql

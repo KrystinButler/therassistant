@@ -1,3 +1,4 @@
+-- Recovered from production migration history; already applied.
 create or replace function public.link_current_user_to_provider(p_provider_id uuid)
 returns jsonb
 language plpgsql

@@ -38,6 +38,7 @@ function asDrawerClaim(row: ClaimsQueueRow): ClaimWorkRecord {
 
 export function ClaimsPage() {
   const [rows, setRows] = useState<ClaimsQueueRow[]>([]);
+  const [preSubmission, setPreSubmission] = useState({ batched: 0, awaitingValidation: 0 });
   const [payerId, setPayerId] = useWorkspaceChoice<string>("payer", "");
   const [tab, setTab] = useWorkspaceChoice<ClaimsTab>("tab", "no_response", CLAIM_TABS.map(([key]) => key));
   const [activeClaimId, setActiveClaimId] = useWorkspaceChoice<string | null>("claim", null);
@@ -51,6 +52,10 @@ export function ClaimsPage() {
     setError(null);
     try {
       const data = await getClaimsQueueData();
+      setPreSubmission({
+        batched: data.filter((claim) => String(claim.claim_status) === "batched").length,
+        awaitingValidation: data.filter((claim) => ["ready_for_validation", "ready_for_batch", "corrected"].includes(String(claim.claim_status))).length,
+      });
       setRows(data.filter((claim) =>
         getOperationalHome({
           claimStatus: claim.claim_status,
@@ -185,7 +190,28 @@ export function ClaimsPage() {
       {message && <div className="thera-alert" style={{ marginBottom: 12 }}>{message}</div>}
       {loading && <div className="thera-state">Loading Claims...</div>}
 
-      {!loading && rows.length === 0 && <section className="thera-card"><div className="thera-empty">No outstanding payer claims.</div></section>}
+      {!loading && !error && rows.length === 0 && (
+        <section className="thera-card">
+          <div className="thera-card-header">
+            <div>
+              <h2>No claims awaiting payer follow-up</h2>
+              <p>This queue begins after a payer claim has actually been submitted and a submission record exists. Creating a batch or downloading an 837P does not send claims to a payer.</p>
+            </div>
+          </div>
+          {preSubmission.batched > 0 && (
+            <div className="thera-alert" style={{ marginBottom: 12 }}>
+              {preSubmission.batched} claim(s) are in ready batches, but not yet recorded as submitted. In Charge Capture, open <strong>837P Batches</strong>, verify and transmit each file using the clearinghouse, then record the real external submission confirmation.
+            </div>
+          )}
+          {preSubmission.awaitingValidation > 0 && (
+            <p>{preSubmission.awaitingValidation} other claim(s) still need validation or batching before they can be submitted.</p>
+          )}
+          <div className="thera-filter-row">
+            {preSubmission.batched > 0 && <Link className="thera-action" href="/billing/charges?tab=batches">Review 837P Batches →</Link>}
+            <Link className={preSubmission.batched > 0 ? "thera-action secondary" : "thera-action"} href="/billing/charges?tab=unbatched">Review Claims Before Submission →</Link>
+          </div>
+        </section>
+      )}
 
       {!loading && rows.length > 0 && (
         <div className="thera-stack">

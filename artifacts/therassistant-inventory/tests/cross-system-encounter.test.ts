@@ -41,7 +41,7 @@ test("emergency and coding safety prompts are disruptive, explicit, and rejectio
 
 test("coding recommendations are applied or rejected through tenant-scoped database RPCs instead of silent diagnosis mutation", () => {
   const repository = read("../src/domains/clinical/repository.ts");
-  const migration = read("../../../supabase/migrations/20261010203000_cross_system_clinical_engine.sql");
+  const migration = ["20261010201535_cross_system_clinical_engine_core.sql", "20261010201546_cross_system_prsds_sync.sql", "20261010201558_cross_system_coding_decisions.sql", "20261010201637_cross_system_coding_rpc_security.sql"].map(name => read(`../../../supabase/migrations/${name}`)).join("\n");
   assert.match(repository, /applyCrossSystemDiagnosisSequence/);
   assert.match(repository, /rejectCrossSystemCodingRecommendation/);
   assert.match(repository, /apply_cross_system_diagnosis_sequence/);

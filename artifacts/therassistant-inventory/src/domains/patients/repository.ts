@@ -1,6 +1,7 @@
 import { tenantSelect, referenceSelect, type Row } from "../../lib/tenant-data-client";
 import { buildPatientChartAggregate, type ChartRow } from "./chart";
 import type { PatientChart } from "./types";
+import { attachClinicalSignatureDates } from "./note-signatures";
 
 type DataRow = Row & { id: string };
 
@@ -41,6 +42,10 @@ export async function getPatientChart(patientId: string): Promise<PatientChart> 
   const relevantPlanIds = new Set(treatmentPlans.map((row) => row.id));
   const claimIds = new Set(claims.map((row) => row.id));
   const denialIds = new Set(denials.map((row) => row.id));
+  const signatures = notes.length ? await tenantSelect<DataRow>("clinical_note_signatures", {
+    clinical_note_id: `in.(${notes.map((note) => note.id).join(",")})`,
+    order: "signed_at.asc",
+  }) : [];
   const patientAppeals = appeals.filter((row) =>
     claimIds.has(String(row.claim_id ?? "")) || denialIds.has(String(row.denial_id ?? "")),
   );
@@ -55,7 +60,7 @@ export async function getPatientChart(patientId: string): Promise<PatientChart> 
     encounters: encounters as ChartRow[],
     treatmentPlans: treatmentPlans as ChartRow[],
     treatmentGoals: treatmentGoals.filter((row) => relevantPlanIds.has(String(row.treatment_plan_id ?? ""))) as ChartRow[],
-    notes: notes as ChartRow[],
+    notes: attachClinicalSignatureDates(notes, signatures) as ChartRow[],
     charges: charges as ChartRow[],
     claims: claims as ChartRow[],
     payments: payments as ChartRow[],

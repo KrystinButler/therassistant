@@ -1,3 +1,4 @@
+-- Recovered from production migration history; already applied.
 create or replace function public.sign_encounter_note_revision(
   p_encounter_id uuid, p_note_id uuid, p_provider_id uuid,
   p_signature_text text, p_expected_note_text text
