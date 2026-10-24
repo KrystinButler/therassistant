@@ -95,7 +95,7 @@ for (const [label, inviteType] of [
     await expect.poll(() => new URL(page.url()).pathname).toBe("/patient-portal");
     await expect(page.getByRole("heading", { name: "Taylor Synthetic" }))
       .toBeVisible({ timeout: 15_000 });
-    await expect(page.getByRole("link", { name: "Open Journal" })).toBeVisible();
+    await expect(page.getByRole("main").getByRole("link", { name: "Open Journal", exact: true })).toBeVisible();
     expect(activated).toBe(true);
     expect(passwordUpdated).toBe(true);
   });
